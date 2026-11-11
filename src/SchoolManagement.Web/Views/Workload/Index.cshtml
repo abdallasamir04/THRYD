@@ -31,7 +31,8 @@
     </div>
     <div class="page-head__actions">
         <a class="btn btn--secondary" href="/timetable/teachers">@Ui.Icon("calendar")Teacher timetables</a>
-        <a class="btn btn--secondary" href="/workload/export?week=@week">@Ui.Icon("download")Export week</a>
+        <a class="btn btn--secondary" href="/workload/export?week=@week">@Ui.Icon("sheet")Export week to Excel</a>
+        <partial name="_Download" model='DownloadLink.Report("/workload/pdf")' />
         <a class="btn btn--primary" href="/workload/create?week=@week" data-modal>@Ui.Icon("plus")Assign periods</a>
     </div>
 </div>

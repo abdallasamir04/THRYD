@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Services;
+using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
-/// <summary>Daily Operations → Student Arrivals: the fast daily checklist and the correction workflow.</summary>
+/// <summary>Daily Operations → Student Attendance (route /arrivals): the fast daily checklist and the correction workflow.</summary>
 [Route("arrivals")]
 public class ArrivalsController(IArrivalService arrivals, IClassService classes, IDutyService duties, ICurrentUser currentUser) : AppController
 {
@@ -22,6 +23,16 @@ public class ArrivalsController(IArrivalService arrivals, IClassService classes,
             OperatorStaffId = currentUser.StaffId,
         };
         return IsAjax ? PartialView("_Checklist", model) : View(model);
+    }
+
+    /// <summary>Download Report: the day's checklist with the page's class and tab (All / Not recorded / Late / Absent).</summary>
+    [HttpGet("pdf")]
+    public async Task<IActionResult> Pdf(string? date, int? classId, string? show, CancellationToken ct)
+    {
+        var day = SchoolWeek.ParseDayOrToday(date);
+        var className = classId is { } id ? (await classes.AllOptionsAsync(ct)).FirstOrDefault(c => c.Id == id)?.Name : null;
+        var tab = show is "missing" or "late" or "absent" or "present" ? show : "all";
+        return await PdfFile(PdfReports.Attendance(await arrivals.ChecklistAsync(day, classId, ct), className, tab), ct);
     }
 
     /// <summary>Saves the rows entered in the checklist (new records only; existing ones go through Correct).</summary>

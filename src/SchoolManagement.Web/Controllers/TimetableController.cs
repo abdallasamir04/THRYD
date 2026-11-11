@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
+using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
@@ -65,6 +66,29 @@ public class TimetableController(ITimetableService timetable, IWorkloadService w
             Others = (await timetable.TeachersAsync(null, t.DepartmentId, ct)).Select(x => (x.Id, x.Name, (string?)$"{x.Sessions} sessions")).ToList(),
         };
         return IsAjax ? PartialView("_Grid", model) : View("Timetable", model);
+    }
+
+    // ------------------------------------------------------------------ PDF downloads (same week and data as the pages)
+
+    [HttpGet("classes/{id:int}/pdf")]
+    public async Task<IActionResult> ClassPdf(int id, string? week, CancellationToken ct)
+    {
+        var cls = (await timetable.ClassesAsync(ct)).FirstOrDefault(c => c.Id == id);
+        if (cls is null) return NotFound();
+        var grid = await timetable.ClassGridAsync(id, SchoolWeek.ParseOrCurrent(week), ct);
+        var details = $"{Ui.Plural(grid.Sessions.Count, "teaching session", "teaching sessions")} a week · {Ui.Plural(cls.Students, "student", "students")}{(cls.IsActive ? "" : " · inactive class")}";
+        return await PdfFile(PdfReports.ClassTimetable(grid, cls.Name, details), ct);
+    }
+
+    [HttpGet("teachers/{id:int}/pdf")]
+    public async Task<IActionResult> TeacherPdf(int id, string? week, CancellationToken ct)
+    {
+        var t = await teachers.GetAsync(id, ct);
+        if (t is null) return NotFound();
+        var start = SchoolWeek.ParseOrCurrent(week);
+        var department = t.DepartmentName is null ? null : $"{t.DepartmentName}{(t.SubcategoryLabel.Length == 0 ? "" : " · " + t.SubcategoryLabel)}";
+        return await PdfFile(PdfReports.TeacherTimetable(await timetable.TeacherGridAsync(id, start, ct), t.FullName, department,
+            await workload.SummaryAsync(id, start, ct)), ct);
     }
 
     // ------------------------------------------------------------------ time slots

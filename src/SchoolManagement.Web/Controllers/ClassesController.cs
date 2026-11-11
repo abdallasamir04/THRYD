@@ -23,6 +23,11 @@ public class ClassesController(IClassService classes) : AppController
         return IsAjax ? PartialView("_List", model) : View(model);
     }
 
+    /// <summary>Download Report: the classes matching the page's search and status.</summary>
+    [HttpGet]
+    public async Task<IActionResult> Pdf(string? search, string? status, CancellationToken ct) =>
+        await PdfFile(Services.Pdf.PdfReports.Classes(await classes.ListAsync(search, status, ct), search, status), ct);
+
     [HttpGet]
     public async Task<IActionResult> Create(CancellationToken ct)
     {

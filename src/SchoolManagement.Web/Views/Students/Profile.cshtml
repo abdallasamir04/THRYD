@@ -26,7 +26,7 @@
     <div class="page-head__actions">
         <a class="btn btn--secondary" href="/students/transfer/@st.Id" data-modal>@Ui.Icon("swap")Transfer class</a>
         <a class="btn btn--secondary" href="/students/edit/@st.Id" data-modal>@Ui.Icon("pencil")Edit student</a>
-        <a class="btn btn--primary" href="/arrivals?classId=@st.ClassId">@Ui.Icon("clock")Today's arrivals</a>
+        <a class="btn btn--primary" href="/arrivals?classId=@st.ClassId">@Ui.Icon("clock")Today's attendance</a>
     </div>
 </div>
 
@@ -69,7 +69,7 @@
         <div class="empty">
             <span class="empty__icon">@Ui.Icon("calendar")</span>
             <p class="empty__title">No arrival records@(string.IsNullOrEmpty(Model.From) && string.IsNullOrEmpty(Model.To) ? "" : " in this period")</p>
-            <p class="empty__text">Records appear here once arrivals are taken on the Student Arrivals checklist.</p>
+            <p class="empty__text">Records appear here once arrivals are taken on the Student Attendance checklist.</p>
         </div>
     }
     else

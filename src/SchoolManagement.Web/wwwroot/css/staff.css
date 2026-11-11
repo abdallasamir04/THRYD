@@ -42,6 +42,22 @@
 .tt.pe-tt { display: grid; grid-template-columns: 96px repeat(var(--tt-cols, 10), minmax(86px, 1fr)); }
 .pe-tt .tt__day { position: sticky; inset-inline-start: 0; z-index: 2; background: var(--color-surface-soft); }
 .pe-tt .tt__day.is-today { background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)); }
+/* PE department page: the P.E. module as a full-width row directly under Department Staff
+   (the staff card stretches to the HOD column's height, so the two always meet). */
+.dept-grid--pe > .dept-pe { grid-column: 1 / -1; }
+.dept-pe { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dept-pe__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; padding-top: 4px; }
+.dept-pe__head .card__sub { margin: 4px 0 0; }
+.dept-pe__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Periods share the full content width instead of a fixed 86px minimum; the grid only scrolls
+   sideways when a period would be narrower than 64px (narrow laptops and tablets). */
+.dept-pe .tt.pe-tt { grid-template-columns: 96px repeat(var(--tt-cols, 10), minmax(64px, 1fr)); }
+.dept-pe .pe-tt .tt__period .tt__time { white-space: normal; }
+@media (max-width: 1200px) {
+    /* One column: keep the P.E. module right after Department Staff, before the HOD panels. */
+    .dept-grid--pe > .dept-pe { order: 1; }
+    .dept-grid--pe > .stack { order: 2; }
+}
 .pe-cell { display: flex; flex-direction: column; gap: 4px; width: 100%; min-height: 84px; padding: 4px; border-radius: 10px; border: 1px solid var(--color-border-subtle); background: var(--color-surface); }
 .pe-chip {
     --pe: var(--color-border-strong);

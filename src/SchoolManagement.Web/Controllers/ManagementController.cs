@@ -44,6 +44,16 @@ public class ManagementController(IManagementService members, IManagementTaskSer
         return View(new ManagementMembersViewModel { Members = list.ToList(), Total = all.Count, Search = search, Position = position });
     }
 
+    /// <summary>Team Members → Download Report (same search and position filter).</summary>
+    [HttpGet("members/pdf")]
+    public async Task<IActionResult> MembersPdf(string? search, string? position, CancellationToken ct)
+    {
+        IEnumerable<ManagementMemberRow> list = await members.ListAsync(search, ct);
+        if (position == "none") list = list.Where(m => m.Position is null);
+        else if (Enum.TryParse<ManagementPosition>(position, out var p)) list = list.Where(m => m.Position == p);
+        return await PdfFile(Services.Pdf.PdfReports.ManagementMembers(list.ToList(), search, position), ct);
+    }
+
     /// <summary>Management Team → Management Positions: the seven positions, holders and history.</summary>
     [HttpGet("positions")]
     public async Task<IActionResult> Positions(CancellationToken ct)

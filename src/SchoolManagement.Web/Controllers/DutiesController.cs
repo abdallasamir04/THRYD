@@ -2,15 +2,19 @@ using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
+using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
 /// <summary>Daily Operations → Morning Duty (Students Arrival Check, In-Class Morning, Morning Assembly / Proadcast).</summary>
 [Route("duties")]
-public class DutiesController(IDutyService duties, IClassService classes) : AppController
+public class DutiesController(IDutyService duties, IClassService classes, IPeService pe) : AppController
 {
-    /// <summary>Duties landing page (three cards); ?type=morning | midday | dismissal opens that duty's page.</summary>
+    /// <summary>
+    /// Duties landing page: Morning, Midday and Dismissal cards (?type=morning | midday | dismissal opens
+    /// that duty's page) plus a P.E. card that opens the P.E. module (/pe).
+    /// </summary>
     [HttpGet("")]
     public async Task<IActionResult> Index(string? date, string? type, CancellationToken ct)
     {
@@ -28,6 +32,10 @@ public class DutiesController(IDutyService duties, IClassService classes) : AppC
                     $"{summary.Count} sections · {(total == 0 ? "no duties today" : $"{total} today{(open > 0 ? $" · {open} need action" : "")}")}",
                     t switch { DutyType.Midday => "amber", DutyType.Dismissal => "teal", _ => "violet" }));
             }
+            var peWeek = await pe.WeekAsync(SchoolWeek.StartOf(day), ct);
+            var peToday = ScheduleRules.IsSchoolDay(day.DayOfWeek) ? peWeek.Count(s => s.Day == day.DayOfWeek) : 0;
+            cards.Add(new HubCard($"/pe?date={SchoolWeek.Iso(day)}", "activity", "P.E.", "Physical Education",
+                $"{Ui.Plural(peWeek.Count, "session", "sessions")} this week{(peToday > 0 ? $" · {peToday} today" : "")}", "green"));
             return View("~/Views/Staff/Hub.cshtml", new HubViewModel
             {
                 Title = "Duties",
@@ -80,6 +88,14 @@ public class DutiesController(IDutyService duties, IClassService classes) : AppC
             Locations = await duties.LocationsAsync(ct),
         };
         return IsAjax ? PartialView("_AuditTable", model) : View(model);
+    }
+
+    /// <summary>Download Report: every duty session matching the audit filters (all pages).</summary>
+    [HttpGet("audit/pdf")]
+    public async Task<IActionResult> AuditPdf([FromQuery] DutyAuditQuery query, CancellationToken ct)
+    {
+        var staff = query.StaffId is { } sid ? (await duties.StaffOptionsAsync(ct)).FirstOrDefault(s => s.Id == sid)?.FullName : null;
+        return await PdfFile(PdfReports.DutyAudit(await duties.AuditListAllAsync(query, ct), query, staff), ct);
     }
 
     [HttpPost("{id:int}/status"), ValidateAntiForgeryToken]

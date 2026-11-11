@@ -10,6 +10,9 @@
         <h1 class="page-title">Staff Duty Records</h1>
         <p class="page-sub">Each staff member's duties and evaluations. Open a person for their full duty history.</p>
     </div>
+    <div class="page-head__actions">
+        <partial name="_Download" model='DownloadLink.Report("/staff/duty-records/pdf")' />
+    </div>
 </div>
 
 <section class="card table-card" aria-label="Staff duty records">

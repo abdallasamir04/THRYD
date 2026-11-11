@@ -63,6 +63,7 @@ public interface IDepartmentService
     Task<IReadOnlyList<HeadHistoryRow>> HeadHistoryAsync(int id, CancellationToken ct = default);
     Task<ServiceResult> UpdateAsync(int id, string? description, CancellationToken ct = default);
     Task<ServiceResult> UpdateAsync(int id, string? description, string? subcategoryLabel, string? subjectLabel, CancellationToken ct = default);
+    Task<ServiceResult> CreateAsync(string? name, string? description, string? subcategoryLabel, string? subjectLabel, CancellationToken ct = default);
     Task<IReadOnlyList<HeadHistoryRow>> RecentHeadChangesAsync(int take, CancellationToken ct = default);
     Task<IReadOnlyList<SubcategoryItem>> SubcategoriesAsync(int departmentId, CancellationToken ct = default);
     Task<SubcategoryItem?> GetSubcategoryAsync(int id, CancellationToken ct = default);
@@ -189,6 +190,49 @@ public sealed class DepartmentService(SchoolDbContext db, ICurrentUser currentUs
         dept.SubjectLabel = subjectText.Length == 0 ? null : subjectText;
         await db.SaveChangesAsync(ct);
         return result;
+    }
+
+    /// <summary>
+    /// Adds an academic department (Departments → Add department). Only the department row is created:
+    /// no staff, HOD, subcategories or timetable sessions. It is listed after the existing departments.
+    /// </summary>
+    public async Task<ServiceResult> CreateAsync(string? name, string? description, string? subcategoryLabel, string? subjectLabel, CancellationToken ct = default)
+    {
+        var clean = TextNormalizer.CleanText(name);
+        var text = description?.Trim() ?? "";
+        var label = TextNormalizer.CleanText(subcategoryLabel);
+        var subjectText = TextNormalizer.CleanText(subjectLabel);
+
+        var result = ServiceResult.Ok();
+        if (clean.Length == 0) result.AddError("Name", "Enter the department name.");
+        else if (clean.Length > Department.NameMaxLength) result.AddError("Name", $"Use {Department.NameMaxLength} characters or fewer.");
+        else if (!TextNormalizer.ContainsLetter(clean)) result.AddError("Name", "The name must contain letters.");
+        if (text.Length > Department.DescriptionMaxLength) result.AddError("Description", $"Use {Department.DescriptionMaxLength} characters or fewer.");
+        if (label.Length > 50) result.AddError("SubcategoryLabel", "Use 50 characters or fewer.");
+        if (subjectText.Length > 50) result.AddError("SubjectLabel", "Use 50 characters or fewer.");
+        if (!result.Succeeded) return result;
+
+        var key = TextNormalizer.NameKey(clean);
+        var existing = await db.Departments.AsNoTracking().Where(d => d.NormalizedName == key).Select(d => d.Name).FirstOrDefaultAsync(ct);
+        if (existing is not null) return ServiceResult.Fail("Name", $"A department named \"{existing}\" already exists.");
+
+        var dept = new Department
+        {
+            Name = clean,
+            NormalizedName = key,
+            Description = text.Length == 0 ? null : text,
+            SubcategoryLabel = label.Length == 0 ? null : label,
+            SubjectLabel = subjectText.Length == 0 ? null : subjectText,
+            SortOrder = (await db.Departments.MaxAsync(d => (int?)d.SortOrder, ct) ?? 0) + 1,
+        };
+        db.Departments.Add(dept);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            db.ChangeTracker.Clear();
+            return ServiceResult.Fail("Name", $"A department named \"{clean}\" already exists.");
+        }
+        return ServiceResult.Ok(dept.Id);
     }
 
     public async Task<IReadOnlyList<HeadHistoryRow>> RecentHeadChangesAsync(int take, CancellationToken ct = default) =>

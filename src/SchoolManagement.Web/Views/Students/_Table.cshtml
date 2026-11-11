@@ -20,7 +20,10 @@
     </div>
     @if (r.TotalCount > 0)
     {
-        <a class="btn btn--ghost btn--sm" href="@exportUrl">@Ui.Icon("download", "icon--sm")Export @(q.HasFilters ? "these" : "all") to Excel</a>
+        <div class="results-bar__actions">
+            <a class="btn btn--ghost btn--sm" href="@exportUrl">@Ui.Icon("sheet", "icon--sm")Export @(q.HasFilters ? "these" : "all") to Excel</a>
+            <partial name="_Download" model='DownloadLink.Report("/students/pdf", small: true)' />
+        </div>
     }
 </div>
 

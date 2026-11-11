@@ -6,6 +6,7 @@
         <div class="card__head">
             <div><h2 class="card__title" id="gw-title">@Ui.Icon("users")@GradeCatalog.Label(Model.Grade) · Week @Model.Week!.Number</h2>
                 <p class="card__sub">Weekly readiness per student. Missing days are listed separately and never counted as Red.</p></div>
+            <partial name="_Download" model='DownloadLink.Report("/belongings/grade-week/pdf", small: true)' />
         </div>
         <div class="table-wrap">
             <table class="table table--stack">

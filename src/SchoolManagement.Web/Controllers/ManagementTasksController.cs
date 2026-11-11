@@ -23,6 +23,14 @@ public class ManagementTasksController(IManagementTaskService tasks, IManagement
         return IsAjax ? PartialView("_TaskList", model) : View(model);
     }
 
+    /// <summary>Download Report: every task matching the page's filters (all pages), in its sort order.</summary>
+    [HttpGet("pdf")]
+    public async Task<IActionResult> Pdf([FromQuery] TaskListQuery query, CancellationToken ct)
+    {
+        var member = query.MemberId is { } id ? (await members.OptionsAsync(ct)).FirstOrDefault(m => m.Id == id)?.FullName : null;
+        return await PdfFile(Services.Pdf.PdfReports.Tasks(await tasks.ListAllAsync(query, ct), query, member), ct);
+    }
+
     [HttpGet("create")]
     public async Task<IActionResult> Create(int? memberId, CancellationToken ct)
     {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
+using SchoolManagement.Web.Services.Pdf;
 
 namespace SchoolManagement.Web.Controllers;
 
@@ -44,4 +45,11 @@ public abstract class AppController : Controller
 
     protected IActionResult NotFoundResult(string message) =>
         IsAjax ? AjaxFailure(message, StatusCodes.Status404NotFound) : NotFound();
+
+    /// <summary>A "Download Timetable / Download Report" response: the report as a branded landscape PDF.</summary>
+    protected async Task<IActionResult> PdfFile(PdfReport report, CancellationToken ct)
+    {
+        var bytes = await HttpContext.RequestServices.GetRequiredService<IPdfExportService>().RenderAsync(report, ct);
+        return File(bytes, "application/pdf", report.FileName);
+    }
 }

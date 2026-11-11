@@ -41,12 +41,36 @@ public sealed class DepartmentDetailsViewModel
     public required DepartmentMemberQuery Query { get; init; }
     public required IReadOnlyList<DepartmentMember> Members { get; init; }
     public required IReadOnlyList<HeadHistoryRow> HeadHistory { get; init; }
+
+    /// <summary>The P.E. module, shown under Department Staff on the PE department page only (null elsewhere).</summary>
+    public PePageViewModel? Pe { get; init; }
 }
 
 public sealed class DepartmentEditModel
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
+
+    [Display(Name = "Description")]
+    [StringLength(Department.DescriptionMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    public string? Description { get; set; }
+
+    [Display(Name = "Subcategory label")]
+    [StringLength(50, ErrorMessage = "Use {1} characters or fewer.")]
+    public string? SubcategoryLabel { get; set; }
+
+    [Display(Name = "Subject label")]
+    [StringLength(50, ErrorMessage = "Use {1} characters or fewer.")]
+    public string? SubjectLabel { get; set; }
+}
+
+/// <summary>Departments → Add department. The same details as Edit, plus the name (fixed after creation).</summary>
+public sealed class DepartmentCreateModel
+{
+    [Display(Name = "Department name")]
+    [Required(ErrorMessage = "Enter the department name.")]
+    [StringLength(Department.NameMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    public string? Name { get; set; }
 
     [Display(Name = "Description")]
     [StringLength(Department.DescriptionMaxLength, ErrorMessage = "Use {1} characters or fewer.")]

@@ -46,6 +46,8 @@ builder.Services.AddScoped<IBelongingsService, BelongingsService>();
 // The arrival checklist saves rows as JSON; fetch() sends the antiforgery token in this header.
 builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 builder.Services.AddSingleton<IExcelExportService, ExcelExportService>();
+// Branded PDF downloads of tables and timetables (one shared generator for every page).
+builder.Services.AddScoped<SchoolManagement.Web.Services.Pdf.IPdfExportService, SchoolManagement.Web.Services.Pdf.PdfExportService>();
 if (testDataCommand is not null) TestDataCommand.Register(builder.Services);
 
 builder.Services.AddControllersWithViews(options =>

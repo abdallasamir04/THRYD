@@ -274,10 +274,12 @@ public partial class HttpTests
     public async Task Duties_page_has_three_tabs_and_new_duties_save_under_their_type()
     {
         var client = fx.Factory.CreateClient();
-        // The Duties page is three cards leading to each duty.
+        // The Duties page is four cards: each duty, then P.E. (opens the P.E. module).
         var landing = await client.GetStringAsync("/duties");
-        Assert.Equal(3, Regex.Matches(landing, "class=\"hub-card ").Count);
+        Assert.Equal(4, Regex.Matches(landing, "class=\"hub-card ").Count);
         foreach (var t in new[] { "morning", "midday", "dismissal" }) Assert.Contains($"href=\"/duties?type={t}&amp;date=", landing);
+        Assert.Matches("<a class=\"hub-card hub-card--\\w+\" href=\"/pe\\?date=[0-9-]+\">", landing);
+        Assert.Contains("Physical Education", landing);
 
         // Midday: youngest first, each with its grade line.
         var midday = WebUtility.HtmlDecode(await client.GetStringAsync("/duties?type=midday"));
@@ -324,7 +326,9 @@ public partial class HttpTests
         cls = await fx.NewClassAsync();
 
         var page = await client.GetStringAsync("/pe?date=2026-11-20");
-        Assert.Contains("aria-current=\"page\"", page[..page.IndexOf("</aside>", StringComparison.Ordinal)]); // P.E. highlighted in the sidebar
+        var sidebar = page[..page.IndexOf("</aside>", StringComparison.Ordinal)];
+        Assert.Contains("aria-current=\"page\"", sidebar); // Duties highlighted in the sidebar (P.E. opens from Duties)
+        Assert.DoesNotContain("href=\"/pe\"", sidebar); // no standalone P.E. sidebar item
         Assert.Equal(10, Regex.Matches(page, "class=\"tt__period\"").Count);
         Assert.Equal(5, Regex.Matches(page, "class=\"tt__day[ \"]").Count);
 
@@ -375,6 +379,95 @@ public partial class HttpTests
             Assert.Null(d.CoTeacherId);
             Assert.Equal(PeFacility.MainGarden, d.Facility);
             Assert.Equal([("Kickboards", false)], d.Equipment.Select(e => (e.Name, e.IsChecked)));
+        }
+
+        // The PE department page renders the same P.E. module (no extra click) as a full-width row of the
+        // department grid, directly under Department Staff.
+        var deptPage = await client.GetStringAsync($"/staff/departments/{pe}");
+        Assert.Contains("class=\"grid-3-1 dept-grid--pe\"", deptPage);
+        var staffAt = deptPage.IndexOf("id=\"members-title\"", StringComparison.Ordinal);
+        var peAt = deptPage.IndexOf("<section class=\"dept-pe\"", StringComparison.Ordinal);
+        Assert.True(staffAt > 0 && peAt > staffAt, $"{staffAt},{peAt}");
+        Assert.Contains("aria-label=\"P.E. timetable\"", deptPage[peAt..]);
+        Assert.Equal(10, Regex.Matches(deptPage, "class=\"tt__period\"").Count);
+        Assert.Contains($"href=\"/pe/sessions/{session}?date=", deptPage);
+        Assert.Contains("id=\"hodhist-title\"", deptPage);
+
+        // Other departments are unchanged.
+        int other;
+        await using (var db = fx.NewContext()) other = await db.Departments.Where(d => d.NormalizedName != "PE").Select(d => d.Id).FirstAsync();
+        var otherPage = await client.GetStringAsync($"/staff/departments/{other}");
+        Assert.Contains("id=\"members-title\"", otherPage);
+        Assert.DoesNotContain("P.E. timetable", otherPage);
+        Assert.DoesNotContain("dept-grid--pe", otherPage);
+    }
+
+    [Fact]
+    public async Task Student_Arrivals_is_shown_as_Student_Attendance()
+    {
+        var client = fx.Factory.CreateClient();
+        var page = await client.GetStringAsync("/arrivals"); // same route and checklist as before
+        Assert.Contains("<h1 class=\"page-title\">Student Attendance</h1>", page);
+        Assert.Contains("<li>Student Attendance</li></ol>", page);
+        Assert.Contains("Student Attendance", page[..page.IndexOf("</aside>", StringComparison.Ordinal)]);
+        Assert.Contains("data-arrival-table", page);
+        foreach (var url in new[] { "/arrivals", "/", "/staff/departments" })
+            Assert.DoesNotContain("Student Arrivals", await client.GetStringAsync(url));
+    }
+
+    [Fact]
+    public async Task Add_department_saves_a_new_department_that_works_like_the_existing_ones()
+    {
+        var client = fx.Factory.CreateClient();
+        Assert.Contains("href=\"/staff/departments/create\" data-modal", await client.GetStringAsync("/staff/departments"));
+        var form = await client.GetStringAsync("/staff/departments/create");
+        var token = TokenPattern().Match(form).Groups[1].Value;
+        var name = "Geography " + DbFixture.Unique();
+        try
+        {
+            // The name is required, and must not repeat an existing department (any case or spacing).
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/staff/departments/create", token, new() { ["Name"] = "   " })).StatusCode);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/staff/departments/create", token, new() { ["Name"] = "1234" })).StatusCode);
+            var duplicate = await PostAsync(client, "/staff/departments/create", token, new() { ["Name"] = "  math " });
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, duplicate.StatusCode);
+            Assert.Contains("A department named \"Math\" already exists.", WebUtility.HtmlDecode(await duplicate.Content.ReadAsStringAsync()));
+
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, "/staff/departments/create", token, new()
+            {
+                ["Name"] = "  " + name + " ", ["Description"] = "Maps, places and people", ["SubcategoryLabel"] = "Strand",
+            })).StatusCode);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/staff/departments/create", token, new() { ["Name"] = name.ToUpperInvariant() })).StatusCode);
+
+            int id;
+            await using (var db = fx.NewContext())
+            {
+                var d = await db.Departments.AsNoTracking().SingleAsync(x => x.Name == name);
+                id = d.Id;
+                Assert.Equal((TextNormalizer.NameKey(name), "Maps, places and people", "Strand"), (d.NormalizedName, d.Description, d.SubcategoryLabel));
+                Assert.True(d.SortOrder > 15); // listed after the existing departments
+                // Nothing is created for it: no staff, HOD, subcategories or timetable sessions.
+                Assert.False(await db.StaffMembers.AnyAsync(s => s.DepartmentId == id));
+                Assert.False(await db.DepartmentHeads.AnyAsync(h => h.DepartmentId == id));
+                Assert.False(await db.DepartmentSubcategories.AnyAsync(s => s.DepartmentId == id));
+                Assert.False(await db.TimetableAssignments.AnyAsync(t => t.DepartmentId == id));
+            }
+
+            // Listed, opens, edits and is offered on the staff form like any department.
+            Assert.Contains($"href=\"/staff/departments/{id}\"", await client.GetStringAsync("/staff/departments"));
+            var details = WebUtility.HtmlDecode(await client.GetStringAsync($"/staff/departments/{id}"));
+            Assert.Contains($"<h1 class=\"page-title\">{name}</h1>", details);
+            Assert.Contains("No HOD assigned.", details);
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, $"/staff/departments/{id}/edit", token, new() { ["Description"] = "Updated description" })).StatusCode);
+            await using (var db = fx.NewContext())
+                Assert.Equal("Updated description", await db.Departments.Where(d => d.Id == id).Select(d => d.Description).SingleAsync());
+            Assert.Contains(name, await client.GetStringAsync("/staff/create"));
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/timetable/teachers?departmentId={id}")).StatusCode);
+        }
+        finally
+        {
+            // Other tests count the fifteen existing departments.
+            await using var db = fx.NewContext();
+            await db.Departments.Where(d => d.Name.StartsWith("Geography ")).ExecuteDeleteAsync();
         }
     }
 

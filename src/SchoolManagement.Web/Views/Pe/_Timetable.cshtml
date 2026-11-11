@@ -1,0 +1,113 @@
+@model PePageViewModel
+@*
+    The P.E. module: date navigation, facility legend and the weekly timetable — days down the side, the
+    school's 10 periods across the top. Each chip is a P.E. session (a class); click it for its details.
+    "+" adds a P.E. session. Shared by the P.E. page (/pe) and the PE department page.
+*@
+@{
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var date = SchoolWeek.Iso(Model.Date);
+    var selectedDay = Model.Date.DayOfWeek;
+    var schoolDay = ScheduleRules.IsSchoolDay(selectedDay);
+    var noTimes = Model.Slots.All(s => !s.HasTimes);
+}
+
+<div class="tt-bar">
+    <partial name="_DayNav" model="Model.Date" />
+    <ul class="tt-legend" aria-label="Facilities">
+        <li><span class="pe-dot pe-dot--kg"></span>KG Garden</li>
+        <li><span class="pe-dot pe-dot--pool"></span>Swimming Pool</li>
+        <li><span class="pe-dot pe-dot--main"></span>Main Garden</li>
+        <li><span class="pe-dot"></span>Facility not set</li>
+    </ul>
+</div>
+
+@if (Model.DepartmentId is null)
+{
+    <div class="notice notice--error">@Ui.Icon("alert-circle")<div class="notice__body"><strong>The P.E. department was not found.</strong>P.E. sessions use the existing P.E. academic department.</div></div>
+}
+else if (Model.PeTeachers == 0)
+{
+    <div class="notice notice--warning">@Ui.Icon("users")<div class="notice__body"><strong>No P.E. teachers yet.</strong>Add staff to the <a href="/staff/departments/@Model.DepartmentId">P.E. department</a> to assign sessions.</div></div>
+}
+@if (!schoolDay)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>@Model.Date.ToString("dddd d MMM", c) is not a school day.</strong>Showing that school week (Sunday–Thursday).</div></div>
+}
+@if (noTimes)
+{
+    <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>The time slots have no times yet.</strong>Periods show as 1–10 until times are set in <a href="/timetable/slots">Time Slots</a>.</div></div>
+}
+@if (!Model.Editable)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>Past week — shown as history.</strong>New sessions start from the current week.</div></div>
+}
+
+<section class="card tt-card" aria-label="P.E. weekly timetable">
+    @if (Model.Slots.Count == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("clock")</span><p class="empty__title">No active time slots</p><div class="empty__actions"><a class="btn btn--primary" href="/timetable/slots">Time slots</a></div></div>
+    }
+    else
+    {
+        <div class="tt-wrap">
+            <div class="tt tt--days-rows pe-tt" role="table" aria-label="P.E. timetable" style="--tt-cols:@Model.Slots.Count">
+                <div class="tt__corner" role="columnheader"><span class="visually-hidden">Day</span></div>
+                @foreach (var slot in Model.Slots)
+                {
+                    <div class="tt__period" role="columnheader">
+                        <span class="tt__slotname">@slot.Label</span>
+                        <span class="tt__time @(slot.HasTimes ? "" : "is-missing")">@slot.Times</span>
+                    </div>
+                }
+                @foreach (var day in ScheduleRules.Days)
+                {
+                    var d = ScheduleRules.DateOf(Model.Week, day);
+                    <div class="tt__day @(day == selectedDay && schoolDay ? "is-today" : "")" role="rowheader">
+                        <span class="tt__dayname">@ScheduleRules.DayName(day)</span>
+                        <span class="tt__date">@d.ToString("d MMM", c)</span>
+                    </div>
+                    @foreach (var slot in Model.Slots)
+                    {
+                        var chips = Model.Sessions.Where(s => s.Day == day && s.SlotId == slot.Id).ToList();
+                        var newUrl = $"/pe/new?day={day}&slotId={slot.Id}&date={date}";
+                        <div class="tt__cell" role="cell">
+                            @if (chips.Count == 0)
+                            {
+                                @if (Model.Editable && Model.DepartmentId is not null)
+                                {
+                                    <a class="tt-cell tt-cell--empty" href="@newUrl" data-modal aria-label="@ScheduleRules.DayName(day), @slot.Label: no P.E. — add a session"><span class="tt-cell__plus">@Ui.Icon("plus")</span></a>
+                                }
+                                else
+                                {
+                                    <div class="tt-cell tt-cell--past" aria-label="@ScheduleRules.DayName(day), @slot.Label: no P.E."></div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="pe-cell">
+                                    @foreach (var s in chips)
+                                    {
+                                        <a class="pe-chip pe-chip--@(s.Facility?.ToString().ToLowerInvariant() ?? "none")" href="/pe/sessions/@s.SessionId?date=@date" data-modal
+                                           title="@s.ClassName · @s.TeacherName@(s.CoTeacherName is null ? "" : " + " + s.CoTeacherName)@(s.Facility is { } f ? " · " + PeService.FacilityName(f) : "")">
+                                            <strong>@s.ClassName</strong>
+                                            <span dir="auto">@s.TeacherName.Split(' ')[0]@(s.CoTeacherName is null ? "" : " +1")</span>
+                                        </a>
+                                    }
+                                    @if (Model.Editable)
+                                    {
+                                        <a class="pe-add" href="@newUrl" data-modal aria-label="Add another P.E. class at @ScheduleRules.DayName(day), @slot.Label">@Ui.Icon("plus", "icon--sm")</a>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+        @if (Model.Sessions.Count == 0)
+        {
+            <p class="hint" style="margin:12px 4px 0">No P.E. sessions this week yet. Click “+” in a day and period to add one.</p>
+        }
+    }
+</section>

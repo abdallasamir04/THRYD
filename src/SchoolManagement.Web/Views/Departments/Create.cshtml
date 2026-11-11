@@ -1,0 +1,69 @@
+@model DepartmentCreateModel
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Add department"; ViewData["Nav"] = "Departments"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/staff/departments">Departments</a></li><li>Add department</li></ol>
+            <h1 class="page-title">Add department</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/staff/departments/create" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("layers", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Add department</h2>
+                <p class="modal__sub">A new academic department. Add its members and assign an HOD from its page afterwards.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" asp-for="Name">Department name <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Name" maxlength="100" dir="auto" placeholder="e.g. Geography" required data-autofocus />
+                <span asp-validation-for="Name" class="field-validation-error"></span>
+                <p class="hint">Must be unique. The name is fixed once the department is created, so reports and imports stay consistent.</p>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Description">Description</label>
+                <textarea class="input textarea" asp-for="Description" rows="4" dir="auto" maxlength="500" placeholder="What this department covers, which stages it teaches…"></textarea>
+                <span asp-validation-for="Description" class="field-validation-error"></span>
+                <p class="hint">Optional. Up to 500 characters.</p>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" asp-for="SubcategoryLabel">Subcategory label</label>
+                    <input class="input" asp-for="SubcategoryLabel" maxlength="50" placeholder="e.g. Language, Subdepartment" />
+                    <span asp-validation-for="SubcategoryLabel" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" asp-for="SubjectLabel">Subject label</label>
+                    <input class="input" asp-for="SubjectLabel" maxlength="50" placeholder="e.g. Subject" />
+                    <span asp-validation-for="SubjectLabel" class="field-validation-error"></span>
+                </div>
+            </div>
+            <p class="hint">Optional. Labels shown on the staff form once the department has subcategories, which you add from its page under Subcategories.</p>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/staff/departments">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("plus")Add department</button>
+        </div>
+    </form>
+</div>

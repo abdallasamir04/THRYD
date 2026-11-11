@@ -229,6 +229,7 @@ public interface IDutyService
     Task<IReadOnlyList<DutyComponentSummary>> SummaryAsync(DutyType type, DateOnly date, CancellationToken ct = default);
     Task<IReadOnlyList<DutyRow>> ListAsync(DutyComponent component, DateOnly date, CancellationToken ct = default);
     Task<PagedResult<DutyRow>> AuditListAsync(DutyAuditQuery query, CancellationToken ct = default);
+    Task<IReadOnlyList<DutyRow>> AuditListAllAsync(DutyAuditQuery query, CancellationToken ct = default);
     Task<IReadOnlyDictionary<DutyStatus, int>> StatusCountsAsync(DateOnly date, CancellationToken ct = default);
     Task<DutyRow?> GetAsync(int id, CancellationToken ct = default);
     Task<IReadOnlyList<BackupResponseRow>> BackupHistoryAsync(int id, CancellationToken ct = default);
@@ -282,6 +283,20 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
 
     public async Task<PagedResult<DutyRow>> AuditListAsync(DutyAuditQuery q, CancellationToken ct = default)
     {
+        var query = AuditFilter(q);
+        var total = await query.CountAsync(ct);
+        var size = Paging.NormalizePageSize(q.PageSize);
+        var page = Paging.ClampPage(q.Page, total, size);
+        var items = await Project(AuditOrder(query)).Skip((page - 1) * size).Take(size).ToListAsync(ct);
+        return new PagedResult<DutyRow> { Items = items, Page = page, PageSize = size, TotalCount = total };
+    }
+
+    /// <summary>Every duty session matching the audit filters, in the audit order (for the PDF download).</summary>
+    public async Task<IReadOnlyList<DutyRow>> AuditListAllAsync(DutyAuditQuery q, CancellationToken ct = default) =>
+        await Project(AuditOrder(AuditFilter(q))).ToListAsync(ct);
+
+    private IQueryable<DutyAssignment> AuditFilter(DutyAuditQuery q)
+    {
         var query = db.DutyAssignments.AsNoTracking();
         if (TryDate(q.From) is { } from) query = query.Where(d => d.DutyDate >= from);
         if (TryDate(q.To) is { } to) query = query.Where(d => d.DutyDate <= to);
@@ -292,14 +307,11 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
         if (q.StaffId is { } staffId) query = query.Where(d => d.StaffAssignments.Any(s => s.StaffMemberId == staffId));
         if (DutyStatuses.FromSlug(q.Status) is { } status) query = query.Where(d => d.Status == status);
         if (q.FollowUp) query = query.Where(d => d.FollowUpRequired);
-
-        var total = await query.CountAsync(ct);
-        var size = Paging.NormalizePageSize(q.PageSize);
-        var page = Paging.ClampPage(q.Page, total, size);
-        var items = await Project(query.OrderByDescending(d => d.DutyDate).ThenBy(d => d.StartTime).ThenBy(d => d.Id))
-            .Skip((page - 1) * size).Take(size).ToListAsync(ct);
-        return new PagedResult<DutyRow> { Items = items, Page = page, PageSize = size, TotalCount = total };
+        return query;
     }
+
+    private static IQueryable<DutyAssignment> AuditOrder(IQueryable<DutyAssignment> query) =>
+        query.OrderByDescending(d => d.DutyDate).ThenBy(d => d.StartTime).ThenBy(d => d.Id);
 
     public async Task<IReadOnlyDictionary<DutyStatus, int>> StatusCountsAsync(DateOnly date, CancellationToken ct = default)
     {

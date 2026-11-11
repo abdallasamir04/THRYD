@@ -202,6 +202,14 @@ public class StudentsController(IStudentService students, IClassService classes,
         return File(bytes, ExcelContentType, $"students-{DateTime.Now:yyyy-MM-dd}.xlsx");
     }
 
+    /// <summary>Download Report: every student matching the list's filters, in its sort order.</summary>
+    [HttpGet]
+    public async Task<IActionResult> Pdf([FromQuery] StudentListQuery query, CancellationToken ct)
+    {
+        var className = query.ClassId is { } classId ? (await classes.GetAsync(classId, ct))?.Name : null;
+        return await PdfFile(Services.Pdf.PdfReports.Students(await students.ListAllAsync(query, ct), query.Search, className), ct);
+    }
+
     /// <summary>
     /// Live duplicate check used by the [Remote] rule on StudentFormModel.FullName. The action name must
     /// match that attribute: when it did not, the browser's check got a 404, stayed pending, and the

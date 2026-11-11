@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Services;
+using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
@@ -39,6 +40,16 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
             ],
         });
     }
+
+    /// <summary>Staff Duty Records → Download Report (same search as the page).</summary>
+    [HttpGet("duty-records/pdf")]
+    public async Task<IActionResult> DutyRecordsPdf(string? search, CancellationToken ct) =>
+        await PdfFile(PdfReports.StaffDutyRecords(await staffDuty.OverviewAsync(search, ct), search), ct);
+
+    /// <summary>Academic Staff → Staff Members → Download Report (all pages, same filters and sort).</summary>
+    [HttpGet("members/pdf")]
+    public async Task<IActionResult> MembersPdf([FromQuery] TeacherListQuery query, CancellationToken ct) =>
+        await PdfFile(PdfReports.StaffMembers(await teachers.ListAllAsync(query, ct), query), ct);
 
     /// <summary>Academic Staff landing page: Departments, or Department Management.</summary>
     [HttpGet("academic")]

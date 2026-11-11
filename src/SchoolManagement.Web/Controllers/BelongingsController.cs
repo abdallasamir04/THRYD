@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Services;
+using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
@@ -13,20 +14,7 @@ public class BelongingsController(IBelongingsService belongings, ITimetableServi
     [HttpGet("")]
     public async Task<IActionResult> Index(int? yearId, int? quarterId, int? week, string? date, string? grade, int? studentId, CancellationToken ct)
     {
-        var years = await belongings.YearsAsync(ct);
-        var picked = DateOnly.TryParseExact(date, "yyyy-MM-dd", out var d) ? d : (DateOnly?)null;
-
-        // Default: the quarter holding the chosen date (or today).
-        var todayQuarter = quarterId is null && yearId is null ? await belongings.QuarterForDateAsync(picked ?? SchoolWeek.Today, ct) : null;
-        var year = years.FirstOrDefault(y => y.Id == (yearId ?? todayQuarter?.YearId)) ?? (yearId is null ? years.FirstOrDefault() : null);
-        var quarter = year?.Quarters.FirstOrDefault(q => q.Id == (quarterId ?? todayQuarter?.Id) && q.IsConfigured)
-                      ?? year?.Quarters.FirstOrDefault(q => q.IsConfigured && quarterId is null);
-        var weeks = quarter?.Weeks ?? [];
-        var w = weeks.FirstOrDefault(x => x.Number == week)
-                ?? weeks.FirstOrDefault(x => picked is { } p && x.Days.Contains(p))
-                ?? weeks.FirstOrDefault(x => x.Days.Contains(SchoolWeek.Today))
-                ?? weeks.FirstOrDefault();
-        DateOnly? day = w is null ? null : picked is { } pd && w.Days.Contains(pd) ? pd : w.Days.Contains(SchoolWeek.Today) ? SchoolWeek.Today : w.Days.FirstOrDefault();
+        var (years, year, quarter, w, day) = await SelectionAsync(yearId, quarterId, week, date, ct);
 
         var gradeKey = GradeCatalog.All.Any(g => g.Key == grade) ? grade : null;
         var students = await belongings.StudentsAsync(gradeKey, ct);
@@ -45,6 +33,37 @@ public class BelongingsController(IBelongingsService belongings, ITimetableServi
             GradeWeek = gradeKey is not null && quarter is not null && w is not null ? await belongings.GradeWeekAsync(gradeKey, quarter, w.Number, ct) : [],
             Departments = depts,
         });
+    }
+
+    /// <summary>Download Report: the selected grade's weekly readiness table (same year, quarter and week as the page).</summary>
+    [HttpGet("grade-week/pdf")]
+    public async Task<IActionResult> GradeWeekPdf(int? yearId, int? quarterId, int? week, string? date, string? grade, CancellationToken ct)
+    {
+        var (_, _, quarter, w, _) = await SelectionAsync(yearId, quarterId, week, date, ct);
+        var gradeKey = GradeCatalog.All.Any(g => g.Key == grade) ? grade : null;
+        if (gradeKey is null || quarter is null || w is null) return NotFound();
+        return await PdfFile(PdfReports.BelongingsGradeWeek(gradeKey, quarter, w, await belongings.GradeWeekAsync(gradeKey, quarter, w.Number, ct)), ct);
+    }
+
+    /// <summary>Year → Quarter → Week → Date from the query string; defaults to the quarter and week holding the date (or today).</summary>
+    private async Task<(IReadOnlyList<YearView> Years, YearView? Year, QuarterView? Quarter, WeekInfo? Week, DateOnly? Day)> SelectionAsync(
+        int? yearId, int? quarterId, int? week, string? date, CancellationToken ct)
+    {
+        var years = await belongings.YearsAsync(ct);
+        var picked = DateOnly.TryParseExact(date, "yyyy-MM-dd", out var d) ? d : (DateOnly?)null;
+
+        // Default: the quarter holding the chosen date (or today).
+        var todayQuarter = quarterId is null && yearId is null ? await belongings.QuarterForDateAsync(picked ?? SchoolWeek.Today, ct) : null;
+        var year = years.FirstOrDefault(y => y.Id == (yearId ?? todayQuarter?.YearId)) ?? (yearId is null ? years.FirstOrDefault() : null);
+        var quarter = year?.Quarters.FirstOrDefault(q => q.Id == (quarterId ?? todayQuarter?.Id) && q.IsConfigured)
+                      ?? year?.Quarters.FirstOrDefault(q => q.IsConfigured && quarterId is null);
+        var weeks = quarter?.Weeks ?? [];
+        var w = weeks.FirstOrDefault(x => x.Number == week)
+                ?? weeks.FirstOrDefault(x => picked is { } p && x.Days.Contains(p))
+                ?? weeks.FirstOrDefault(x => x.Days.Contains(SchoolWeek.Today))
+                ?? weeks.FirstOrDefault();
+        DateOnly? day = w is null ? null : picked is { } pd && w.Days.Contains(pd) ? pd : w.Days.Contains(SchoolWeek.Today) ? SchoolWeek.Today : w.Days.FirstOrDefault();
+        return (years, year, quarter, w, day);
     }
 
     [HttpGet("subjects")]

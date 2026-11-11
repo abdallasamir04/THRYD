@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Services;
+using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
 /// <summary>
-/// P.E. timetable (sidebar → P.E.). Sessions are the P.E. department's normal timetable sessions:
+/// P.E. timetable (Duties → P.E., and embedded on the PE department page). Sessions are the P.E. department's normal timetable sessions:
 /// created with ITimetableService (conflicts, one class per slot, workload), changed and removed with
 /// the existing timetable forms. This controller adds the P.E. grid and the session details.
 /// </summary>
@@ -14,18 +15,16 @@ namespace SchoolManagement.Web.Controllers;
 public class PeController(IPeService pe, ITimetableService timetable, ITeacherService teachers, IClassService classes) : AppController
 {
     [HttpGet("")]
-    public async Task<IActionResult> Index(string? date, CancellationToken ct)
+    public async Task<IActionResult> Index(string? date, CancellationToken ct) =>
+        View(await PePageViewModel.LoadAsync(SchoolWeek.ParseDayOrToday(date), pe, timetable, teachers, ct));
+
+    /// <summary>Download Timetable (from /pe and from the PE department page): the same week and data.</summary>
+    [HttpGet("pdf")]
+    public async Task<IActionResult> Pdf(string? date, CancellationToken ct)
     {
-        var day = SchoolWeek.ParseDayOrToday(date);
-        var week = SchoolWeek.StartOf(day);
-        var dept = await pe.DepartmentIdAsync(ct);
-        return View(new PePageViewModel
-        {
-            Date = day, Week = week, DepartmentId = dept,
-            Slots = (await timetable.SlotsAsync(ct)).Where(s => s.IsActive).ToList(),
-            Sessions = await pe.WeekAsync(week, ct),
-            PeTeachers = dept is null ? 0 : (await teachers.ListAllAsync(new TeacherListQuery { DepartmentId = dept }, ct)).Count,
-        });
+        var m = await PePageViewModel.LoadAsync(SchoolWeek.ParseDayOrToday(date), pe, timetable, teachers, ct);
+        var department = m.DepartmentId is { } id ? (await teachers.DepartmentsAsync(ct)).FirstOrDefault(d => d.Id == id)?.Name : null;
+        return await PdfFile(PdfReports.PeTimetable(m.Week, m.Slots, m.Sessions, department, m.PeTeachers), ct);
     }
 
     [HttpGet("new")]

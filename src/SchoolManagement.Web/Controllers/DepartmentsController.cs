@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Services;
+using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
 /// <summary>Academic Staff → Departments: the department grid, each department's page, HOD changes.</summary>
 [Route("staff/departments")]
-public class DepartmentsController(IDepartmentService departments) : AppController
+public class DepartmentsController(IDepartmentService departments, IPeService pe, ITimetableService timetable, ITeacherService teachers) : AppController
 {
     [HttpGet("")]
     public async Task<IActionResult> Index([FromQuery] DepartmentListQuery query, CancellationToken ct)
@@ -24,19 +25,55 @@ public class DepartmentsController(IDepartmentService departments) : AppControll
         return IsAjax ? PartialView("_Grid", model) : View(model);
     }
 
+    /// <summary>Add department: a new academic department with its own name and details (no staff or HOD yet).</summary>
+    [HttpGet("create")]
+    public IActionResult Create() => PageOrPartial("Create", new DepartmentCreateModel());
+
+    [HttpPost("create"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create(DepartmentCreateModel model, CancellationToken ct)
+    {
+        if (ModelState.IsValid)
+        {
+            var result = await departments.CreateAsync(model.Name, model.Description, model.SubcategoryLabel, model.SubjectLabel, ct);
+            if (result.Succeeded)
+                return Saved($"{TextNormalizer.CleanText(model.Name)} was added. Open it to add members and assign an HOD.", result.EntityId!.Value, "/staff/departments");
+            AddErrors(result);
+        }
+        return FormView("Create", model);
+    }
+
     [HttpGet("{id:int}")]
-    public async Task<IActionResult> Details(int id, [FromQuery] DepartmentMemberQuery query, CancellationToken ct)
+    public async Task<IActionResult> Details(int id, [FromQuery] DepartmentMemberQuery query, string? date, CancellationToken ct)
     {
         var dept = await departments.GetAsync(id, ct);
         if (dept is null) return NotFoundResult("This department no longer exists.");
+        // The PE department page embeds the P.E. module (same data as /pe) under Department Staff.
+        var isPe = !IsAjax && await pe.DepartmentIdAsync(ct) == id;
         var model = new DepartmentDetailsViewModel
         {
             Department = dept,
             Query = query,
             Members = await departments.MembersAsync(id, query, ct),
             HeadHistory = IsAjax ? [] : await departments.HeadHistoryAsync(id, ct),
+            Pe = isPe ? await PePageViewModel.LoadAsync(SchoolWeek.ParseDayOrToday(date), pe, timetable, teachers, ct) : null,
         };
         return IsAjax ? PartialView("_Members", model) : View(model);
+    }
+
+    /// <summary>Department Report: the department's staff (same search, subcategory and sort as the page) and HOD history.</summary>
+    [HttpGet("{id:int}/pdf")]
+    public async Task<IActionResult> Pdf(int id, [FromQuery] DepartmentMemberQuery query, CancellationToken ct)
+    {
+        var dept = await departments.GetAsync(id, ct);
+        if (dept is null) return NotFound();
+        return await PdfFile(PdfReports.Department(dept, await departments.MembersAsync(id, query, ct), await departments.HeadHistoryAsync(id, ct), query), ct);
+    }
+
+    [HttpGet("heads/pdf")]
+    public async Task<IActionResult> HeadsPdf(string? filter, CancellationToken ct)
+    {
+        var hod = filter is "missing" or "assigned" ? filter : null;
+        return await PdfFile(PdfReports.Heads(await departments.ListAsync(new DepartmentListQuery { Hod = hod }, ct), hod), ct);
     }
 
     /// <summary>Academic Staff → HOD Management: every department's current HOD and recent changes.</summary>

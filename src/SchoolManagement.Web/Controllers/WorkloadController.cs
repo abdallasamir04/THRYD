@@ -3,6 +3,7 @@ using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.Services.Excel;
+using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
@@ -43,6 +44,37 @@ public class WorkloadController(
             await workload.OverviewAsync(start, new WorkloadOverviewQuery { Sort = "name" }, ct),
             await workload.WeekAssignmentsAsync(start, ct));
         return File(bytes, StudentsController.ExcelContentType, $"teacher-workload-{SchoolWeek.Iso(start)}.xlsx");
+    }
+
+    /// <summary>Download Report: the week's workload with the page's filters and sort order.</summary>
+    [HttpGet("pdf")]
+    public async Task<IActionResult> Pdf([FromQuery] WorkloadOverviewQuery query, CancellationToken ct)
+    {
+        var week = SchoolWeek.ParseOrCurrent(query.Week);
+        var all = await workload.OverviewAsync(week, new WorkloadOverviewQuery(), ct);
+        var departments = await teachers.DepartmentsAsync(ct);
+        var max = await workload.MaxAsync(ct);
+        IReadOnlyList<PdfMeta> filters =
+        [
+            new("Search", string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim()),
+            new("Teacher", query.TeacherId is { } tid ? all.FirstOrDefault(r => r.TeacherId == tid)?.TeacherName : null),
+            new("Status", query.Status switch { "capacity" => "Has free periods", "available" => "Available", "near" => "Near capacity", "full" => "Full", _ => null }),
+            new("Category", Enum.TryParse<WorkloadCategory>(query.Category, true, out var cat) ? "Has " + WorkloadRules.Label(cat).ToLowerInvariant() : null),
+            new("Department", query.DepartmentId is { } did ? departments.FirstOrDefault(d => d.Id == did)?.Name : query.Department),
+            new("Job title", query.JobTitle == TeacherListQuery.NoJobTitle ? "Not set" : query.JobTitle),
+        ];
+        return await PdfFile(PdfReports.Workload(week, await workload.OverviewAsync(week, query, ct), all, max, filters), ct);
+    }
+
+    /// <summary>Download Report from a teacher's workload page (same week).</summary>
+    [HttpGet("teacher/{id:int}/pdf")]
+    public async Task<IActionResult> TeacherPdf(int id, string? week, CancellationToken ct)
+    {
+        var teacher = await teachers.GetAsync(id, ct);
+        if (teacher is null) return NotFound();
+        var start = SchoolWeek.ParseOrCurrent(week);
+        return await PdfFile(PdfReports.TeacherWorkload(teacher, (await workload.SummaryAsync(id, start, ct))!,
+            await workload.AssignmentsAsync(id, start, ct), await workload.HistoryAsync(id, 100, ct)), ct);
     }
 
     [HttpGet("teacher/{id:int}")]

@@ -6,6 +6,7 @@
     var week = SchoolWeek.Iso(g.Week);
     var noTimes = g.Slots.Where(s => s.IsActive).All(s => !s.HasTimes);
     var sessions = g.Sessions.Count;
+    var pdfPath = (Model.IsClass ? "/timetable/classes/" : "/timetable/teachers/") + Model.EntityId + "/pdf";
 }
 <span data-refresh-on-save hidden></span>
 
@@ -39,6 +40,7 @@
             <a class="btn btn--secondary" href="/workload/teacher/@Model.EntityId?week=@week">@Ui.Icon("chart")Workload</a>
         }
         <a class="btn btn--secondary" href="/timetable/slots">@Ui.Icon("clock")Time slots</a>
+        <partial name="_Download" model="DownloadLink.Timetable(pdfPath)" />
     </div>
 </div>
 

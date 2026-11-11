@@ -65,6 +65,14 @@
         if (e.key === "Escape" && doc.body.classList.contains("nav-open")) setNav(false);
     });
 
+    // ------------------------------------------------------------------ PDF downloads
+    // A download link holds its export path; on click it takes the page's current query string, so
+    // filters, dates and tabs changed in place (AJAX lists, attendance tabs) are what gets exported.
+    doc.addEventListener("click", function (e) {
+        var link = e.target.closest("a[data-download]");
+        if (link) link.href = link.getAttribute("data-download") + window.location.search;
+    });
+
     // ------------------------------------------------------------------ progress + fetch
     var bar = doc.createElement("div");
     bar.className = "progress-bar";

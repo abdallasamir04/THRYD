@@ -60,6 +60,7 @@ public sealed class TaskInput
 public interface IManagementTaskService
 {
     Task<PagedResult<TaskRow>> ListAsync(TaskListQuery query, CancellationToken ct = default);
+    Task<IReadOnlyList<TaskRow>> ListAllAsync(TaskListQuery query, CancellationToken ct = default);
     Task<TaskCounts> CountsAsync(int? memberId, CancellationToken ct = default);
     Task<TaskRow?> GetAsync(int id, CancellationToken ct = default);
     Task<ServiceResult> CreateAsync(TaskInput input, CancellationToken ct = default);
@@ -87,6 +88,10 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
         var items = await Project(Sort(filtered, q)).Skip((page - 1) * size).Take(size).ToListAsync(ct);
         return new PagedResult<TaskRow> { Items = items, Page = page, PageSize = size, TotalCount = total };
     }
+
+    /// <summary>Every task matching the filters, in the list's sort order (for the PDF download).</summary>
+    public async Task<IReadOnlyList<TaskRow>> ListAllAsync(TaskListQuery q, CancellationToken ct = default) =>
+        await Project(Sort(Filter(q), q)).ToListAsync(ct);
 
     public async Task<TaskCounts> CountsAsync(int? memberId, CancellationToken ct = default)
     {

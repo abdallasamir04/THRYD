@@ -13,6 +13,12 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.20" />
+    <PackageReference Include="QuestPDF" Version="2026.9.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PDF export fonts: static copies of the site's Manrope and Noto Sans Arabic (see Resources/Fonts/make-pdf-fonts.py). -->
+    <EmbeddedResource Include="Resources\Fonts\*.ttf" LogicalName="PdfFonts.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

@@ -13,6 +13,23 @@ public sealed class PePageViewModel
     public int? DepartmentId { get; init; }
     public int PeTeachers { get; init; }
     public bool Editable => Week >= Common.SchoolWeek.Current;
+
+    /// <summary>
+    /// The P.E. timetable for the week of <paramref name="date"/>. Used by the P.E. page (/pe, opened from
+    /// Duties) and by the PE department page, so both show the same data.
+    /// </summary>
+    public static async Task<PePageViewModel> LoadAsync(DateOnly date, IPeService pe, ITimetableService timetable, ITeacherService teachers, CancellationToken ct)
+    {
+        var week = Common.SchoolWeek.StartOf(date);
+        var dept = await pe.DepartmentIdAsync(ct);
+        return new PePageViewModel
+        {
+            Date = date, Week = week, DepartmentId = dept,
+            Slots = (await timetable.SlotsAsync(ct)).Where(s => s.IsActive).ToList(),
+            Sessions = await pe.WeekAsync(week, ct),
+            PeTeachers = dept is null ? 0 : (await teachers.ListAllAsync(new TeacherListQuery { DepartmentId = dept }, ct)).Count,
+        };
+    }
 }
 
 /// <summary>New P.E. session from an empty cell: day and period come from the cell.</summary>

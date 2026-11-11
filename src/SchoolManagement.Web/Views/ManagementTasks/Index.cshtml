@@ -16,6 +16,7 @@
     </div>
     <div class="page-head__actions">
         <a class="btn btn--secondary" href="/management/members">@Ui.Icon("briefcase")Team members</a>
+        <partial name="_Download" model='DownloadLink.Report("/management/tasks/pdf")' />
         <a class="btn btn--primary" href="/management/tasks/create@(q.MemberId is { } mid ? $"?memberId={mid}" : "")" data-modal>@Ui.Icon("plus")New task</a>
     </div>
 </div>

@@ -27,6 +27,7 @@
     <div class="page-head__actions">
         <a class="btn btn--secondary" href="/teachers/details/@t.Id" data-modal>@Ui.Icon("user")Teacher details</a>
         <a class="btn btn--secondary" href="/timetable/teachers/@t.Id?week=@week">@Ui.Icon("calendar")Timetable</a>
+        <partial name="_Download" model='DownloadLink.Report($"/workload/teacher/{t.Id}/pdf")' />
         @if (s.Remaining > 0)
         {
             <a class="btn btn--primary" href="/workload/create?teacherId=@t.Id&week=@week" data-modal>@Ui.Icon("plus")Assign periods</a>

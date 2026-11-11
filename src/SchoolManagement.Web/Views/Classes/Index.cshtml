@@ -12,6 +12,7 @@
         <p class="page-sub">Every student belongs to one of these classes. Deactivate a class to stop new placements without touching its students.</p>
     </div>
     <div class="page-head__actions">
+        <partial name="_Download" model='DownloadLink.Report("/classes/pdf")' />
         <a class="btn btn--primary" href="/classes/create" data-modal>@Ui.Icon("plus")Add class</a>
     </div>
 </div>
