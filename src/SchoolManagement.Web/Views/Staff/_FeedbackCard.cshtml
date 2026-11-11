@@ -1,0 +1,12 @@
+@model FeedbackRow
+<article class="feedback">
+    <header class="feedback__head">
+        <partial name="_Stars" model="(double?)Model.Rating" />
+        @if (Model.FollowUpRequired) { <span class="badge badge--warning">Follow-up</span> }
+    </header>
+    <p class="feedback__text" dir="auto">@Model.Feedback</p>
+    <p class="feedback__meta">
+        <span dir="auto">@Model.DutyDescription</span> · @Model.DutyDate.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)
+        · @(Model.Role == DutyRole.Primary ? "assigned" : "backup") · by <span dir="auto">@Model.EvaluatorName</span>
+    </p>
+</article>

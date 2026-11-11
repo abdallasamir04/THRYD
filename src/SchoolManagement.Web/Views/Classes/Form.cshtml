@@ -1,0 +1,114 @@
+@model ClassFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit class" : "Add class";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Classes"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/classes">Classes</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form asp-controller="Classes" asp-action="@(Model.IsEdit ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post"
+          data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "door", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">@(Model.IsEdit ? $"{Model.StudentCount} student(s) are in this class. Renaming keeps them in it." : "Choose a stage and section; the class number is assigned for you.")</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors" style="margin-bottom:14px"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-grid form-grid--2">
+                @if (!Model.IsEdit)
+                {
+                    var allSections = Model.Sections.Values.SelectMany(s => s).Distinct().OrderBy(s => s.Length).ThenBy(s => s).ToList();
+                    <div class="field">
+                        <label class="label" asp-for="GradeLevel">Stage <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" asp-for="GradeLevel" data-autofocus required>
+                            @foreach (var (code, label) in ClassNumbering.Stages)
+                            {
+                                <option value="@code">@label</option>
+                            }
+                        </select>
+                        <span asp-validation-for="GradeLevel" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="Section">Section <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input" asp-for="Section" list="class-sections" maxlength="3" placeholder="e.g. A, or a new letter" required
+                               pattern="[A-Za-z]{1,3}" title="1–3 letters, e.g. A or C" style="text-transform:uppercase" />
+                        <datalist id="class-sections">
+                            @foreach (var s in allSections)
+                            {
+                                <option value="@s">Section @s</option>
+                            }
+                        </datalist>
+                        <span asp-validation-for="Section" class="field-validation-error"></span>
+                        <span class="hint">Pick an existing section or type a new one. A new section starts at 1.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="field">
+                        <label class="label" asp-for="Name">Class name <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input" asp-for="Name" placeholder="e.g. G11A" maxlength="50" data-autofocus />
+                        <span asp-validation-for="Name" class="field-validation-error"></span>
+                    </div>
+                }
+                <div class="field">
+                    <label class="label" asp-for="Capacity">Class capacity <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" asp-for="Capacity" type="number" min="1" max="1000" step="1" required />
+                    <span asp-validation-for="Capacity" class="field-validation-error"></span>
+                    <span class="hint">Maximum number of students permitted in this class.</span>
+                </div>
+                <div class="field field--full">
+                    <label class="switch">
+                        <input type="checkbox" asp-for="IsActive" />
+                        <span class="switch__track" aria-hidden="true"></span>
+                        <span>Active — can receive new students</span>
+                    </label>
+                    @if (Model.IsEdit && Model.StudentCount > 0)
+                    {
+                        <span class="hint">Deactivating keeps the @Model.StudentCount student(s) in this class.</span>
+                    }
+                </div>
+            </div>
+            @if (!Model.IsEdit)
+            {
+                <p class="hint" style="margin-top:14px">
+                    The class number is calculated automatically for each stage and section (KG + next number + section, e.g. KG3A).
+                    @if (Model.NextNames.Count > 0)
+                    {
+                        <br /><text>Next in existing sections: @string.Join(", ", Model.NextNames)</text>
+                    }
+                </p>
+            }
+            else
+            {
+                <p class="hint" style="margin-top:14px">Class order is determined automatically based on grade level and section.</p>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/classes">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Add class")</button>
+        </div>
+    </form>
+</div>

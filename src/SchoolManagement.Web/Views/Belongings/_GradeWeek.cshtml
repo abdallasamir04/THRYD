@@ -1,0 +1,30 @@
+@model BelongingsPageViewModel
+@* Weekly readiness of every student of the selected grade (click a student to open their records). *@
+@if (Model.GradeWeek.Count > 0)
+{
+    <section class="card table-card" aria-labelledby="gw-title">
+        <div class="card__head">
+            <div><h2 class="card__title" id="gw-title">@Ui.Icon("users")@GradeCatalog.Label(Model.Grade) · Week @Model.Week!.Number</h2>
+                <p class="card__sub">Weekly readiness per student. Missing days are listed separately and never counted as Red.</p></div>
+        </div>
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Student</th><th scope="col" class="num">Personal</th><th scope="col" class="num">Academic</th><th scope="col" class="num">Overall</th><th scope="col" class="num">Recorded days</th><th scope="col" class="num">Missing</th></tr></thead>
+                <tbody>
+                    @foreach (var r in Model.GradeWeek)
+                    {
+                        <tr class="@(Model.Student?.Id == r.StudentId ? "is-selected" : "")">
+                            <td data-label="Student"><div class="person"><span class="avatar avatar--@Ui.Tone(r.Name)" aria-hidden="true">@Ui.Initials(r.Name)</span>
+                                <div style="min-width:0"><div class="person__name" dir="auto"><a href="@Model.Query(("studentId", r.StudentId))">@r.Name</a></div><div class="person__meta">@r.ClassName</div></div></div></td>
+                            <td data-label="Personal" class="num">@ReadinessCounts.Text(r.Readiness.Personal.Percent)</td>
+                            <td data-label="Academic" class="num">@ReadinessCounts.Text(r.Readiness.Academic.Percent)</td>
+                            <td data-label="Overall" class="num"><strong>@ReadinessCounts.Text(r.Readiness.Overall.Percent)</strong></td>
+                            <td data-label="Recorded days" class="num">@r.RecordedDays</td>
+                            <td data-label="Missing" class="num @(r.MissingDays > 0 ? "" : "faint")">@r.MissingDays</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}

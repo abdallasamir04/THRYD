@@ -1,0 +1,127 @@
+@model SettingsViewModel
+@{
+    ViewData["Title"] = "Settings";
+    ViewData["Nav"] = "Settings";
+    var s = Model.System;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>System</li><li>Settings</li></ol>
+        <h1 class="page-title">Settings</h1>
+        <p class="page-sub">School profile, appearance and database status.</p>
+    </div>
+</div>
+
+<div class="grid-2">
+    <section class="card" aria-labelledby="profile-title">
+        <div class="card__head"><h2 class="card__title" id="profile-title">@Ui.Icon("school")School profile</h2></div>
+        <form method="post" asp-action="Index" data-loading class="card__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" asp-for="Profile.SchoolName">School name <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Profile.SchoolName" dir="auto" maxlength="120" />
+                <span asp-validation-for="Profile.SchoolName" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Profile.AcademicYear">Academic year</label>
+                <input class="input" asp-for="Profile.AcademicYear" placeholder="e.g. 2026–2027" maxlength="20" />
+                <span asp-validation-for="Profile.AcademicYear" class="field-validation-error"></span>
+                <span class="hint">Shown in the top bar and on the dashboard.</span>
+            </div>
+            <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save profile</button></div>
+        </form>
+    </section>
+
+    <section class="card" aria-labelledby="appearance-title">
+        <div class="card__head"><h2 class="card__title" id="appearance-title">@Ui.Icon("sun")Appearance</h2></div>
+        <div class="card__body">
+            <div class="theme-options" role="group" aria-label="Theme">
+                <button class="theme-option" type="button" data-theme-option="light" aria-pressed="false"><span class="theme-option__preview theme-option__preview--light"><i></i><i></i></span>Light</button>
+                <button class="theme-option" type="button" data-theme-option="dark" aria-pressed="false"><span class="theme-option__preview theme-option__preview--dark"><i></i><i></i></span>Dark</button>
+                <button class="theme-option" type="button" data-theme-option="system" aria-pressed="false"><span class="theme-option__preview theme-option__preview--system"></span>System</button>
+            </div>
+            <p class="hint" style="margin-top:12px">Saved in this browser only.</p>
+        </div>
+    </section>
+</div>
+
+<div class="grid-2">
+    <section class="card" aria-labelledby="workload-title" id="workload">
+        <div class="card__head"><h2 class="card__title" id="workload-title">@Ui.Icon("chart")Maximum weekly workload</h2></div>
+        <form method="post" action="/settings/workloadlimit" data-loading class="card__body form-grid">
+            @Html.AntiForgeryToken()
+            <div class="field">
+                <label class="label" for="maxWeeklyPeriods">Maximum legal periods per week (default: 24)</label>
+                <input class="input" type="number" id="maxWeeklyPeriods" name="maxWeeklyPeriods" value="@Model.MaxWeeklyPeriods" min="1" max="24" required style="max-width:200px" />
+                <span class="hint">Configures the maximum workload limit enforced across all teachers and categories (Teaching, Office, Substitutions, Duties).</span>
+            </div>
+            <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save workload limit</button></div>
+        </form>
+    </section>
+
+    <section class="card" aria-labelledby="arrival-title" id="arrival">
+        <div class="card__head"><h2 class="card__title" id="arrival-title">@Ui.Icon("clock")Student arrival deadline</h2></div>
+        <form method="post" action="/settings/arrivaldeadline" data-loading class="card__body form-grid">
+            @Html.AntiForgeryToken()
+            <div class="field">
+                <label class="label" for="deadline">Students arriving after this time are marked Late</label>
+                <input class="input" type="time" id="deadline" name="deadline" value="@Model.ArrivalDeadline?.ToString("HH:mm")" required style="max-width:200px" />
+                <span class="hint">
+                    @if (Model.ArrivalDeadline is null)
+                    {
+                        <strong>Not set yet.</strong> <span>Until it is set, arrivals are recorded without On Time / Late.</span>
+                    }
+                    else
+                    {
+                        <span>Arriving exactly at the deadline is on time. Each record keeps the deadline it was recorded with.</span>
+                    }
+                </span>
+            </div>
+            <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save deadline</button></div>
+        </form>
+    </section>
+
+    <section class="card" aria-labelledby="operator-title" id="operator">
+        <div class="card__head"><h2 class="card__title" id="operator-title">@Ui.Icon("user")Working as</h2></div>
+        <form method="post" action="/operator" class="card__body form-grid">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnUrl" value="/settings#operator" />
+            <div class="field">
+                <label class="label" for="operator-staff">Your name on the records you create in this browser</label>
+                <select class="select" id="operator-staff" name="staffId" data-searchable>
+                    <option value="">Not set</option>
+                    @foreach (var st in Model.Staff)
+                    {
+                        <option value="@st.Id" selected="@(Model.OperatorStaffId == st.Id)" data-note="@st.JobTitle">@st.FullName</option>
+                    }
+                </select>
+                <span class="hint">Used for “Created by”, “Recorded by” and “Updated by”. This is <strong>self-selected, not a sign-in</strong>: it is not verified until user accounts are added.</span>
+            </div>
+            <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button></div>
+        </form>
+    </section>
+</div>
+
+<section class="card" aria-labelledby="system-title">
+    <div class="card__head">
+        <h2 class="card__title" id="system-title">@Ui.Icon("database")Database</h2>
+        @if (s.CanConnect)
+        {
+            <span class="badge badge--success"><span class="status-dot"></span>Connected</span>
+        }
+        else
+        {
+            <span class="badge badge--error"><span class="status-dot status-dot--bad"></span>Not connected</span>
+        }
+    </div>
+    <div class="card__body">
+        <dl class="dl">
+            <dt>Server</dt><dd class="mono">@(s.Server ?? "—")</dd>
+            <dt>Database</dt><dd class="mono">@(s.Database ?? "—")</dd>
+            <dt>Records</dt><dd>@Ui.Plural(s.Students, "student", "students") · @Ui.Plural(s.Teachers, "teacher", "teachers") · @Ui.Plural(s.Classes, "class", "classes")</dd>
+            <dt>Migrations applied</dt><dd>@(s.AppliedMigrations.Count == 0 ? "None" : string.Join(", ", s.AppliedMigrations))</dd>
+            <dt>Pending migrations</dt><dd>@(s.PendingMigrations.Count == 0 ? "None — the database is up to date" : string.Join(", ", s.PendingMigrations))</dd>
+        </dl>
+    </div>
+</section>

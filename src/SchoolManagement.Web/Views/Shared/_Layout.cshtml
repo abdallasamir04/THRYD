@@ -1,0 +1,211 @@
+@*
+    Application shell: grouped sidebar (brand + navigation) next to the workspace (glass topbar + page).
+    Below 1024px the sidebar is an off-canvas drawer opened by the topbar's menu button.
+    Planned modules (Daily Operations, School QA) are shown muted with "Soon": no link, no route.
+*@
+@inject ISettingsService Settings
+@inject IDashboardService Dashboard
+@inject ICurrentUser CurrentUser
+@{
+    var operatorName = CurrentUser.Name;
+    var profile = await Settings.GetProfileAsync();
+    var counts = await Dashboard.NavCountsAsync();
+    var current = ViewData["Nav"] as string ?? "";
+    // Every page under Staff (academic and management) highlights the single Staff entry.
+    if (current is "Departments" or "StaffMembers" or "Teachers" or "Workload" or "Timetable" or "Management" or "ManagementTasks") current = "Staff";
+    var title = ViewData["Title"] as string ?? "Dashboard";
+
+    // "Staff" is one entry: its landing page leads to Academic Staff or the Management Team, and from
+    // there to each feature, so the sidebar does not list every Staff submodule.
+    var groups = new (string Title, (string Key, string? Href, string Label, string Icon, int? Count)[] Items)[]
+    {
+        ("People", new (string, string?, string, string, int?)[]
+        {
+            ("Staff", "/staff", "Staff", "users", counts.Teachers + counts.Management),
+            ("Belongings", "/belongings", "Belongings", "inbox", null),
+        }),
+        ("Academics", new (string, string?, string, string, int?)[]
+        {
+            ("Classes", "/classes", "Classes", "door", counts.Classes),
+            ("PE", "/pe", "P.E.", "activity", null),
+        }),
+        ("Daily Operations", new (string, string?, string, string, int?)[]
+        {
+            ("MorningDuty", "/duties", "Duties", "shield-check", null),
+            ("DutyAudit", "/duties/audit", "Duty Audit", "clipboard-check", null),
+            ("StaffDuty", "/staff?view=duties", "Staff Duty Records", "users", null),
+            ("Arrivals", "/arrivals", "Student Arrivals", "clock", null),
+        }),
+        ("Data", new (string, string?, string, string, int?)[]
+        {
+            ("ImportExport", "/import-export", "Import / Export", "sheet", null),
+        }),
+        ("Coming next", new (string, string?, string, string, int?)[]
+        {
+            ("SchoolQA", null, "School QA", "clipboard-check", null),
+        }),
+        ("System", new (string, string?, string, string, int?)[]
+        {
+            ("Settings", "/settings", "Settings", "settings", null),
+        }),
+    };
+    var group = current == "Dashboard" ? "Overview"
+        : groups.FirstOrDefault(g => g.Items.Any(i => i.Key == current)).Title ?? "";
+    var flash = TempData[SchoolManagement.Web.Controllers.AppController.ToastKey] as string;
+}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@title · @profile.SchoolName</title>
+    <script src="~/js/theme-init.js" asp-append-version="true"></script>
+    <link rel="preload" href="~/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="~/css/app.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/operations.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/staff.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/skeleton.css" asp-append-version="true" />
+    <link rel="icon" type="image/png" href="~/img/logo-mark.png" asp-append-version="true" />
+    @await RenderSectionAsync("Head", required: false)
+</head>
+<body>
+    <partial name="_Icons" />
+    <a class="skip-link" href="#content">Skip to content</a>
+
+    <div class="shell">
+        <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+            <div class="sidebar__head">
+                <a class="brand brand--logo" href="/">
+                    @* THRYD logo: transparent copies of E:\noo\logo.jpeg, one for each theme. *@
+                    <img class="brand__logo brand__logo--light" src="~/img/logo-light.png" asp-append-version="true" alt="THRYD" width="640" height="123" />
+                    <img class="brand__logo brand__logo--dark" src="~/img/logo-dark.png" asp-append-version="true" alt="THRYD" width="640" height="123" />
+                    <span class="brand__tagline">The AI-Powered School Operating System</span>
+                </a>
+                <button class="icon-btn sidebar__close" type="button" data-nav-close aria-label="Close navigation">@Ui.Icon("x")</button>
+            </div>
+
+            <nav class="nav" aria-label="Sections">
+                <ul class="nav__list">
+                    <li>
+                        <a class="nav__link" href="/" aria-current="@(current == "Dashboard" ? "page" : null)">
+                            @Ui.Icon("dashboard")<span>Dashboard</span>
+                        </a>
+                    </li>
+                </ul>
+
+                @foreach (var (groupTitle, items) in groups)
+                {
+                    var id = "nav-" + groupTitle.ToLowerInvariant().Replace(' ', '-');
+                    <details class="nav__section" open>
+                        <summary class="nav__summary" id="@id"><span>@groupTitle</span>@Ui.Icon("chevron-down")</summary>
+                        <ul class="nav__list" aria-labelledby="@id">
+                            @foreach (var (key, href, label, icon, count) in items)
+                            {
+                                <li>
+                                    @if (href is null)
+                                    {
+                                        <span class="nav__link nav__link--planned">
+                                            @Ui.Icon(icon)<span>@label</span>
+                                            <span class="nav__soon">Soon<span class="visually-hidden"> — not available yet</span></span>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <a class="nav__link" href="@href" aria-current="@(current == key ? "page" : null)">
+                                            @Ui.Icon(icon)<span>@label</span>
+                                            @if (count is not null)
+                                            {
+                                                <span class="nav__count" aria-label="@count records">@Ui.Count(count.Value)</span>
+                                            }
+                                        </a>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </details>
+                }
+            </nav>
+
+            <div class="sidebar__foot">
+                @Ui.Icon("database")
+                <p><strong>Saved to SQL Server</strong>Every change and import is stored in the school database.</p>
+            </div>
+        </aside>
+        <div class="scrim" data-nav-close aria-hidden="true"></div>
+
+        <div class="main">
+            <header class="topbar">
+                <div class="topbar__start">
+                    <button class="icon-btn icon-btn--bordered topbar__menu" type="button" data-nav-toggle aria-expanded="false" aria-controls="sidebar">
+                        @Ui.Icon("menu")<span class="visually-hidden">Open navigation</span>
+                    </button>
+                    <p class="trail">
+                        <span class="trail__group">@group</span>
+                        <span class="trail__sep" aria-hidden="true">/</span>
+                        <span class="trail__page">@title</span>
+                    </p>
+                </div>
+                <div class="topbar__actions">
+                    <span class="chip topbar__date">@Ui.Icon("calendar")@DateTime.Now.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
+                    @if (!string.IsNullOrEmpty(profile.AcademicYear))
+                    {
+                        <span class="chip chip--brand">@profile.AcademicYear</span>
+                    }
+                    <button class="icon-btn icon-btn--bordered theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="Dark mode">
+                        @Ui.Icon("moon", "icon--moon")@Ui.Icon("sun", "icon--sun")
+                    </button>
+                    <span class="topbar__divider" aria-hidden="true"></span>
+                    <a class="account" href="/settings#operator" title="@(operatorName is null ? "Choose who you are working as" : "Working as — self-selected, not a sign-in")">
+                        <span class="avatar avatar--@Ui.Tone(operatorName ?? profile.SchoolName)" aria-hidden="true">@Ui.Initials(operatorName ?? profile.SchoolName)</span>
+                        <span class="account__text">
+                            <span class="account__name" dir="auto">@(operatorName ?? "Administration")</span>
+                            <span class="account__role">@(operatorName is null ? "Set “Working as”" : "Working as · not verified")</span>
+                        </span>
+                    </a>
+                </div>
+            </header>
+
+            <main class="workspace" id="content" tabindex="-1">
+                @RenderBody()
+            </main>
+
+            <footer class="footer">
+                @profile.SchoolName · School Management · © @DateTime.Now.Year
+            </footer>
+        </div>
+    </div>
+
+    <dialog id="app-modal" class="modal" aria-label="Dialog"></dialog>
+
+    <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+        <div class="modal__content">
+            <div class="modal__head">
+                <span class="modal__icon modal__icon--danger">@Ui.Icon("alert-triangle", "icon--lg")</span>
+                <div>
+                    <h2 class="modal__title" id="confirm-title" data-confirm-title>Are you sure?</h2>
+                    <p class="modal__sub" id="confirm-text" data-confirm-text></p>
+                </div>
+            </div>
+            <div class="modal__foot" style="border-top:0">
+                <button class="btn btn--secondary" type="button" data-confirm-cancel>Cancel</button>
+                <button class="btn btn--danger" type="button" data-confirm-ok>Delete</button>
+            </div>
+        </div>
+    </dialog>
+
+    @if (!string.IsNullOrEmpty(flash))
+    {
+        var parts = flash.Split('|', 2);
+        <div id="flash" hidden data-type="@parts[0]" data-message="@(parts.Length > 1 ? parts[1] : parts[0])"></div>
+    }
+
+    <script src="~/lib/jquery/dist/jquery.min.js" asp-append-version="true"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js" asp-append-version="true"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js" asp-append-version="true"></script>
+    <script src="~/js/operations.js" asp-append-version="true"></script>
+    <script src="~/js/staff.js" asp-append-version="true"></script>
+    <script src="~/js/app.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

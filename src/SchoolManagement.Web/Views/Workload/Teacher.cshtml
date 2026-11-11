@@ -1,0 +1,203 @@
+@model TeacherWorkloadViewModel
+@{
+    var t = Model.Teacher;
+    var s = Model.Summary;
+    var week = SchoolWeek.Iso(s.WeekStart);
+    ViewData["Title"] = t.FullName;
+    ViewData["Nav"] = "Staff";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/workload?week=@week">Teacher Workload</a></li><li dir="auto">@t.FullName</li></ol>
+        <div class="profile">
+            <span class="avatar avatar--lg avatar--@Ui.Tone(t.FullName)" aria-hidden="true">@Ui.Initials(t.FullName)</span>
+            <div>
+                <h1 class="page-title" dir="auto">@t.FullName</h1>
+                <p class="page-sub">
+                    <span dir="auto">@(t.JobTitle ?? "Job title not set")</span>
+                    @if (!string.IsNullOrEmpty(t.ContactNumber))
+                    {
+                        <span> · </span><a class="phone-link" href="tel:@t.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@t.ContactNumber</a>
+                    }
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/teachers/details/@t.Id" data-modal>@Ui.Icon("user")Teacher details</a>
+        <a class="btn btn--secondary" href="/timetable/teachers/@t.Id?week=@week">@Ui.Icon("calendar")Timetable</a>
+        @if (s.Remaining > 0)
+        {
+            <a class="btn btn--primary" href="/workload/create?teacherId=@t.Id&week=@week" data-modal>@Ui.Icon("plus")Assign periods</a>
+        }
+        else
+        {
+            <span class="btn btn--primary" aria-disabled="true" title="This teacher is full for this week">@Ui.Icon("x-circle")Full this week</span>
+        }
+    </div>
+</div>
+
+<partial name="_WeekNav" model="s.WeekStart" />
+
+<div id="teacher-workload" data-ajax-list data-refresh-page>
+    <div class="grid-3-1">
+        <section class="card" aria-labelledby="assignments-title">
+            <div class="card__head">
+                <div>
+                    <h2 class="card__title" id="assignments-title">@Ui.Icon("list")Assignments this week</h2>
+                    <p class="card__sub">Every row counts once, in its category.</p>
+                </div>
+            </div>
+            @if (Model.Assignments.Count == 0 && s.FromTimetable == 0)
+            {
+                <div class="empty">
+                    <span class="empty__icon">@Ui.Icon("calendar")</span>
+                    <p class="empty__title">No periods assigned this week</p>
+                    <p class="empty__text">Assign teaching sessions on a class timetable, or add office hours, substitutions and duties. The total can never go above @s.Max.</p>
+                    <div class="empty__actions"><a class="btn btn--primary" href="/workload/create?teacherId=@t.Id&week=@week" data-modal>@Ui.Icon("plus")Assign periods</a></div>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="table table--stack">
+                        <thead>
+                            <tr>
+                                <th scope="col">Category</th>
+                                <th scope="col" class="num">Periods</th>
+                                <th scope="col">Related to</th>
+                                <th scope="col">Last change</th>
+                                <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (s.FromTimetable > 0)
+                            {
+                                <tr>
+                                    <td data-label="Category"><span class="cat-badge">@Ui.Icon("graduation-cap", "icon--sm")Teaching Sessions</span></td>
+                                    <td data-label="Periods" class="num"><strong>@s.FromTimetable</strong></td>
+                                    <td data-label="Related to"><span class="muted">Weekly sessions on the class timetable</span></td>
+                                    <td data-label="Last change" class="muted">Automatic</td>
+                                    <td class="col-actions"><a class="btn btn--ghost btn--sm" href="/timetable/teachers/@t.Id?week=@week">@Ui.Icon("calendar", "icon--sm")Timetable</a></td>
+                                </tr>
+                            }
+                            @foreach (var a in Model.Assignments)
+                            {
+                                <tr>
+                                    <td data-label="Category"><span class="cat-badge cat-badge--@a.Category.ToString().ToLowerInvariant()">@Ui.Icon(WorkloadRules.Icon(a.Category), "icon--sm")@WorkloadRules.Label(a.Category)</span></td>
+                                    <td data-label="Periods" class="num"><strong>@a.Periods</strong></td>
+                                    <td data-label="Related to">
+                                        @if (a.Day is { } pd && a.SlotNumber is { } sn)
+                                        {
+                                            <span class="badge badge--primary">@ScheduleRules.DayShort(pd) · P@(sn)</span>
+                                        }
+                                        @if (a.ClassName is not null)
+                                        {
+                                            <span class="badge badge--class">@a.ClassName</span>
+                                        }
+                                        @if (a.DutyLabel is not null)
+                                        {
+                                            <span class="muted">@a.DutyLabel</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(a.Description))
+                                        {
+                                            <div class="person__meta" dir="auto">@a.Description</div>
+                                        }
+                                        @if (a.ClassName is null && a.DutyLabel is null && a.Day is null && string.IsNullOrEmpty(a.Description))
+                                        {
+                                            <span class="faint">—</span>
+                                        }
+                                    </td>
+                                    <td data-label="Last change" class="muted nowrap" title="@Ui.DateTime(a.UpdatedAt)">@Ui.Ago(a.UpdatedAt)</td>
+                                    <td class="col-actions">
+                                        <div class="row-actions">
+                                            <a class="icon-btn icon-btn--primary" href="/workload/@a.Id/edit" data-modal title="Edit" aria-label="Edit @a.Category periods">@Ui.Icon("pencil")</a>
+                                            <form action="/workload/@a.Id/delete" method="post" data-ajax-form
+                                                  data-confirm="@a.Periods @a.Category period(s) will be removed. @t.FullName's total becomes @(s.Total - a.Periods)/@s.Max."
+                                                  data-confirm-title="Remove this assignment?" data-confirm-button="Remove">
+                                                @Html.AntiForgeryToken()
+                                                <button class="icon-btn icon-btn--danger" type="submit" title="Remove" aria-label="Remove @a.Category periods">@Ui.Icon("trash")</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-total">
+                                <th scope="row">Total</th>
+                                <td class="num"><strong>@s.Total / @s.Max</strong></td>
+                                <td colspan="3" class="muted">@s.Remaining remaining</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="card" aria-labelledby="load-title">
+            <div class="card__head">
+                <h2 class="card__title" id="load-title">@Ui.Icon("chart")Weekly load</h2>
+            </div>
+            <div class="card__body">
+                <partial name="_WorkloadMeter" model="s" />
+                @if (s.Remaining > 0)
+                {
+                    <p class="section-label" style="margin-top:18px">Quick add</p>
+                    <div class="quick-cats">
+                        @foreach (var c in WorkloadRules.Categories)
+                        {
+                            <a class="btn btn--secondary btn--sm" href="/workload/create?teacherId=@t.Id&week=@week&category=@c" data-modal>@Ui.Icon("plus", "icon--sm")@c</a>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    </div>
+
+    <section class="card" aria-labelledby="history-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="history-title">@Ui.Icon("clock")Assignment history</h2>
+                <p class="card__sub">Every add, change and removal for this teacher, newest first (all weeks).</p>
+            </div>
+        </div>
+        @if (Model.History.Count == 0)
+        {
+            <div class="empty"><p class="empty__text">No changes recorded yet.</p></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table table--stack">
+                    <thead>
+                        <tr>
+                            <th scope="col">When</th>
+                            <th scope="col">Week</th>
+                            <th scope="col">Change</th>
+                            <th scope="col">Details</th>
+                            <th scope="col" class="num">Week total after</th>
+                            <th scope="col">By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in Model.History)
+                        {
+                            <tr>
+                                <td data-label="When" class="nowrap muted">@Ui.DateTime(h.ChangedAt)</td>
+                                <td data-label="Week" class="nowrap">@SchoolWeek.Label(h.WeekStart)</td>
+                                <td data-label="Change">
+                                    <span class="badge @(h.Change switch { WorkloadChange.Created => "badge--success", WorkloadChange.Updated => "badge--primary", _ => "badge--error" })">@h.Change</span>
+                                </td>
+                                <td data-label="Details" dir="auto">@h.Summary</td>
+                                <td data-label="Week total after" class="num">@h.WeekTotalAfter/@s.Max</td>
+                                <td data-label="By" class="muted">@(h.ChangedBy ?? "No sign-in yet")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>

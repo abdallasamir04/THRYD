@@ -1,0 +1,90 @@
+@model DutyAuditFormModel
+@*
+    Duty audit record: operational status plus audit notes, issues and follow-up. Covered and
+    In Progress are refused by the server unless someone on duty is recorded present.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var d = Model.Duty!;
+    var someonePresent = Coverage.IsCovered(d.Coverage);
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Duty audit"; ViewData["Nav"] = "DutyAudit"; }
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/duties/@d.Id/audit-record" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("clipboard-check", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Duty audit record</h2>
+                <p class="modal__sub" dir="auto">@DutyComponents.Name(d.Component) · @d.DutyDate.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) · @d.StartTime.ToString("HH:mm")–@d.EndTime.ToString("HH:mm") · @d.Description</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+
+            <div class="audit-facts">
+                <div><span class="duty__role">Assigned staff</span><strong dir="auto">@d.PrimaryName</strong> <span class="muted">· @(d.PrimaryAttendance == AttendanceStatus.NotRecorded ? "attendance not recorded" : d.PrimaryAttendance.ToString().ToLowerInvariant())</span></div>
+                <div><span class="duty__role">Backup</span>@if (d.BackupName is null) { <span class="muted">None</span> } else { <strong dir="auto">@d.BackupName</strong> <span class="muted">· request @(d.BackupStatus == BackupRequestStatus.Rejected ? "declined" : d.BackupStatus.ToString().ToLowerInvariant()) · @(d.BackupAttendance == AttendanceStatus.NotRecorded ? "attendance not recorded" : d.BackupAttendance.ToString().ToLowerInvariant())</span> }</div>
+                <div><span class="duty__role">Staffing</span><span class="badge badge--@Coverage.Tone(d.Coverage) badge--dot">@Coverage.Label(d.Coverage)</span></div>
+            </div>
+
+            <fieldset class="field">
+                <legend class="label">Duty status</legend>
+                <div class="status-choice">
+                    @foreach (var s in DutyStatuses.All)
+                    {
+                        var blocked = s is DutyStatus.Covered or DutyStatus.InProgress && !someonePresent;
+                        <label class="status-choice__option status-choice__option--@DutyStatuses.Slug(s) @(blocked ? "is-blocked" : "")">
+                            <input type="radio" name="Status" value="@s" checked="@(Model.Status == s)" disabled="@(blocked && Model.Status != s)" />
+                            <span>
+                                <strong>@DutyStatuses.Label(s)</strong>
+                                <small>@(s switch
+                                {
+                                    DutyStatus.Pending => "Scheduled, not started",
+                                    DutyStatus.InProgress => "Started, being performed",
+                                    DutyStatus.Covered => "Completed with confirmed staff",
+                                    _ => "Not adequately covered",
+                                })</small>
+                            </span>
+                        </label>
+                    }
+                </div>
+                @if (!someonePresent)
+                {
+                    <span class="hint">Covered and In Progress need the assigned staff member, or a backup who accepted, recorded as present.</span>
+                }
+            </fieldset>
+
+            <div class="field">
+                <label class="label" asp-for="AuditNotes">Audit notes</label>
+                <textarea class="input textarea" asp-for="AuditNotes" rows="3" dir="auto" maxlength="2000"></textarea>
+                <span asp-validation-for="AuditNotes" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="IssuesEncountered">Issues encountered</label>
+                <textarea class="input textarea" asp-for="IssuesEncountered" rows="3" dir="auto" maxlength="2000"></textarea>
+                <span asp-validation-for="IssuesEncountered" class="field-validation-error"></span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" asp-for="FollowUpRequired" />
+                <span class="switch__track" aria-hidden="true"></span>
+                <span>Follow-up required</span>
+            </label>
+            <p class="hint">Created by @(d.CreatedBy ?? "—") · last updated by @(d.UpdatedBy ?? "—") on @Ui.DateTime(d.UpdatedAt).</p>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/duties/audit">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save audit</button>
+        </div>
+    </form>
+</div>

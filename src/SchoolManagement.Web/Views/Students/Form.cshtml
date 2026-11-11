@@ -1,0 +1,109 @@
+@model StudentFormModel
+@*
+    Add / edit student. Opens in the modal (AJAX) or as a page (direct link, no JavaScript).
+    The class is always chosen from the Classes table; inactive classes are offered only to a
+    student who is already in one.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var locked = Model.IsClassLocked ? Model.LockedClass : null;
+    var heading = Model.IsEdit ? "Edit student" : locked is not null ? $"Add student to {locked.Name}" : "Add student";
+    var lockedFull = locked is not null && locked.StudentCount >= locked.Capacity;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Students"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students">Students</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="@(locked is not null ? $"/classes/{locked.Id}/students/create" : Model.IsEdit ? $"/Students/Edit/{Model.Id}" : "/Students/Create")"
+          asp-antiforgery="true" method="post"
+          data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "user-plus", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">@(Model.IsEdit ? "Change the name or move the student to another class." : locked is not null ? $"The student is added to {locked.Name}." : "The student is added to the class you choose.")</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+
+        <div class="modal__body">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors" style="margin-bottom:14px"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-grid">
+                <div class="field">
+                    <label class="label" asp-for="FullName">Student full name <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" asp-for="FullName" dir="auto" placeholder="e.g. Omar Khaled Hassan" maxlength="150" data-autofocus />
+                    <span asp-validation-for="FullName" class="field-validation-error"></span>
+                </div>
+                @if (locked is not null)
+                {
+                    @* The class comes from the route; this hidden copy only feeds the live duplicate check. *@
+                    <input type="hidden" asp-for="SchoolClassId" />
+                    <div class="field">
+                        <span class="label">Class</span>
+                        <p style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <span class="badge badge--class" style="font-size:0.85rem">@locked.Name</span>
+                            <span class="muted"><span class="num">@locked.StudentCount</span> / @locked.Capacity students</span>
+                            @if (lockedFull)
+                            {
+                                <span class="badge badge--error">Full</span>
+                            }
+                        </p>
+                        @if (lockedFull)
+                        {
+                            <span class="field-validation-error">@locked.Name is full. Increase its capacity on the Classes page or add the student to another class.</span>
+                        }
+                    </div>
+                }
+                else
+                {
+                <div class="field">
+                    <label class="label" asp-for="SchoolClassId">Class <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" asp-for="SchoolClassId" data-searchable data-revalidate="#FullName">
+                        <option value="">Choose a class…</option>
+                        @foreach (var c in Model.ClassOptions)
+                        {
+                            <option value="@c.Id" data-note="@(c.IsActive ? null : "Inactive")">@c.Name</option>
+                        }
+                    </select>
+                    <span asp-validation-for="SchoolClassId" class="field-validation-error"></span>
+                    @if (Model.ClassOptions.Count == 0)
+                    {
+                        <span class="hint">There are no active classes. <a href="/classes">Add or activate a class</a> first.</span>
+                    }
+                    else
+                    {
+                        <span class="hint">Only active classes are listed. Manage them on the <a href="/classes">Classes</a> page.</span>
+                    }
+                </div>
+                }
+            </div>
+        </div>
+
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="@(locked is not null ? $"/students?classId={locked.Id}" : "/students")">Cancel</a>
+            }
+            @if (!Model.IsEdit && modal)
+            {
+                <button class="btn btn--secondary" type="submit" data-reopen="@(locked is not null ? $"/classes/{locked.Id}/students/create" : "/students/create?classId={SchoolClassId}")">@Ui.Icon("plus")Save &amp; add another</button>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Add student")</button>
+        </div>
+    </form>
+</div>

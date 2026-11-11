@@ -1,0 +1,315 @@
+@model BelongingsPageViewModel
+@using SchoolManagement.Web.Entities
+@*
+    Belongings (administration). Selection: Year → Quarter → Week → Date → Grade → Student (query string).
+    Readiness everywhere = Green ÷ (Green + Red); N/A and missing records are excluded (ReadinessCounts).
+*@
+@{
+    ViewData["Title"] = "Belongings";
+    ViewData["Nav"] = "Belongings";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var m = Model;
+    var back = m.Query();
+    var personal = new (string Field, string Label, string Icon, ItemStatus? Value)[]
+    {
+        ("Jacket", "Jacket", "user", m.Day?.Jacket), ("SchoolBag", "School Bag", "briefcase", m.Day?.SchoolBag),
+        ("PencilCase", "Pencil Case", "pencil", m.Day?.PencilCase), ("WaterFlask", "Water Flask", "activity", m.Day?.WaterFlask),
+        ("LunchBox", "Lunch Box / Bag", "inbox", m.Day?.LunchBox),
+    };
+    string Tone(double? p) => p is null ? "na" : p >= 80 ? "ok" : p >= 50 ? "near" : "low";
+
+    void Status(string name, ItemStatus? value, string label)
+    {
+        <div class="status-pick" role="radiogroup" aria-label="@label">
+            <label class="status-pick__opt status-pick__opt--green"><input type="radio" name="@name" value="Green" checked="@(value == ItemStatus.Green)" required />@Ui.Icon("check", "icon--sm")Green</label>
+            <label class="status-pick__opt status-pick__opt--red"><input type="radio" name="@name" value="Red" checked="@(value == ItemStatus.Red)" />@Ui.Icon("x", "icon--sm")Red</label>
+            <label class="status-pick__opt status-pick__opt--na"><input type="radio" name="@name" value="NotApplicable" checked="@(value == ItemStatus.NotApplicable)" />N/A</label>
+        </div>
+    }
+
+    void Badge(ItemStatus s)
+    {
+        <span class="st st--@(s == ItemStatus.Green ? "green" : s == ItemStatus.Red ? "red" : "na")">@(s == ItemStatus.Green ? "Green" : s == ItemStatus.Red ? "Red" : "N/A")</span>
+    }
+
+    void Cards(Readiness r, string scope)
+    {
+        <ul class="rd-cards" aria-label="@scope readiness">
+            @foreach (var (label, counts) in new[] { ("Personal Belongings", r.Personal), ("Academic Materials", r.Academic), ("Overall Readiness", r.Overall) })
+            {
+                <li class="rd-card rd-card--@Tone(counts.Percent)">
+                    <span class="rd-card__label">@label</span>
+                    <span class="rd-card__value">@ReadinessCounts.Text(counts.Percent)</span>
+                    <span class="rd-card__counts"><b class="g">@counts.Green</b> green · <b class="r">@counts.Red</b> red · <b>@counts.NotApplicable</b> N/A</span>
+                </li>
+            }
+        </ul>
+    }
+
+    void Bars(IEnumerable<(string Label, string Sub, Readiness R, bool Recorded, bool Due)> points)
+    {
+        <div class="rd-chart" role="img" aria-label="Readiness trend">
+            @foreach (var p in points)
+            {
+                var pct = p.R.Overall.Percent;
+                <div class="rd-chart__col" title="@p.Label: overall @ReadinessCounts.Text(pct) · personal @ReadinessCounts.Text(p.R.Personal.Percent) · academic @ReadinessCounts.Text(p.R.Academic.Percent)">
+                    <span class="rd-chart__val">@(p.Recorded ? ReadinessCounts.Text(pct) : p.Due ? "Missing" : "—")</span>
+                    <div class="rd-chart__track">
+                        @if (p.Recorded && pct is { } v)
+                        {
+                            <span class="rd-chart__bar rd-chart__bar--@Tone(v)" style="height:@(Math.Max(v, 3).ToString("0.##", c))%"></span>
+                        }
+                        else
+                        {
+                            <span class="rd-chart__empty @(p.Recorded ? "is-na" : p.Due ? "is-missing" : "")"></span>
+                        }
+                    </div>
+                    <span class="rd-chart__label">@p.Label</span>
+                    <span class="rd-chart__sub">@p.Sub</span>
+                </div>
+            }
+        </div>
+    }
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Belongings</li></ol>
+        <h1 class="page-title">Belongings</h1>
+        <p class="page-sub">Daily personal belongings and academic materials per student, with readiness by day, week and quarter.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/belongings/calendar">@Ui.Icon("calendar")Academic calendar</a>
+    </div>
+</div>
+
+@if (m.Years.Count == 0 || m.Years.All(y => y.Quarters.All(q => !q.IsConfigured)))
+{
+    <div class="empty empty--boxed">
+        <span class="empty__icon">@Ui.Icon("calendar")</span>
+        <p class="empty__title">Set up the academic calendar first</p>
+        <p class="empty__text">Add the academic year and the dates of its four quarters (8 school weeks each). Daily records are kept per quarter, week and date.</p>
+        <div class="empty__actions"><a class="btn btn--primary" href="/belongings/calendar">@Ui.Icon("calendar")Academic calendar</a></div>
+    </div>
+    return;
+}
+
+@* ---------------------------------------------------------------- selection *@
+<form class="card bl-filters" method="get" action="/belongings" aria-label="Select the record">
+    <div class="field"><label class="label" for="f-year">1 · Academic year</label>
+        <select class="select" id="f-year" name="yearId" onchange="this.form.submit()">
+            @foreach (var y in m.Years) { <option value="@y.Id" selected="@(m.Year?.Id == y.Id)">@y.Name</option> }
+        </select></div>
+    <div class="field"><label class="label" for="f-quarter">2 · Quarter</label>
+        <select class="select" id="f-quarter" name="quarterId" onchange="this.form.submit()">
+            @foreach (var q in m.Year?.Quarters ?? [])
+            {
+                <option value="@q.Id" selected="@(m.Quarter?.Id == q.Id)" disabled="@(!q.IsConfigured)">@q.Name@(q.IsConfigured ? "" : " (dates not set)")</option>
+            }
+        </select></div>
+    <div class="field"><label class="label" for="f-week">3 · Week</label>
+        <select class="select" id="f-week" name="week" onchange="this.form.submit()">
+            @foreach (var w in m.Quarter?.Weeks ?? []) { <option value="@w.Number" selected="@(m.Week?.Number == w.Number)">@w.Label</option> }
+        </select></div>
+    <div class="field"><label class="label" for="f-date">4 · Date</label>
+        <select class="select" id="f-date" name="date" onchange="this.form.submit()">
+            @foreach (var d in m.Week?.Days ?? []) { <option value="@SchoolWeek.Iso(d)" selected="@(m.Date == d)">@d.ToString("dddd d MMM", c)</option> }
+        </select></div>
+    <div class="field"><label class="label" for="f-grade">5 · Grade</label>
+        <select class="select" id="f-grade" name="grade" onchange="this.form.submit()">
+            <option value="">Choose a grade…</option>
+            @foreach (var (key, label) in GradeCatalog.All) { <option value="@key" selected="@(m.Grade == key)">@label</option> }
+        </select></div>
+    <div class="field"><label class="label" for="f-student">6 · Student</label>
+        <select class="select" id="f-student" name="studentId" onchange="this.form.submit()" disabled="@(m.Grade is null)" data-searchable>
+            <option value="">@(m.Grade is null ? "Choose a grade first" : m.Students.Count == 0 ? "No students in this grade" : "Choose a student…")</option>
+            @foreach (var s in m.Students) { <option value="@s.Id" selected="@(m.Student?.Id == s.Id)" data-note="@s.ClassName">@s.Name</option> }
+        </select></div>
+    <noscript><button class="btn btn--primary" type="submit">Show</button></noscript>
+</form>
+
+@if (m.Student is null || m.Date is null)
+{
+    @if (m.Grade is not null && m.GradeWeek.Count > 0)
+    {
+        <partial name="_GradeWeek" model="m" />
+    }
+    else
+    {
+        <div class="empty empty--boxed">
+            <span class="empty__icon">@Ui.Icon("users")</span>
+            <p class="empty__title">@(m.Grade is null ? "Choose a grade and a student" : "No students in this grade")</p>
+            <p class="empty__text">Records and readiness are shown for one student at a time. Students come from the existing classes of the grade.</p>
+        </div>
+    }
+    return;
+}
+
+@{ var day = m.Day!; var date = m.Date.Value; }
+
+@* ---------------------------------------------------------------- A: student *@
+<section class="card bl-student" aria-label="Student">
+    <span class="avatar avatar--lg avatar--@Ui.Tone(m.Student.Name)" aria-hidden="true">@Ui.Initials(m.Student.Name)</span>
+    <div class="bl-student__main">
+        <h2 class="bl-student__name" dir="auto">@m.Student.Name</h2>
+        <p class="person__meta">@GradeCatalog.Label(m.Grade) · Class @m.Student.ClassName</p>
+    </div>
+    <dl class="bl-student__facts">
+        <div><dt>Date</dt><dd>@date.ToString("dddd d MMM yyyy", c)</dd></div>
+        <div><dt>Quarter</dt><dd>@m.Quarter!.Name · @m.Year!.Name</dd></div>
+        <div><dt>Week</dt><dd>Week @m.Week!.Number of 8</dd></div>
+        <div><dt>Record</dt><dd>@(day.RecordId is null ? "Not recorded yet" : day.UpdatedAt is { } u ? "Saved " + Ui.DateTime(u) : "Saved")</dd></div>
+    </dl>
+</section>
+
+<div class="grid-3-1">
+    <div class="stack">
+        @* ---------------------------------------------------------------- B + D: personal belongings and notes *@
+        <section class="card" aria-labelledby="pb-title">
+            <div class="card__head"><div><h2 class="card__title" id="pb-title">@Ui.Icon("briefcase")Personal Belongings</h2><p class="card__sub">Each item has its own status. N/A items do not count in readiness.</p></div></div>
+            <form class="card__body form-grid" action="/belongings/personal" method="post" data-ajax-form data-loading>
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="StudentId" value="@m.Student.Id" />
+                <input type="hidden" name="Date" value="@SchoolWeek.Iso(date)" />
+                <input type="hidden" name="Grade" value="@m.Grade" />
+                <input type="hidden" name="back" value="@back" />
+                <ul class="bl-items">
+                    @foreach (var (field, label, icon, value) in personal)
+                    {
+                        <li class="bl-item">
+                            <span class="bl-item__name">@Ui.Icon(icon)@label</span>
+                            @{ Status(field, value, label); }
+                        </li>
+                    }
+                </ul>
+                <div class="field">
+                    <label class="label" for="Notes">Daily notes</label>
+                    <textarea class="input textarea" id="Notes" name="Notes" rows="3" dir="auto" maxlength="2000" placeholder="e.g. Forgot the water flask. Needs to bring the English copy book tomorrow.">@day.Notes</textarea>
+                    <p class="hint">Notes are kept with this student and date; earlier versions are kept when you edit them.</p>
+                </div>
+                <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save belongings &amp; notes</button></div>
+            </form>
+        </section>
+
+        @* ---------------------------------------------------------------- C: academic materials *@
+        <section class="card" aria-labelledby="am-title">
+            <div class="card__head"><div><h2 class="card__title" id="am-title">@Ui.Icon("graduation-cap")Academic Materials</h2><p class="card__sub">Book and Copy Book per subject. Saving a subject again updates it.</p></div></div>
+            @if (day.Materials.Count > 0)
+            {
+                <div class="table-wrap">
+                    <table class="table table--stack">
+                        <thead><tr><th scope="col">Department</th><th scope="col">Subject</th><th scope="col">Book</th><th scope="col">Copy Book</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var mat in day.Materials)
+                            {
+                                <tr>
+                                    <td data-label="Department">@mat.DepartmentName</td>
+                                    <td data-label="Subject" dir="auto"><strong>@mat.Subject</strong></td>
+                                    <td data-label="Book">@{ Badge(mat.Book); }</td>
+                                    <td data-label="Copy Book">@{ Badge(mat.CopyBook); }</td>
+                                    <td class="col-actions">
+                                        <form action="/belongings/materials/@mat.Id/delete" method="post" data-ajax-form data-confirm="The @mat.Subject record of this day will be removed." data-confirm-title="Remove subject?" data-confirm-button="Remove">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="back" value="@back" />
+                                            <button class="icon-btn icon-btn--danger" type="submit" aria-label="Remove @mat.Subject" title="Remove">@Ui.Icon("trash")</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            <form class="card__body form-grid" action="/belongings/materials" method="post" data-ajax-form data-loading data-subject-form>
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="StudentId" value="@m.Student.Id" />
+                <input type="hidden" name="Date" value="@SchoolWeek.Iso(date)" />
+                <input type="hidden" name="Grade" value="@m.Grade" />
+                <input type="hidden" name="back" value="@back" />
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" for="DepartmentId">Department</label>
+                        <select class="select" id="DepartmentId" name="DepartmentId" required data-subject-source>
+                            <option value="">Choose a department…</option>
+                            @foreach (var dpt in m.Departments)
+                            {
+                                <option value="@dpt.Id" data-subjects="@System.Text.Json.JsonSerializer.Serialize(dpt.Subjects)">@dpt.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="Subject">Subject</label>
+                        <select class="select" id="Subject" name="Subject" required disabled data-subject-target>
+                            <option value="">Choose a department first</option>
+                        </select>
+                    </div>
+                </div>
+                <ul class="bl-items">
+                    <li class="bl-item"><span class="bl-item__name">@Ui.Icon("list")Book</span>@{ Status("Book", null, "Book"); }</li>
+                    <li class="bl-item"><span class="bl-item__name">@Ui.Icon("pencil")Copy Book</span>@{ Status("CopyBook", null, "Copy Book"); }</li>
+                </ul>
+                <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save subject</button></div>
+            </form>
+        </section>
+    </div>
+
+    @* ---------------------------------------------------------------- E: readiness *@
+    <div class="stack">
+        <section class="card" aria-labelledby="rd-title">
+            <div class="card__head"><h2 class="card__title" id="rd-title">@Ui.Icon("chart")Readiness · @date.ToString("ddd d MMM", c)</h2></div>
+            <div class="card__body">
+                @if (!day.Readiness.IsRecorded)
+                {
+                    <p class="muted" style="margin:0 0 10px">Nothing recorded for this day yet — readiness shows N/A (not 0%).</p>
+                }
+                @{ Cards(day.Readiness, "Daily"); }
+            </div>
+        </section>
+        @if (day.NoteHistory.Count > 0)
+        {
+            <section class="card" aria-labelledby="nh-title">
+                <div class="card__head"><h2 class="card__title" id="nh-title">@Ui.Icon("clock")Earlier notes</h2></div>
+                <ol class="timeline" style="margin:16px 22px">
+                    @foreach (var n in day.NoteHistory)
+                    {
+                        <li class="timeline__item timeline__item--withdrawn">
+                            <span class="timeline__when">Replaced @Ui.DateTime(n.ChangedAt)@(n.ChangedBy is null ? "" : " by " + n.ChangedBy)</span>
+                            <span dir="auto" style="white-space:pre-line">@(n.Notes ?? "(empty)")</span>
+                        </li>
+                    }
+                </ol>
+            </section>
+        }
+    </div>
+</div>
+
+@* ---------------------------------------------------------------- F: analytics *@
+@if (m.WeekStats is { } ws)
+{
+    <section class="card" aria-labelledby="wk-title">
+        <div class="card__head">
+            <div><h2 class="card__title" id="wk-title">@Ui.Icon("calendar")Week @m.Week!.Number · @m.Student.Name</h2>
+                <p class="card__sub">Counts added over the week (not an average of days). @ws.RecordedDays of @ws.SchoolDays school day(s) recorded@(ws.MissingDays > 0 ? $" · {ws.MissingDays} missing" : "").</p></div>
+        </div>
+        <div class="card__body bl-analytics">
+            @{ Cards(ws.Total, "Weekly"); }
+            @{ Bars(ws.Points.Select(p => (p.Date.ToString("ddd", c), p.Date.ToString("d MMM", c), p.Readiness, p.Recorded, p.Due))); }
+        </div>
+    </section>
+}
+@if (m.QuarterStats is { } qs)
+{
+    <section class="card" aria-labelledby="qt-title">
+        <div class="card__head">
+            <div><h2 class="card__title" id="qt-title">@Ui.Icon("chart")@m.Quarter!.Name · @m.Student.Name</h2>
+                <p class="card__sub">@qs.RecordedDays of @qs.SchoolDays school day(s) recorded@(qs.MissingDays > 0 ? $" · {qs.MissingDays} missing (not counted as Red)" : ""). Missing days are not counted.</p></div>
+        </div>
+        <div class="card__body bl-analytics">
+            @{ Cards(qs.Total, "Quarterly"); }
+            @{ Bars(qs.Points.Select(p => ($"W{p.Week.Number}", $"{p.RecordedDays}/{p.Week.Days.Count} days", p.Readiness, p.RecordedDays > 0, p.MissingDays > 0))); }
+        </div>
+    </section>
+}
+
+<partial name="_GradeWeek" model="m" />

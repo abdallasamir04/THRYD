@@ -1,0 +1,97 @@
+@model HeadsViewModel
+@{
+    ViewData["Title"] = "HOD Management";
+    ViewData["Nav"] = "Departments";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var missing = Model.Departments.Count(d => d.Head is null);
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li>HOD Management</li></ol>
+        <h1 class="page-title">HOD Management</h1>
+        <p class="page-sub">Exactly one Head of Department per academic department, chosen from its own staff. Replacing an HOD keeps the history.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/staff/departments">@Ui.Icon("layers")Departments</a>
+    </div>
+</div>
+
+<section class="card table-card" aria-label="Heads of Department">
+    <div class="toolbar">
+        <nav class="segmented" aria-label="Filter">
+            <a href="/staff/departments/heads" aria-current="@(Model.Filter is null ? "true" : "false")">All</a>
+            <a href="/staff/departments/heads?filter=assigned" aria-current="@(Model.Filter == "assigned" ? "true" : "false")">With an HOD</a>
+            <a href="/staff/departments/heads?filter=missing" aria-current="@(Model.Filter == "missing" ? "true" : "false")">Without an HOD@(missing > 0 && Model.Filter is null ? $" ({missing})" : "")</a>
+        </nav>
+    </div>
+    @if (Model.Departments.Count == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("check-circle")</span><p class="empty__title">Nothing to show</p><p class="empty__text">No department matches this filter.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead>
+                    <tr><th scope="col">Department</th><th scope="col">Head of Department</th><th scope="col">Since</th><th scope="col" class="num">Members</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in Model.Departments)
+                    {
+                        <tr>
+                            <td data-label="Department"><a href="/staff/departments/@d.Id"><strong>@d.Name</strong></a></td>
+                            <td data-label="Head of Department">
+                                @if (d.Head is { } h)
+                                {
+                                    <div class="person">
+                                        <span class="avatar avatar--@Ui.Tone(h.FullName)" aria-hidden="true">@Ui.Initials(h.FullName)</span>
+                                        <div style="min-width:0"><div class="person__name" dir="auto"><a href="/staff/@h.TeacherId">@h.FullName</a></div><div class="person__meta" dir="auto">@(h.JobTitle ?? "Academic staff")</div></div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="badge badge--warning">@Ui.Icon("alert-triangle")No HOD assigned</span>
+                                }
+                            </td>
+                            <td data-label="Since" class="nowrap">@(d.Head?.StartDate.ToString("d MMM yyyy", c) ?? "—")</td>
+                            <td data-label="Members" class="num">@d.MemberCount</td>
+                            <td class="col-actions">
+                                @if (d.MemberCount > 0)
+                                {
+                                    <a class="btn btn--@(d.Head is null ? "primary" : "secondary") btn--sm" href="/staff/departments/@d.Id/head" data-modal>@Ui.Icon("crown", "icon--sm")@(d.Head is null ? "Assign HOD" : "Change HOD")</a>
+                                }
+                                else
+                                {
+                                    <a class="btn btn--ghost btn--sm" href="/staff/create?departmentId=@d.Id" data-modal>@Ui.Icon("user-plus", "icon--sm")Add a member first</a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="card" aria-labelledby="recent-title">
+    <div class="card__head"><div><h2 class="card__title" id="recent-title">@Ui.Icon("clock")Recent HOD changes</h2><p class="card__sub">Appointments and replacements across all departments, newest first.</p></div></div>
+    @if (Model.Recent.Count == 0)
+    {
+        <div class="empty" style="padding:28px"><p class="empty__text">No HOD has been assigned yet.</p></div>
+    }
+    else
+    {
+        <ol class="timeline" style="margin:16px 22px">
+            @foreach (var h in Model.Recent)
+            {
+                <li class="timeline__item @(h.IsCurrent ? "timeline__item--accepted" : "timeline__item--withdrawn")">
+                    <span class="timeline__when">@h.DepartmentName · @h.StartDate.ToString("d MMM yyyy", c) – @(h.IsCurrent ? "now" : h.EndDate?.ToString("d MMM yyyy", c))</span>
+                    <span dir="auto"><strong>@h.FullName</strong>@(h.IsCurrent ? " · current HOD" : "")</span>
+                    @if (h.EndReason is not null) { <span class="timeline__note" dir="auto">@h.EndReason</span> }
+                </li>
+            }
+        </ol>
+    }
+</section>

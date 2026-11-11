@@ -1,0 +1,50 @@
+@model DepartmentIndexViewModel
+@{
+    ViewData["Title"] = "Departments";
+    ViewData["Nav"] = "Departments";
+    var q = Model.Query;
+    var missing = Model.TotalDepartments - Model.WithHead;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li>Departments</li></ol>
+        <h1 class="page-title">Academic Departments</h1>
+        <p class="page-sub">Open a department to see its Head of Department, members and subcategories.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/staff">@Ui.Icon("users")All staff members</a>
+        <a class="btn btn--primary" href="/staff/create" data-modal>@Ui.Icon("user-plus")Add staff member</a>
+    </div>
+</div>
+
+<ul class="kpis" aria-label="Department totals">
+    <li class="kpi"><span class="kpi__icon">@Ui.Icon("layers")</span><p class="kpi__label">Departments</p><p class="kpi__value">@Model.TotalDepartments</p><p class="kpi__meta">Academic departments</p></li>
+    <li class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Staff in departments</p><p class="kpi__value">@Ui.Count(Model.TotalMembers)</p><p class="kpi__meta">Academic staff with a department</p></li>
+    <li class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("crown")</span><p class="kpi__label">HODs assigned</p><p class="kpi__value">@Model.WithHead<span class="faint" style="font-size:1rem"> / @Model.TotalDepartments</span></p><p class="kpi__meta">One Head of Department each</p></li>
+    <li>
+        <a class="kpi @(missing > 0 ? "kpi--warn" : "kpi--teal")" href="/staff/departments?hod=missing" style="text-decoration:none">
+            <span class="kpi__icon">@Ui.Icon(missing > 0 ? "alert-triangle" : "check-circle")</span><p class="kpi__label">Without an HOD</p><p class="kpi__value">@missing</p><p class="kpi__meta">@(missing > 0 ? "Show them, then assign from each department page" : "Every department has an HOD")</p>
+        </a>
+    </li>
+</ul>
+
+<section class="card table-card" aria-label="Department list">
+    <form class="toolbar" action="/staff/departments" method="get" role="search" data-list-filter="#dept-list">
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" name="search" value="@q.Search" placeholder="Search departments or HOD…" aria-label="Search departments or Head of Department" autocomplete="off" dir="auto" />
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="hod" aria-label="Filter by Head of Department">
+                <option value="">All departments</option>
+                <option value="assigned" selected="@(q.Hod == "assigned")">With an HOD</option>
+                <option value="missing" selected="@(q.Hod == "missing")">Without an HOD</option>
+            </select>
+        </div>
+        <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+    </form>
+    <div id="dept-list" data-ajax-list data-refresh-page aria-live="polite">
+        <partial name="_Grid" model="Model" />
+    </div>
+</section>

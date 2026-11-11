@@ -1,0 +1,89 @@
+@model ManagementMemberFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit Management Team member" : "Add Management Team member";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Management"; }
+    var action = Model.IsEdit ? $"/management/members/{Model.Id}/edit" : "/management/members/create";
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/members">Team Members</a></li><li>@(Model.IsEdit ? "Edit" : "Add")</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "user-plus", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">Management Team records are separate from academic staff and departments.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="field">
+                <label class="label" asp-for="FullName">Full name <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="FullName" dir="auto" placeholder="e.g. Dr. Hala Mostafa" maxlength="150" data-autofocus />
+                <span asp-validation-for="FullName" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" for="Position">Position</label>
+                <select class="select" id="Position" name="Position">
+                    <option value="">No position yet</option>
+                    @foreach (var p in ManagementPositions.All)
+                    {
+                        var held = Model.Holders.TryGetValue(p, out var holder);
+                        <option value="@p" selected="@(Model.Position == p)" disabled="@(held && Model.Position != p)">@ManagementPositions.Name(p)@(held ? $" — held by {holder}" : "")</option>
+                    }
+                </select>
+                <span asp-validation-for="Position" class="field-validation-error"></span>
+                <p class="hint">Each position has one holder. Positions held by someone else are shown but cannot be chosen.</p>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" asp-for="ContactNumber">Contact number</label>
+                    <input class="input" asp-for="ContactNumber" type="tel" inputmode="tel" dir="ltr" placeholder="010 1234 5678" maxlength="30" />
+                    <span asp-validation-for="ContactNumber" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" asp-for="Email">Email</label>
+                    <input class="input" asp-for="Email" type="email" dir="ltr" placeholder="name@school.edu.eg" maxlength="150" />
+                    <span asp-validation-for="Email" class="field-validation-error"></span>
+                </div>
+            </div>
+            <div class="field" style="max-width:280px">
+                <label class="label" for="AppointedOn">Appointed on</label>
+                <input class="input picker" type="date" id="AppointedOn" name="AppointedOn" value="@(Model.AppointedOn is { } ao ? SchoolWeek.Iso(ao) : "")"
+                       min="1980-01-01" max="@SchoolWeek.Iso(SchoolWeek.Today.AddYears(1))" />
+                <div class="picker-quick">
+                    <button type="button" data-date-quick="0" data-target="#AppointedOn">Today</button>
+                    <button type="button" data-date-quick="clear" data-target="#AppointedOn">Clear</button>
+                </div>
+                <span asp-validation-for="AppointedOn" class="field-validation-error"></span>
+            </div>
+        </div>
+
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="@(Model.IsEdit ? $"/management/members/{Model.Id}" : "/management/members")">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Add member")</button>
+        </div>
+    </form>
+</div>

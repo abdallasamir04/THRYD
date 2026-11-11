@@ -1,0 +1,117 @@
+@model ClassIndexViewModel
+
+@if (Model.Classes.Count == 0)
+{
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("door")</span>
+        @if (Model.TotalClasses == 0)
+        {
+            <p class="empty__title">No classes</p>
+            <p class="empty__text">Add the school's classes so students can be placed in them.</p>
+            <div class="empty__actions"><a class="btn btn--primary" href="/classes/create" data-modal>@Ui.Icon("plus")Add class</a></div>
+        }
+        else
+        {
+            <p class="empty__title">No classes match</p>
+            <p class="empty__text">Try another name or status.</p>
+            <div class="empty__actions"><a class="btn btn--secondary" href="/classes?view=@Model.View" data-list-link>Clear filters</a></div>
+        }
+    </div>
+}
+else if (Model.View == "table")
+{
+    <div class="table-wrap">
+        <table class="table table--stack">
+            <thead>
+                <tr>
+                    <th scope="col">Class</th>
+                    <th scope="col">Enrollment / Capacity</th>
+                    <th scope="col">Capacity Status</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Display order</th>
+                    <th scope="col">Last updated</th>
+                    <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in Model.Classes)
+                {
+                    var isFull = c.StudentCount >= c.Capacity;
+                    var isNear = !isFull && (c.StudentCount >= c.Capacity - 3 || c.StudentCount >= (int)(c.Capacity * 0.85));
+                    <tr>
+                        <td data-label="Class"><a href="/students?classId=@c.Id"><span class="badge badge--class" style="font-size:0.85rem">@c.Name</span></a></td>
+                        <td data-label="Enrollment / Capacity"><a href="/students?classId=@c.Id"><strong class="num">@c.StudentCount</strong> / @c.Capacity students</a></td>
+                        <td data-label="Capacity Status">
+                            @if (isFull)
+                            {
+                                <span class="badge badge--error">Full</span>
+                            }
+                            else if (isNear)
+                            {
+                                <span class="badge badge--warning">Near capacity</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge--success">Available</span>
+                            }
+                        </td>
+                        <td data-label="Status">
+                            @if (c.IsActive)
+                            {
+                                <span class="badge badge--success badge--dot">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge--neutral badge--dot">Inactive</span>
+                            }
+                        </td>
+                        <td data-label="Display order" class="num muted">@c.SortOrder</td>
+                        <td data-label="Last updated" class="muted nowrap">@Ui.Date(c.UpdatedAt)</td>
+                        <td class="col-actions"><partial name="_Actions" model="c" /></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else
+{
+    <ul class="class-grid" style="list-style:none;margin:0">
+        @foreach (var c in Model.Classes)
+        {
+            var isFull = c.StudentCount >= c.Capacity;
+            var isNear = !isFull && (c.StudentCount >= c.Capacity - 3 || c.StudentCount >= (int)(c.Capacity * 0.85));
+            <li class="class-card @(c.IsActive ? "" : "is-inactive")">
+                <div class="class-card__top">
+                    <a href="/students?classId=@c.Id" style="text-decoration:none"><span class="class-card__code">@c.Name</span></a>
+                    <div style="display:flex;gap:4px;align-items:center">
+                        @if (isFull)
+                        {
+                            <span class="badge badge--error">Full</span>
+                        }
+                        else if (isNear)
+                        {
+                            <span class="badge badge--warning">Near</span>
+                        }
+                        @if (c.IsActive)
+                        {
+                            <span class="badge badge--success badge--dot">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge--neutral badge--dot">Inactive</span>
+                        }
+                    </div>
+                </div>
+                <div>
+                    <p class="class-card__count"><strong class="num">@c.StudentCount</strong> / @c.Capacity</p>
+                    <p class="class-card__label">@(c.StudentCount == 1 ? "student" : "students") enrolled</p>
+                </div>
+                <div class="class-card__foot">
+                    <a class="class-card__link" href="/students?classId=@c.Id">View students</a>
+                    <partial name="_Actions" model="c" />
+                </div>
+            </li>
+        }
+    </ul>
+}

@@ -1,0 +1,99 @@
+@model AssignHeadModel
+@*
+    Choose the department's one Head of Department from its own academic staff. Saving ends the
+    current appointment (kept in the HOD history) and starts the new one on the chosen date.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var d = Model.Department!;
+    var current = d.Head;
+    var heading = current is null ? "Assign Head of Department" : "Change Head of Department";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Departments"; }
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var candidates = Model.Candidates.Where(m => !m.IsHead).ToList();
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/staff/departments/heads">HOD Management</a></li><li><a href="/staff/departments/@d.Id">@d.Name</a></li><li>HOD</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/staff/departments/@d.Id/head" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("crown", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">@d.Name · one HOD at a time, chosen from the department's academic staff.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            @if (current is not null)
+            {
+                <div class="notice notice--warning">@Ui.Icon("info")<div class="notice__body"><strong>Current HOD: @current.FullName</strong> (since @current.StartDate.ToString("d MMM yyyy", c)). Saving replaces this appointment; it stays in the HOD history.</div></div>
+            }
+
+            @if (candidates.Count == 0)
+            {
+                <div class="empty empty--boxed">
+                    <span class="empty__icon">@Ui.Icon("users")</span>
+                    <p class="empty__title">@(current is null ? "No staff in this department" : "No other staff in this department")</p>
+                    <p class="empty__text">The HOD must be an academic staff member of @d.Name. Add a member to the department first.</p>
+                    <div class="empty__actions"><a class="btn btn--secondary" href="/staff/create?departmentId=@d.Id" data-modal>@Ui.Icon("user-plus")Add member</a></div>
+                </div>
+            }
+            else
+            {
+                <div class="field">
+                    <label class="label" for="TeacherId">New Head of Department <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" asp-for="TeacherId" data-searchable>
+                        <option value="">Choose a member of @d.Name…</option>
+                        @foreach (var m in candidates)
+                        {
+                            <option value="@m.Id" selected="@(Model.TeacherId == m.Id)" data-note="@(m.SubcategoryLabel.Length > 0 ? m.SubcategoryLabel : m.JobTitle)">@m.FullName</option>
+                        }
+                    </select>
+                    <span asp-validation-for="TeacherId" class="field-validation-error"></span>
+                </div>
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" for="StartDate">Start date <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="date" id="StartDate" name="StartDate" value="@(Model.StartDate is { } sd ? SchoolWeek.Iso(sd) : "")"
+                               min="@SchoolWeek.Iso(current?.StartDate ?? SchoolManagement.Web.Services.DepartmentService.EarliestDate)" max="@SchoolWeek.Iso(SchoolWeek.Today.AddYears(1))"
+                               required data-val="true" data-val-required="Enter the date the appointment starts." />
+                        <div class="picker-quick" aria-label="Quick dates">
+                            <button type="button" data-date-quick="0" data-target="#StartDate">Today</button>
+                            <button type="button" data-date-quick="1" data-target="#StartDate">Tomorrow</button>
+                        </div>
+                        <span asp-validation-for="StartDate" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="Note">Note</label>
+                        <input class="input" asp-for="Note" dir="auto" maxlength="300" placeholder="Optional, e.g. acting HOD for term 2" />
+                        <span asp-validation-for="Note" class="field-validation-error"></span>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/staff/departments/@d.Id">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit" disabled="@(candidates.Count == 0)">@Ui.Icon("check")@(current is null ? "Assign HOD" : "Replace HOD")</button>
+        </div>
+    </form>
+</div>

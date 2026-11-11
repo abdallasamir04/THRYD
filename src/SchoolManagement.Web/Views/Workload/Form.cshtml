@@ -1,0 +1,154 @@
+@model WorkloadFormModel
+@*
+    Add / edit workload periods. The capacity panel is a live preview only (wwwroot/js/operations.js);
+    the save is checked again on the server inside a locked transaction.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit workload assignment" : "Assign periods";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Staff"; }
+    var lockedTeacher = Model.TeacherLocked ? Model.Teachers.FirstOrDefault(x => x.Id == Model.TeacherId) : null;
+    var current = (Model.Summary?.Total ?? 0) - Model.CurrentPeriods;
+    var max = Model.Summary?.Max ?? WorkloadRules.Max; // the configured maximum (Settings)
+    var remaining = Math.Max(0, max - current);
+    var tone = WorkloadRules.Tone(WorkloadRules.StatusOf(current, max));
+    var weekIso = SchoolWeek.Iso(SchoolWeek.StartOf(Model.Week ?? SchoolWeek.Current));
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/workload">Teacher Workload</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@(Model.IsEdit ? $"/workload/{Model.Id}/edit" : "/workload/create")" method="post"
+          data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents"
+          data-workload-form data-exclude-id="@Model.Id">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "chart", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">Maximum @max periods per teacher per week. Teaching sessions of timetabled classes are counted automatically.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+
+        <div class="modal__body">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors" style="margin-bottom:14px"></div>
+            <input type="hidden" asp-for="Id" />
+            @if (Model.TimeSlotId is not null)
+            {
+                @* A period placed in a timetable slot keeps its slot when edited. *@
+                <input type="hidden" name="Day" value="@Model.Day" />
+                <input type="hidden" name="TimeSlotId" value="@Model.TimeSlotId" />
+            }
+            <div class="form-grid">
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" asp-for="TeacherId">Teacher <span class="req" aria-hidden="true">*</span></label>
+                        @if (lockedTeacher is not null)
+                        {
+                            <input type="hidden" asp-for="TeacherId" data-wl-teacher />
+                            <div class="locked-field" dir="auto">@lockedTeacher.FullName<span class="faint">@(lockedTeacher.JobTitle is null ? "" : " · " + lockedTeacher.JobTitle)</span></div>
+                        }
+                        else
+                        {
+                            <select class="select" asp-for="TeacherId" data-searchable data-wl-teacher>
+                                <option value="">Choose a teacher…</option>
+                                @foreach (var x in Model.Teachers)
+                                {
+                                    <option value="@x.Id" data-note="@x.JobTitle">@x.FullName</option>
+                                }
+                            </select>
+                        }
+                        <span asp-validation-for="TeacherId" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="Week">Week <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="date" id="Week" name="Week" value="@weekIso" required data-wl-week />
+                        <span class="hint" data-wl-week-label>Saved as the school week of @SchoolWeek.Label(SchoolWeek.StartOf(Model.Week ?? SchoolWeek.Current)).</span>
+                        <span asp-validation-for="Week" class="field-validation-error"></span>
+                    </div>
+                </div>
+
+                <fieldset class="field cat-picker">
+                    <legend class="label">Category <span class="req" aria-hidden="true">*</span></legend>
+                    <div class="cat-picker__options">
+                        @foreach (var c in WorkloadRules.Categories)
+                        {
+                            <label class="cat-option cat-option--@c.ToString().ToLowerInvariant()">
+                                <input type="radio" name="Category" value="@c" checked="@(Model.Category == c)" data-wl-category />
+                                <span class="cat-option__icon">@Ui.Icon(WorkloadRules.Icon(c))</span>
+                                <span>@c</span>
+                            </label>
+                        }
+                    </div>
+                    <span asp-validation-for="Category" class="field-validation-error"></span>
+                </fieldset>
+
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" asp-for="Periods">Periods this week <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input" asp-for="Periods" type="number" min="1" max="@WorkloadRules.Max" step="1" inputmode="numeric" data-wl-periods data-autofocus />
+                        <span asp-validation-for="Periods" class="field-validation-error"></span>
+                    </div>
+                    <div class="capacity capacity--@tone" data-wl-capacity aria-live="polite">
+                        <p class="capacity__title">Current load</p>
+                        <p class="capacity__figure"><strong data-wl-total>@current</strong> / @max · <span data-wl-remaining>@remaining</span> available</p>
+                        <p class="capacity__msg" data-wl-message>@(Model.TeacherId is null ? "Choose a teacher to see their load." : remaining == 0 ? "This teacher is full for this week." : "")</p>
+                    </div>
+                </div>
+
+                <div class="field" data-wl-show="Class Substitution">
+                    <label class="label" asp-for="SchoolClassId">Class <span class="req" aria-hidden="true" data-wl-show="Class">*</span><span class="faint" data-wl-show="Substitution">(optional)</span></label>
+                    <select class="select" asp-for="SchoolClassId" data-searchable>
+                        <option value="">Choose a class…</option>
+                        @foreach (var c in Model.Classes)
+                        {
+                            <option value="@c.Id" data-note="@(c.IsActive ? null : "Inactive")">@c.Name</option>
+                        }
+                    </select>
+                    <span asp-validation-for="SchoolClassId" class="field-validation-error"></span>
+                </div>
+
+                <div class="field" data-wl-show="Duty">
+                    <label class="label" asp-for="DutyAssignmentId">Recorded duty <span class="faint">(optional)</span></label>
+                    <select class="select" asp-for="DutyAssignmentId" data-wl-duty>
+                        <option value="">Not linked to a recorded duty</option>
+                        @foreach (var d in Model.Duties)
+                        {
+                            <option value="@d.Id">@d.Label</option>
+                        }
+                    </select>
+                    <span class="hint">Morning duties this week where the teacher is the assigned staff or the accepted backup.</span>
+                    <span asp-validation-for="DutyAssignmentId" class="field-validation-error"></span>
+                </div>
+
+                <div class="field">
+                    <label class="label" asp-for="Description">Note <span class="faint">(optional)</span></label>
+                    <input class="input" asp-for="Description" dir="auto" maxlength="200" placeholder="e.g. Covering for Ms. Hoda, Tue P3–P4" />
+                    <span asp-validation-for="Description" class="field-validation-error"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/workload">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit" data-wl-submit>@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Assign")</button>
+        </div>
+    </form>
+</div>

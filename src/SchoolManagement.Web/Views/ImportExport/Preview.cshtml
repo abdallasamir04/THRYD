@@ -1,0 +1,131 @@
+@model ImportPreviewViewModel
+@{
+    ViewData["Title"] = "Preview import";
+    ViewData["Nav"] = "ImportExport";
+    var s = Model.Session;
+    var p = Model.Preview;
+    var fields = ImportDefinitions.Fields(s.Kind);
+    var noun = s.Kind == ImportKind.Students ? "student" : "teacher";
+    var readyLabel = $"{p.Ready} {noun}{(p.Ready == 1 ? "" : "s")}";
+    var rows = Model.Filter switch
+    {
+        "ready" => p.Rows.Where(r => r.Status == RowStatus.Ready),
+        "duplicate" => p.Rows.Where(r => r.Status == RowStatus.Duplicate),
+        "invalid" => p.Rows.Where(r => r.Status == RowStatus.Invalid),
+        _ => p.Rows,
+    };
+    var list = rows.Take(1000).ToList();
+    var hidden = rows.Count() - list.Count;
+    string Tile(string f) => Model.Filter == f ? "true" : "false";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/import-export?kind=@s.Kind">Import / Export</a></li><li>Preview</li></ol>
+        <h1 class="page-title">Check before importing</h1>
+        <p class="page-sub">Nothing has been saved yet. Only rows marked “Ready” will be imported.</p>
+    </div>
+</div>
+
+<partial name="_Steps" model="3" />
+
+<div class="summary-tiles">
+    <a class="summary-tile" href="?filter=all" aria-current="@Tile("all")"><span class="summary-tile__value num">@p.Rows.Count</span><span class="summary-tile__label">@Ui.Icon("table", "icon--sm")Rows with data</span></a>
+    <a class="summary-tile summary-tile--ok" href="?filter=ready" aria-current="@Tile("ready")"><span class="summary-tile__value num">@p.Ready</span><span class="summary-tile__label">@Ui.Icon("check-circle", "icon--sm")Ready to import</span></a>
+    <a class="summary-tile summary-tile--dup" href="?filter=duplicate" aria-current="@Tile("duplicate")"><span class="summary-tile__value num">@p.Duplicates</span><span class="summary-tile__label">@Ui.Icon("copy", "icon--sm")Duplicates (skipped)</span></a>
+    <a class="summary-tile summary-tile--bad" href="?filter=invalid" aria-current="@Tile("invalid")"><span class="summary-tile__value num">@p.Invalid</span><span class="summary-tile__label">@Ui.Icon("x-circle", "icon--sm")Need fixing</span></a>
+</div>
+
+@if (p.Duplicates + p.Invalid > 0)
+{
+    <div class="notice notice--warning">
+        @Ui.Icon("alert-triangle")
+        <div class="notice__body">
+            <strong>@(p.Duplicates + p.Invalid) row(s) will not be imported.</strong>
+            Download the report, fix the rows in your file and import it again; rows already imported are then skipped as duplicates.
+            <a href="/import-export/@s.Token/report">Download the report (Excel)</a>
+        </div>
+    </div>
+}
+@if (p.WithWarnings > 0)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>@p.WithWarnings ready row(s) have a warning.</strong>They will be imported; check the note on each.</div></div>
+}
+
+<section class="card table-card" aria-label="Rows">
+    @if (p.Rows.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("inbox")</span>
+            <p class="empty__title">No data rows found</p>
+            <p class="empty__text">The selected columns are empty below the header row. Go back and check the sheet, header row and columns.</p>
+            <div class="empty__actions"><a class="btn btn--secondary" href="/import-export/@s.Token/columns">Back to columns</a></div>
+        </div>
+    }
+    else if (list.Count == 0)
+    {
+        <div class="empty"><p class="empty__text">No rows in this group.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead>
+                    <tr>
+                        <th scope="col" class="col-num">Row</th>
+                        @foreach (var f in fields)
+                        {
+                            <th scope="col">@f.Label</th>
+                        }
+                        <th scope="col">Status</th>
+                        <th scope="col">Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in list)
+                    {
+                        <tr class="@(r.Status == RowStatus.Invalid ? "is-invalid" : r.Status == RowStatus.Duplicate ? "is-duplicate" : "")">
+                            <td class="col-num" style="display:table-cell">@r.RowNumber</td>
+                            @foreach (var f in fields)
+                            {
+                                var v = r.Value(f.Key);
+                                <td data-label="@f.Label" dir="@(f.Key == ImportDefinitions.ContactNumber ? "ltr" : "auto")">
+                                    @if (v.Length == 0) { <span class="faint">—</span> }
+                                    else if (f.Key == ImportDefinitions.Class && r.ClassName is not null) { <span class="badge badge--class">@r.ClassName</span> }
+                                    else { @v }
+                                </td>
+                            }
+                            <td data-label="Status">
+                                @switch (r.Status)
+                                {
+                                    case RowStatus.Ready: <span class="badge badge--success badge--dot">Ready</span> break;
+                                    case RowStatus.Duplicate: <span class="badge badge--warning badge--dot">Duplicate</span> break;
+                                    default: <span class="badge badge--error badge--dot">Invalid</span> break;
+                                }
+                            </td>
+                            <td data-label="Notes">
+                                <ul class="row-msgs">
+                                    @foreach (var e in r.Errors) { <li class="@(r.Status == RowStatus.Duplicate ? "is-dup" : "is-error")">@e</li> }
+                                    @foreach (var w in r.Warnings) { <li class="is-warn">@w</li> }
+                                </ul>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (hidden > 0)
+        {
+            <div class="table-foot">@hidden more row(s) are not shown here; they are included in the import and the report.</div>
+        }
+    }
+</section>
+
+<div class="sticky-actions">
+    <a class="btn btn--secondary" href="/import-export/@s.Token/columns">@Ui.Icon("arrow-left")Back to columns</a>
+    <form method="post" action="/import-export/@s.Token/confirm" data-confirm="@readyLabel will be added. @(p.Duplicates + p.Invalid) row(s) will be skipped and listed in the report."
+          data-confirm-title="Import @readyLabel?" data-confirm-button="Import now" data-confirm-tone="warning">
+        @Html.AntiForgeryToken()
+        <button class="btn btn--primary btn--lg" type="submit" disabled="@(p.Ready == 0)">@Ui.Icon("check")Import @readyLabel</button>
+    </form>
+</div>

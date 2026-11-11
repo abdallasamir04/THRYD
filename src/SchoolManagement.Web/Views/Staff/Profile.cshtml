@@ -1,0 +1,209 @@
+@model StaffProfileViewModel
+@*
+    Staff profile → Duty History: one row per assignment (primary or backup), the person's own
+    outcome (an absent person never counts as having covered the duty; a declined backup request
+    is not an attendance failure), and every evaluation ever recorded (none are overwritten).
+*@
+@{
+    var p = Model.Profile;
+    var st = p.Staff;
+    var s = p.Summary;
+    ViewData["Title"] = st.FullName;
+    ViewData["Nav"] = "StaffDuty";
+    var recent = p.Evaluations.Take(3).ToList();
+    var isTeacher = st.StaffType == "Teacher";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff Duty Records</a></li><li dir="auto">@st.FullName</li></ol>
+        <div class="profile">
+            <span class="avatar avatar--lg avatar--@Ui.Tone(st.FullName)" aria-hidden="true">@Ui.Initials(st.FullName)</span>
+            <div>
+                <h1 class="page-title" dir="auto">@st.FullName</h1>
+                <p class="page-sub">
+                    @if (!string.IsNullOrEmpty(Model.Teacher?.DepartmentName))
+                    {
+                        <a class="badge badge--class" href="/staff/departments/@Model.Teacher.DepartmentId" style="text-decoration:none">@Model.Teacher.DepartmentName@(Model.Teacher.SubcategoryLabel.Length == 0 ? "" : $" · {Model.Teacher.SubcategoryLabel}")</a>
+                        @if (Model.Teacher.IsHead) { <span class="hod-badge">@Ui.Icon("crown")Head of Department</span> }
+                    }
+                    <span dir="auto">@(st.JobTitle ?? st.StaffType)</span>
+                    @if (!string.IsNullOrEmpty(st.ContactNumber))
+                    {
+                        <span> · </span><a class="phone-link" href="tel:@st.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@st.ContactNumber</a>
+                    }
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="page-head__actions">
+        @if (isTeacher)
+        {
+            <a class="btn btn--secondary" href="/teachers/edit/@st.Id" data-modal>@Ui.Icon("pencil")Edit staff</a>
+        }
+        else if (st.StaffType == "Management")
+        {
+            <a class="btn btn--secondary" href="/management/members/@st.Id">@Ui.Icon("briefcase")Management profile</a>
+        }
+        @if (isTeacher)
+        {
+            <a class="btn btn--secondary" href="/timetable/teachers/@st.Id">@Ui.Icon("calendar")Timetable</a>
+            <a class="btn btn--secondary" href="/workload/teacher/@st.Id">@Ui.Icon("chart")Workload</a>
+        }
+        <a class="btn btn--secondary" href="/duties/audit?staffId=@st.Id">@Ui.Icon("clipboard-check")Duty audit</a>
+    </div>
+</div>
+
+<ul class="kpis kpis--5" aria-label="Duty history totals">
+    <li class="kpi"><span class="kpi__icon">@Ui.Icon("shield-check")</span><p class="kpi__label">Assigned duties</p><p class="kpi__value">@s.TotalAssigned</p><p class="kpi__meta">As assigned staff or accepted backup</p></li>
+    <li class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("check-circle")</span><p class="kpi__label">Covered</p><p class="kpi__value">@s.Covered</p><p class="kpi__meta">Present and duty covered</p></li>
+    <li class="kpi kpi--full"><span class="kpi__icon">@Ui.Icon("x-circle")</span><p class="kpi__label">Not covered</p><p class="kpi__value">@s.NotCovered</p><p class="kpi__meta">Absent, or duty not covered</p></li>
+    <li class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("clock")</span><p class="kpi__label">Pending / in progress</p><p class="kpi__value">@s.Open</p><p class="kpi__meta">@s.Declined declined backup request(s) — not counted</p></li>
+    <li class="kpi kpi--orange"><span class="kpi__icon">@Ui.Icon("sparkles")</span><p class="kpi__label">Average rating</p><p class="kpi__value">@(s.AverageRating?.ToString("0.0") ?? "—")</p><p class="kpi__meta">@Ui.Plural(s.EvaluatedAssignments, "evaluated duty", "evaluated duties") (latest evaluation each)</p></li>
+</ul>
+
+<div class="grid-3-1">
+    <section class="card" aria-labelledby="recent-title">
+        <div class="card__head"><h2 class="card__title" id="recent-title">@Ui.Icon("sparkles")Recent feedback</h2></div>
+        @if (recent.Count == 0)
+        {
+            <div class="empty"><p class="empty__text">No evaluations yet. Supervisors evaluate a duty from its row below once the duty has taken place.</p></div>
+        }
+        else
+        {
+            <div class="feedback-list">
+                @foreach (var f in recent)
+                {
+                    <partial name="_FeedbackCard" model="f" />
+                }
+            </div>
+        }
+    </section>
+    @if (Model.Workload is { } wl)
+    {
+        <section class="card" aria-labelledby="wl-title">
+            <div class="card__head"><h2 class="card__title" id="wl-title">@Ui.Icon("chart")Workload this week</h2></div>
+            <div class="card__body">
+                <partial name="_WorkloadMeter" model="wl" />
+                <dl class="dl" style="margin-top:16px;font-size:0.875rem">
+                    <dt>Teaching Sessions</dt>
+                    <dd class="num">@wl.Breakdown.Class periods</dd>
+                    <dt>Office Hours</dt>
+                    <dd class="num">@wl.Breakdown.Office periods</dd>
+                    <dt>Substitutions</dt>
+                    <dd class="num">@wl.Breakdown.Substitution periods</dd>
+                    <dt>Duties</dt>
+                    <dd class="num">@wl.Breakdown.Duty periods</dd>
+                    <dt>Total Weekly</dt>
+                    <dd class="num"><strong>@wl.Total / @wl.Max</strong> periods</dd>
+                    <dt>Remaining</dt>
+                    <dd class="num"><strong>@wl.Remaining</strong> periods</dd>
+                </dl>
+            </div>
+        </section>
+    }
+</div>
+
+<section class="card" aria-labelledby="history-title">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title" id="history-title">@Ui.Icon("list")Duty history</h2>
+            <p class="card__sub">Every duty assignment, newest first. Primary (assigned) and backup roles are shown separately.</p>
+        </div>
+    </div>
+    @if (p.Duties.Count == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("shield-check")</span><p class="empty__title">No duties yet</p><p class="empty__text">Duties appear here once this person is assigned to one, or asked to be a backup.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Duty</th>
+                        <th scope="col">Role</th>
+                        <th scope="col">Attendance</th>
+                        <th scope="col">Duty status</th>
+                        <th scope="col">Outcome for this person</th>
+                        <th scope="col">Rating</th>
+                        @if (isTeacher) { <th scope="col">Workload</th> }
+                        <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in p.Duties)
+                    {
+                        <tr class="@(StaffDutyRules.Counts(d.Outcome) ? "" : "is-ended")">
+                            <td data-label="Date" class="nowrap"><strong>@d.DutyDate.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</strong><div class="person__meta num">@d.StartTime.ToString("HH:mm")–@d.EndTime.ToString("HH:mm")</div></td>
+                            <td data-label="Duty"><a href="/duties/@d.DutyId" data-modal dir="auto">@d.Description</a><div class="person__meta">@DutyComponents.Name(d.Component)@(d.Location is null ? "" : " · " + d.Location)</div></td>
+                            <td data-label="Role">
+                                <span class="role-badge role-badge--@d.Role.ToString().ToLowerInvariant()">@(d.Role == DutyRole.Primary ? "Assigned" : "Backup")</span>
+                                @if (!d.IsCurrent && d.EndReason is not null) { <div class="person__meta">@d.EndReason</div> }
+                            </td>
+                            <td data-label="Attendance">@(d.Attendance == AttendanceStatus.NotRecorded ? "Not recorded" : d.Attendance.ToString())</td>
+                            <td data-label="Duty status"><span class="status-badge status-badge--@DutyStatuses.Slug(d.DutyStatus)">@DutyStatuses.Label(d.DutyStatus)</span></td>
+                            <td data-label="Outcome"><span class="badge badge--@StaffDutyRules.Tone(d.Outcome)">@StaffDutyRules.Label(d.Outcome)</span></td>
+                            <td data-label="Rating">@if (d.LatestRating is { } r) { <partial name="_Stars" model="(double?)r" /> <span class="faint">@(d.EvaluationCount > 1 ? $"({d.EvaluationCount})" : "")</span> } else { <span class="faint">—</span> }</td>
+                            @if (isTeacher)
+                            {
+                                <td data-label="Workload">
+                                    @if (d.WorkloadPeriods is { } periods) { <span class="cat-badge cat-badge--duty">@periods period(s) counted</span> }
+                                    else if (d.CanCountInWorkload) { <a class="btn btn--ghost btn--sm" href="/workload/create?teacherId=@st.Id&week=@SchoolWeek.Iso(SchoolWeek.StartOf(d.DutyDate))&dutyId=@d.DutyId" data-modal>@Ui.Icon("plus", "icon--sm")Count</a> }
+                                    else { <span class="faint">—</span> }
+                                </td>
+                            }
+                            <td class="col-actions">
+                                @if (d.CanEvaluate)
+                                {
+                                    <a class="btn btn--secondary btn--sm" href="/staff/assignments/@d.AssignmentId/evaluate" data-modal>@Ui.Icon("sparkles", "icon--sm")Evaluate</a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="card" aria-labelledby="evals-title">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title" id="evals-title">@Ui.Icon("clock")All evaluations</h2>
+            <p class="card__sub">Kept permanently. A newer evaluation of the same duty is added alongside the earlier one.</p>
+        </div>
+    </div>
+    @if (p.Evaluations.Count == 0)
+    {
+        <div class="empty"><p class="empty__text">No evaluations recorded.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Evaluated</th><th scope="col">Duty</th><th scope="col">Role</th><th scope="col">Rating</th><th scope="col">Feedback</th><th scope="col">Follow-up</th><th scope="col">Evaluated by</th></tr></thead>
+                <tbody>
+                    @foreach (var f in p.Evaluations)
+                    {
+                        <tr class="@(f.IsLatest ? "" : "is-ended")">
+                            <td data-label="Evaluated" class="nowrap">@f.EvaluationDate.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)@if (!f.IsLatest) { <div class="person__meta">earlier evaluation</div> }</td>
+                            <td data-label="Duty"><span dir="auto">@f.DutyDescription</span><div class="person__meta">@f.DutyDate.ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture) · @DutyComponents.Name(f.Component)</div></td>
+                            <td data-label="Role"><span class="role-badge role-badge--@f.Role.ToString().ToLowerInvariant()">@(f.Role == DutyRole.Primary ? "Assigned" : "Backup")</span></td>
+                            <td data-label="Rating"><partial name="_Stars" model="(double?)f.Rating" /></td>
+                            <td data-label="Feedback">
+                                <div dir="auto" style="white-space:pre-line">@f.Feedback</div>
+                                @if (f.Strengths is not null) { <div class="person__meta"><strong>Strengths:</strong> <span dir="auto">@f.Strengths</span></div> }
+                                @if (f.Issues is not null) { <div class="person__meta"><strong>To improve:</strong> <span dir="auto">@f.Issues</span></div> }
+                            </td>
+                            <td data-label="Follow-up">@(f.FollowUpRequired ? "Yes" : "No")</td>
+                            <td data-label="Evaluated by" dir="auto">@f.EvaluatorName</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

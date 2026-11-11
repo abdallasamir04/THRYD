@@ -1,0 +1,115 @@
+@model AssignPeriodModel
+@*
+    Assign Period (teaching session). Class, day and slot come from the clicked cell and are not asked
+    again. Department → Subject → Teacher: staff.js loads the eligible teachers with their weekly
+    workload and availability for this slot. The server re-checks everything when saving.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit teaching session" : "Assign period";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Timetable"; }
+    var slot = Model.Slot!;
+    var action = Model.IsEdit ? $"/timetable/sessions/{Model.SessionId}/edit" : "/timetable/sessions";
+    var subjects = Model.Departments.FirstOrDefault(d => d.Id == Model.DepartmentId).Subjects ?? [];
+    string Info(TeacherCandidate c) => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        c.Department, c.Total, c.Max, c.Remaining, c.Available, c.Reason,
+        status = WorkloadRules.Tone(c.Status), statusLabel = WorkloadRules.Label(c.Status),
+    });
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/timetable/classes">Class Timetable</a></li><li><a href="/timetable/classes/@Model.ClassId">@Model.ClassName</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents"
+          data-assign-period data-day="@Model.Day" data-slot="@Model.SlotId" data-exclude="@Model.SessionId">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="ClassId" value="@Model.ClassId" />
+        <input type="hidden" name="Day" value="@Model.Day" />
+        <input type="hidden" name="SlotId" value="@Model.SlotId" />
+        <input type="hidden" name="Week" value="@Model.Week" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "calendar", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">One subject and one teacher for this slot, every week from this week on.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+            <div class="slot-facts" aria-label="Selected slot">
+                <div><span class="slot-facts__label">Class</span><strong>@Model.ClassName</strong></div>
+                <div><span class="slot-facts__label">Day</span><strong>@ScheduleRules.DayName(Model.Day)</strong></div>
+                <div><span class="slot-facts__label">Period</span><strong>@slot.Label</strong></div>
+                <div><span class="slot-facts__label">Time</span><strong class="@(slot.HasTimes ? "" : "faint")">@slot.Times</strong></div>
+            </div>
+
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="DepartmentId">1 · Department <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="DepartmentId" name="DepartmentId" data-ap-dept data-val="true" data-val-required="Choose the department.">
+                        <option value="">Choose a department…</option>
+                        @foreach (var d in Model.Departments)
+                        {
+                            <option value="@d.Id" selected="@(Model.DepartmentId == d.Id)" data-subjects="@System.Text.Json.JsonSerializer.Serialize(d.Subjects)">@d.Name</option>
+                        }
+                    </select>
+                    <span asp-validation-for="DepartmentId" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="Subject">2 · Subject <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="Subject" name="Subject" data-ap-subject data-val="true" data-val-required="Choose the subject." disabled="@(Model.DepartmentId is null)">
+                        <option value="">@(Model.DepartmentId is null ? "Choose a department first" : "Choose a subject…")</option>
+                        @foreach (var s in subjects)
+                        {
+                            <option value="@s" selected="@(string.Equals(Model.Subject, s, StringComparison.OrdinalIgnoreCase))">@s</option>
+                        }
+                    </select>
+                    <span asp-validation-for="Subject" class="field-validation-error"></span>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label" for="TeacherId">3 · Teacher <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" id="TeacherId" name="TeacherId" data-ap-teacher data-val="true" data-val-required="Choose the teacher." disabled="@(Model.DepartmentId is null)">
+                    <option value="">@(Model.DepartmentId is null ? "Choose a department first" : Model.Candidates.Count == 0 ? "No eligible teachers" : "Choose a teacher…")</option>
+                    @foreach (var c in Model.Candidates)
+                    {
+                        <option value="@c.Id" selected="@(Model.TeacherId == c.Id)" disabled="@(!c.Available && Model.TeacherId != c.Id)" data-info="@Info(c)" title="@c.Reason">@c.Name — @c.Total/@c.Max@(c.Available ? "" : " · unavailable")</option>
+                    }
+                </select>
+                <span asp-validation-for="TeacherId" class="field-validation-error"></span>
+                <div class="teacher-info" data-ap-info hidden></div>
+                <p class="hint" data-ap-hint>Only academic staff of the chosen department who teach the subject are listed. Busy or full teachers are shown but cannot be chosen.</p>
+            </div>
+
+            <div class="field">
+                <label class="label" asp-for="Notes">Notes</label>
+                <input class="input" asp-for="Notes" dir="auto" maxlength="300" placeholder="Optional, e.g. lab room" />
+                <span asp-validation-for="Notes" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/timetable/classes/@Model.ClassId">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Assign period")</button>
+        </div>
+    </form>
+</div>

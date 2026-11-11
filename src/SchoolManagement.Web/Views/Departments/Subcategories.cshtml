@@ -1,0 +1,73 @@
+@model SubcategoriesViewModel
+@*
+    Department-specific subcategories stored in the database. For Second Language these are the
+    languages: adding one here makes it available on the staff form at once (no code change).
+*@
+@{
+    var d = Model.Department;
+    var noun = Model.ItemNoun;
+    var label = d.Rules?.Label ?? (noun == "language" ? "Language" : "Subcategory");
+    ViewData["Title"] = $"{d.Name} · {label}s";
+    ViewData["Nav"] = "Departments";
+    var tops = Model.Items.Where(i => i.ParentId is null).ToList();
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/staff/departments">Departments</a></li><li><a href="/staff/departments/@d.Id">@d.Name</a></li><li>@(label)s</li></ol>
+        <h1 class="page-title">@d.Name · @(label)s</h1>
+        <p class="page-sub">Active @(noun)s are offered when adding or editing @d.Name staff. Inactive ones stay on existing records but are not offered again.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/staff/departments/@d.Id">@Ui.Icon("arrow-left")Back to @d.Name</a>
+        <a class="btn btn--primary" href="/staff/departments/@d.Id/subcategories/create" data-modal>@Ui.Icon("plus")Add @noun</a>
+    </div>
+</div>
+
+<section class="card table-card" aria-label="@(label)s">
+    @if (tops.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("layers")</span>
+            <p class="empty__title">No @(noun)s yet</p>
+            <p class="empty__text">@d.Name has no subcategories, so staff are added without one. Add the first @noun to start using them.</p>
+            <div class="empty__actions"><a class="btn btn--primary" href="/staff/departments/@d.Id/subcategories/create" data-modal>@Ui.Icon("plus")Add @noun</a></div>
+        </div>
+    }
+    else
+    {
+        <div class="member-grid">
+            @foreach (var t in tops)
+            {
+                var children = Model.Items.Where(i => i.ParentId == t.Id).ToList();
+                <article class="member-card" style="@(t.IsActive ? "" : "border-style:dashed;background:var(--color-surface)")">
+                    <div class="member-card__top" style="justify-content:space-between">
+                        <div style="min-width:0">
+                            <div class="person__name" dir="auto">@t.Name</div>
+                            <div class="person__meta">@Ui.Plural(t.MemberCount, "staff member", "staff members")</div>
+                        </div>
+                        <span class="badge @(t.IsActive ? "badge--success" : "badge--neutral")">@(t.IsActive ? "Active" : "Inactive")</span>
+                    </div>
+                    @if (children.Count > 0)
+                    {
+                        <div class="chip-row">
+                            @foreach (var s in children)
+                            {
+                                <a href="/staff/departments/subcategories/@s.Id/edit" data-modal style="text-decoration:none" title="Edit @s.Name">
+                                    <span class="sub-chip" style="@(s.IsActive ? "" : "opacity:.55;text-decoration:line-through")">@s.Name<b>@s.MemberCount</b></span>
+                                </a>
+                            }
+                        </div>
+                    }
+                    <div class="member-card__foot">
+                        <a class="btn btn--ghost btn--sm" href="/staff/departments/@d.Id/subcategories/create?parentId=@t.Id" data-modal>@Ui.Icon("plus", "icon--sm")Add subject</a>
+                        <div class="row-actions">
+                            <a class="icon-btn icon-btn--primary" href="/staff/departments/subcategories/@t.Id/edit" data-modal title="Edit" aria-label="Edit @t.Name">@Ui.Icon("pencil")</a>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>

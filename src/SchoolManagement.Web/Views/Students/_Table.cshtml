@@ -1,0 +1,105 @@
+@model StudentIndexViewModel
+@{
+    var q = Model.Query;
+    var r = Model.Result;
+    var classFilter = q.ClassId is { } cid ? Model.Classes.FirstOrDefault(c => c.Id == cid) : null;
+    var exportUrl = "/students/export" + Context.Request.QueryString;
+}
+
+<div class="results-bar">
+    <div class="results-bar__info">
+        <span><strong class="num">@Ui.Count(r.TotalCount)</strong> @(q.HasFilters ? "matching" : "") @(r.TotalCount == 1 ? "student" : "students")</span>
+        @if (!string.IsNullOrWhiteSpace(q.Search))
+        {
+            <span class="filter-chip">Name: “@q.Search.Trim()”<a href="@Context.Request.WithQuery(("search", null), ("page", null))" data-list-link aria-label="Clear name search">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (classFilter is not null)
+        {
+            <span class="filter-chip">Class: @classFilter.Name<a href="@Context.Request.WithQuery(("classId", null), ("page", null))" data-list-link aria-label="Clear class filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+    </div>
+    @if (r.TotalCount > 0)
+    {
+        <a class="btn btn--ghost btn--sm" href="@exportUrl">@Ui.Icon("download", "icon--sm")Export @(q.HasFilters ? "these" : "all") to Excel</a>
+    }
+</div>
+
+@if (r.TotalCount == 0)
+{
+    @if (Model.TotalStudents == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("graduation-cap")</span>
+            <p class="empty__title">No students yet</p>
+            <p class="empty__text">Add students one by one, or import your whole list from Excel. Each student is placed in one of your classes.</p>
+            <div class="empty__actions">
+                <a class="btn btn--primary" href="@(classFilter is not null ? $"/classes/{classFilter.Id}/students/create" : "/students/create")" data-modal>@Ui.Icon("user-plus")Add student</a>
+                <a class="btn btn--secondary" href="/import-export?kind=Students">@Ui.Icon("upload")Import from Excel</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("search")</span>
+            <p class="empty__title">No students match</p>
+            <p class="empty__text">Try a shorter part of the name, or another class.</p>
+            <div class="empty__actions">
+                <a class="btn btn--secondary" href="/students" data-list-link>Clear filters</a>
+            </div>
+        </div>
+    }
+}
+else
+{
+    <div class="table-wrap">
+        <table class="table table--stack">
+            <thead>
+                <tr>
+                    <th scope="col" class="col-num">#</th>
+                    <th scope="col" aria-sort="@(q.Sort == "name" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "name", "Student name", q.Sort, q.Dir)</th>
+                    <th scope="col" aria-sort="@(q.Sort == "class" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "class", "Class", q.Sort, q.Dir)</th>
+                    <th scope="col" aria-sort="@(q.Sort == "created" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "created", "Added", q.Sort, q.Dir)</th>
+                    <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @{ var n = r.FirstItem; }
+                @foreach (var s in r.Items)
+                {
+                    <tr>
+                        <td class="col-num">@(n++)</td>
+                        <td data-label="Student">
+                            <div class="person">
+                                <span class="avatar avatar--@Ui.Tone(s.FullName)" aria-hidden="true">@Ui.Initials(s.FullName)</span>
+                                <span class="person__name" dir="auto"><a href="/students/profile/@s.Id">@s.FullName</a></span>
+                            </div>
+                        </td>
+                        <td data-label="Class">
+                            <span class="badge badge--class">@s.ClassName</span>
+                            @if (!s.ClassActive)
+                            {
+                                <span class="badge badge--warning" title="This class is inactive">Inactive class</span>
+                            }
+                        </td>
+                        <td data-label="Added" class="muted nowrap" title="@Ui.DateTime(s.CreatedAt)">@Ui.Date(s.CreatedAt)</td>
+                        <td class="col-actions">
+                            <div class="row-actions">
+                                <a class="icon-btn icon-btn--primary" href="/students/transfer/@s.Id" data-modal title="Transfer class" aria-label="Transfer @s.FullName">@Ui.Icon("swap")</a>
+                                <a class="icon-btn icon-btn--primary" href="/students/details/@s.Id" data-modal title="View details" aria-label="View @s.FullName">@Ui.Icon("eye")</a>
+                                <a class="icon-btn icon-btn--primary" href="/students/edit/@s.Id" data-modal title="Edit" aria-label="Edit @s.FullName">@Ui.Icon("pencil")</a>
+                                <form asp-controller="Students" asp-action="Delete" asp-route-id="@s.Id" method="post" data-ajax-form
+                                      data-confirm="@s.FullName will be removed from @s.ClassName. This cannot be undone."
+                                      data-confirm-title="Delete this student?" data-confirm-button="Delete student">
+                                    <button class="icon-btn icon-btn--danger" type="submit" title="Delete" aria-label="Delete @s.FullName">@Ui.Icon("trash")</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    var pager = PagerModel.From(r, r.TotalCount == 1 ? "student" : "students");
+    <partial name="_Pager" model="pager" />
+}

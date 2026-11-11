@@ -1,0 +1,73 @@
+@model StudentRow
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = Model.FullName; ViewData["Nav"] = "Students"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students">Students</a></li><li>Details</li></ol>
+            <h1 class="page-title">Student details</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <div class="modal__head">
+        <div class="profile">
+            <span class="avatar avatar--lg avatar--@Ui.Tone(Model.FullName)" aria-hidden="true">@Ui.Initials(Model.FullName)</span>
+            <div>
+                <h2 class="profile__name" dir="auto">@Model.FullName</h2>
+                <p class="modal__sub">Student · <span class="badge badge--class">@Model.ClassName</span></p>
+            </div>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+    <div class="modal__body">
+        <dl class="dl">
+            <dt>Full name</dt>
+            <dd dir="auto">@Model.FullName</dd>
+            <dt>Class</dt>
+            <dd>
+                <a href="/students?classId=@Model.ClassId">@Model.ClassName</a>
+                @if (Model.ClassActive)
+                {
+                    <span class="badge badge--success badge--dot">Active class</span>
+                }
+                else
+                {
+                    <span class="badge badge--warning badge--dot">Inactive class</span>
+                }
+            </dd>
+            <dt>Added</dt>
+            <dd>@Ui.DateTime(Model.CreatedAt)</dd>
+            <dt>Last updated</dt>
+            <dd>@Ui.DateTime(Model.UpdatedAt)</dd>
+            <dt>Record ID</dt>
+            <dd class="num">#@Model.Id</dd>
+        </dl>
+        @if (!Model.ClassActive)
+        {
+            <div class="notice notice--warning" style="margin-top:14px">
+                @Ui.Icon("alert-triangle")
+                <div class="notice__body"><strong>This student's class is inactive.</strong>Move the student to an active class with Edit.</div>
+            </div>
+        }
+    </div>
+    <div class="modal__foot">
+        @if (modal)
+        {
+            <button class="btn btn--secondary" type="button" data-modal-close>Close</button>
+        }
+        else
+        {
+            <a class="btn btn--secondary" href="/students">Back to students</a>
+        }
+        <a class="btn btn--secondary" href="/students/transfer/@Model.Id" data-modal>@Ui.Icon("swap")Transfer</a>
+        <a class="btn btn--secondary" href="/students/edit/@Model.Id" data-modal>@Ui.Icon("pencil")Edit</a>
+        <a class="btn btn--primary" href="/students/profile/@Model.Id">@Ui.Icon("calendar")Profile &amp; attendance</a>
+    </div>
+</div>

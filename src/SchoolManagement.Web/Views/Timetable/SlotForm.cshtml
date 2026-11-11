@@ -1,0 +1,79 @@
+@model SlotFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = $"Period {Model.Number}";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Timetable"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/timetable/slots">Time Slots</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/timetable/slots/@Model.Id/edit" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("clock", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Edit period @Model.Number</h2>
+                <p class="modal__sub">Applies to every school day (Sunday–Thursday).</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" asp-for="Name">Name <span class="faint" style="font-weight:600">(optional)</span></label>
+                <input class="input" asp-for="Name" maxlength="50" placeholder="Period @Model.Number" data-autofocus />
+                <span asp-validation-for="Name" class="field-validation-error"></span>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="StartTime">Start time</label>
+                    <input class="input picker" type="time" id="StartTime" name="StartTime" value="@Model.StartTime?.ToString("HH:mm")" />
+                    <span asp-validation-for="StartTime" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="EndTime">End time</label>
+                    <input class="input picker" type="time" id="EndTime" name="EndTime" value="@Model.EndTime?.ToString("HH:mm")" />
+                    <span asp-validation-for="EndTime" class="field-validation-error"></span>
+                </div>
+            </div>
+            <p class="hint">Enter both times, or leave both empty. The end must be after the start, and active periods may not overlap.</p>
+            @if (Model.InUse > 0)
+            {
+                <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>@Ui.Plural(Model.InUse, "current assignment uses", "current assignments use") this period.</strong>They stay in this period; changing its times moves them to the new times.</div></div>
+                <label class="switch">
+                    <input type="checkbox" name="ConfirmAffected" value="true" checked="@Model.ConfirmAffected" />
+                    <span class="switch__track" aria-hidden="true"></span>
+                    <span>I understand — apply the new times to these assignments</span>
+                </label>
+                <span asp-validation-for="ConfirmAffected" class="field-validation-error"></span>
+            }
+            <label class="switch">
+                <input type="checkbox" asp-for="IsActive" />
+                <span class="switch__track" aria-hidden="true"></span>
+                <span>Active (shown in every timetable)</span>
+            </label>
+            <span asp-validation-for="IsActive" class="field-validation-error"></span>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/timetable/slots">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save period</button>
+        </div>
+    </form>
+</div>

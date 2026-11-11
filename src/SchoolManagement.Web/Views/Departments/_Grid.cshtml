@@ -1,0 +1,85 @@
+@model DepartmentIndexViewModel
+@{
+    static string Mark(string name)
+    {
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length > 1) return string.Concat(words.Take(2).Select(w => char.ToUpperInvariant(w[0])));
+        return name.Length <= 3 ? name.ToUpperInvariant() : name[..2].ToUpperInvariant();
+    }
+}
+
+<div class="results-bar">
+    <div class="results-bar__info">
+        <span><strong class="num">@Model.Departments.Count</strong> @(Model.Query.HasFilters ? "matching" : "") @(Model.Departments.Count == 1 ? "department" : "departments")</span>
+        @if (!string.IsNullOrWhiteSpace(Model.Query.Search))
+        {
+            <span class="filter-chip">Search: “@Model.Query.Search.Trim()”<a href="@Context.Request.WithQuery(("search", null))" data-list-link aria-label="Clear search">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.Query.Hod))
+        {
+            <span class="filter-chip">@(Model.Query.Hod == "missing" ? "Without an HOD" : "With an HOD")<a href="@Context.Request.WithQuery(("hod", null))" data-list-link aria-label="Clear HOD filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+    </div>
+</div>
+
+@if (Model.Departments.Count == 0)
+{
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("search")</span>
+        <p class="empty__title">No departments match</p>
+        <p class="empty__text">Try another name, or clear the filters to see all @Model.TotalDepartments departments.</p>
+        <div class="empty__actions"><a class="btn btn--secondary" href="/staff/departments" data-list-link>Clear filters</a></div>
+    </div>
+}
+else
+{
+    <div class="dept-grid">
+        @foreach (var d in Model.Departments)
+        {
+            <article class="dept-card" aria-labelledby="dept-@d.Id">
+                <div class="dept-card__top">
+                    <span class="dept-card__mark" aria-hidden="true">@Mark(d.Name)</span>
+                    <div style="min-width:0">
+                        <h2 class="dept-card__name" id="dept-@d.Id"><a class="stretched" href="/staff/departments/@d.Id">@d.Name</a></h2>
+                        @if (!string.IsNullOrWhiteSpace(d.Description))
+                        {
+                            <p class="dept-card__desc" dir="auto">@d.Description</p>
+                        }
+                    </div>
+                    <div class="dept-card__count"><strong>@d.MemberCount</strong><span>@(d.MemberCount == 1 ? "member" : "members")</span></div>
+                </div>
+
+                @if (d.Head is { } h)
+                {
+                    <div class="dept-card__hod">
+                        <span class="avatar avatar--@Ui.Tone(h.FullName)" aria-hidden="true">@Ui.Initials(h.FullName)</span>
+                        <div style="min-width:0">
+                            <span class="dept-card__label">Head of Department</span>
+                            <div class="person__name" dir="auto">@h.FullName</div>
+                        </div>
+                        <span class="hod-badge" style="margin-inline-start:auto">@Ui.Icon("crown")HOD</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="dept-card__hod dept-card__hod--missing">@Ui.Icon("alert-triangle")No HOD assigned yet</div>
+                }
+
+                @if (d.Rules is { } rules)
+                {
+                    <div>
+                        <span class="dept-card__label" style="margin-bottom:6px">@(rules.Label)s</span>
+                        <div class="chip-row">
+                            @foreach (var o in rules.Options)
+                            {
+                                <span class="sub-chip">@o.Value<b>@d.CountOf(o.Value)</b></span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="dept-card__foot"><span>Open department</span>@Ui.Icon("arrow-right", "icon--sm")</div>
+            </article>
+        }
+    </div>
+}

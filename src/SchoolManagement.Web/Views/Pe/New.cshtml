@@ -1,0 +1,61 @@
+@model PeNewModel
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "New P.E. session"; ViewData["Nav"] = "PE"; }
+    var slot = Model.Slot!;
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/pe/new" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Day" value="@Model.Day" />
+        <input type="hidden" name="SlotId" value="@Model.SlotId" />
+        <input type="hidden" name="Date" value="@Model.Date" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("activity", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">New P.E. session</h2>
+                <p class="modal__sub">Every week from this week on. It also appears on the class and teacher timetables and counts in the teacher's workload.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="slot-facts">
+                <div><span class="slot-facts__label">Day</span><strong>@ScheduleRules.DayName(Model.Day)</strong></div>
+                <div><span class="slot-facts__label">Period</span><strong>@slot.Label</strong></div>
+                <div><span class="slot-facts__label">Time</span><strong class="@(slot.HasTimes ? "" : "faint")">@slot.Times</strong></div>
+            </div>
+            <div class="field">
+                <label class="label" for="ClassId">Class <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" asp-for="ClassId" data-searchable>
+                    <option value="">@(Model.Classes.Count == 0 ? "Every class is busy in this period" : "Choose a class…")</option>
+                    @foreach (var cl in Model.Classes)
+                    {
+                        <option value="@cl.Id" selected="@(Model.ClassId == cl.Id)" data-note="@cl.Grade">@cl.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="ClassId" class="field-validation-error"></span>
+                <p class="hint">Only classes with no lesson in this period are listed.</p>
+            </div>
+            <div class="field">
+                <label class="label" for="TeacherId">P.E. teacher <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" asp-for="TeacherId" data-searchable>
+                    <option value="">@(Model.Teachers.Count == 0 ? "No P.E. teachers yet" : "Choose a teacher…")</option>
+                    @foreach (var t in Model.Teachers)
+                    {
+                        <option value="@t.Id" selected="@(Model.TeacherId == t.Id)" disabled="@(!t.Available)" data-note="@(t.Available ? $"{t.Total}/{t.Max}" : "busy")">@t.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="TeacherId" class="field-validation-error"></span>
+                <p class="hint">Teachers of the P.E. department. Busy or full teachers cannot be chosen. Co-teacher, facility and equipment are set in the session details.</p>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="/pe?date=@Model.Date">Cancel</a> }
+            <button class="btn btn--primary" type="submit" disabled="@(Model.Classes.Count == 0 || Model.Teachers.Count == 0)">@Ui.Icon("check")Add session</button>
+        </div>
+    </form>
+</div>

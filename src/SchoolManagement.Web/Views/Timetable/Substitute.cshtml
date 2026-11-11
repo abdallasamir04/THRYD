@@ -1,0 +1,63 @@
+@model SubstituteModel
+@*
+    Cover one teaching session for one week. Saved as a Substitution period (1 period) in the substitute's
+    workload, placed in the same day + slot, so it shows on their timetable and is checked for clashes.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var s = Model.Session!;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Substitute"; ViewData["Nav"] = "Timetable"; }
+    string Info(TeacherCandidate c) => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        c.Department, c.Total, c.Max, c.Remaining, c.Available, c.Reason,
+        status = WorkloadRules.Tone(c.Status), statusLabel = WorkloadRules.Label(c.Status),
+    });
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/timetable/substitute" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents" data-teacher-picker>
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="SessionId" value="@Model.SessionId" />
+        <input type="hidden" name="Week" value="@Model.Week" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("swap", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Substitute this week</h2>
+                <p class="modal__sub" dir="auto">@s.ClassName · @s.Subject (usually @s.TeacherName) · @ScheduleRules.DayName(s.Day), @Model.Slot!.Label · week of @SchoolWeek.Label(Model.WeekStart)</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="TeacherId">Substitute teacher <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" id="TeacherId" name="TeacherId" data-ap-teacher data-searchable data-val="true" data-val-required="Choose the substitute teacher.">
+                    <option value="">Choose a teacher…</option>
+                    @foreach (var c in Model.Candidates)
+                    {
+                        <option value="@c.Id" selected="@(Model.TeacherId == c.Id)" disabled="@(!c.Available)" data-info="@Info(c)" data-note="@(c.Available ? $"{c.Total}/{c.Max}" : "busy")">@c.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="TeacherId" class="field-validation-error"></span>
+                <div class="teacher-info" data-ap-info hidden></div>
+                <p class="hint">Free teachers are listed first, @s.DepartmentName first. A teacher who is busy at this time or already full cannot be chosen.</p>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Description">Note</label>
+                <input class="input" asp-for="Description" dir="auto" maxlength="200" placeholder="Covering @s.Subject for @s.TeacherName" />
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/timetable/classes/@s.ClassId">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save substitution</button>
+        </div>
+    </form>
+</div>

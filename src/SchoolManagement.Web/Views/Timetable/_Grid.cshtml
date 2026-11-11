@@ -1,0 +1,164 @@
+@model TimetablePageViewModel
+@*
+    Weekly grid: Sunday–Thursday × the active time slots. Class view and teacher view render the same
+    session rows. Desktop shows a grid; phones show one card per day (same cells, no sideways scroll).
+*@
+@{
+    var g = Model.Grid;
+    var slots = g.Slots.Where(s => s.IsActive).ToList();
+    var week = SchoolWeek.Iso(g.Week);
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var today = SchoolWeek.Today;
+
+    string AssignUrl(DayOfWeek day, SlotView slot) => Model.IsClass
+        ? $"/timetable/assign?classId={Model.EntityId}&day={day}&slotId={slot.Id}&week={week}"
+        : $"/timetable/teacher-slot?teacherId={Model.EntityId}&day={day}&slotId={slot.Id}&week={week}";
+
+    void Cell(DayOfWeek day, SlotView slot)
+    {
+        var session = g.Session(day, slot.Id);
+        var periods = g.PeriodsAt(day, slot.Id).ToList();
+        var where = $"{ScheduleRules.DayName(day)}, {slot.Label}";
+        if (session is not null)
+        {
+            var sub = periods.FirstOrDefault(p => p.Category == WorkloadCategory.Substitution);
+            if (Model.IsClass)
+            {
+                <a class="tt-cell tt-cell--filled @(sub is null ? "" : "has-sub")" href="@AssignUrl(day, slot)" data-modal aria-label="@where: @session.Subject with @session.TeacherName"
+                   title="@session.Subject · @session.TeacherName · @session.DepartmentName@(sub is null ? "" : " · Sub: " + sub.TeacherName)">
+                    <span class="tt-cell__title" dir="auto">@session.Subject</span>
+                    <span class="tt-cell__line" dir="auto">@Ui.Icon("user", "icon--sm")@session.TeacherName</span>
+                    <span class="tt-cell__meta">@session.DepartmentName</span>
+                    @if (sub is not null)
+                    {
+                        <span class="tt-cell__flag" dir="auto">@Ui.Icon("swap", "icon--sm")Sub: @sub.TeacherName</span>
+                    }
+                </a>
+            }
+            else
+            {
+                <a class="tt-cell tt-cell--filled" href="/timetable/classes/@session.ClassId?week=@week" aria-label="@where: @session.ClassName, @session.Subject">
+                    <span class="tt-cell__title">@session.ClassName</span>
+                    <span class="tt-cell__line" dir="auto">@session.Subject</span>
+                    <span class="tt-cell__meta">@session.DepartmentName</span>
+                </a>
+            }
+        }
+        else if (!Model.IsClass && periods.Count > 0)
+        {
+            var p = periods[0];
+            <a class="tt-cell tt-cell--@(p.Category == WorkloadCategory.Substitution ? "sub" : "office")" href="@AssignUrl(day, slot)" data-modal aria-label="@where: @WorkloadRules.Label(p.Category)">
+                <span class="tt-cell__title">@(p.Category == WorkloadCategory.Substitution ? "Substitution" : "Office hours")</span>
+                @if (p.ClassName is not null) { <span class="tt-cell__line">@p.ClassName</span> }
+                <span class="tt-cell__meta">This week only</span>
+            </a>
+        }
+        else if (g.Editable || !Model.IsClass)
+        {
+            <a class="tt-cell tt-cell--empty" href="@AssignUrl(day, slot)" data-modal aria-label="@where: free — assign a period">
+                <span class="tt-cell__plus">@Ui.Icon("plus")</span><span class="tt-cell__hint">Assign</span>
+            </a>
+        }
+        else
+        {
+            <div class="tt-cell tt-cell--past" aria-label="@where: free"></div>
+        }
+    }
+}
+
+@if (slots.Count == 0)
+{
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("clock")</span>
+        <p class="empty__title">No active time slots</p>
+        <p class="empty__text">Activate the school's time slots to build timetables.</p>
+        <div class="empty__actions"><a class="btn btn--primary" href="/timetable/slots">Time slots</a></div>
+    </div>
+}
+else
+{
+    @if (!Model.IsClass && g.Duties.Count > 0)
+    {
+        <div class="tt-duties" aria-label="Duties this week">
+            <span class="tt-duties__label">@Ui.Icon("shield-check")Duties this week</span>
+            @foreach (var d in g.Duties)
+            {
+                <span class="tt-duty @(d.Counted ? "is-counted" : "")" title="@(d.Counted ? "Counted in workload" : "Not counted in workload yet")">
+                    <strong>@d.Date.ToString("ddd", c)</strong> @DutyComponents.Name(d.Component) · @ScheduleRules.Times(d.Start, d.End)
+                    @(d.Counted ? "✓" : "")
+                </span>
+            }
+        </div>
+    }
+
+    @if (Model.IsClass)
+    {
+        @* Class timetable: days are the rows, periods the columns. Same cells and links as before. *@
+        <div class="tt-wrap">
+            <div class="tt tt--days-rows" role="table" aria-label="@Model.Name weekly timetable" style="--tt-cols:@slots.Count">
+                <div class="tt__corner" role="columnheader"><span class="visually-hidden">Day</span></div>
+                @foreach (var slot in slots)
+                {
+                    <div class="tt__period" role="columnheader">
+                        <span class="tt__slotname">@slot.Label</span>
+                        <span class="tt__time @(slot.HasTimes ? "" : "is-missing")">@slot.Times</span>
+                    </div>
+                }
+                @foreach (var day in ScheduleRules.Days)
+                {
+                    var date = ScheduleRules.DateOf(g.Week, day);
+                    <div class="tt__day @(date == today ? "is-today" : "")" role="rowheader">
+                        <span class="tt__dayname">@ScheduleRules.DayName(day)</span>
+                        <span class="tt__date">@date.ToString("d MMM", c)</span>
+                    </div>
+                    @foreach (var slot in slots)
+                    {
+                        <div class="tt__cell" role="cell">@{ Cell(day, slot); }</div>
+                    }
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="tt" role="table" aria-label="@Model.Name weekly timetable" style="--tt-rows:@slots.Count">
+            <div class="tt__corner" role="columnheader"><span class="visually-hidden">Period</span></div>
+            @foreach (var day in ScheduleRules.Days)
+            {
+                var date = ScheduleRules.DateOf(g.Week, day);
+                <div class="tt__day @(date == today ? "is-today" : "")" role="columnheader">
+                    <span class="tt__dayname">@ScheduleRules.DayName(day)</span>
+                    <span class="tt__date">@date.ToString("d MMM", c)</span>
+                </div>
+            }
+            @foreach (var slot in slots)
+            {
+                <div class="tt__slot" role="rowheader">
+                    <span class="tt__slotname">@slot.Label</span>
+                    <span class="tt__time @(slot.HasTimes ? "" : "is-missing")">@slot.Times</span>
+                </div>
+                @foreach (var day in ScheduleRules.Days)
+                {
+                    <div class="tt__cell" role="cell">@{ Cell(day, slot); }</div>
+                }
+            }
+        </div>
+    }
+
+    <div class="tt-days" aria-label="@Model.Name weekly timetable by day">
+        @foreach (var day in ScheduleRules.Days)
+        {
+            var date = ScheduleRules.DateOf(g.Week, day);
+            <section class="tt-dayCard @(date == today ? "is-today" : "")">
+                <h3 class="tt-dayCard__head">@ScheduleRules.DayName(day) <span>@date.ToString("d MMM", c)</span></h3>
+                @foreach (var slot in slots)
+                {
+                    <div class="tt-dayCard__row">
+                        <div class="tt__slot"><span class="tt__slotname">@slot.Label</span><span class="tt__time @(slot.HasTimes ? "" : "is-missing")">@slot.Times</span></div>
+                        @{ Cell(day, slot); }
+                    </div>
+                }
+            </section>
+        }
+    </div>
+}

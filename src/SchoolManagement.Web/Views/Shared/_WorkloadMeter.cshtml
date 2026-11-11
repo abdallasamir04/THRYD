@@ -1,0 +1,56 @@
+@model WorkloadSummary
+@*
+    Weekly workload at a glance: total / 24, status (green available · orange 20–23 · red full),
+    a bar split by category, and (unless ViewData["Compact"]) one card per category.
+*@
+@{
+    var compact = ViewData["Compact"] as bool? ?? false;
+    var tone = WorkloadRules.Tone(Model.Status);
+    var max = Model.Max; // configured maximum (Settings), never above 24
+    string Width(int v) => (Math.Min(v, max) * 100.0 / max).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+}
+<div class="wl wl--@tone">
+    <div class="wl__head">
+        <p class="wl__figure"><span class="wl__total num">@Model.Total</span><span class="wl__max">/ @max periods</span></p>
+        <span class="wl-status wl-status--@tone">@WorkloadRules.Label(Model.Status)</span>
+    </div>
+    <div class="wl__bar" role="meter" aria-label="Weekly workload" aria-valuemin="0" aria-valuemax="@max" aria-valuenow="@Model.Total"
+         aria-valuetext="@Model.Total of @max periods, @WorkloadRules.Label(Model.Status)">
+        @foreach (var c in WorkloadRules.Categories)
+        {
+            var v = Model.Breakdown[c];
+            if (v > 0)
+            {
+                <span class="wl__seg wl__seg--@c.ToString().ToLowerInvariant()" style="width:@Width(v)" title="@c: @v"></span>
+            }
+        }
+    </div>
+    <p class="wl__note">
+        @if (Model.Status == WorkloadStatus.Full)
+        {
+            <strong>Full.</strong> <span>No more periods can be assigned this week.</span>
+        }
+        else if (Model.Status == WorkloadStatus.NearCapacity)
+        {
+            <strong>Approaching the maximum:</strong> <span>@Model.Remaining @(Model.Remaining == 1 ? "period" : "periods") left.</span>
+        }
+        else
+        {
+            <span><strong class="num">@Model.Remaining</strong> @(Model.Remaining == 1 ? "period" : "periods") available</span>
+        }
+        <span class="faint"> · Week of @SchoolWeek.Label(Model.WeekStart)</span>
+    </p>
+    @if (!compact)
+    {
+        <ul class="wl-cats">
+            @foreach (var c in WorkloadRules.Categories)
+            {
+                <li class="wl-cat wl-cat--@c.ToString().ToLowerInvariant()">
+                    <span class="wl-cat__icon">@Ui.Icon(WorkloadRules.Icon(c))</span>
+                    <span class="wl-cat__label">@WorkloadRules.Label(c)</span>
+                    <span class="wl-cat__value num">@Model.Breakdown[c]</span>
+                </li>
+            }
+        </ul>
+    }
+</div>

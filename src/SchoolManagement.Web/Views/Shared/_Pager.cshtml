@@ -1,0 +1,62 @@
+@model PagerModel
+@*
+    Table footer: "Showing 1–25 of 312", rows-per-page and page links. Links keep the current
+    filters; app.js loads them into the list without a page reload.
+*@
+<div class="table-foot">
+    <div>Showing <strong class="num">@Ui.Count(Model.FirstItem)–@Ui.Count(Model.LastItem)</strong> of <strong class="num">@Ui.Count(Model.TotalCount)</strong> @Model.Noun</div>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <label class="page-size">Rows per page
+            <select class="select" data-list-pagesize aria-label="Rows per page">
+                @foreach (var size in Paging.PageSizes)
+                {
+                    <option value="@size" selected="@(size == Model.PageSize)">@size</option>
+                }
+            </select>
+        </label>
+        @if (Model.TotalPages > 1)
+        {
+            <nav aria-label="Pages">
+                <ul class="pager">
+                    <li>
+                        @if (Model.Page > 1)
+                        {
+                            <a href="@Context.Request.WithQuery(("page", Model.Page - 1))" data-list-link aria-label="Previous page">@Ui.Icon("chevron-left", "icon--sm")</a>
+                        }
+                        else
+                        {
+                            <span class="is-disabled" aria-hidden="true">@Ui.Icon("chevron-left", "icon--sm")</span>
+                        }
+                    </li>
+                    @foreach (var p in Model.Window())
+                    {
+                        <li>
+                            @if (p == 0)
+                            {
+                                <span class="gap" aria-hidden="true">…</span>
+                            }
+                            else if (p == Model.Page)
+                            {
+                                <span aria-current="page">@p</span>
+                            }
+                            else
+                            {
+                                <a href="@Context.Request.WithQuery(("page", p))" data-list-link aria-label="Page @p">@p</a>
+                            }
+                        </li>
+                    }
+                    <li>
+                        @if (Model.Page < Model.TotalPages)
+                        {
+                            <a href="@Context.Request.WithQuery(("page", Model.Page + 1))" data-list-link aria-label="Next page">@Ui.Icon("chevron-right", "icon--sm")</a>
+                        }
+                        else
+                        {
+                            <span class="is-disabled" aria-hidden="true">@Ui.Icon("chevron-right", "icon--sm")</span>
+                        }
+                    </li>
+                </ul>
+            </nav>
+        }
+    </div>
+</div>

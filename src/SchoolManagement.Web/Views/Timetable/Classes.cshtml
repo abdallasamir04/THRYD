@@ -1,0 +1,54 @@
+@model ClassPickerViewModel
+@{
+    ViewData["Title"] = "Class Timetable";
+    ViewData["Nav"] = "Timetable";
+    var active = Model.Classes.Where(c => c.IsActive).ToList();
+    var perWeek = 5 * Model.ActiveSlots;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li>Class Timetable</li></ol>
+        <h1 class="page-title">Class Timetable</h1>
+        <p class="page-sub">Every class has its own week: Sunday–Thursday × @Model.ActiveSlots periods. Choose a class to assign subjects and teachers.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/timetable/teachers">@Ui.Icon("calendar")Teacher timetables</a>
+        <a class="btn btn--secondary" href="/timetable/slots">@Ui.Icon("clock")Time slots</a>
+    </div>
+</div>
+
+<section class="card table-card" aria-label="Classes">
+    <div class="toolbar">
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" placeholder="Filter classes…" aria-label="Filter classes" data-filter-cards="#class-grid" autocomplete="off" />
+        </div>
+        <span class="muted" style="font-size:0.84rem">@active.Count active classes · @active.Count(c => c.Sessions > 0) timetabled</span>
+    </div>
+    @if (active.Count == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("door")</span><p class="empty__title">No active classes</p><p class="empty__text">Add or activate classes first.</p><div class="empty__actions"><a class="btn btn--primary" href="/classes">Classes</a></div></div>
+    }
+    else
+    {
+        <div class="class-grid" id="class-grid">
+            @foreach (var c in active)
+            {
+                var pct = perWeek == 0 ? 0 : (int)Math.Round(100.0 * c.Sessions / perWeek);
+                <a class="class-card" href="/timetable/classes/@c.Id" data-card-text="@c.Name" style="text-decoration:none;color:inherit">
+                    <div class="class-card__top">
+                        <span class="class-card__code">@c.Name</span>
+                        <span class="badge @(c.Sessions == 0 ? "badge--neutral" : pct >= 100 ? "badge--success" : "badge--primary")">@(c.Sessions == 0 ? "Empty" : pct >= 100 ? "Complete" : $"{pct}%")</span>
+                    </div>
+                    <div>
+                        <div class="class-card__count">@c.Sessions<span class="faint" style="font-size:0.9rem;font-weight:700"> / @perWeek</span></div>
+                        <div class="class-card__label">periods assigned · @Ui.Plural(c.Students, "student", "students")</div>
+                    </div>
+                    <div class="tt-progress" aria-hidden="true"><span style="width:@Math.Min(100, pct)%"></span></div>
+                    <div class="class-card__foot"><span class="class-card__link">Open timetable</span>@Ui.Icon("arrow-right", "icon--sm")</div>
+                </a>
+            }
+        </div>
+    }
+</section>

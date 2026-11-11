@@ -1,0 +1,127 @@
+@model TeacherFormModel
+@inject ITeacherService TeacherRules
+@{
+    // Department subcategories come from the database (managed on each department's page).
+    var allRules = await TeacherRules.SubcategoryRulesAsync();
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit staff member" : "Add staff member";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Staff"; }
+    var selectedDept = Model.Departments.FirstOrDefault(d => d.Id == Model.DepartmentId);
+    var subRules = selectedDept is null ? null : allRules.GetValueOrDefault(selectedDept.Id);
+    var subjectOptions = subRules?.Find(Model.Subcategory)?.Subjects ?? [];
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/staff/members">Staff Members</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form asp-controller="Teachers" asp-action="@(Model.IsEdit ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post"
+          data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "user-plus", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">Academic staff only — Management Team members are added under Management Team.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+
+        <div class="modal__body">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors" style="margin-bottom:14px"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-grid">
+                <div class="field">
+                    <label class="label" asp-for="FullName">Full name <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" asp-for="FullName" dir="auto" placeholder="e.g. Mona Adel Farouk" maxlength="150" data-autofocus />
+                    <span asp-validation-for="FullName" class="field-validation-error"></span>
+                </div>
+                @*
+                    Subcategory and subject appear only for departments that have them (DepartmentCatalog):
+                    Religion → Islamic (Religion / Quran) or Christian (Christian Religion); Second Language →
+                    French / Deutsch; ICT → ICT / AI; WSD → its four subdepartments. staff.js swaps the options
+                    when the department changes; the server checks the same rules on save.
+                *@
+                <div class="form-grid form-grid--2" data-dept-picker>
+                    <div class="field">
+                        <label class="label" for="DepartmentId">Academic department</label>
+                        <select class="select" id="DepartmentId" name="DepartmentId" data-dept-select>
+                            <option value="">No department</option>
+                            @foreach (var d in Model.Departments)
+                            {
+                                <option value="@d.Id" selected="@(Model.DepartmentId == d.Id)" data-subcats="@DepartmentCatalog.ClientJson(allRules.GetValueOrDefault(d.Id))">@d.Name</option>
+                            }
+                        </select>
+                        <span asp-validation-for="DepartmentId" class="field-validation-error"></span>
+                    </div>
+                    <div class="field" data-subcat-field hidden="@(subRules is null)">
+                        <label class="label" for="Subcategory"><span data-subcat-label>@(subRules?.Label ?? "Subcategory")</span> <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" id="Subcategory" name="Subcategory" data-subcat-select
+                                data-val="true" data-val-required="Choose an option for this department.">
+                            <option value="">Choose…</option>
+                            @foreach (var o in subRules?.Options ?? [])
+                            {
+                                <option value="@o.Value" selected="@(string.Equals(Model.Subcategory, o.Value, StringComparison.OrdinalIgnoreCase))">@o.Value</option>
+                            }
+                        </select>
+                        <span asp-validation-for="Subcategory" class="field-validation-error"></span>
+                    </div>
+                    <div class="field" data-subject-field hidden="@(subjectOptions.Count == 0)">
+                        <label class="label" for="Subject"><span data-subject-label>@(subRules?.SubjectLabel ?? "Subject")</span> <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" id="Subject" name="Subject" data-subject-select
+                                data-val="true" data-val-required="Choose the subject.">
+                            <option value="">Choose…</option>
+                            @foreach (var s in subjectOptions)
+                            {
+                                <option value="@s" selected="@(string.Equals(Model.Subject, s, StringComparison.OrdinalIgnoreCase) || subjectOptions.Count == 1)">@s</option>
+                            }
+                        </select>
+                        <span asp-validation-for="Subject" class="field-validation-error"></span>
+                    </div>
+                </div>
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" asp-for="JobTitle">Job title / Position</label>
+                        <input class="input" asp-for="JobTitle" dir="auto" list="job-titles" placeholder="e.g. Math Teacher" maxlength="100" />
+                        <datalist id="job-titles">
+                            @foreach (var j in Model.JobTitleSuggestions)
+                            {
+                                <option value="@j.JobTitle"></option>
+                            }
+                        </datalist>
+                        <span asp-validation-for="JobTitle" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="ContactNumber">Contact number</label>
+                        <input class="input" asp-for="ContactNumber" type="tel" inputmode="tel" dir="ltr" placeholder="010 1234 5678" maxlength="30" />
+                        <span asp-validation-for="ContactNumber" class="field-validation-error"></span>
+                    </div>
+                </div>
+                <p class="hint">Phone numbers keep leading zeros and international prefixes such as +20. Spaces and dashes are allowed.</p>
+            </div>
+        </div>
+
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+                @if (!Model.IsEdit)
+                {
+                    <button class="btn btn--secondary" type="submit" data-reopen="/teachers/create?departmentId={DepartmentId}">@Ui.Icon("plus")Save &amp; add another</button>
+                }
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="@(Model.DepartmentId is { } did ? $"/staff/departments/{did}" : "/staff/members")">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Add staff member")</button>
+        </div>
+    </form>
+</div>

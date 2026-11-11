@@ -1,0 +1,69 @@
+@model StudentTransferModel
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = $"Transfer {Model.Student?.FullName ?? "Student"}";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Classes"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/classes">Classes</a></li><li><a href="/students/profile/@Model.StudentId">@Model.Student?.FullName</a></li><li>Transfer</li></ol>
+            <h1 class="page-title">Transfer Class</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form asp-controller="Students" asp-action="Transfer" asp-route-id="@Model.StudentId" method="post"
+          data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("swap", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">Current class: <span class="badge badge--class">@Model.Student?.ClassName</span></p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors" style="margin-bottom:14px"></div>
+            <input type="hidden" asp-for="StudentId" />
+
+            <div class="field">
+                <label class="label" asp-for="TargetClassId">Destination class <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" asp-for="TargetClassId" required data-autofocus>
+                    <option value="">Choose a destination class…</option>
+                    @foreach (var c in Model.AvailableClasses.Where(c => c.Id != Model.Student?.ClassId))
+                    {
+                        var isFull = c.StudentCount >= c.Capacity;
+                        <option value="@c.Id" disabled="@(isFull || !c.IsActive ? "disabled" : null)">
+                            @c.Name — @c.StudentCount / @c.Capacity students @(isFull ? "(FULL)" : (!c.IsActive ? "(Inactive)" : ""))
+                        </option>
+                    }
+                </select>
+                <span asp-validation-for="TargetClassId" class="field-validation-error"></span>
+                <span class="hint">Classes at full capacity are disabled and cannot receive transfers.</span>
+            </div>
+
+            <div class="notice notice--info" style="margin-top:14px">
+                @Ui.Icon("shield-check")
+                <div class="notice__body">
+                    <strong>Capacity Protection:</strong> The transfer will be validated against destination capacity in a database transaction to prevent over-enrollment.
+                </div>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/students/profile/@Model.StudentId">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("swap")Confirm transfer</button>
+        </div>
+    </form>
+</div>

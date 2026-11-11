@@ -1,0 +1,93 @@
+@model ArrivalCorrectionModel
+@*
+    Correction workflow: the only way to change a saved arrival record. The previous and new values,
+    the reason and who corrected it are kept in StudentArrivalCorrections.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var r = Model.Record!;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Correct arrival record"; ViewData["Nav"] = "Arrivals"; }
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/arrivals/@Model.Id/correct" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon modal__icon--warning">@Ui.Icon("pencil", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">Correct arrival — @r.StudentName</h2>
+                <p class="modal__sub">@r.ClassName · @r.Date.ToString("dddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) · recorded by @(r.RecordedBy ?? "—")@(r.Corrections > 0 ? $" · corrected {r.Corrections}× before" : "")</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <fieldset class="field">
+                <legend class="label">Arrival</legend>
+                <div class="seg-toggle">
+                    <label><input type="radio" name="Status" value="Present" checked="@(Model.Status == ArrivalStatus.Present)" /><span>Present</span></label>
+                    <label><input type="radio" name="Status" value="Absent" checked="@(Model.Status == ArrivalStatus.Absent)" /><span>Absent</span></label>
+                </div>
+            </fieldset>
+            <div class="form-grid form-grid--3">
+                <div class="field">
+                    <label class="label" for="Time">Arrival time</label>
+                    <input class="input" type="time" step="1" id="Time" name="Time" value="@Model.Time" />
+                    <span class="hint">Late status is recalculated with the current deadline.</span>
+                </div>
+                <div class="field">
+                    <label class="label" for="Method">Method</label>
+                    <select class="select" id="Method" name="Method">
+                        <option value="">Not recorded</option>
+                        @foreach (var m in Enum.GetValues<ArrivalMethod>())
+                        {
+                            <option value="@m" selected="@(Model.Method == m)">@Arrivals.Method(m)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="label" asp-for="Location">Arrival location</label>
+                    <input class="input" asp-for="Location" maxlength="120" dir="auto" />
+                </div>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="ReceivedByStaffId">Received by</label>
+                    <select class="select" id="ReceivedByStaffId" name="ReceivedByStaffId" data-searchable>
+                        <option value="">Not recorded</option>
+                        @foreach (var s in Model.Staff)
+                        {
+                            <option value="@s.Id" selected="@(Model.ReceivedByStaffId == s.Id)" data-note="@s.JobTitle">@s.FullName</option>
+                        }
+                    </select>
+                </div>
+                <label class="switch" style="align-self:end;padding-bottom:10px">
+                    <input type="checkbox" name="ReceivingConfirmed" value="true" checked="@Model.ReceivingConfirmed" />
+                    <span class="switch__track" aria-hidden="true"></span>
+                    <span>Receiving confirmed</span>
+                </label>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Notes">Notes</label>
+                <input class="input" asp-for="Notes" maxlength="500" dir="auto" />
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Reason">Reason for the correction <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Reason" maxlength="500" dir="auto" placeholder="e.g. Entered for the wrong student; arrived 07:52 not 07:25" data-autofocus />
+                <span asp-validation-for="Reason" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/arrivals?date=@SchoolWeek.Iso(r.Date)">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save correction</button>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,41 @@
+@model TaskIndexViewModel
+@{
+    ViewData["Title"] = "Tasks";
+    ViewData["Nav"] = "ManagementTasks";
+    var k = Model.Counts;
+    var q = Model.Query;
+    string Link(string? status) => Context.Request.WithQuery(("status", status), ("page", null));
+    string Current(string? status) => q.Status == status ? "true" : "false";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li>Tasks</li></ol>
+        <h1 class="page-title">Management Team Tasks</h1>
+        <p class="page-sub">Individual tasks of Management Team members. Separate from academic staff workload.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/management/members">@Ui.Icon("briefcase")Team members</a>
+        <a class="btn btn--primary" href="/management/tasks/create@(q.MemberId is { } mid ? $"?memberId={mid}" : "")" data-modal>@Ui.Icon("plus")New task</a>
+    </div>
+</div>
+
+@if (Model.Members.Count == 0)
+{
+    <div class="notice notice--warning">@Ui.Icon("info")<div class="notice__body"><strong>No Management Team members yet.</strong>Tasks are assigned to Management Team members. <a href="/management/members/create" data-modal>Add a team member</a> first.</div></div>
+}
+
+<ul class="summary-tiles summary-tiles--5" aria-label="Task totals@(q.MemberId is null ? "" : " for the selected member")">
+    <li><a class="summary-tile" href="@Link(null)" aria-current="@Current(null)"><span class="summary-tile__value num">@k.Total</span><span class="summary-tile__label">@Ui.Icon("list", "icon--sm")All tasks</span></a></li>
+    <li><a class="summary-tile summary-tile--muted" href="@Link("todo")" aria-current="@Current("todo")"><span class="summary-tile__value num">@k.ToDo</span><span class="summary-tile__label">@Ui.Icon("clock", "icon--sm")To do</span></a></li>
+    <li><a class="summary-tile" href="@Link("in-progress")" aria-current="@Current("in-progress")"><span class="summary-tile__value num" style="color:var(--color-secondary-ink)">@k.InProgress</span><span class="summary-tile__label">@Ui.Icon("activity", "icon--sm")In progress@(k.OnHold > 0 ? $" · {k.OnHold} on hold" : "")</span></a></li>
+    <li><a class="summary-tile summary-tile--ok" href="@Link("completed")" aria-current="@Current("completed")"><span class="summary-tile__value num">@k.Completed</span><span class="summary-tile__label">@Ui.Icon("check-circle", "icon--sm")Completed</span></a></li>
+    <li><a class="summary-tile @(k.Overdue > 0 ? "summary-tile--bad" : "")" href="@Link("overdue")" aria-current="@Current("overdue")"><span class="summary-tile__value num">@k.Overdue</span><span class="summary-tile__label">@Ui.Icon("alert-circle", "icon--sm")Overdue@(k.DueToday > 0 ? $" · {k.DueToday} due today" : "")</span></a></li>
+</ul>
+
+<section class="card table-card" aria-label="Task list">
+    <partial name="_Toolbar" model="Model" />
+    <div id="task-list" data-ajax-list data-refresh-page aria-live="polite">
+        <partial name="_TaskList" model="Model" />
+    </div>
+</section>

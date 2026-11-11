@@ -1,0 +1,76 @@
+@model TaskIndexViewModel
+@{
+    var q = Model.Query;
+    var r = Model.Result;
+    string? StatusLabel(string? s) => s switch
+    {
+        "open" => "Open", "overdue" => "Overdue", "todo" => "To Do", "in-progress" => "In Progress",
+        "on-hold" => "On Hold", "completed" => "Completed", _ => null,
+    };
+    string? DueLabel(string? s) => s switch
+    {
+        "overdue" => "Overdue", "today" => "Due today", "week" => "Next 7 days", "later" => "Due later", "none" => "No due date", _ => null,
+    };
+    var memberName = q.MemberId is { } mid && !Model.ForMember ? Model.Members.FirstOrDefault(m => m.Id == mid)?.FullName : null;
+}
+
+<div class="results-bar">
+    <div class="results-bar__info">
+        <span><strong class="num">@Ui.Count(r.TotalCount)</strong> @(q.HasFilters || memberName is not null ? "matching" : "") @(r.TotalCount == 1 ? "task" : "tasks")</span>
+        @if (!string.IsNullOrWhiteSpace(q.Search))
+        {
+            <span class="filter-chip">Search: “@q.Search.Trim()”<a href="@Context.Request.WithQuery(("search", null), ("page", null))" data-list-link aria-label="Clear search">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (memberName is not null)
+        {
+            <span class="filter-chip" dir="auto">@memberName<a href="@Context.Request.WithQuery(("memberId", null), ("page", null))" data-list-link aria-label="Clear member filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (StatusLabel(q.Status) is { } sl)
+        {
+            <span class="filter-chip">Status: @sl<a href="@Context.Request.WithQuery(("status", null), ("page", null))" data-list-link aria-label="Clear status filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (!string.IsNullOrWhiteSpace(q.Priority))
+        {
+            <span class="filter-chip">Priority: @q.Priority<a href="@Context.Request.WithQuery(("priority", null), ("page", null))" data-list-link aria-label="Clear priority filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (DueLabel(q.Due) is { } dl)
+        {
+            <span class="filter-chip">@dl<a href="@Context.Request.WithQuery(("due", null), ("page", null))" data-list-link aria-label="Clear due date filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+    </div>
+</div>
+
+@if (r.TotalCount == 0)
+{
+    @if (Model.Counts.Total == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("clipboard-check")</span>
+            <p class="empty__title">No tasks yet</p>
+            <p class="empty__text">Create a task, assign it to a Management Team member and set its priority and due date.</p>
+            <div class="empty__actions">
+                <a class="btn btn--primary" href="/management/tasks/create@(Model.ForMember ? $"?memberId={q.MemberId}" : "")" data-modal>@Ui.Icon("plus")New task</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("search")</span>
+            <p class="empty__title">No tasks match</p>
+            <p class="empty__text">Try another status, priority or due date, or clear the filters.</p>
+            <div class="empty__actions"><a class="btn btn--secondary" href="@Model.BaseUrl" data-list-link>Clear filters</a></div>
+        </div>
+    }
+}
+else
+{
+    <div class="task-grid">
+        @foreach (var t in r.Items)
+        {
+            <partial name="~/Views/ManagementTasks/_TaskCard.cshtml" model="(t, Model.ForMember)" />
+        }
+    </div>
+    var pager = PagerModel.From(r, r.TotalCount == 1 ? "task" : "tasks");
+    <partial name="_Pager" model="pager" />
+}

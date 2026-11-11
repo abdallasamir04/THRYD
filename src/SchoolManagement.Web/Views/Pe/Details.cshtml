@@ -1,0 +1,117 @@
+@model PeDetailsModel
+@*
+    P.E. session details. Teacher / class / time come from the timetable session (change the teacher
+    with the existing timetable form); this form saves co-teacher, facility, activity, equipment
+    checklist and notes. Equipment rows bind as Equipment[key].Name / .Checked (staff.js adds rows).
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var v = Model.View!;
+    var s = v.Session;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "P.E. session"; ViewData["Nav"] = "PE"; }
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var removeForm = $"pe-remove-{s.Id}";
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/pe/sessions/@s.Id" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Date" value="@Model.Date" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("activity", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">P.E. · @s.ClassName</h2>
+                <p class="modal__sub">@ScheduleRules.DayName(s.Day), @v.Slot.Label · every week since @s.StartsOn.ToString("d MMM yyyy", c)</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+            <div class="slot-facts" aria-label="Session">
+                <div><span class="slot-facts__label">Assigned teacher</span><strong dir="auto">@s.TeacherName</strong></div>
+                <div><span class="slot-facts__label">Assigned grade</span><strong>@v.Grade</strong><span class="person__meta">Class @s.ClassName</span></div>
+                <div><span class="slot-facts__label">Session time</span><strong class="@(v.Slot.HasTimes ? "" : "faint")">@v.Slot.Times</strong><span class="person__meta">@v.Slot.Label</span></div>
+            </div>
+
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="CoTeacherId">Co-teacher</label>
+                    <select class="select" asp-for="CoTeacherId" data-searchable>
+                        <option value="">No co-teacher</option>
+                        @foreach (var t in Model.CoTeachers)
+                        {
+                            <option value="@t.Id" selected="@(Model.CoTeacherId == t.Id)" data-note="@t.Note">@t.Name</option>
+                        }
+                    </select>
+                    <span asp-validation-for="CoTeacherId" class="field-validation-error"></span>
+                    <p class="hint">P.E. teachers are listed first. Someone busy at this time cannot be chosen.</p>
+                </div>
+                <fieldset class="field">
+                    <legend class="label">Facility</legend>
+                    <div class="kind-choice pe-facilities">
+                        @foreach (var f in Enum.GetValues<SchoolManagement.Web.Entities.PeFacility>())
+                        {
+                            <label class="kind-choice__opt"><input type="radio" name="Facility" value="@f" checked="@(Model.Facility == f)" /><span class="pe-dot pe-dot--@f.ToString().ToLowerInvariant()"></span>@PeService.FacilityName(f)</label>
+                        }
+                        <label class="kind-choice__opt"><input type="radio" name="Facility" value="" checked="@(Model.Facility is null)" />Not set</label>
+                    </div>
+                    <span asp-validation-for="Facility" class="field-validation-error"></span>
+                </fieldset>
+            </div>
+
+            <div class="field">
+                <label class="label" asp-for="Activity">Curriculum focus / activity</label>
+                <input class="input" asp-for="Activity" dir="auto" maxlength="300" placeholder="e.g. Ball control — dribbling relays" />
+                <span asp-validation-for="Activity" class="field-validation-error"></span>
+            </div>
+
+            <div class="field" data-equipment>
+                <span class="label">Equipment</span>
+                <ul class="pe-equip" data-equipment-list>
+                    @foreach (var (key, item) in Model.Equipment)
+                    {
+                        <li class="pe-equip__row">
+                            <input type="checkbox" name="Equipment[@key].Checked" value="true" checked="@item.Checked" aria-label="Ready: @item.Name" />
+                            <input class="input input--sm" name="Equipment[@key].Name" value="@item.Name" maxlength="100" dir="auto" aria-label="Equipment item" />
+                            <button class="icon-btn icon-btn--danger" type="button" data-equipment-remove aria-label="Remove @item.Name">@Ui.Icon("x")</button>
+                        </li>
+                    }
+                </ul>
+                <p class="hint" data-equipment-empty hidden="@(Model.Equipment.Count > 0)">No equipment listed yet.</p>
+                <div class="pe-equip__add">
+                    <input class="input input--sm" data-equipment-new maxlength="100" placeholder="Add an item, e.g. Cones" aria-label="New equipment item" dir="auto" />
+                    <button class="btn btn--secondary btn--sm" type="button" data-equipment-add>@Ui.Icon("plus", "icon--sm")Add</button>
+                </div>
+                <span asp-validation-for="Equipment" class="field-validation-error"></span>
+                <p class="hint">Tick an item when it is ready. Changes are saved with “Save details”.</p>
+            </div>
+
+            <div class="field">
+                <label class="label" asp-for="Notes">Notes / quality feedback</label>
+                <textarea class="input textarea" asp-for="Notes" rows="3" dir="auto" maxlength="2000" placeholder="Observations, feedback, follow-ups…"></textarea>
+                <span asp-validation-for="Notes" class="field-validation-error"></span>
+            </div>
+            @if (v.UpdatedAt is { } u)
+            {
+                <p class="hint">Last saved @Ui.DateTime(u)@(v.UpdatedBy is null ? "" : " by " + v.UpdatedBy)</p>
+            }
+        </div>
+        <div class="modal__foot" style="flex-wrap:wrap">
+            @if (s.EndedOn is null)
+            {
+                <button class="btn btn--soft-danger" type="submit" form="@removeForm" style="margin-inline-end:auto">@Ui.Icon("trash")Remove</button>
+                <a class="btn btn--secondary" href="/timetable/sessions/@s.Id/edit" data-modal>@Ui.Icon("swap")Change teacher</a>
+            }
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="/pe?date=@Model.Date">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save details</button>
+        </div>
+    </form>
+    <form id="@removeForm" action="/timetable/sessions/@s.Id/remove" method="post" data-ajax-form hidden
+          data-confirm="P.E. for @s.ClassName (@ScheduleRules.DayName(s.Day), @v.Slot.Label) will be removed from this week on. Earlier weeks keep it in their history."
+          data-confirm-title="Remove this P.E. session?" data-confirm-button="Remove session">
+        @Html.AntiForgeryToken()
+    </form>
+</div>

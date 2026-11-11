@@ -1,0 +1,84 @@
+@model ArrivalChecklistViewModel
+@{
+    ViewData["Title"] = "Student Arrivals";
+    ViewData["Nav"] = "Arrivals";
+    var c = Model.Checklist;
+    var date = SchoolWeek.Iso(c.Date);
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li>Student Arrivals</li></ol>
+        <h1 class="page-title">Student Arrivals</h1>
+        <p class="page-sub">Record each student's arrival for the day. Students without a record are shown as “Not recorded” — never as absent.</p>
+    </div>
+</div>
+
+<partial name="_DayNav" model="c.Date" />
+
+<section class="card arrival-session" aria-label="Session settings">
+    <form class="arrival-session__row" method="get" action="/arrivals">
+        <input type="hidden" name="date" value="@date" />
+        <div class="field">
+            <label class="label" for="classId">Class</label>
+            <select class="select" id="classId" name="classId" data-searchable onchange="this.form.submit()">
+                <option value="">All classes</option>
+                @foreach (var cls in Model.Classes)
+                {
+                    <option value="@cls.Id" selected="@(c.ClassId == cls.Id)" data-note="@(cls.IsActive ? null : "Inactive")">@cls.Name</option>
+                }
+            </select>
+        </div>
+    </form>
+    <div class="arrival-session__row" data-arrival-session>
+        <div class="field">
+            <label class="label" for="session-receiver">Received by</label>
+            <select class="select" id="session-receiver" data-searchable>
+                <option value="">Not recorded</option>
+                @foreach (var s in Model.Staff)
+                {
+                    <option value="@s.Id" selected="@(Model.OperatorStaffId == s.Id)" data-note="@s.JobTitle">@s.FullName</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="session-location">Arrival location</label>
+            <input class="input" id="session-location" maxlength="120" placeholder="e.g. Main gate" dir="auto" />
+        </div>
+        <div class="field">
+            <label class="label" for="session-method">Default method</label>
+            <select class="select" id="session-method">
+                <option value="">None</option>
+                @foreach (var m in Enum.GetValues<ArrivalMethod>())
+                {
+                    <option value="@m">@Arrivals.Method(m)</option>
+                }
+            </select>
+        </div>
+        <label class="switch">
+            <input type="checkbox" id="session-confirmed" />
+            <span class="switch__track" aria-hidden="true"></span>
+            <span>Receiving confirmed</span>
+        </label>
+        <div class="deadline-chip @(c.Deadline is null ? "is-missing" : "")">
+            @Ui.Icon("clock", "icon--sm")
+            @if (c.Deadline is { } dl)
+            {
+                <span>Late after <strong>@dl.ToString("HH:mm")</strong></span>
+            }
+            else
+            {
+                <span>No arrival deadline set — <a href="/settings#arrival">set it in Settings</a> to mark late arrivals.</span>
+            }
+        </div>
+    </div>
+</section>
+
+@Html.AntiForgeryToken()
+<div id="arrival-list" data-ajax-list aria-live="polite">
+    <partial name="_Checklist" model="Model" />
+</div>
+
+@section Scripts {
+    <script src="~/js/arrivals.js" asp-append-version="true"></script>
+}

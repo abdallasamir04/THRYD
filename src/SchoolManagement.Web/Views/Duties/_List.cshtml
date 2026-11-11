@@ -1,0 +1,39 @@
+@model DutyListViewModel
+@{
+    var duties = Model.Duties;
+    int Count(DutyStatus s) => duties.Count(d => d.Status == s);
+    var staffAction = duties.Count(d => Coverage.NeedsAction(d.Coverage));
+    var notRecorded = duties.Count(d => d.Coverage == CoverageState.AttendanceNotRecorded);
+}
+
+@if (duties.Count == 0)
+{
+    <div class="card">
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon(Model.Info.Icon)</span>
+            <p class="empty__title">No @Model.Info.Name duties on this day</p>
+            <p class="empty__text">Add a duty with its time, location and the staff member assigned. Attendance and any backup are recorded on the same duty.</p>
+            <div class="empty__actions">
+                <a class="btn btn--primary" href="/duties/create?component=@Model.Info.Slug&date=@SchoolWeek.Iso(Model.Date)" data-modal>@Ui.Icon("plus")Add duty</a>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <ul class="coverage-strip" aria-label="Duty status for this day">
+        <li><span class="num">@duties.Count</span> duties</li>
+        <li><span class="num">@Count(DutyStatus.Pending)</span> pending</li>
+        <li class="is-info"><span class="num">@Count(DutyStatus.InProgress)</span> in progress</li>
+        <li class="is-ok"><span class="num">@Count(DutyStatus.Covered)</span> covered</li>
+        <li class="is-bad"><span class="num">@Count(DutyStatus.NotCovered)</span> not covered</li>
+        <li class="is-wait"><span class="num">@staffAction</span> need staff action</li>
+        <li class="is-muted"><span class="num">@notRecorded</span> attendance not recorded</li>
+    </ul>
+    <div class="duty-grid">
+        @foreach (var d in duties)
+        {
+            <partial name="_DutyCard" model="d" />
+        }
+    </div>
+}

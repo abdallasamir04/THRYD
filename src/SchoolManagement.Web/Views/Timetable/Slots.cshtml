@@ -1,0 +1,55 @@
+@model SlotsViewModel
+@{
+    ViewData["Title"] = "Time Slots";
+    ViewData["Nav"] = "Timetable";
+    var configured = Model.Slots.Count(s => s.HasTimes);
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/timetable/classes">Class Timetable</a></li><li>Time Slots</li></ol>
+        <h1 class="page-title">Time Slots</h1>
+        <p class="page-sub">The same @Model.Slots.Count periods apply to every school day, Sunday to Thursday. Active slots may not overlap.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/timetable/classes">@Ui.Icon("grid")Class timetables</a>
+    </div>
+</div>
+
+@if (configured < Model.Slots.Count)
+{
+    <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>@(Model.Slots.Count - configured) of @Model.Slots.Count slots have no times yet.</strong>Enter each period's start and end time. Timetables already work with period numbers; times are added to them automatically.</div></div>
+}
+
+<section class="card table-card" aria-label="Time slots">
+    <div class="table-wrap">
+        <table class="table table--stack">
+            <thead>
+                <tr><th scope="col" class="col-num">#</th><th scope="col">Period</th><th scope="col">Start</th><th scope="col">End</th><th scope="col">Duration</th><th scope="col">Status</th><th scope="col" class="num">In use</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Model.Slots)
+                {
+                    var inUse = Model.InUse.GetValueOrDefault(s.Id);
+                    <tr class="@(s.IsActive ? "" : "is-ended")">
+                        <td class="col-num">@s.Number</td>
+                        <td data-label="Period"><strong>@s.Label</strong></td>
+                        <td data-label="Start" class="num">@(s.Start?.ToString("HH:mm") ?? "—")</td>
+                        <td data-label="End" class="num">@(s.End?.ToString("HH:mm") ?? "—")</td>
+                        <td data-label="Duration" class="num">@(s.Start is { } a && s.End is { } b ? $"{(int)(b - a).TotalMinutes} min" : "—")</td>
+                        <td data-label="Status">
+                            @if (!s.IsActive) { <span class="badge badge--neutral">Inactive</span> }
+                            else if (!s.HasTimes) { <span class="badge badge--warning">Times not set</span> }
+                            else { <span class="badge badge--success">Ready</span> }
+                        </td>
+                        <td data-label="In use" class="num">@inUse</td>
+                        <td class="col-actions">
+                            <a class="btn btn--secondary btn--sm" href="/timetable/slots/@s.Id/edit" data-modal>@Ui.Icon("pencil", "icon--sm")Edit</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

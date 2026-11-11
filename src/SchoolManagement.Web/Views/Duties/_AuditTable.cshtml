@@ -1,0 +1,74 @@
+@model DutyAuditViewModel
+@{
+    var r = Model.Result;
+    string Att(AttendanceStatus a) => a == AttendanceStatus.NotRecorded ? "not recorded" : a.ToString().ToLowerInvariant();
+}
+
+@if (r.TotalCount == 0)
+{
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("clipboard-check")</span>
+        <p class="empty__title">@(Model.Query.HasFilters ? "No duty sessions match" : "No duty sessions yet")</p>
+        <p class="empty__text">@(Model.Query.HasFilters ? "Try a wider date range or fewer filters." : "Duties added on the Morning Duty pages appear here with their audit record.")</p>
+        @if (Model.Query.HasFilters)
+        {
+            <div class="empty__actions"><a class="btn btn--secondary" href="/duties/audit" data-list-link>Clear filters</a></div>
+        }
+    </div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="table table--stack">
+            <thead>
+                <tr>
+                    <th scope="col">Date &amp; time</th>
+                    <th scope="col">Duty</th>
+                    <th scope="col">Location</th>
+                    <th scope="col">Assigned staff</th>
+                    <th scope="col">Backup</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Audit</th>
+                    <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in r.Items)
+                {
+                    <tr>
+                        <td data-label="Date & time" class="nowrap"><strong>@d.DutyDate.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</strong><div class="person__meta num">@d.StartTime.ToString("HH:mm")–@d.EndTime.ToString("HH:mm")</div></td>
+                        <td data-label="Duty"><div dir="auto">@d.Description</div><div class="person__meta">@DutyComponents.TypeName(d.DutyType) · @DutyComponents.Name(d.Component)</div></td>
+                        <td data-label="Location" dir="auto">@(d.Location ?? "—")</td>
+                        <td data-label="Assigned staff"><a href="/staff/@d.PrimaryStaffId" dir="auto">@d.PrimaryName</a><div class="person__meta">@Att(d.PrimaryAttendance)</div></td>
+                        <td data-label="Backup">
+                            @if (d.BackupName is null)
+                            {
+                                <span class="faint">—</span>
+                            }
+                            else
+                            {
+                                <a href="/staff/@d.BackupStaffId" dir="auto">@d.BackupName</a>
+                                <div class="person__meta">request @(d.BackupStatus == BackupRequestStatus.Rejected ? "declined" : d.BackupStatus.ToString().ToLowerInvariant())@(d.BackupStatus == BackupRequestStatus.Accepted ? " · " + Att(d.BackupAttendance) : "")</div>
+                            }
+                        </td>
+                        <td data-label="Status"><span class="status-badge status-badge--@DutyStatuses.Slug(d.Status)">@DutyStatuses.Label(d.Status)</span></td>
+                        <td data-label="Audit">
+                            @if (d.FollowUpRequired) { <span class="badge badge--warning">Follow-up</span> }
+                            @if (!string.IsNullOrEmpty(d.IssuesEncountered)) { <span class="badge badge--error" title="@d.IssuesEncountered">Issues</span> }
+                            @if (!string.IsNullOrEmpty(d.AuditNotes)) { <span class="badge badge--neutral" title="@d.AuditNotes">Notes</span> }
+                            <div class="person__meta">by @(d.UpdatedBy ?? "—") · @Ui.Ago(d.UpdatedAt)</div>
+                        </td>
+                        <td class="col-actions">
+                            <div class="row-actions">
+                                <a class="icon-btn icon-btn--primary" href="/duties/@d.Id" data-modal title="Details & audit trail" aria-label="Details">@Ui.Icon("eye")</a>
+                                <a class="icon-btn icon-btn--primary" href="/duties/@d.Id/audit-record" data-modal title="Edit audit record" aria-label="Edit audit record">@Ui.Icon("clipboard-check")</a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    var pager = PagerModel.From(r, r.TotalCount == 1 ? "duty session" : "duty sessions");
+    <partial name="_Pager" model="pager" />
+}

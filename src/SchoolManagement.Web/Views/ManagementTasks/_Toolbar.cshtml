@@ -1,0 +1,65 @@
+@model TaskIndexViewModel
+@* Filters for a task list (Tasks page or a member profile). app.js reloads #task-list as they change. *@
+@{
+    var q = Model.Query;
+}
+<form class="toolbar" action="@Model.BaseUrl" method="get" role="search" data-list-filter="#task-list" style="border-radius:0">
+    <div class="toolbar__search input-icon">
+        @Ui.Icon("search")
+        <input class="input" type="search" name="search" value="@q.Search" placeholder="Search tasks@(Model.ForMember ? "" : " or members")…" aria-label="Search tasks" autocomplete="off" dir="auto" />
+    </div>
+    @if (!Model.ForMember)
+    {
+        <div class="toolbar__filter">
+            <select class="select" name="memberId" aria-label="Filter by team member" data-searchable>
+                <option value="">All team members</option>
+                @foreach (var m in Model.Members)
+                {
+                    <option value="@m.Id" selected="@(q.MemberId == m.Id)" data-note="@(m.Position is { } p ? ManagementPositions.Name(p) : "")">@m.FullName</option>
+                }
+            </select>
+        </div>
+    }
+    <div class="toolbar__filter">
+        <select class="select" name="status" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            <option value="open" selected="@(q.Status == "open")">Open (not completed)</option>
+            @foreach (var s in TaskLabels.Statuses)
+            {
+                <option value="@TaskLabels.StatusSlug(s)" selected="@(q.Status == TaskLabels.StatusSlug(s))">@TaskLabels.Status(s)</option>
+            }
+            <option value="overdue" selected="@(q.Status == "overdue")">Overdue</option>
+        </select>
+    </div>
+    <div class="toolbar__filter">
+        <select class="select" name="priority" aria-label="Filter by priority">
+            <option value="">All priorities</option>
+            @foreach (var p in TaskLabels.Priorities)
+            {
+                <option value="@TaskLabels.PrioritySlug(p)" selected="@(string.Equals(q.Priority, TaskLabels.PrioritySlug(p), StringComparison.OrdinalIgnoreCase))">@TaskLabels.Priority(p)</option>
+            }
+        </select>
+    </div>
+    <div class="toolbar__filter">
+        <select class="select" name="due" aria-label="Filter by due date">
+            <option value="">Any due date</option>
+            <option value="overdue" selected="@(q.Due == "overdue")">Overdue</option>
+            <option value="today" selected="@(q.Due == "today")">Due today</option>
+            <option value="week" selected="@(q.Due == "week")">Due in the next 7 days</option>
+            <option value="later" selected="@(q.Due == "later")">Due later</option>
+            <option value="none" selected="@(q.Due == "none")">No due date</option>
+        </select>
+    </div>
+    <div class="toolbar__sort">
+        <select class="select" name="sort" aria-label="Sort tasks">
+            <option value="due" selected="@(q.Sort == "due")">Sort: Due date</option>
+            <option value="priority" selected="@(q.Sort == "priority")">Sort: Priority</option>
+            <option value="status" selected="@(q.Sort == "status")">Sort: Status</option>
+            <option value="created" selected="@(q.Sort == "created")">Sort: Newest</option>
+            <option value="title" selected="@(q.Sort == "title")">Sort: Title A–Z</option>
+        </select>
+    </div>
+    <input type="hidden" name="pageSize" value="@q.PageSize" />
+    <input type="hidden" name="page" value="" />
+    <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+</form>

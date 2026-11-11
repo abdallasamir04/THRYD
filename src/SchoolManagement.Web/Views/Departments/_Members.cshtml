@@ -1,0 +1,90 @@
+@model DepartmentDetailsViewModel
+@{
+    var d = Model.Department;
+    var q = Model.Query;
+}
+
+@if (q.HasFilters)
+{
+    <div class="results-bar">
+        <div class="results-bar__info">
+            <span><strong class="num">@Model.Members.Count</strong> matching @(Model.Members.Count == 1 ? "member" : "members")</span>
+            @if (!string.IsNullOrWhiteSpace(q.Search))
+            {
+                <span class="filter-chip">Search: “@q.Search.Trim()”<a href="@Context.Request.WithQuery(("search", null))" data-list-link aria-label="Clear search">@Ui.Icon("x", "icon--sm")</a></span>
+            }
+            @if (!string.IsNullOrWhiteSpace(q.Subcategory))
+            {
+                <span class="filter-chip">@q.Subcategory.Replace("|", " · ")<a href="@Context.Request.WithQuery(("subcategory", null))" data-list-link aria-label="Clear subcategory filter">@Ui.Icon("x", "icon--sm")</a></span>
+            }
+        </div>
+    </div>
+}
+
+@if (Model.Members.Count == 0)
+{
+    @if (q.HasFilters)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("search")</span>
+            <p class="empty__title">No members match</p>
+            <p class="empty__text">Try another name, or clear the filters.</p>
+            <div class="empty__actions"><a class="btn btn--secondary" href="/staff/departments/@d.Id" data-list-link>Clear filters</a></div>
+        </div>
+    }
+    else
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("users")</span>
+            <p class="empty__title">No staff in @d.Name yet</p>
+            <p class="empty__text">Add a new staff member here, or edit an existing staff member and choose @d.Name as their department.</p>
+            <div class="empty__actions">
+                <a class="btn btn--primary" href="/staff/create?departmentId=@d.Id" data-modal>@Ui.Icon("user-plus")Add member</a>
+                <a class="btn btn--secondary" href="/staff">Browse staff members</a>
+            </div>
+        </div>
+    }
+}
+else
+{
+    <div class="member-grid">
+        @foreach (var m in Model.Members)
+        {
+            <article class="member-card @(m.IsHead ? "is-head" : "")" aria-labelledby="m-@m.Id">
+                <div class="member-card__top">
+                    <span class="avatar avatar--@Ui.Tone(m.FullName)" aria-hidden="true">@Ui.Initials(m.FullName)</span>
+                    <div style="min-width:0">
+                        <div class="person__name" id="m-@m.Id" dir="auto"><a class="stretched" href="/staff/@m.Id">@m.FullName</a></div>
+                        <div class="person__meta" dir="auto">@(m.JobTitle ?? "Job title not set")</div>
+                    </div>
+                </div>
+                @if (m.IsHead || m.SubcategoryLabel.Length > 0)
+                {
+                    <div class="chip-row">
+                        @if (m.IsHead) { <span class="hod-badge">@Ui.Icon("crown")Head of Department</span> }
+                        @if (m.SubcategoryLabel.Length > 0) { <span class="badge badge--class">@m.SubcategoryLabel</span> }
+                    </div>
+                }
+                <div class="member-card__foot">
+                    @if (!string.IsNullOrEmpty(m.ContactNumber))
+                    {
+                        <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr" style="position:relative;z-index:1">@Ui.Icon("phone")@m.ContactNumber</a>
+                    }
+                    else
+                    {
+                        <span class="faint" style="font-size:0.8rem">No contact number</span>
+                    }
+                    <div class="row-actions">
+                        <a class="icon-btn icon-btn--primary" href="/teachers/edit/@m.Id" data-modal title="Edit" aria-label="Edit @m.FullName">@Ui.Icon("pencil")</a>
+                        <form action="/staff/departments/@d.Id/members/@m.Id/remove" method="post" data-ajax-form
+                              data-confirm="@m.FullName will be removed from @d.Name@(m.IsHead ? " and will no longer be its HOD" : ""). Their staff record is kept."
+                              data-confirm-title="Remove from department?" data-confirm-button="Remove">
+                            @Html.AntiForgeryToken()
+                            <button class="icon-btn icon-btn--danger" type="submit" title="Remove from department" aria-label="Remove @m.FullName from @d.Name">@Ui.Icon("x-circle")</button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+        }
+    </div>
+}

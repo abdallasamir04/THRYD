@@ -1,0 +1,98 @@
+@model WorkloadOverviewViewModel
+@{
+    var week = SchoolWeek.Iso(Model.Week);
+    var compact = new ViewDataDictionary(ViewData) { ["Compact"] = true };
+    string CategoryName(WorkloadCategory c) => c switch
+    {
+        WorkloadCategory.Class => "Teaching sessions",
+        WorkloadCategory.Office => "Office hours",
+        WorkloadCategory.Substitution => "Substitutions",
+        _ => "Duties",
+    };
+}
+
+@if (Model.AllRows.Count == 0)
+{
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("presentation")</span>
+        <p class="empty__title">No teachers yet</p>
+        <p class="empty__text">Workload is tracked for the teachers on the Teachers page. Add or import teachers first.</p>
+        <div class="empty__actions"><a class="btn btn--primary" href="/teachers">Go to Teachers</a></div>
+    </div>
+}
+else if (Model.Rows.Count == 0)
+{
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("search")</span>
+        <p class="empty__title">No teachers match</p>
+        <p class="empty__text">Try another status, category, department or job title.</p>
+        <div class="empty__actions"><a class="btn btn--secondary" href="/workload?week=@week" data-list-link>Clear filters</a></div>
+    </div>
+}
+else
+{
+    @if (Model.AllRows.All(r => r.Total == 0))
+    {
+        <div class="notice" style="margin:14px 18px 0">
+            @Ui.Icon("info")
+            <div class="notice__body"><strong>No periods assigned for this week yet.</strong>Use “Assign periods”, or open a teacher to build their week.</div>
+        </div>
+    }
+    <div class="table-wrap">
+        <table class="table table--stack">
+            <thead>
+                <tr>
+                    <th scope="col">Teacher</th>
+                    <th scope="col">Department</th>
+                    @foreach (var c in WorkloadRules.Categories)
+                    {
+                        <th scope="col" class="num">@CategoryName(c)</th>
+                    }
+                    <th scope="col" class="num">Total</th>
+                    <th scope="col" class="num">Remaining</th>
+                    <th scope="col" style="min-width:220px">Weekly load</th>
+                    <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model.Rows)
+                {
+                    var tone = WorkloadRules.Tone(r.Status);
+                    <tr class="wl-row wl-row--@tone">
+                        <td data-label="Teacher">
+                            <div class="person">
+                                <span class="avatar avatar--@Ui.Tone(r.TeacherName)" aria-hidden="true">@Ui.Initials(r.TeacherName)</span>
+                                <div style="min-width:0">
+                                    <div class="person__name" dir="auto"><a href="/workload/teacher/@r.TeacherId?week=@week">@r.TeacherName</a></div>
+                                    <div class="person__meta" dir="auto">@(r.JobTitle ?? "Job title not set")</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td data-label="Department" dir="auto" class="@(r.DepartmentName is null ? "faint" : "")">@(r.DepartmentName ?? "Not set")</td>
+                        @foreach (var c in WorkloadRules.Categories)
+                        {
+                            var v = r.Breakdown[c];
+                            <td data-label="@CategoryName(c)" class="num @(v == 0 ? "faint" : "")" title="@(c == WorkloadCategory.Class && r.FromTimetable > 0 ? $"{r.FromTimetable} from the class timetable" : null)">@v</td>
+                        }
+                        <td data-label="Total" class="num"><strong>@r.Total</strong> / @r.Max</td>
+                        <td data-label="Remaining" class="num">@r.Remaining</td>
+                        <td data-label="Weekly load"><partial name="_WorkloadMeter" model="r" view-data="compact" /></td>
+                        <td class="col-actions">
+                            <div class="row-actions">
+                                @if (r.Remaining > 0)
+                                {
+                                    <a class="icon-btn icon-btn--primary" href="/workload/create?teacherId=@r.TeacherId&week=@week" data-modal title="Assign periods" aria-label="Assign periods to @r.TeacherName">@Ui.Icon("plus")</a>
+                                }
+                                <a class="icon-btn icon-btn--primary" href="/timetable/teachers/@r.TeacherId?week=@week" title="Timetable" aria-label="Open @r.TeacherName's timetable">@Ui.Icon("calendar")</a>
+                                <a class="icon-btn icon-btn--primary" href="/workload/teacher/@r.TeacherId?week=@week" title="Open workload" aria-label="Open @r.TeacherName's workload">@Ui.Icon("arrow-right")</a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="table-foot">
+        <div>Showing <strong class="num">@Model.Rows.Count</strong> of <strong class="num">@Model.AllRows.Count</strong> teachers · week of @SchoolWeek.Label(Model.Week)</div>
+    </div>
+}

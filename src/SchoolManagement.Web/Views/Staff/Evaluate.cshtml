@@ -1,0 +1,112 @@
+@model FeedbackFormModel
+@*
+    Supervisor evaluation of one staff assignment. Adds a new evaluation; earlier ones are never
+    changed. The evaluator is chosen from the staff directory (and cannot be the person evaluated).
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var c = Model.Context!;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Evaluate duty"; ViewData["Nav"] = "StaffDuty"; }
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/staff/assignments/@c.AssignmentId/evaluate" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("sparkles", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">Evaluate @c.StaffName</h2>
+                <p class="modal__sub" dir="auto">
+                    @(c.Role == DutyRole.Primary ? "Assigned staff" : "Backup") · @DutyComponents.Name(c.Component) · @c.DutyDate.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)
+                    · @c.StartTime.ToString("HH:mm")–@c.EndTime.ToString("HH:mm") · @c.Description
+                </p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            @if (!c.CanEvaluate)
+            {
+                <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>This assignment cannot be evaluated.</strong>Only the assigned staff member, or a backup who accepted, can be evaluated, on or after the duty date.</div></div>
+            }
+            <div class="audit-facts">
+                <div><span class="duty__role">Attendance</span><strong>@(c.Attendance == AttendanceStatus.NotRecorded ? "Not recorded" : c.Attendance.ToString())</strong></div>
+                <div><span class="duty__role">Duty status</span><span class="status-badge status-badge--@DutyStatuses.Slug(c.DutyStatus)">@DutyStatuses.Label(c.DutyStatus)</span></div>
+                <div><span class="duty__role">Earlier evaluations</span><strong>@c.Previous.Count</strong></div>
+            </div>
+
+            <fieldset class="field">
+                <legend class="label">Performance rating <span class="req" aria-hidden="true">*</span></legend>
+                <div class="star-input">
+                    @for (var i = 5; i >= 1; i--)
+                    {
+                        <input type="radio" id="rating-@i" name="Rating" value="@i" checked="@(Model.Rating == i)" />
+                        <label for="rating-@i" title="@i star@(i == 1 ? "" : "s")"><span class="visually-hidden">@i star@(i == 1 ? "" : "s")</span>★</label>
+                    }
+                </div>
+                <span asp-validation-for="Rating" class="field-validation-error"></span>
+            </fieldset>
+
+            <div class="field">
+                <label class="label" asp-for="Feedback">Written feedback <span class="req" aria-hidden="true">*</span></label>
+                <textarea class="input textarea" asp-for="Feedback" rows="3" dir="auto" maxlength="2000" data-autofocus></textarea>
+                <span asp-validation-for="Feedback" class="field-validation-error"></span>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" asp-for="Strengths">Strengths / positive observations</label>
+                    <textarea class="input textarea" asp-for="Strengths" rows="2" dir="auto" maxlength="1000"></textarea>
+                </div>
+                <div class="field">
+                    <label class="label" asp-for="Issues">Issues / areas for improvement</label>
+                    <textarea class="input textarea" asp-for="Issues" rows="2" dir="auto" maxlength="1000"></textarea>
+                </div>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" asp-for="EvaluatorStaffId">Evaluated by <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" asp-for="EvaluatorStaffId" data-searchable>
+                        <option value="">Choose the supervisor…</option>
+                        @foreach (var s in Model.Evaluators)
+                        {
+                            <option value="@s.Id" data-note="@s.JobTitle">@s.FullName</option>
+                        }
+                    </select>
+                    <span asp-validation-for="EvaluatorStaffId" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="EvaluationDate">Evaluation date</label>
+                    <input class="input picker" type="date" id="EvaluationDate" name="EvaluationDate" value="@(Model.EvaluationDate is { } ed ? SchoolWeek.Iso(ed) : "")" min="@SchoolWeek.Iso(c.DutyDate)" max="@SchoolWeek.Iso(SchoolWeek.Today)" />
+                    <span asp-validation-for="EvaluationDate" class="field-validation-error"></span>
+                </div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" asp-for="FollowUpRequired" />
+                <span class="switch__track" aria-hidden="true"></span>
+                <span>Follow-up required</span>
+            </label>
+
+            @if (c.Previous.Count > 0)
+            {
+                <details class="previous">
+                    <summary>Earlier evaluations of this duty (@c.Previous.Count) — kept as they are</summary>
+                    <div class="feedback-list">@foreach (var f in c.Previous) { <partial name="~/Views/Staff/_FeedbackCard.cshtml" model="f" /> }</div>
+                </details>
+            }
+        </div>
+
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/staff/@c.StaffId">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit" disabled="@(!c.CanEvaluate)">@Ui.Icon("check")Save evaluation</button>
+        </div>
+    </form>
+</div>

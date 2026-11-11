@@ -1,0 +1,85 @@
+@model MorningDutyViewModel
+@{
+    var typeName = DutyComponents.TypeName(Model.Type);
+    ViewData["Title"] = typeName;
+    ViewData["Nav"] = "MorningDuty";
+    var date = SchoolWeek.Iso(Model.Date);
+    var total = Model.Components.Sum(c => c.Total);
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties?date=@date">Duties</a></li><li>@typeName</li></ol>
+        <h1 class="page-title">Duties</h1>
+        <p class="page-sub">Morning, midday and dismissal duties. A duty can be marked Covered only when the person on duty is recorded as present.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/duties/audit?from=@date&to=@date">@Ui.Icon("clipboard-check")Duty audit</a>
+    </div>
+</div>
+
+<nav class="segmented duty-tabs" aria-label="Duty type">
+    @foreach (var t in DutyComponents.Types)
+    {
+        <a href="/duties?type=@DutyComponents.TypeSlug(t)&date=@date" aria-current="@(t == Model.Type ? "true" : "false")">@DutyComponents.TypeName(t)</a>
+    }
+</nav>
+
+<partial name="_DayNav" model="Model.Date" />
+
+<ul class="duty-components" aria-label="@typeName components">
+    @foreach (var c in Model.Components)
+    {
+        var href = $"{DutyComponents.Href(c.Info)}?date={date}";
+        <li class="duty-component">
+            <div class="duty-component__top">
+                <span class="duty-component__icon">@Ui.Icon(c.Info.Icon, "icon--lg")</span>
+                @if (c.Total == 0)
+                {
+                    <span class="badge badge--neutral">No duties recorded</span>
+                }
+                else if (c.NeedsStaffAction > 0)
+                {
+                    <span class="badge badge--error badge--dot">@c.NeedsStaffAction need staff action</span>
+                }
+                else if (c.Covered == c.Total)
+                {
+                    <span class="badge badge--success badge--dot">All covered</span>
+                }
+                else
+                {
+                    <span class="badge badge--warning badge--dot">Open duties</span>
+                }
+            </div>
+            <h2 class="duty-component__title"><a href="@href">@c.Info.Name</a></h2>
+            @if (c.Info.Grades is not null)
+            {
+                <p class="duty-component__grades">@Ui.Icon("graduation-cap", "icon--sm")@c.Info.Grades</p>
+            }
+            <p class="duty-component__text">@c.Info.Summary</p>
+            @if (c.Info.DetailsPending)
+            {
+                <p class="duty-component__pending">@Ui.Icon("info", "icon--sm")Detailed assembly and proadcast requirements will be added later.</p>
+            }
+            <dl class="duty-component__stats">
+                <div><dt>Pending</dt><dd class="num">@c.Pending</dd></div>
+                <div><dt>In progress</dt><dd class="num is-info">@c.InProgress</dd></div>
+                <div><dt>Covered</dt><dd class="num is-ok">@c.Covered</dd></div>
+                <div><dt>Uncovered</dt><dd class="num is-bad">@c.NotCovered</dd></div>
+            </dl>
+            <div class="duty-component__foot">
+                <a class="btn btn--secondary btn--sm" href="@href">Open @Ui.Icon("arrow-right", "icon--sm")</a>
+                <a class="btn btn--ghost btn--sm" href="/duties/create?component=@c.Info.Slug&date=@date" data-modal>@Ui.Icon("plus", "icon--sm")Add duty</a>
+            </div>
+        </li>
+    }
+</ul>
+
+@if (total == 0)
+{
+    <div class="empty empty--boxed">
+        <span class="empty__icon">@Ui.Icon("shield-check")</span>
+        <p class="empty__title">No @typeName.ToLowerInvariant() recorded for this day</p>
+        <p class="empty__text">Open a component and add its duties: description, time, location and the staff member assigned.</p>
+    </div>
+}

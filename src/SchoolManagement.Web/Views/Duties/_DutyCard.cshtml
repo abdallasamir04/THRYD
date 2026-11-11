@@ -1,0 +1,165 @@
+@model DutyRow
+@*
+    One duty with its workflow controls:
+    assigned staff → attendance → (absent) backup request → accept / decline → backup attendance.
+*@
+@{
+    var d = Model;
+    var state = d.Coverage;
+    var tone = DutyStatuses.Tone(d.Status);
+    var someonePresent = Coverage.IsCovered(state);
+    string AttendanceBadge(AttendanceStatus a) => a switch
+    {
+        AttendanceStatus.Present => "badge--success",
+        AttendanceStatus.Absent => "badge--error",
+        _ => "badge--neutral",
+    };
+    string AttendanceText(AttendanceStatus a) => a == AttendanceStatus.NotRecorded ? "Not recorded" : a.ToString();
+}
+<article class="duty duty--@tone" aria-labelledby="duty-@d.Id-title">
+    <header class="duty__head">
+        <span class="duty__time num">@Ui.Icon("clock", "icon--sm")@d.StartTime.ToString("HH:mm") – @d.EndTime.ToString("HH:mm")</span>
+        <span class="duty__badges">
+            @if (d.FollowUpRequired)
+            {
+                <span class="badge badge--warning" title="Follow-up required">@Ui.Icon("alert-triangle", "icon--sm")Follow-up</span>
+            }
+            <span class="status-badge status-badge--@DutyStatuses.Slug(d.Status)">@DutyStatuses.Label(d.Status)</span>
+        </span>
+    </header>
+    <p class="duty__staffing"><span class="badge badge--@Coverage.Tone(state) badge--dot">Staffing: @Coverage.Label(state)</span></p>
+    <h3 class="duty__title" id="duty-@d.Id-title" dir="auto">@d.Description</h3>
+    <p class="duty__meta">
+        @if (!string.IsNullOrEmpty(d.Location))
+        {
+            <span dir="auto">@Ui.Icon("door", "icon--sm")@d.Location</span>
+        }
+        @foreach (var c in d.ClassNames)
+        {
+            <span class="badge badge--class">@c</span>
+        }
+    </p>
+
+    <div class="duty__people">
+        <div class="duty__person">
+            <span class="duty__role">Assigned staff</span>
+            <div class="person">
+                <span class="avatar avatar--@Ui.Tone(d.PrimaryName)" aria-hidden="true">@Ui.Initials(d.PrimaryName)</span>
+                <div style="min-width:0">
+                    <div class="person__name" dir="auto">@d.PrimaryName</div>
+                    <span class="badge @AttendanceBadge(d.PrimaryAttendance)">@AttendanceText(d.PrimaryAttendance)</span>
+                </div>
+            </div>
+            <div class="duty__actions" role="group" aria-label="Attendance of @d.PrimaryName">
+                @if (d.PrimaryAttendance != AttendanceStatus.Present)
+                {
+                    <form action="/duties/@d.Id/attendance" method="post" data-ajax-form>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="status" value="Present" />
+                        <button class="btn btn--secondary btn--sm" type="submit">@Ui.Icon("check", "icon--sm")Present</button>
+                    </form>
+                }
+                @if (d.PrimaryAttendance != AttendanceStatus.Absent)
+                {
+                    <a class="btn btn--secondary btn--sm" href="/duties/@d.Id/edit?attendance=Absent" data-modal>@Ui.Icon("x", "icon--sm")Absent…</a>
+                }
+            </div>
+        </div>
+
+        @if (d.BackupStaffId is not null)
+        {
+            <div class="duty__person duty__person--backup">
+                <span class="duty__role">Backup</span>
+                <div class="person">
+                    <span class="avatar avatar--@Ui.Tone(d.BackupName)" aria-hidden="true">@Ui.Initials(d.BackupName)</span>
+                    <div style="min-width:0">
+                        <div class="person__name" dir="auto">@d.BackupName</div>
+                        <span class="badge @(d.BackupStatus switch { BackupRequestStatus.Accepted => "badge--success", BackupRequestStatus.Rejected => "badge--error", _ => "badge--warning" })">
+                            Request: @(d.BackupStatus == BackupRequestStatus.Rejected ? "Declined" : d.BackupStatus.ToString())
+                        </span>
+                        @if (d.BackupStatus == BackupRequestStatus.Accepted)
+                        {
+                            <span class="badge @AttendanceBadge(d.BackupAttendance)">Attendance: @AttendanceText(d.BackupAttendance)</span>
+                        }
+                    </div>
+                </div>
+                <div class="duty__actions">
+                    @if (d.BackupStatus == BackupRequestStatus.Pending)
+                    {
+                        <form action="/duties/@d.Id/backup-response" method="post" data-ajax-form>
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="accepted" value="true" />
+                            <button class="btn btn--secondary btn--sm" type="submit">@Ui.Icon("check", "icon--sm")Accepted</button>
+                        </form>
+                        <form action="/duties/@d.Id/backup-response" method="post" data-ajax-form
+                              data-confirm="@d.BackupName will be recorded as having declined. You can then choose another backup."
+                              data-confirm-title="Record that the backup declined?" data-confirm-button="Record decline" data-confirm-tone="warning">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="accepted" value="false" />
+                            <button class="btn btn--secondary btn--sm" type="submit">@Ui.Icon("x", "icon--sm")Declined</button>
+                        </form>
+                    }
+                    else if (d.BackupStatus == BackupRequestStatus.Accepted)
+                    {
+                        @foreach (var status in new[] { AttendanceStatus.Present, AttendanceStatus.Absent })
+                        {
+                            if (d.BackupAttendance == status) continue;
+                            <form action="/duties/@d.Id/backup-attendance" method="post" data-ajax-form>
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="status" value="@status" />
+                                <button class="btn btn--secondary btn--sm" type="submit">@Ui.Icon(status == AttendanceStatus.Present ? "check" : "x", "icon--sm")Backup @status.ToString().ToLowerInvariant()</button>
+                            </form>
+                        }
+                    }
+                    else if (d.BackupStatus == BackupRequestStatus.Rejected)
+                    {
+                        <a class="btn btn--primary btn--sm" href="/duties/@d.Id/edit" data-modal>@Ui.Icon("user-plus", "icon--sm")Choose another backup</a>
+                    }
+                </div>
+            </div>
+        }
+        else if (d.PrimaryAttendance == AttendanceStatus.Absent)
+        {
+            <div class="duty__person duty__person--backup">
+                <span class="duty__role">Backup</span>
+                <p class="muted">No backup chosen.</p>
+                <a class="btn btn--primary btn--sm" href="/duties/@d.Id/edit" data-modal>@Ui.Icon("user-plus", "icon--sm")Choose backup</a>
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(d.Notes))
+    {
+        <p class="duty__notes" dir="auto">@Ui.Icon("info", "icon--sm")@d.Notes</p>
+    }
+
+    <form class="duty__status" action="/duties/@d.Id/status" method="post" data-ajax-form>
+        @Html.AntiForgeryToken()
+        <span class="duty__role">Duty status</span>
+        <div class="status-pills" role="group" aria-label="Duty status">
+            @foreach (var s in DutyStatuses.All)
+            {
+                var blocked = s is DutyStatus.Covered or DutyStatus.InProgress && !someonePresent;
+                <button class="status-pill status-pill--@DutyStatuses.Slug(s)" type="submit" name="status" value="@s"
+                        aria-pressed="@(d.Status == s ? "true" : "false")" disabled="@(blocked || d.Status == s)"
+                        title="@(blocked ? "Needs someone recorded present first" : DutyStatuses.Label(s))">@DutyStatuses.Label(s)</button>
+            }
+        </div>
+    </form>
+
+    <footer class="duty__foot">
+        <div class="duty__actions">
+            <a class="btn btn--ghost btn--sm" href="/duties/@d.Id" data-modal>@Ui.Icon("eye", "icon--sm")Details &amp; staff</a>
+            <a class="btn btn--ghost btn--sm" href="/duties/@d.Id/audit-record" data-modal>@Ui.Icon("clipboard-check", "icon--sm")Audit</a>
+        </div>
+        <div class="row-actions">
+            <a class="icon-btn icon-btn--primary" href="/duties/@d.Id/edit" data-modal title="Edit duty" aria-label="Edit duty">@Ui.Icon("pencil")</a>
+            <form action="/duties/@d.Id/delete" method="post" data-ajax-form
+                  data-confirm="“@d.Description” (@d.StartTime.ToString("HH:mm")) will be deleted with its backup history."
+                  data-confirm-title="Delete this duty?" data-confirm-button="Delete duty">
+                @Html.AntiForgeryToken()
+                <button class="icon-btn icon-btn--danger" type="submit" title="Delete duty" aria-label="Delete duty">@Ui.Icon("trash")</button>
+            </form>
+        </div>
+    </footer>
+</article>

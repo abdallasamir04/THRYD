@@ -1,0 +1,54 @@
+/*
+ * Shared skeleton loaders (used by app.js App.skeleton): placeholders shaped like the content being
+ * loaded, with a subtle shimmer. Shown only while a request is in flight, then replaced by the real
+ * content, the empty state or the previous content plus an error message.
+ */
+:root { --sk-base: var(--color-surface-sunken); --sk-shine: rgb(255 255 255 / 0.6); }
+:root[data-theme="dark"] { --sk-base: rgb(255 255 255 / 0.06); --sk-shine: rgb(255 255 255 / 0.07); }
+
+.sk { position: relative; display: block; overflow: hidden; background: var(--sk-base); border-radius: 7px; }
+.sk::after {
+    content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--sk-shine), transparent);
+    animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes sk-shimmer { to { transform: translateX(100%); } }
+.sk-line { height: 11px; width: 100%; }
+.sk-line--sm { height: 9px; }
+.sk-line--lg { height: 16px; }
+.sk-avatar { width: 36px; height: 36px; border-radius: 11px; flex: none; }
+.sk-icon { width: 44px; height: 44px; border-radius: 13px; flex: none; }
+.sk-pill { height: 22px; width: 72px; border-radius: 99px; }
+.sk-btn { height: 38px; width: 110px; border-radius: 12px; }
+.sk-field { height: 42px; border-radius: 10px; }
+.sk-stack { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
+.sk-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+/* Table: the real header row is kept; body rows shimmer. */
+.sk-table td { padding-block: 16px; }
+
+/* Card grids reuse the grid's own class; each card keeps the height of the cards it replaces. */
+.sk-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--color-border-subtle); border-radius: 14px; background: var(--color-surface-raised); }
+
+/* Modal body while its form loads. */
+.sk-modal { display: flex; flex-direction: column; gap: 18px; padding: 24px; }
+.sk-modal__foot { display: flex; justify-content: flex-end; gap: 10px; padding-top: 6px; }
+
+/* Lists: the skeleton replaces the old spinner overlay. */
+[data-ajax-list].has-skeleton::after { display: none; }
+[data-ajax-list].has-skeleton > * { opacity: 1; }
+.sk-wrap { pointer-events: none; }
+
+/* A form control whose options or values are loading (dependent dropdowns, capacity panels). */
+.is-skeleton {
+    color: transparent !important; pointer-events: none;
+    background-image: linear-gradient(90deg, var(--sk-base) 25%, var(--sk-shine) 50%, var(--sk-base) 75%) !important;
+    background-size: 200% 100% !important; animation: sk-sweep 1.4s ease-in-out infinite;
+}
+.is-skeleton * { visibility: hidden; }
+@keyframes sk-sweep { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .sk::after { animation: none; }
+    .is-skeleton { animation: none; }
+}

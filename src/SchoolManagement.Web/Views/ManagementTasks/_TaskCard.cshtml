@@ -1,0 +1,65 @@
+@model (TaskRow Task, bool ForMember)
+@{
+    var t = Model.Task;
+    var done = t.Status == ManagementTaskStatus.Completed;
+    var dueTone = done ? "due-chip--done" : t.IsOverdue ? "due-chip--overdue" : t.IsDueToday ? "due-chip--today" : "";
+}
+<article class="task-card task-card--@TaskLabels.PrioritySlug(t.Priority) @(t.IsOverdue ? "is-overdue" : "") @(done ? "is-done" : "")" aria-labelledby="task-@t.Id">
+    <div class="task-card__top">
+        <h3 class="task-card__title" id="task-@t.Id" dir="auto">@t.Title</h3>
+        <span class="priority priority--@TaskLabels.PrioritySlug(t.Priority)" title="Priority">@Ui.Icon("flag")@TaskLabels.Priority(t.Priority)</span>
+    </div>
+
+    <div class="task-card__badges">
+        <span class="task-status task-status--@TaskLabels.StatusSlug(t.Status)">@TaskLabels.Status(t.Status)</span>
+        @if (t.IsOverdue) { <span class="badge badge--error">Overdue</span> }
+        else if (t.IsDueToday) { <span class="badge badge--warning">Due today</span> }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(t.Description))
+    {
+        <p class="task-card__desc" dir="auto">@t.Description</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(t.Notes))
+    {
+        <details class="task-card__notes">
+            <summary>Notes</summary>
+            <p dir="auto">@t.Notes</p>
+        </details>
+    }
+
+    <div class="meta-row">
+        <span class="due-chip @dueTone">@Ui.Icon(done ? "check-circle" : "calendar")@(done && t.CompletedAt is { } ca ? "Completed " + Ui.Date(ca) : TaskLabels.Due(t.DueDate, t.DueTime))</span>
+        @if (!Model.ForMember)
+        {
+            <span class="task-card__who">
+                <span class="avatar avatar--@Ui.Tone(t.MemberName)" aria-hidden="true">@Ui.Initials(t.MemberName)</span>
+                <a href="/management/members/@t.MemberId" dir="auto" title="@ManagementPositions.Name(t.MemberPosition)">@t.MemberName</a>
+            </span>
+        }
+    </div>
+
+    <div class="task-card__foot">
+        <form class="task-card__status" action="/management/tasks/@t.Id/status" method="post" data-ajax-form>
+            @Html.AntiForgeryToken()
+            <label class="visually-hidden" for="status-@t.Id">Status of @t.Title</label>
+            <select class="select" id="status-@t.Id" name="status" data-autosubmit>
+                @foreach (var s in TaskLabels.Statuses)
+                {
+                    <option value="@s" selected="@(t.Status == s)">@TaskLabels.Status(s)</option>
+                }
+            </select>
+            <noscript><button class="btn btn--secondary btn--sm" type="submit">Update</button></noscript>
+        </form>
+        <div class="row-actions">
+            <span class="faint" style="font-size:0.72rem" title="Last updated @Ui.DateTime(t.UpdatedAt)">@Ui.Ago(t.UpdatedAt)</span>
+            <a class="icon-btn icon-btn--primary" href="/management/tasks/@t.Id/edit" data-modal title="Edit task" aria-label="Edit @t.Title">@Ui.Icon("pencil")</a>
+            <form action="/management/tasks/@t.Id/delete" method="post" data-ajax-form
+                  data-confirm="“@t.Title” will be deleted. The member's task history keeps a record that it was deleted."
+                  data-confirm-title="Delete this task?" data-confirm-button="Delete task">
+                @Html.AntiForgeryToken()
+                <button class="icon-btn icon-btn--danger" type="submit" title="Delete task" aria-label="Delete @t.Title">@Ui.Icon("trash")</button>
+            </form>
+        </div>
+    </div>
+</article>

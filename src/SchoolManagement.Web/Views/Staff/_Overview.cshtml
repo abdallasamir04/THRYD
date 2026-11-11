@@ -1,0 +1,48 @@
+@model StaffOverviewViewModel
+
+@if (Model.Rows.Count == 0)
+{
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("users")</span>
+        <p class="empty__title">@(string.IsNullOrWhiteSpace(Model.Search) ? "No staff yet" : "No staff match")</p>
+        <p class="empty__text">Staff come from the Teachers directory.</p>
+    </div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="table table--stack">
+            <thead>
+                <tr>
+                    <th scope="col">Staff member</th>
+                    <th scope="col" class="num">Assigned</th>
+                    <th scope="col" class="num">Covered</th>
+                    <th scope="col" class="num">Not covered</th>
+                    <th scope="col" class="num">Pending / in progress</th>
+                    <th scope="col">Average rating</th>
+                    <th scope="col" class="col-actions"><span class="visually-hidden">Open</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model.Rows)
+                {
+                    var s = r.Summary;
+                    <tr>
+                        <td data-label="Staff member">
+                            <div class="person">
+                                <span class="avatar avatar--@Ui.Tone(r.Staff.FullName)" aria-hidden="true">@Ui.Initials(r.Staff.FullName)</span>
+                                <div><div class="person__name" dir="auto"><a href="/staff/@r.Staff.Id">@r.Staff.FullName</a></div><div class="person__meta" dir="auto">@(r.Staff.JobTitle ?? r.Staff.StaffType)</div></div>
+                            </div>
+                        </td>
+                        <td data-label="Assigned" class="num">@s.TotalAssigned</td>
+                        <td data-label="Covered" class="num is-ok">@s.Covered</td>
+                        <td data-label="Not covered" class="num @(s.NotCovered > 0 ? "is-bad" : "")">@s.NotCovered</td>
+                        <td data-label="Pending / in progress" class="num">@s.Open</td>
+                        <td data-label="Average rating"><partial name="_Stars" model="s.AverageRating" /> <span class="faint">@(s.EvaluatedAssignments == 0 ? "" : $"({s.EvaluatedAssignments})")</span></td>
+                        <td class="col-actions"><a class="icon-btn icon-btn--primary" href="/staff/@r.Staff.Id" aria-label="Open @r.Staff.FullName">@Ui.Icon("arrow-right")</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

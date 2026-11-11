@@ -1,0 +1,65 @@
+@model IReadOnlyList<YearView>
+@{
+    ViewData["Title"] = "Academic Calendar";
+    ViewData["Nav"] = "Belongings";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/belongings">Belongings</a></li><li>Academic calendar</li></ol>
+        <h1 class="page-title">Academic Calendar</h1>
+        <p class="page-sub">Each academic year has four quarters of exactly 8 school weeks (Sunday–Thursday). Weeks are worked out from each quarter's start and end dates.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/belongings">@Ui.Icon("arrow-left")Belongings</a>
+    </div>
+</div>
+
+<section class="card" aria-labelledby="ny-title">
+    <div class="card__head"><h2 class="card__title" id="ny-title">@Ui.Icon("plus")Add an academic year</h2></div>
+    <form class="card__body bl-year-form" action="/belongings/years" method="post" data-ajax-form data-loading>
+        @Html.AntiForgeryToken()
+        <input class="input" name="Name" maxlength="50" required placeholder="e.g. 2026–2027" aria-label="Academic year name" />
+        <button class="btn btn--primary" type="submit">@Ui.Icon("plus")Add year</button>
+    </form>
+</section>
+
+@if (Model.Count == 0)
+{
+    <div class="empty empty--boxed"><span class="empty__icon">@Ui.Icon("calendar")</span><p class="empty__title">No academic years yet</p><p class="empty__text">Add the current academic year above, then set the dates of its four quarters.</p></div>
+}
+@foreach (var y in Model)
+{
+    <section class="card" aria-label="@y.Name">
+        <div class="card__head"><h2 class="card__title">@Ui.Icon("calendar")@y.Name</h2><span class="badge @(y.Quarters.All(q => q.IsConfigured) ? "badge--success" : "badge--warning")">@y.Quarters.Count(q => q.IsConfigured) of 4 quarters set</span></div>
+        <div class="bl-quarters">
+            @foreach (var q in y.Quarters)
+            {
+                <article class="bl-quarter @(q.IsConfigured ? "" : "is-unset")">
+                    <div class="bl-quarter__head">
+                        <div>
+                            <h3 class="bl-quarter__name">@q.Name</h3>
+                            <p class="person__meta">@(q.IsConfigured ? $"{q.StartDate!.Value.ToString("ddd d MMM yyyy", c)} – {q.EndDate!.Value.ToString("ddd d MMM yyyy", c)}" : "Dates not set")</p>
+                        </div>
+                        <a class="btn btn--secondary btn--sm" href="/belongings/quarters/@q.Id/edit" data-modal>@Ui.Icon("pencil", "icon--sm")@(q.IsConfigured ? "Edit" : "Set dates")</a>
+                    </div>
+                    @if (q.IsConfigured)
+                    {
+                        <ol class="bl-weeks">
+                            @foreach (var w in q.Weeks)
+                            {
+                                <li title="@string.Join(", ", w.Days.Select(d => d.ToString("ddd d MMM", c)))">
+                                    <strong>W@(w.Number)</strong>
+                                    <span>@w.WeekStart.ToString("d MMM", c) – @w.WeekEnd.ToString("d MMM", c)</span>
+                                    <span class="faint">@w.Days.Count day@(w.Days.Count == 1 ? "" : "s")@(w.Days.Count < 5 ? " (partial)" : "")</span>
+                                </li>
+                            }
+                        </ol>
+                    }
+                </article>
+            }
+        </div>
+    </section>
+}

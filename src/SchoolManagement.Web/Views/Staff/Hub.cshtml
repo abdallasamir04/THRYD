@@ -1,0 +1,50 @@
+@model HubViewModel
+@*
+    Landing page of the Staff section (Staff, Academic Staff, Management Team): large navigation cards.
+    Each whole card is one link to the feature it describes.
+*@
+@{
+    ViewData["Title"] = Model.Title;
+    ViewData["Nav"] = Model.Nav;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs">
+            @foreach (var (label, href) in Model.Crumbs)
+            {
+                <li>@if (href is null) { <span aria-current="page">@label</span> } else { <a href="@href">@label</a> }</li>
+            }
+        </ol>
+        <h1 class="page-title">@Model.Title</h1>
+        <p class="page-sub">@Model.Subtitle</p>
+    </div>
+</div>
+
+<nav class="hub @(Model.Large ? "hub--large" : "")" aria-label="@Model.Title sections">
+    @foreach (var c in Model.Cards)
+    {
+        <a class="hub-card hub-card--@c.Tone" href="@c.Href">
+            <span class="hub-card__icon" aria-hidden="true">@Ui.Icon(c.Icon)</span>
+            <span class="hub-card__body">
+                <span class="hub-card__title">@c.Title</span>
+                <span class="hub-card__text">@c.Description</span>
+                @if (c.Meta is not null)
+                {
+                    <span class="hub-card__meta">@c.Meta</span>
+                }
+            </span>
+            <span class="hub-card__go" aria-hidden="true">@Ui.Icon("arrow-right")</span>
+        </a>
+    }
+</nav>
+
+@if (Model.Extra.Count > 0)
+{
+    <div class="hub-extra">
+        @foreach (var (label, href, icon) in Model.Extra)
+        {
+            <a class="chip" href="@href">@Ui.Icon(icon)@label</a>
+        }
+    </div>
+}

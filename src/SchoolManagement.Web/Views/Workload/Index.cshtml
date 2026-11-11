@@ -1,0 +1,148 @@
+@model WorkloadOverviewViewModel
+@{
+    ViewData["Title"] = "Teacher Workload";
+    ViewData["Nav"] = "Staff";
+    var all = Model.AllRows;
+    var q = Model.Query;
+    var full = all.Count(r => r.Status is WorkloadStatus.Full or WorkloadStatus.OverLimit);
+    var near = all.Count(r => r.Status == WorkloadStatus.NearCapacity);
+    var available = all.Count(r => r.Status == WorkloadStatus.Available);
+    var assigned = all.Sum(r => r.Total);
+    var max = Model.MaxWeeklyPeriods;
+    var nearFrom = Model.NearFrom;
+    var capacity = all.Count * max;
+    var week = SchoolWeek.Iso(Model.Week);
+    // Weekly totals per category across all teachers.
+    var categoryTotals = WorkloadRules.Categories.Select(c => (Category: c, Total: all.Sum(r => r.Breakdown[c]))).ToList();
+    string CategoryName(WorkloadCategory c) => c switch
+    {
+        WorkloadCategory.Class => "Teaching sessions",
+        WorkloadCategory.Office => "Office hours",
+        WorkloadCategory.Substitution => "Substitutions",
+        _ => "Duties",
+    };
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li>Teacher Workload</li></ol>
+        <h1 class="page-title">Teacher Workload</h1>
+        <p class="page-sub">Each teacher has at most @max periods per school week: teaching sessions (from the class timetable), office hours, substitutions and duties.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/timetable/teachers">@Ui.Icon("calendar")Teacher timetables</a>
+        <a class="btn btn--secondary" href="/workload/export?week=@week">@Ui.Icon("download")Export week</a>
+        <a class="btn btn--primary" href="/workload/create?week=@week" data-modal>@Ui.Icon("plus")Assign periods</a>
+    </div>
+</div>
+
+<partial name="_WeekNav" model="Model.Week" />
+
+<ul class="kpis" aria-label="Workload totals for the week">
+    <li class="kpi">
+        <span class="kpi__icon">@Ui.Icon("presentation")</span>
+        <p class="kpi__label">Teachers</p>
+        <p class="kpi__value">@Ui.Count(all.Count)</p>
+        <p class="kpi__meta">@Ui.Count(assigned) of @Ui.Count(capacity) periods assigned</p>
+    </li>
+    <li class="kpi kpi--ok">
+        <span class="kpi__icon">@Ui.Icon("check-circle")</span>
+        <p class="kpi__label">Available</p>
+        <p class="kpi__value">@Ui.Count(available)</p>
+        <p class="kpi__meta">Under @nearFrom periods · <a href="@Context.Request.WithQuery(("status", "available"))">Show</a></p>
+    </li>
+    <li class="kpi kpi--orange">
+        <span class="kpi__icon">@Ui.Icon("alert-triangle")</span>
+        <p class="kpi__label">Near capacity</p>
+        <p class="kpi__value">@Ui.Count(near)</p>
+        <p class="kpi__meta">@nearFrom–@(max - 1) periods · <a href="@Context.Request.WithQuery(("status", "near"))">Show</a></p>
+    </li>
+    <li class="kpi kpi--full">
+        <span class="kpi__icon">@Ui.Icon("x-circle")</span>
+        <p class="kpi__label">Full</p>
+        <p class="kpi__value">@Ui.Count(full)</p>
+        <p class="kpi__meta">@max/@max · <a href="@Context.Request.WithQuery(("status", "full"))">Show</a></p>
+    </li>
+</ul>
+
+<ul class="kpis" aria-label="Periods per category this week">
+    @foreach (var (c, total) in categoryTotals)
+    {
+        <li class="kpi">
+            <span class="kpi__icon">@Ui.Icon(WorkloadRules.Icon(c))</span>
+            <p class="kpi__label">@CategoryName(c)</p>
+            <p class="kpi__value">@Ui.Count(total)</p>
+            <p class="kpi__meta">periods · <a href="@Context.Request.WithQuery(("category", c.ToString().ToLowerInvariant()))">Show teachers</a></p>
+        </li>
+    }
+</ul>
+
+<section class="card table-card" aria-label="Teachers' workload">
+    <form class="toolbar" action="/workload" method="get" role="search" data-list-filter="#workload-list">
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" name="search" value="@q.Search" placeholder="Search teacher…" aria-label="Search teacher" autocomplete="off" dir="auto" />
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="teacherId" aria-label="Teacher" data-searchable>
+                <option value="">All teachers</option>
+                @foreach (var t in all.OrderBy(r => r.TeacherName))
+                {
+                    <option value="@t.TeacherId" selected="@(q.TeacherId == t.TeacherId)" data-note="@t.Total/@t.Max">@t.TeacherName</option>
+                }
+            </select>
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="status" aria-label="Workload status">
+                <option value="">All statuses</option>
+                <option value="capacity" selected="@(q.Status == "capacity")">Has free periods (for substitution)</option>
+                <option value="available" selected="@(q.Status == "available")">Available (under @nearFrom)</option>
+                <option value="near" selected="@(q.Status == "near")">Near capacity (@nearFrom–@(max - 1))</option>
+                <option value="full" selected="@(q.Status == "full")">Full (@max)</option>
+            </select>
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="category" aria-label="Category">
+                <option value="">Any category</option>
+                @foreach (var c in WorkloadRules.Categories)
+                {
+                    var key = c.ToString().ToLowerInvariant();
+                    <option value="@key" selected="@(string.Equals(q.Category, key, StringComparison.OrdinalIgnoreCase))">Has @CategoryName(c).ToLowerInvariant()</option>
+                }
+            </select>
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="departmentId" aria-label="Department" data-searchable>
+                <option value="">All departments</option>
+                @foreach (var d in Model.Departments)
+                {
+                    <option value="@d.Id" selected="@(q.DepartmentId == d.Id)">@d.Name</option>
+                }
+            </select>
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="jobTitle" aria-label="Job title" data-searchable>
+                <option value="">All job titles</option>
+                @foreach (var j in Model.JobTitles)
+                {
+                    <option value="@j.JobTitle" selected="@(q.JobTitle == j.JobTitle)">@j.JobTitle</option>
+                }
+                <option value="@TeacherListQuery.NoJobTitle" selected="@(q.JobTitle == TeacherListQuery.NoJobTitle)">Job title not set</option>
+            </select>
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="sort" aria-label="Sort">
+                <option value="load" selected="@(q.Sort == "load")">Highest load first</option>
+                <option value="remaining" selected="@(q.Sort == "remaining")">Most free periods first</option>
+                <option value="name" selected="@(q.Sort == "name")">Name A–Z</option>
+                <option value="department" selected="@(q.Sort == "department")">Department</option>
+            </select>
+        </div>
+        <input type="hidden" name="week" value="@week" />
+        <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+    </form>
+
+    <div id="workload-list" data-ajax-list data-refresh-page aria-live="polite">
+        <partial name="_Table" model="Model" />
+    </div>
+</section>

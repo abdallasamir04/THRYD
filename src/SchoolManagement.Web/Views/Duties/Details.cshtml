@@ -1,0 +1,171 @@
+@model DutyDetailsViewModel
+@{
+    var d = Model.Duty;
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Duty details"; ViewData["Nav"] = "MorningDuty"; }
+    var state = d.Coverage;
+    string Att(AttendanceStatus a) => a == AttendanceStatus.NotRecorded ? "Not recorded" : a.ToString();
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <div class="modal__head">
+        <span class="modal__icon">@Ui.Icon(Model.Info.Icon, "icon--lg")</span>
+        <div>
+            <h2 class="modal__title" dir="auto">@d.Description</h2>
+            <p class="modal__sub">@Model.Info.Name · @d.DutyDate.ToString("dddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) · @d.StartTime.ToString("HH:mm")–@d.EndTime.ToString("HH:mm")</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+    <div class="modal__body">
+        <div class="audit-head">
+            <div>
+                <span class="duty__role">Duty status</span>
+                <span class="status-badge status-badge--@DutyStatuses.Slug(d.Status)">@DutyStatuses.Label(d.Status)</span>
+            </div>
+            <div>
+                <span class="duty__role">Staffing</span>
+                <span class="badge badge--@Coverage.Tone(state) badge--dot">@Coverage.Label(state)</span>
+            </div>
+            <div>
+                <span class="duty__role">Follow-up</span>
+                <span class="badge @(d.FollowUpRequired ? "badge--warning" : "badge--neutral")">@(d.FollowUpRequired ? "Required" : "Not required")</span>
+            </div>
+            <a class="btn btn--secondary btn--sm" href="/duties/@d.Id/audit-record" data-modal>@Ui.Icon("clipboard-check", "icon--sm")Edit audit</a>
+        </div>
+
+        <dl class="dl">
+            <dt>Duty type</dt>
+            <dd>@DutyComponents.TypeName(d.DutyType) · @Model.Info.Name</dd>
+            <dt>Location</dt>
+            <dd dir="auto">@(d.Location ?? "Not set")</dd>
+            @if (Model.Info.HasClasses)
+            {
+                <dt>Classes covered</dt>
+                <dd>@foreach (var c in d.ClassNames) { <span class="badge badge--class" style="margin-inline-end:4px">@c</span> }</dd>
+            }
+            <dt>Assigned staff</dt>
+            <dd dir="auto">@d.PrimaryName · <span class="muted">@Att(d.PrimaryAttendance)</span></dd>
+            <dt>Backup staff</dt>
+            <dd dir="auto">@(d.BackupName ?? "None")</dd>
+            @if (d.BackupStaffId is not null)
+            {
+                <dt>Backup request</dt>
+                <dd>@(d.BackupStatus == BackupRequestStatus.Rejected ? "Declined" : d.BackupStatus.ToString())</dd>
+                <dt>Backup attendance</dt>
+                <dd>@(d.BackupStatus == BackupRequestStatus.Accepted ? Att(d.BackupAttendance) : "Recorded after the backup accepts")</dd>
+            }
+            <dt>Operational notes</dt>
+            <dd dir="auto" style="white-space:pre-line">@(d.Notes ?? "—")</dd>
+            <dt>Audit notes</dt>
+            <dd dir="auto" style="white-space:pre-line">@(d.AuditNotes ?? "—")</dd>
+            <dt>Issues encountered</dt>
+            <dd dir="auto" style="white-space:pre-line">@(d.IssuesEncountered ?? "—")</dd>
+            <dt>Created by</dt>
+            <dd>@(d.CreatedBy ?? "Not recorded") · @Ui.DateTime(d.CreatedAt)</dd>
+            <dt>Last updated by</dt>
+            <dd>@(d.UpdatedBy ?? "Not recorded") · @Ui.DateTime(d.UpdatedAt)</dd>
+        </dl>
+
+        <h3 class="section-label" style="margin-top:20px">Staff on this duty</h3>
+        <div class="table-wrap">
+            <table class="table table--compact">
+                <thead><tr><th scope="col">Staff</th><th scope="col">Role</th><th scope="col">Attendance</th><th scope="col">Evaluations</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var s in Model.Staff)
+                    {
+                        <tr class="@(s.IsCurrent ? "" : "is-ended")">
+                            <td><a href="/staff/@s.StaffId" dir="auto">@s.StaffName</a>@if (!s.IsCurrent) {<div class="person__meta">@s.EndReason</div>}</td>
+                            <td>
+                                <span class="role-badge role-badge--@s.Role.ToString().ToLowerInvariant()">@(s.Role == DutyRole.Primary ? "Assigned" : "Backup")</span>
+                                @if (s.Role == DutyRole.Backup)
+                                {
+                                    <span class="muted">@(s.BackupStatus == BackupRequestStatus.Rejected ? "declined" : s.BackupStatus.ToString().ToLowerInvariant())</span>
+                                }
+                            </td>
+                            <td>@Att(s.Attendance)</td>
+                            <td>@(s.EvaluationCount == 0 ? "—" : $"{s.EvaluationCount} · latest {s.LatestRating}/5")</td>
+                            <td class="col-actions">
+                                @if (s.CanEvaluate)
+                                {
+                                    <a class="btn btn--secondary btn--sm" href="/staff/assignments/@s.Id/evaluate" data-modal>@Ui.Icon("sparkles", "icon--sm")Evaluate</a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (d.BackupStaffId is not null && d.BackupStatus == BackupRequestStatus.Pending)
+        {
+            <div class="backup-panel" style="margin-top:16px">
+                <p class="backup-panel__title">@Ui.Icon("user-plus")Record @d.BackupName's answer</p>
+                <form action="/duties/@d.Id/backup-response" method="post" data-ajax-form class="form-grid">
+                    @Html.AntiForgeryToken()
+                    <div class="field">
+                        <label class="label" for="backup-note">Note <span class="faint">(optional)</span></label>
+                        <input class="input" id="backup-note" name="note" maxlength="500" dir="auto" placeholder="e.g. Confirmed by phone at 07:05" />
+                    </div>
+                    <div class="duty__actions">
+                        <button class="btn btn--primary btn--sm" type="submit" name="accepted" value="true">@Ui.Icon("check", "icon--sm")Accepted</button>
+                        <button class="btn btn--secondary btn--sm" type="submit" name="accepted" value="false">@Ui.Icon("x", "icon--sm")Declined</button>
+                    </div>
+                </form>
+            </div>
+        }
+
+        <h3 class="section-label" style="margin-top:20px">Backup history</h3>
+        @if (Model.History.Count == 0)
+        {
+            <p class="muted">No backup has been requested for this duty.</p>
+        }
+        else
+        {
+            <ol class="timeline">
+                @foreach (var h in Model.History)
+                {
+                    <li class="timeline__item timeline__item--@h.Response.ToString().ToLowerInvariant()">
+                        <span class="timeline__when">@Ui.DateTime(h.RecordedAt)</span>
+                        <span class="timeline__what"><strong dir="auto">@h.StaffName</strong> — @(h.Response switch { BackupResponseKind.Requested => "asked to cover", BackupResponseKind.Accepted => "accepted", BackupResponseKind.Rejected => "declined", _ => "request withdrawn" })</span>
+                        @if (!string.IsNullOrEmpty(h.Note))
+                        {
+                            <span class="timeline__note" dir="auto">@h.Note</span>
+                        }
+                        <span class="timeline__by faint">Recorded by: @(h.RecordedBy ?? "Not recorded")</span>
+                    </li>
+                }
+            </ol>
+        }
+
+        <h3 class="section-label" style="margin-top:20px">Audit trail</h3>
+        @if (Model.AuditTrail.Count == 0)
+        {
+            <p class="muted">No changes recorded.</p>
+        }
+        else
+        {
+            <ol class="timeline">
+                @foreach (var a in Model.AuditTrail)
+                {
+                    <li class="timeline__item timeline__item--audit">
+                        <span class="timeline__when">@Ui.DateTime(a.ChangedAt) · status @DutyStatuses.Label(a.StatusAfter)</span>
+                        <span class="timeline__what" dir="auto">@a.Summary</span>
+                        <span class="timeline__by faint">By: @(a.ChangedBy ?? "Not recorded")</span>
+                    </li>
+                }
+            </ol>
+        }
+    </div>
+    <div class="modal__foot">
+        @if (modal)
+        {
+            <button class="btn btn--secondary" type="button" data-modal-close>Close</button>
+        }
+        else
+        {
+            <a class="btn btn--secondary" href="@DutyComponents.Href(Model.Info)?date=@SchoolWeek.Iso(d.DutyDate)">Back</a>
+        }
+        <a class="btn btn--primary" href="/duties/@d.Id/edit" data-modal>@Ui.Icon("pencil")Edit duty</a>
+    </div>
+</div>

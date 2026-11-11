@@ -1,0 +1,123 @@
+@model ManagementProfileViewModel
+@{
+    var m = Model.Member;
+    var k = Model.Counts;
+    ViewData["Title"] = m.FullName;
+    ViewData["Nav"] = "Management";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var baseUrl = $"/management/members/{m.Id}";
+    string Tile(string? status) => Model.Tasks.Query.Status == status ? "true" : "false";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/members">Team Members</a></li><li dir="auto">@m.FullName</li></ol>
+        <div class="profile">
+            <span class="avatar avatar--lg avatar--@Ui.Tone(m.FullName)" aria-hidden="true">@Ui.Initials(m.FullName)</span>
+            <div>
+                <h1 class="page-title" dir="auto">@m.FullName</h1>
+                <p class="page-sub">
+                    <span class="badge @(m.Position is null ? "badge--neutral" : "badge--primary")">@Ui.Icon(m.Position is { } p ? ManagementPositions.Icon(p) : "briefcase")@m.PositionName</span>
+                    <span>Management Team</span>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="@baseUrl/edit" data-modal>@Ui.Icon("pencil")Edit profile</a>
+        <form action="@baseUrl/delete" method="post" data-ajax-form
+              data-confirm="@m.FullName will be removed from the Management Team. Members with tasks cannot be removed until their tasks are reassigned or deleted."
+              data-confirm-title="Remove this member?" data-confirm-button="Remove member">
+            @Html.AntiForgeryToken()
+            <button class="btn btn--soft-danger" type="submit">@Ui.Icon("trash")Remove</button>
+        </form>
+        <a class="btn btn--primary" href="/management/tasks/create?memberId=@m.Id" data-modal>@Ui.Icon("plus")New task</a>
+    </div>
+</div>
+
+<ul class="summary-tiles summary-tiles--5" aria-label="Task totals">
+    <li><a class="summary-tile" href="@baseUrl" aria-current="@Tile(null)"><span class="summary-tile__value num">@k.Total</span><span class="summary-tile__label">@Ui.Icon("list", "icon--sm")Assigned tasks</span></a></li>
+    <li><a class="summary-tile summary-tile--muted" href="@baseUrl?status=todo" aria-current="@Tile("todo")"><span class="summary-tile__value num">@k.ToDo</span><span class="summary-tile__label">@Ui.Icon("clock", "icon--sm")Pending (to do)</span></a></li>
+    <li><a class="summary-tile" href="@baseUrl?status=in-progress" aria-current="@Tile("in-progress")"><span class="summary-tile__value num" style="color:var(--color-secondary-ink)">@k.InProgress</span><span class="summary-tile__label">@Ui.Icon("activity", "icon--sm")In progress@(k.OnHold > 0 ? $" · {k.OnHold} on hold" : "")</span></a></li>
+    <li><a class="summary-tile summary-tile--ok" href="@baseUrl?status=completed" aria-current="@Tile("completed")"><span class="summary-tile__value num">@k.Completed</span><span class="summary-tile__label">@Ui.Icon("check-circle", "icon--sm")Completed</span></a></li>
+    <li><a class="summary-tile @(k.Overdue > 0 ? "summary-tile--bad" : "")" href="@baseUrl?status=overdue" aria-current="@Tile("overdue")"><span class="summary-tile__value num">@k.Overdue</span><span class="summary-tile__label">@Ui.Icon("alert-circle", "icon--sm")Overdue</span></a></li>
+</ul>
+
+<div class="grid-3-1">
+    <section class="card table-card" aria-labelledby="tasks-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="tasks-title">@Ui.Icon("clipboard-check")Tasks</h2>
+                <p class="card__sub">Individual tasks of @m.FullName. Change a status directly on a card.</p>
+            </div>
+        </div>
+        <partial name="~/Views/ManagementTasks/_Toolbar.cshtml" model="Model.Tasks" />
+        <div id="task-list" data-ajax-list data-refresh-page aria-live="polite">
+            <partial name="~/Views/ManagementTasks/_TaskList.cshtml" model="Model.Tasks" />
+        </div>
+    </section>
+
+    <div class="stack">
+        <section class="card" aria-labelledby="info-title">
+            <div class="card__head"><h2 class="card__title" id="info-title">@Ui.Icon("user")Profile</h2></div>
+            <div class="card__body">
+                <dl class="dl" style="font-size:0.875rem">
+                    <dt>Position</dt><dd>@m.PositionName</dd>
+                    <dt>Contact</dt>
+                    <dd>@if (!string.IsNullOrEmpty(m.ContactNumber)) { <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@m.ContactNumber</a> } else { <span class="faint">Not set</span> }</dd>
+                    <dt>Email</dt>
+                    <dd>@if (!string.IsNullOrEmpty(m.Email)) { <a href="mailto:@m.Email" dir="ltr" style="overflow-wrap:anywhere">@m.Email</a> } else { <span class="faint">Not set</span> }</dd>
+                    <dt>Appointed on</dt><dd>@(m.AppointedOn?.ToString("d MMM yyyy", c) ?? "Not set")</dd>
+                    <dt>Added</dt><dd>@Ui.Date(m.CreatedAt)</dd>
+                </dl>
+                @if (Model.Positions.Count > 0)
+                {
+                    <p class="dept-card__label" style="margin:16px 0 8px">Position history</p>
+                    <ol class="timeline">
+                        @foreach (var ph in Model.Positions)
+                        {
+                            <li class="timeline__item @(ph.IsCurrent ? "timeline__item--accepted" : "timeline__item--withdrawn")">
+                                <span class="timeline__when">@ph.StartDate.ToString("d MMM yyyy", c) – @(ph.IsCurrent ? "now" : ph.EndDate?.ToString("d MMM yyyy", c))</span>
+                                <strong>@ManagementPositions.Name(ph.Position)</strong>
+                                @if (ph.EndReason is not null) { <span class="timeline__note" dir="auto">@ph.EndReason</span> }
+                            </li>
+                        }
+                    </ol>
+                }
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="history-title">
+            <div class="card__head">
+                <div>
+                    <h2 class="card__title" id="history-title">@Ui.Icon("clock")Task history</h2>
+                    <p class="card__sub">Latest @Model.History.Count change(s), newest first.</p>
+                </div>
+            </div>
+            @if (Model.History.Count == 0)
+            {
+                <div class="empty" style="padding:24px"><p class="empty__text">No task activity yet.</p></div>
+            }
+            else
+            {
+                <ol class="timeline" style="margin:16px 22px">
+                    @foreach (var h in Model.History)
+                    {
+                        var tone = h.Action switch
+                        {
+                            SchoolManagement.Web.Entities.TaskHistoryAction.Deleted => "timeline__item--rejected",
+                            _ when h.StatusAfter == SchoolManagement.Web.Entities.ManagementTaskStatus.Completed => "timeline__item--accepted",
+                            SchoolManagement.Web.Entities.TaskHistoryAction.Created => "timeline__item--audit",
+                            _ => "",
+                        };
+                        <li class="timeline__item @tone">
+                            <span class="timeline__when">@Ui.DateTime(h.ChangedAt)@(h.ChangedBy is null ? "" : " · " + h.ChangedBy)</span>
+                            <span dir="auto"><strong>@h.TaskTitle</strong></span>
+                            <span class="timeline__note" dir="auto" style="font-style:normal">@h.Summary</span>
+                        </li>
+                    }
+                </ol>
+            }
+        </section>
+    </div>
+</div>

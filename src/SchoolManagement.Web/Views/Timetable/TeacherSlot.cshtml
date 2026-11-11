@@ -1,0 +1,121 @@
+@model TeacherSlotModel
+@*
+    A slot of a teacher's timetable in one week: add office hours here, or count one of the teacher's
+    existing duties (from the Duties module) in their workload. Duties keep their own date and times.
+    An occupied slot (office hours / substitution) shows the period with a Remove action instead.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Assign period"; ViewData["Nav"] = "Timetable"; }
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var w = Model.Workload;
+    var full = w is not null && w.Total >= w.Max;
+    var date = ScheduleRules.DateOf(Model.WeekStart, Model.Day);
+    var countable = Model.Duties.Where(d => !d.Counted).ToList();
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <div class="modal__head">
+        <span class="modal__icon">@Ui.Icon("calendar", "icon--lg")</span>
+        <div>
+            <h2 class="modal__title">@(Model.Periods.Count == 0 ? "Assign period" : "Period this week")</h2>
+            <p class="modal__sub" dir="auto">@Model.TeacherName · @ScheduleRules.DayName(Model.Day) @date.ToString("d MMM", c), @Model.Slot!.Label (@Model.Slot.Times)</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+
+    @if (Model.Periods.Count > 0)
+    {
+        <div class="modal__body form-grid">
+            @foreach (var p in Model.Periods)
+            {
+                <div class="sub-line">
+                    <span>@Ui.Icon(p.Category == WorkloadCategory.Substitution ? "swap" : "briefcase", "icon--sm")<strong>@WorkloadRules.Label(p.Category)</strong>@(p.ClassName is null ? "" : " · " + p.ClassName)@(p.Description is null ? "" : " · " + p.Description)</span>
+                    <form action="/timetable/periods/@p.Id/remove" method="post" data-ajax-form data-confirm="This period will be removed and the workload reduced by 1." data-confirm-title="Remove period?" data-confirm-button="Remove">
+                        @Html.AntiForgeryToken()
+                        <button class="btn btn--ghost btn--sm" type="submit">Remove</button>
+                    </form>
+                </div>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Close</button> }
+            else { <a class="btn btn--secondary" href="/timetable/teachers/@Model.TeacherId?week=@Model.Week">Back</a> }
+        </div>
+    }
+    else
+    {
+        <form action="/timetable/teacher-slot" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents" data-teacher-slot>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="TeacherId" value="@Model.TeacherId" />
+            <input type="hidden" name="Day" value="@Model.Day" />
+            <input type="hidden" name="SlotId" value="@Model.SlotId" />
+            <input type="hidden" name="Week" value="@Model.Week" />
+            <div class="modal__body form-grid">
+                <div asp-validation-summary="All" class="validation-summary-errors"></div>
+                @if (w is not null)
+                {
+                    <div class="slot-facts">
+                        <div><span class="slot-facts__label">This week</span><strong>@w.Total / @w.Max periods</strong></div>
+                        <div><span class="slot-facts__label">Remaining</span><strong>@w.Remaining</strong></div>
+                        <div><span class="slot-facts__label">Status</span><span class="wl-status wl-status--@WorkloadRules.Tone(w.Status)">@WorkloadRules.Label(w.Status)</span></div>
+                    </div>
+                }
+
+                <fieldset class="field">
+                    <legend class="label">What is this period?</legend>
+                    <div class="kind-choice" role="radiogroup">
+                        <label class="kind-choice__opt"><input type="radio" name="Kind" value="office" checked="@(Model.Kind != "duty")" data-kind />@Ui.Icon("briefcase", "icon--sm")Office hours</label>
+                        <label class="kind-choice__opt"><input type="radio" name="Kind" value="duty" checked="@(Model.Kind == "duty")" data-kind />@Ui.Icon("shield-check", "icon--sm")Duty</label>
+                    </div>
+                    <p class="hint">Teaching sessions are assigned from a <a href="/timetable/classes">class timetable</a>; substitutions on the class's occupied slot.</p>
+                </fieldset>
+
+                <div data-kind-panel="office" hidden="@(Model.Kind == "duty")">
+                    @if (full)
+                    {
+                        <div class="notice notice--error">@Ui.Icon("x-circle")<div class="notice__body"><strong>@Model.TeacherName is full this week.</strong>No more periods can be added (@w!.Total/@w.Max).</div></div>
+                    }
+                    <div class="field">
+                        <label class="label" asp-for="Description">Note</label>
+                        <input class="input" asp-for="Description" dir="auto" maxlength="200" placeholder="Optional, e.g. parent meetings" />
+                    </div>
+                </div>
+
+                <div data-kind-panel="duty" hidden="@(Model.Kind != "duty")">
+                    <p class="dept-card__label" style="margin-bottom:6px">@Model.TeacherName's duties on @ScheduleRules.DayName(Model.Day) @date.ToString("d MMM", c)</p>
+                    @if (Model.Duties.Count == 0)
+                    {
+                        <div class="empty empty--boxed" style="padding:18px">
+                            <p class="empty__text">No duty on this day for @Model.TeacherName. Duties are scheduled in the Duties module (Morning Duty and its components).</p>
+                            <div class="empty__actions"><a class="btn btn--secondary btn--sm" href="/duties?date=@SchoolWeek.Iso(date)">@Ui.Icon("shield-check", "icon--sm")Open duties for this day</a></div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="duty-pick">
+                            @foreach (var d in Model.Duties)
+                            {
+                                <label class="duty-pick__item @(d.Counted ? "is-counted" : "")">
+                                    <input type="radio" name="DutyAssignmentId" value="@d.Id" disabled="@d.Counted" checked="@(Model.DutyAssignmentId == d.Id)" />
+                                    <span>
+                                        <strong>@DutyComponents.Name(d.Component)</strong> · @ScheduleRules.Times(d.Start, d.End)
+                                        <span class="person__meta" dir="auto">@d.Description@(d.Location is null ? "" : " · " + d.Location) · @d.Role</span>
+                                    </span>
+                                    <span class="badge @(d.Counted ? "badge--success" : "badge--neutral")">@(d.Counted ? "Counted" : "Not counted")</span>
+                                </label>
+                            }
+                        </div>
+                        <p class="hint">Counting a duty adds 1 period to Duties in this week's workload. Status, backup and feedback stay in the Duties module.</p>
+                    }
+                </div>
+            </div>
+            <div class="modal__foot">
+                @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+                else { <a class="btn btn--secondary" href="/timetable/teachers/@Model.TeacherId?week=@Model.Week">Cancel</a> }
+                <button class="btn btn--primary" type="submit" disabled="@(full && countable.Count == 0)">@Ui.Icon("check")Save</button>
+            </div>
+        </form>
+    }
+</div>

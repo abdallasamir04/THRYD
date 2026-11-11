@@ -1,0 +1,218 @@
+@model StudentProfileViewModel
+@*
+    Student profile → Arrival & Attendance History. Statistics use recorded days only: a day with
+    no arrival record is not counted at all (it is never treated as an absence).
+*@
+@{
+    var st = Model.Student;
+    var h = Model.History;
+    var s = h.Summary;
+    ViewData["Title"] = st.FullName;
+    ViewData["Nav"] = "Students";
+    var withNotes = h.Records.Where(r => !string.IsNullOrEmpty(r.Notes)).ToList();
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students">Students</a></li><li dir="auto">@st.FullName</li></ol>
+        <div class="profile">
+            <span class="avatar avatar--lg avatar--@Ui.Tone(st.FullName)" aria-hidden="true">@Ui.Initials(st.FullName)</span>
+            <div>
+                <h1 class="page-title" dir="auto">@st.FullName</h1>
+                <p class="page-sub">Student · <span class="badge badge--class">@st.ClassName</span>@if (Model.CurrentClass is { } cc) { <span class="muted">(@cc.StudentCount / @cc.Capacity students)</span> }@if (!st.ClassActive) { <span class="badge badge--warning">Inactive class</span> }</p>
+            </div>
+        </div>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/students/transfer/@st.Id" data-modal>@Ui.Icon("swap")Transfer class</a>
+        <a class="btn btn--secondary" href="/students/edit/@st.Id" data-modal>@Ui.Icon("pencil")Edit student</a>
+        <a class="btn btn--primary" href="/arrivals?classId=@st.ClassId">@Ui.Icon("clock")Today's arrivals</a>
+    </div>
+</div>
+
+<section class="card" aria-labelledby="att-title">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title" id="att-title">@Ui.Icon("calendar")Arrival &amp; attendance history</h2>
+            <p class="card__sub">Recorded school days only. Days without a record are not counted.</p>
+        </div>
+        <form class="date-filter" method="get" action="/students/profile/@st.Id">
+            <label class="visually-hidden" for="from">From</label>
+            <input class="input input--sm" type="date" id="from" name="from" value="@Model.From" aria-label="From date" />
+            <span class="muted">to</span>
+            <label class="visually-hidden" for="to">To</label>
+            <input class="input input--sm" type="date" id="to" name="to" value="@Model.To" aria-label="To date" />
+            <select class="select input--sm" name="order" aria-label="Order">
+                <option value="newest" selected="@Model.NewestFirst">Newest first</option>
+                <option value="oldest" selected="@(!Model.NewestFirst)">Oldest first</option>
+            </select>
+            <button class="btn btn--secondary btn--sm" type="submit">Apply</button>
+            @if (!string.IsNullOrEmpty(Model.From) || !string.IsNullOrEmpty(Model.To))
+            {
+                <a class="btn btn--ghost btn--sm" href="/students/profile/@st.Id">Clear</a>
+            }
+        </form>
+    </div>
+
+    <div class="card__body">
+        <ul class="summary-tiles summary-tiles--5" aria-label="Attendance summary">
+            <li class="summary-tile"><span class="summary-tile__value num">@s.Recorded</span><span class="summary-tile__label">School days recorded</span></li>
+            <li class="summary-tile summary-tile--ok"><span class="summary-tile__value num">@s.Present</span><span class="summary-tile__label">Present</span></li>
+            <li class="summary-tile summary-tile--bad"><span class="summary-tile__value num">@s.Absent</span><span class="summary-tile__label">Absent</span></li>
+            <li class="summary-tile summary-tile--dup"><span class="summary-tile__value num">@s.Late</span><span class="summary-tile__label">Late arrivals</span></li>
+            <li class="summary-tile"><span class="summary-tile__value num">@(s.OnTimePercent is { } p ? p.ToString("0.#") + "%" : "—")</span><span class="summary-tile__label">On time (@s.OnTime of @(s.OnTime + s.Late) timed)</span></li>
+        </ul>
+    </div>
+
+    @if (h.Records.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("calendar")</span>
+            <p class="empty__title">No arrival records@(string.IsNullOrEmpty(Model.From) && string.IsNullOrEmpty(Model.To) ? "" : " in this period")</p>
+            <p class="empty__text">Records appear here once arrivals are taken on the Student Arrivals checklist.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Date</th><th scope="col">Attendance</th><th scope="col">Arrival time</th><th scope="col">Method</th><th scope="col">Received by</th><th scope="col">Notes</th><th scope="col">Recorded</th></tr></thead>
+                <tbody>
+                    @foreach (var r in h.Records)
+                    {
+                        <tr class="@(r.Late == LateStatus.Late ? "is-late" : "")">
+                            <td data-label="Date" class="nowrap"><strong>@r.Date.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</strong>@if (r.ClassName != st.ClassName) { <div class="person__meta">in @r.ClassName</div> }</td>
+                            <td data-label="Attendance">@if (r.Status == ArrivalStatus.Present) { <span class="badge badge--success badge--dot">Present</span> } else { <span class="badge badge--error badge--dot">Absent</span> }</td>
+                            <td data-label="Arrival time" class="num">
+                                @if (r.Time is { } t)
+                                {
+                                    <strong>@t.ToString(t.Second == 0 ? "HH:mm" : "HH:mm:ss")</strong>
+                                    @if (r.Late == LateStatus.Late) { <span class="badge badge--error">Late</span> }
+                                    else if (r.Late == LateStatus.OnTime) { <span class="badge badge--success">On time</span> }
+                                    @if (r.DeadlineUsed is { } dl) { <div class="person__meta">deadline @dl.ToString("HH:mm")</div> }
+                                }
+                                else { <span class="faint">—</span> }
+                            </td>
+                            <td data-label="Method">@(r.Status == ArrivalStatus.Present ? Arrivals.Method(r.Method) : "—")@if (r.Location is not null) { <div class="person__meta" dir="auto">@r.Location</div> }</td>
+                            <td data-label="Received by" dir="auto">@(r.ReceivedByName is null ? "—" : r.ReceivedByName + (r.Confirmed ? " ✓" : ""))</td>
+                            <td data-label="Notes" dir="auto">@(r.Notes ?? "")</td>
+                            <td data-label="Recorded"><span class="person__meta">@(r.RecordedBy ?? "—")@(r.Corrections > 0 ? $" · corrected {r.Corrections}×" : "")</span> <a class="btn btn--ghost btn--sm" href="/arrivals/@r.RecordId/correct" data-modal>Correct</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<div class="grid-2">
+    <section class="card" aria-labelledby="methods-title">
+        <div class="card__head"><h2 class="card__title" id="methods-title">@Ui.Icon("arrow-right")Arrival methods</h2></div>
+        @if (h.Methods.Count == 0)
+        {
+            <div class="empty"><p class="empty__text">No present days recorded.</p></div>
+        }
+        else
+        {
+            var max = h.Methods.Max(m => m.Count);
+            <div class="hbars">
+                @foreach (var (label, count) in h.Methods)
+                {
+                    <div class="hbar__row"><span class="hbar__label">@label</span><span class="hbar__value">@count</span><span class="hbar__track"><span class="hbar__fill" style="display:block;width:@((count * 100.0 / max).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></span></span></div>
+                }
+            </div>
+        }
+    </section>
+    <section class="card" aria-labelledby="receivers-title">
+        <div class="card__head"><h2 class="card__title" id="receivers-title">@Ui.Icon("users")Receiving staff</h2></div>
+        @if (h.Receivers.Count == 0)
+        {
+            <div class="empty"><p class="empty__text">No receiving staff recorded.</p></div>
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var (name, count) in h.Receivers)
+                {
+                    <li class="list__item"><span class="avatar avatar--@Ui.Tone(name)" aria-hidden="true">@Ui.Initials(name)</span><span class="list__main list__title" dir="auto">@name</span><span class="list__end">@count day(s)</span></li>
+                }
+            </ul>
+        }
+    </section>
+</div>
+
+@if (withNotes.Count > 0 || h.Corrections.Count > 0)
+{
+    <div class="grid-2">
+        <section class="card" aria-labelledby="notes-title">
+            <div class="card__head"><h2 class="card__title" id="notes-title">@Ui.Icon("info")Operational notes</h2></div>
+            @if (withNotes.Count == 0) { <div class="empty"><p class="empty__text">No notes.</p></div> }
+            else
+            {
+                <ul class="list">@foreach (var r in withNotes) { <li class="list__item"><span class="list__end">@r.Date.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span><span class="list__main" dir="auto">@r.Notes</span></li> }</ul>
+            }
+        </section>
+        <section class="card" aria-labelledby="corr-title">
+            <div class="card__head"><h2 class="card__title" id="corr-title">@Ui.Icon("pencil")Corrections</h2></div>
+            @if (h.Corrections.Count == 0) { <div class="empty"><p class="empty__text">No corrections.</p></div> }
+            else
+            {
+                <ol class="timeline" style="margin:16px 22px">
+                    @foreach (var c in h.Corrections)
+                    {
+                        <li class="timeline__item timeline__item--audit">
+                            <span class="timeline__when">@Ui.DateTime(c.CorrectedAt) · record of @c.Date.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) · by @(c.CorrectedBy ?? "—")</span>
+                            <span class="timeline__what" dir="auto"><strong>Reason:</strong> @c.Reason</span>
+                            <span class="timeline__note" dir="auto">Before: @c.Before</span>
+                            <span class="timeline__note" dir="auto">After: @c.After</span>
+                        </li>
+                    }
+                </ol>
+            }
+        </section>
+    </div>
+}
+
+<section class="card" aria-labelledby="transfers-title" style="margin-top:20px">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title" id="transfers-title">@Ui.Icon("swap")Class transfer history</h2>
+            <p class="card__sub">All recorded transfers for this student across classes.</p>
+        </div>
+        <a class="btn btn--secondary btn--sm" href="/students/transfer/@st.Id" data-modal>@Ui.Icon("swap")Transfer class</a>
+    </div>
+    @if (Model.TransferHistory.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("swap")</span>
+            <p class="empty__title">No transfers recorded</p>
+            <p class="empty__text">This student remains in their initial class assignment (@st.ClassName).</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Previous Class</th>
+                        <th scope="col">New Class</th>
+                        <th scope="col">Transferred By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in Model.TransferHistory)
+                    {
+                        <tr>
+                            <td data-label="Date">@Ui.DateTime(t.TransferredAt)</td>
+                            <td data-label="Previous Class"><span class="badge badge--neutral">@t.FromClassName</span></td>
+                            <td data-label="New Class"><span class="badge badge--class">@t.ToClassName</span></td>
+                            <td data-label="Transferred By">@(t.TransferredBy ?? "Administrator")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

@@ -1,0 +1,80 @@
+@model DutyAuditViewModel
+@{
+    ViewData["Title"] = "Duty Audit";
+    ViewData["Nav"] = "DutyAudit";
+    var q = Model.Query;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li>Duty Audit</li></ol>
+        <h1 class="page-title">Duty Audit</h1>
+        <p class="page-sub">Every duty session with its status, staffing, attendance and audit notes. Each change is kept in the duty's audit trail.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/duties">@Ui.Icon("shield-check")Morning Duty</a>
+    </div>
+</div>
+
+<section class="card table-card" aria-label="Duty audit records">
+    <form class="toolbar toolbar--wrap" action="/duties/audit" method="get" role="search" data-list-filter="#audit-list">
+        <div class="field toolbar__date"><label class="label" for="f-from">From</label><input class="input picker" type="date" id="f-from" name="from" value="@q.From" /></div>
+        <div class="field toolbar__date"><label class="label" for="f-to">To</label><input class="input picker" type="date" id="f-to" name="to" value="@q.To" /></div>
+        <div class="field toolbar__filter">
+            <label class="label" for="f-type">Duty type</label>
+            <select class="select" id="f-type" name="type">
+                <option value="">All types</option>
+                @foreach (var t in Enum.GetValues<DutyType>())
+                {
+                    <option value="@t" selected="@(string.Equals(q.Type, t.ToString(), StringComparison.OrdinalIgnoreCase))">@DutyComponents.TypeName(t)</option>
+                }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="f-component">Component</label>
+            <select class="select" id="f-component" name="component">
+                <option value="">All components</option>
+                @foreach (var c in DutyComponents.All)
+                {
+                    <option value="@c.Slug" selected="@(q.Component == c.Slug)">@c.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="f-location">Location</label>
+            <input class="input" type="search" id="f-location" name="location" value="@q.Location" list="audit-locations" placeholder="Any location" dir="auto" />
+            <datalist id="audit-locations">@foreach (var l in Model.Locations) { <option value="@l"></option> }</datalist>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="f-staff">Staff</label>
+            <select class="select" id="f-staff" name="staffId" data-searchable>
+                <option value="">All staff</option>
+                @foreach (var s in Model.Staff)
+                {
+                    <option value="@s.Id" selected="@(q.StaffId == s.Id)" data-note="@s.JobTitle">@s.FullName</option>
+                }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="f-status">Status</label>
+            <select class="select" id="f-status" name="status">
+                <option value="">All statuses</option>
+                @foreach (var s in DutyStatuses.All)
+                {
+                    <option value="@DutyStatuses.Slug(s)" selected="@(q.Status == DutyStatuses.Slug(s))">@DutyStatuses.Label(s)</option>
+                }
+            </select>
+        </div>
+        <label class="switch toolbar__switch">
+            <input type="checkbox" name="followUp" value="true" checked="@q.FollowUp" />
+            <span class="switch__track" aria-hidden="true"></span>
+            <span>Follow-up only</span>
+        </label>
+        <input type="hidden" name="pageSize" value="@q.PageSize" />
+        <input type="hidden" name="page" value="" />
+        <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+    </form>
+    <div id="audit-list" data-ajax-list aria-live="polite">
+        <partial name="_AuditTable" model="Model" />
+    </div>
+</section>

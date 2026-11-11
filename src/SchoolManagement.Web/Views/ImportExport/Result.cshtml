@@ -1,0 +1,76 @@
+@model ImportResultViewModel
+@{
+    ViewData["Title"] = "Import finished";
+    ViewData["Nav"] = "ImportExport";
+    var s = Model.Session;
+    var r = Model.Result;
+    var fields = ImportDefinitions.Fields(s.Kind);
+    var listUrl = s.Kind == ImportKind.Students ? "/students?sort=created&dir=desc" : "/teachers?sort=created&dir=desc";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/import-export?kind=@s.Kind">Import / Export</a></li><li>Summary</li></ol>
+        <h1 class="page-title">Import summary</h1>
+        <p class="page-sub" dir="auto">@s.FileName · @Ui.DateTime(r.CompletedAtUtc)</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/import-export?kind=@s.Kind">@Ui.Icon("upload")Import another file</a>
+        <a class="btn btn--primary" href="@listUrl">View @ImportDefinitions.Title(s.Kind).ToLowerInvariant()</a>
+    </div>
+</div>
+
+<partial name="_Steps" model="5" />
+
+<div class="summary-tiles">
+    <div class="summary-tile summary-tile--ok"><span class="summary-tile__value num">@r.Imported</span><span class="summary-tile__label">@Ui.Icon("check-circle", "icon--sm")Imported</span></div>
+    <div class="summary-tile summary-tile--dup"><span class="summary-tile__value num">@r.SkippedDuplicates</span><span class="summary-tile__label">@Ui.Icon("copy", "icon--sm")Skipped duplicates</span></div>
+    <div class="summary-tile summary-tile--bad"><span class="summary-tile__value num">@r.Failed</span><span class="summary-tile__label">@Ui.Icon("x-circle", "icon--sm")Failed</span></div>
+    <div class="summary-tile"><span class="summary-tile__value num">@r.TotalRows</span><span class="summary-tile__label">@Ui.Icon("table", "icon--sm")Rows with data</span></div>
+</div>
+
+<section class="card" aria-labelledby="skipped-title">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title" id="skipped-title">@Ui.Icon("file-x")Rows not imported</h2>
+            <p class="card__sub">Each row with its number in your file and the reason.</p>
+        </div>
+        @if (r.NotImported.Count > 0)
+        {
+            <a class="btn btn--secondary btn--sm" href="/import-export/@s.Token/report">@Ui.Icon("download", "icon--sm")Download report</a>
+        }
+    </div>
+    @if (r.NotImported.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("check-circle")</span>
+            <p class="empty__title">Every row was imported</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead>
+                    <tr>
+                        <th scope="col" class="col-num">Row</th>
+                        @foreach (var f in fields) { <th scope="col">@f.Label</th> }
+                        <th scope="col">Result</th>
+                        <th scope="col">Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in r.NotImported.Take(1000))
+                    {
+                        <tr class="@(row.Status == RowStatus.Duplicate ? "is-duplicate" : "is-invalid")">
+                            <td class="col-num" style="display:table-cell">@row.RowNumber</td>
+                            @foreach (var f in fields) { <td data-label="@f.Label" dir="auto">@row.Value(f.Key)</td> }
+                            <td data-label="Result">@if (row.Status == RowStatus.Duplicate) { <span class="badge badge--warning">Skipped</span> } else { <span class="badge badge--error">Failed</span> }</td>
+                            <td data-label="Reason">@string.Join(" ", row.Errors)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

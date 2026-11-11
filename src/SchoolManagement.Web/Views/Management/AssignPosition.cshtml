@@ -1,0 +1,73 @@
+@model AssignPositionModel
+@*
+    Give a position to an existing member, or leave it vacant. The previous holder's appointment ends
+    and stays in the history; a member who held another position moves from it.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var name = ManagementPositions.Name(Model.Position);
+    var heading = Model.Current is null ? $"Assign {name}" : $"Replace {name}";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Management"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/positions">Positions</a></li><li>@name</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/management/positions/@Model.Position/assign" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("crown", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">One holder per position. The change is kept in the appointment history.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            @if (Model.Current is { } cur)
+            {
+                <div class="notice notice--warning">@Ui.Icon("info")<div class="notice__body"><strong>Current holder: @cur.FullName</strong>Choosing someone else ends their appointment on the start date.</div></div>
+            }
+            <div class="field">
+                <label class="label" for="MemberId">Team member</label>
+                <select class="select" id="MemberId" name="MemberId" data-searchable>
+                    <option value="">@(Model.Current is null ? "Choose a member…" : "Nobody — leave the position vacant")</option>
+                    @foreach (var m in Model.Members.Where(m => m.Id != Model.Current?.Id))
+                    {
+                        <option value="@m.Id" selected="@(Model.MemberId == m.Id)" data-note="@(m.Position is { } p ? "now " + ManagementPositions.Name(p) : "no position")">@m.FullName</option>
+                    }
+                </select>
+                <span asp-validation-for="MemberId" class="field-validation-error"></span>
+                <p class="hint">Someone new? <a href="/management/members/create?position=@Model.Position" data-modal>Add a new member</a> with this position instead.</p>
+            </div>
+            <div class="field" style="max-width:280px">
+                <label class="label" for="StartDate">Start date <span class="req" aria-hidden="true">*</span></label>
+                <input class="input picker" type="date" id="StartDate" name="StartDate" value="@(Model.StartDate is { } sd ? SchoolWeek.Iso(sd) : "")"
+                       min="1980-01-01" max="@SchoolWeek.Iso(SchoolWeek.Today.AddYears(1))" required data-val="true" data-val-required="Enter the date the appointment starts." />
+                <div class="picker-quick"><button type="button" data-date-quick="0" data-target="#StartDate">Today</button></div>
+                <span asp-validation-for="StartDate" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/management/positions">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+        </div>
+    </form>
+</div>

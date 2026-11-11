@@ -1,0 +1,87 @@
+@model ManagementMembersViewModel
+@{
+    ViewData["Title"] = "Team Members";
+    ViewData["Nav"] = "Management";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li>Team Members</li></ol>
+        <h1 class="page-title">Team Members</h1>
+        <p class="page-sub">@Ui.Plural(Model.Total, "Management Team member", "Management Team members"). Open a profile for tasks and history.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/management/positions">@Ui.Icon("crown")Positions</a>
+        <a class="btn btn--primary" href="/management/members/create" data-modal>@Ui.Icon("user-plus")Add team member</a>
+    </div>
+</div>
+
+<section class="card table-card" aria-label="Team members">
+    <form class="toolbar" action="/management/members" method="get" role="search">
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" name="search" value="@Model.Search" placeholder="Search members…" aria-label="Search members" autocomplete="off" dir="auto" />
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="position" aria-label="Filter by position" onchange="this.form.submit()">
+                <option value="">All positions</option>
+                @foreach (var p in ManagementPositions.All)
+                {
+                    <option value="@p" selected="@(Model.Position == p.ToString())">@ManagementPositions.Name(p)</option>
+                }
+                <option value="none" selected="@(Model.Position == "none")">No position</option>
+            </select>
+        </div>
+        <button class="btn btn--secondary" type="submit">@Ui.Icon("search")Search</button>
+    </form>
+
+    @if (Model.Members.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon(Model.Total == 0 ? "users" : "search")</span>
+            <p class="empty__title">@(Model.Total == 0 ? "No team members yet" : "No members match")</p>
+            <p class="empty__text">@(Model.Total == 0 ? "Add the School Director, SQAM and the stage coordinators." : "Try another name or position.")</p>
+            <div class="empty__actions">
+                @if (Model.Total == 0)
+                {
+                    <a class="btn btn--primary" href="/management/members/create" data-modal>@Ui.Icon("user-plus")Add team member</a>
+                }
+                else
+                {
+                    <a class="btn btn--secondary" href="/management/members">Clear filters</a>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="member-grid">
+            @foreach (var m in Model.Members)
+            {
+                <article class="member-card" aria-labelledby="mm-@m.Id">
+                    <div class="member-card__top">
+                        <span class="avatar avatar--lg avatar--@Ui.Tone(m.FullName)" aria-hidden="true">@Ui.Initials(m.FullName)</span>
+                        <div style="min-width:0">
+                            <div class="person__name" id="mm-@m.Id" dir="auto"><a class="stretched" href="/management/members/@m.Id">@m.FullName</a></div>
+                            <span class="badge @(m.Position is null ? "badge--neutral" : "badge--primary")">@m.PositionName</span>
+                        </div>
+                    </div>
+                    <div class="position-card__stats">
+                        <div class="position-card__stat"><strong>@m.OpenTasks</strong><span>Open</span></div>
+                        <div class="position-card__stat @(m.OverdueTasks > 0 ? "is-bad" : "")"><strong>@m.OverdueTasks</strong><span>Overdue</span></div>
+                        <div class="position-card__stat"><strong>@m.CompletedTasks</strong><span>Done</span></div>
+                    </div>
+                    <div class="member-card__foot">
+                        <span class="faint" style="font-size:0.8rem" dir="ltr">@(m.ContactNumber ?? m.Email ?? (m.AppointedOn is { } a ? "Since " + a.ToString("d MMM yyyy", c) : "No contact details"))</span>
+                        <div class="row-actions">
+                            <a class="icon-btn icon-btn--primary" href="/management/tasks/create?memberId=@m.Id" data-modal title="New task" aria-label="New task for @m.FullName">@Ui.Icon("plus")</a>
+                            <a class="icon-btn icon-btn--primary" href="/management/members/@m.Id/edit" data-modal title="Edit" aria-label="Edit @m.FullName">@Ui.Icon("pencil")</a>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>

@@ -1,0 +1,66 @@
+@model TeacherPickerViewModel
+@{
+    ViewData["Title"] = "Teacher Timetable";
+    ViewData["Nav"] = "Timetable";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li>Teacher Timetable</li></ol>
+        <h1 class="page-title">Teacher Timetable</h1>
+        <p class="page-sub">Each teacher's week, built from the class timetables (no separate schedule), with their office hours, substitutions and duties.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/timetable/classes">@Ui.Icon("grid")Class timetables</a>
+        <a class="btn btn--secondary" href="/workload">@Ui.Icon("chart")Workload</a>
+    </div>
+</div>
+
+<section class="card table-card" aria-label="Teachers">
+    <form class="toolbar" action="/timetable/teachers" method="get" role="search">
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" name="search" value="@Model.Search" placeholder="Search teacher…" aria-label="Search teacher" autocomplete="off" dir="auto" />
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="departmentId" aria-label="Department" onchange="this.form.submit()">
+                <option value="">All departments</option>
+                @foreach (var d in Model.Departments)
+                {
+                    <option value="@d.Id" selected="@(Model.DepartmentId == d.Id)">@d.Name</option>
+                }
+            </select>
+        </div>
+        <button class="btn btn--secondary" type="submit">@Ui.Icon("search")Search</button>
+    </form>
+    @if (Model.Teachers.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("search")</span>
+            <p class="empty__title">No teachers found</p>
+            <p class="empty__text">Try another name or department.</p>
+            <div class="empty__actions"><a class="btn btn--secondary" href="/timetable/teachers">Clear filters</a></div>
+        </div>
+    }
+    else
+    {
+        <div class="member-grid">
+            @foreach (var t in Model.Teachers)
+            {
+                <a class="member-card" href="/timetable/teachers/@t.Id" style="text-decoration:none;color:inherit">
+                    <div class="member-card__top">
+                        <span class="avatar avatar--@Ui.Tone(t.Name)" aria-hidden="true">@Ui.Initials(t.Name)</span>
+                        <div style="min-width:0">
+                            <div class="person__name" dir="auto">@t.Name</div>
+                            <div class="person__meta" dir="auto">@(t.Department ?? "No department")</div>
+                        </div>
+                    </div>
+                    <div class="member-card__foot">
+                        <span class="badge @(t.Sessions == 0 ? "badge--neutral" : "badge--primary")">@Ui.Plural(t.Sessions, "session", "sessions") a week</span>
+                        <span class="class-card__link">Timetable @Ui.Icon("arrow-right", "icon--sm")</span>
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</section>

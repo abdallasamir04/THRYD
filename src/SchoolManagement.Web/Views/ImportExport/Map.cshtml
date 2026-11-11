@@ -1,0 +1,116 @@
+@model ImportMapViewModel
+@{
+    ViewData["Title"] = "Match columns";
+    ViewData["Nav"] = "ImportExport";
+    var s = Model.Session;
+    var maxHeader = Math.Min(s.Sheet.Rows.Count, HeaderDetector.MaxHeaderScan);
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/import-export?kind=@s.Kind">Import / Export</a></li><li>Match columns</li></ol>
+        <h1 class="page-title">Match columns</h1>
+        <p class="page-sub">Importing <strong>@ImportDefinitions.Title(s.Kind).ToLowerInvariant()</strong> from <strong dir="auto">@s.FileName</strong>. Check which column holds each field.</p>
+    </div>
+</div>
+
+<partial name="_Steps" model="2" />
+
+<form method="post" action="/import-export/@s.Token/columns" data-import-map data-loading>
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="intent" value="" />
+    <div asp-validation-summary="All" class="validation-summary-errors" style="margin-bottom:16px"></div>
+
+    <div class="grid-3-1">
+        <section class="card" aria-labelledby="map-title">
+            <div class="card__head"><h2 class="card__title" id="map-title">@Ui.Icon("swap")Fields</h2></div>
+            <div class="card__body mapping">
+                @foreach (var f in Model.Fields)
+                {
+                    var mapped = s.Mapping.GetValueOrDefault(f.Key);
+                    <div class="mapping__row">
+                        <div class="mapping__field">
+                            <strong>@f.Label @if (f.Required) {<span class="req" style="color:var(--color-error-ink)">*</span>}</strong>
+                            <span class="hint">@f.Hint</span>
+                        </div>
+                        <span class="mapping__arrow" aria-hidden="true">@Ui.Icon("arrow-left")</span>
+                        <div class="field">
+                            <label class="visually-hidden" for="map-@f.Key">Column for @f.Label</label>
+                            <select class="select" id="map-@f.Key" name="map[@f.Key]" data-map-field data-map-label="@f.Label">
+                                <option value="">@(f.Required ? "Choose a column…" : "— Not in this file —")</option>
+                                @for (var i = 0; i < Model.ColumnLabels.Count; i++)
+                                {
+                                    <option value="@i" selected="@(mapped == i)">@Model.ColumnLabels[i]</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="file-title">
+            <div class="card__head"><h2 class="card__title" id="file-title">@Ui.Icon("sheet")File</h2></div>
+            <div class="card__body form-grid">
+                <div class="field">
+                    <label class="label" for="sheetIndex">Sheet</label>
+                    <select class="select" id="sheetIndex" name="sheetIndex" data-refresh>
+                        @for (var i = 0; i < s.Sheets.Count; i++)
+                        {
+                            <option value="@i" selected="@(i == s.SheetIndex)">@s.Sheets[i].Name (@s.Sheets[i].Rows.Count rows)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="label" for="headerIndex">Header row</label>
+                    <select class="select" id="headerIndex" name="headerIndex" data-refresh>
+                        <option value="-1" selected="@(s.HeaderIndex == -1)">No header row (first row is data)</option>
+                        @for (var i = 0; i < maxHeader; i++)
+                        {
+                            <option value="@i" selected="@(i == s.HeaderIndex)">Row @s.Sheet.Rows[i].RowNumber: @string.Join(" | ", s.Sheet.Rows[i].Cells.Where(c => c.Length > 0).Take(4))</option>
+                        }
+                    </select>
+                    <span class="hint">Detected automatically; change it if the preview looks wrong.</span>
+                </div>
+                <p class="muted"><strong class="num">@Ui.Count(Model.DataRowCount)</strong> data rows below the header.</p>
+            </div>
+        </section>
+    </div>
+
+    <section class="card" aria-labelledby="sample-title" style="margin-top:20px">
+        <div class="card__head">
+            <h2 class="card__title" id="sample-title">@Ui.Icon("table")First rows of the file</h2>
+            <span class="muted">Columns not used are dimmed.</span>
+        </div>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col" class="col-num">Row</th>
+                        @for (var i = 0; i < Model.ColumnLabels.Count; i++)
+                        {
+                            <th scope="col" data-col="@i">@Model.ColumnLabels[i]<br /><span class="badge badge--neutral" data-col-tag="@i">Not imported</span></th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Sample)
+                    {
+                        <tr>
+                            <td class="col-num">@row.RowNumber</td>
+                            @for (var i = 0; i < Model.ColumnLabels.Count; i++)
+                            {
+                                <td data-col="@i" dir="auto">@row.Cell(i)</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="sticky-actions" style="margin-top:20px">
+        <a class="btn btn--secondary" href="/import-export?kind=@s.Kind">@Ui.Icon("arrow-left")Upload a different file</a>
+        <button class="btn btn--primary btn--lg" type="submit">Check rows @Ui.Icon("arrow-right")</button>
+    </div>
+</form>

@@ -1,0 +1,19 @@
+@model DateOnly
+@* Previous / next school day and a date picker; keeps the rest of the page's query. *@
+@{
+    var today = SchoolWeek.Today;
+}
+<form class="week-nav" method="get" action="@Context.Request.Path" aria-label="Date">
+    <a class="icon-btn icon-btn--bordered" href="@Context.Request.WithQuery(("date", SchoolWeek.Iso(Model.AddDays(-1))))" aria-label="Previous day">@Ui.Icon("chevron-left")</a>
+    <div class="week-nav__label">
+        <span class="week-nav__eyebrow">@(Model == today ? "Today" : Model < today ? "Past day" : "Upcoming day")</span>
+        <strong>@Model.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</strong>
+    </div>
+    <a class="icon-btn icon-btn--bordered" href="@Context.Request.WithQuery(("date", SchoolWeek.Iso(Model.AddDays(1))))" aria-label="Next day">@Ui.Icon("chevron-right")</a>
+    <label class="visually-hidden" for="day-picker">Go to date</label>
+    <input class="input week-nav__picker" id="day-picker" type="date" name="date" value="@SchoolWeek.Iso(Model)" onchange="this.form.submit()" />
+    @if (Model != today)
+    {
+        <a class="btn btn--ghost btn--sm" href="@Context.Request.WithQuery(("date", null))">Today</a>
+    }
+</form>

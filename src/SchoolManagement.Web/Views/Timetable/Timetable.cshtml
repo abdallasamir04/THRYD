@@ -1,0 +1,92 @@
+@model TimetablePageViewModel
+@{
+    ViewData["Title"] = (Model.IsClass ? "Class Timetable · " : "Teacher Timetable · ") + Model.Name;
+    ViewData["Nav"] = "Timetable";
+    var g = Model.Grid;
+    var week = SchoolWeek.Iso(g.Week);
+    var noTimes = g.Slots.Where(s => s.IsActive).All(s => !s.HasTimes);
+    var sessions = g.Sessions.Count;
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs">
+            <li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li>
+            <li><a href="@(Model.IsClass ? "/timetable/classes" : "/timetable/teachers")">@(Model.IsClass ? "Class Timetable" : "Teacher Timetable")</a></li>
+            <li dir="auto">@Model.Name</li>
+        </ol>
+        <div class="profile">
+            <span class="@(Model.IsClass ? "class-card__code" : $"avatar avatar--lg avatar--{Ui.Tone(Model.Name)}")" aria-hidden="true">@(Model.IsClass ? Model.Name : Ui.Initials(Model.Name))</span>
+            <div>
+                <h1 class="page-title" dir="auto">@Model.Name</h1>
+                <p class="page-sub" dir="auto">@Model.Subtitle</p>
+            </div>
+        </div>
+    </div>
+    <div class="page-head__actions">
+        <div class="tt-switch">
+            <label class="visually-hidden" for="tt-switch">@(Model.IsClass ? "Switch class" : "Switch teacher")</label>
+            <select class="select" id="tt-switch" data-searchable data-navigate="@(Model.IsClass ? "/timetable/classes/" : "/timetable/teachers/")" data-week="@week">
+                @foreach (var o in Model.Others)
+                {
+                    <option value="@o.Id" selected="@(o.Id == Model.EntityId)" data-note="@o.Note">@o.Name</option>
+                }
+            </select>
+        </div>
+        @if (!Model.IsClass)
+        {
+            <a class="btn btn--secondary" href="/workload/teacher/@Model.EntityId?week=@week">@Ui.Icon("chart")Workload</a>
+        }
+        <a class="btn btn--secondary" href="/timetable/slots">@Ui.Icon("clock")Time slots</a>
+    </div>
+</div>
+
+<div class="tt-bar">
+    <partial name="_WeekNav" model="g.Week" />
+    <ul class="tt-legend" aria-label="Legend">
+        <li><span class="tt-swatch tt-swatch--filled"></span>Teaching session (every week)</li>
+        @if (Model.IsClass)
+        {
+            <li><span class="tt-swatch tt-swatch--sub"></span>Substitute this week</li>
+        }
+        else
+        {
+            <li><span class="tt-swatch tt-swatch--office"></span>Office hours (this week)</li>
+            <li><span class="tt-swatch tt-swatch--sub"></span>Substitution (this week)</li>
+        }
+        <li><span class="tt-swatch tt-swatch--empty"></span>Free</li>
+    </ul>
+</div>
+
+@if (noTimes)
+{
+    <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>The time slots have no times yet.</strong>Periods are numbered 1–10 until the school enters its times in <a href="/timetable/slots">Time Slots</a>. Assignments keep their slot when times are added.</div></div>
+}
+@if (!g.Editable)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>Past week — shown as history.</strong>Changes to the timetable take effect from the current week.</div></div>
+}
+
+@if (Model.Workload is { } w)
+{
+    <section class="card tt-summary" aria-label="Workload this week">
+        <div class="card__body">
+            <partial name="_WorkloadMeter" model="w" view-data="@(new ViewDataDictionary(ViewData) { ["Compact"] = true })" />
+            <dl class="tt-summary__cats">
+                @foreach (var cat in WorkloadRules.Categories)
+                {
+                    <div><dt>@WorkloadRules.Label(cat)</dt><dd class="num">@w.Breakdown[cat]</dd></div>
+                }
+            </dl>
+        </div>
+    </section>
+}
+else if (Model.IsClass && sessions == 0 && g.Editable)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>No sessions yet.</strong>Click any free slot to assign a subject and teacher. Each session counts once in the teacher's weekly workload.</div></div>
+}
+
+<section class="card tt-card" aria-label="Weekly timetable">
+    <partial name="_Grid" model="Model" />
+</section>

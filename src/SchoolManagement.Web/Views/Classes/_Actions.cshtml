@@ -1,0 +1,14 @@
+@model ClassRow
+<div class="row-actions">
+    <a class="icon-btn icon-btn--primary" href="/classes/edit/@Model.Id" data-modal title="Edit" aria-label="Edit @Model.Name">@Ui.Icon("pencil")</a>
+    <form asp-controller="Classes" asp-action="ToggleActive" asp-route-id="@Model.Id" method="post" data-ajax-form
+          data-confirm="@(Model.IsActive
+              ? $"{Model.Name} will no longer be offered for new students. Its {Model.StudentCount} student(s) stay in it."
+              : $"{Model.Name} will be offered again when adding or moving students.")"
+          data-confirm-title="@(Model.IsActive ? "Deactivate this class?" : "Activate this class?")"
+          data-confirm-button="@(Model.IsActive ? "Deactivate" : "Activate")" data-confirm-tone="warning">
+        <input type="hidden" name="active" value="@(Model.IsActive ? "false" : "true")" />
+        <button class="icon-btn icon-btn--primary" type="submit" title="@(Model.IsActive ? "Deactivate" : "Activate")" aria-label="@(Model.IsActive ? "Deactivate" : "Activate") @Model.Name">@Ui.Icon("power")</button>
+    </form>
+    <a class="icon-btn icon-btn--danger" href="/classes/delete/@Model.Id" data-modal title="Delete" aria-label="Delete @Model.Name">@Ui.Icon("trash")</a>
+</div>

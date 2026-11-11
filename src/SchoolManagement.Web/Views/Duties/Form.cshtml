@@ -1,0 +1,171 @@
+@model DutyFormModel
+@*
+    Add / edit a morning duty. The backup section appears only when the assigned staff member is
+    absent (operations.js); the server enforces the same rules (backup required when absent, backup
+    must differ from the assigned staff, a new backup always starts as a Pending request).
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var info = Model.Info;
+    var heading = Model.IsEdit ? "Edit duty" : $"Add {info.Name} duty";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "MorningDuty"; }
+    var action = Model.IsEdit ? $"/duties/{Model.Id}/edit" : "/duties/create";
+    var absent = Model.PrimaryAttendance == AttendanceStatus.Absent;
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties">Duties</a></li><li><a href="/duties?type=@DutyComponents.TypeSlug(info.Type)">@DutyComponents.TypeName(info.Type)</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents" data-duty-form>
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" name="Component" value="@Model.Component" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(info.Icon, "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">@info.Name · @DutyComponents.TypeName(info.Type)</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+
+        <div class="modal__body">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors" style="margin-bottom:14px"></div>
+            @if (Model.Staff.Count == 0)
+            {
+                <div class="notice notice--warning" style="margin-bottom:14px">
+                    @Ui.Icon("alert-triangle")
+                    <div class="notice__body"><strong>No staff members yet.</strong>Add teachers on the <a href="/teachers">Teachers</a> page before assigning duties.</div>
+                </div>
+            }
+            <div class="form-grid">
+                <div class="field">
+                    <label class="label" asp-for="Description">Duty description <span class="req" aria-hidden="true">*</span></label>
+                    <textarea class="input textarea" asp-for="Description" rows="2" dir="auto" maxlength="300" data-autofocus></textarea>
+                    <span asp-validation-for="Description" class="field-validation-error"></span>
+                </div>
+
+                <div class="form-grid form-grid--3">
+                    <div class="field">
+                        <label class="label" for="DutyDate">Date <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="date" id="DutyDate" name="DutyDate" value="@(Model.DutyDate is { } dd ? SchoolWeek.Iso(dd) : "")" required />
+                        <span asp-validation-for="DutyDate" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="StartTime">Start time <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="time" id="StartTime" name="StartTime" value="@Model.StartTime?.ToString("HH:mm")" required />
+                        <span asp-validation-for="StartTime" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="EndTime">End time <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="time" id="EndTime" name="EndTime" value="@Model.EndTime?.ToString("HH:mm")" required />
+                        <span asp-validation-for="EndTime" class="field-validation-error"></span>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="label" asp-for="Location">Duty location</label>
+                    <input class="input" asp-for="Location" dir="auto" maxlength="120" />
+                    <span asp-validation-for="Location" class="field-validation-error"></span>
+                </div>
+
+                @if (info.HasClasses)
+                {
+                    <fieldset class="field">
+                        <legend class="label">Class / classes covered <span class="req" aria-hidden="true">*</span></legend>
+                        <div class="check-chips">
+                            @foreach (var c in Model.Classes)
+                            {
+                                <label class="check-chip">
+                                    <input type="checkbox" name="ClassIds" value="@c.Id" checked="@Model.ClassIds.Contains(c.Id)" />
+                                    <span>@c.Name</span>
+                                </label>
+                            }
+                        </div>
+                        <span asp-validation-for="ClassIds" class="field-validation-error"></span>
+                    </fieldset>
+                }
+
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" asp-for="PrimaryStaffId">Assigned staff <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" asp-for="PrimaryStaffId" data-searchable data-duty-primary>
+                            <option value="">Choose a staff member…</option>
+                            @foreach (var s in Model.Staff)
+                            {
+                                <option value="@s.Id" data-note="@s.JobTitle">@s.FullName</option>
+                            }
+                        </select>
+                        <span asp-validation-for="PrimaryStaffId" class="field-validation-error"></span>
+                    </div>
+                    <fieldset class="field">
+                        <legend class="label">Assigned staff attendance</legend>
+                        <div class="segmented segmented--radio">
+                            @foreach (var a in new[] { AttendanceStatus.NotRecorded, AttendanceStatus.Present, AttendanceStatus.Absent })
+                            {
+                                <label>
+                                    <input type="radio" name="PrimaryAttendance" value="@a" checked="@(Model.PrimaryAttendance == a)" data-duty-attendance />
+                                    <span>@(a == AttendanceStatus.NotRecorded ? "Not recorded" : a.ToString())</span>
+                                </label>
+                            }
+                        </div>
+                        <span asp-validation-for="PrimaryAttendance" class="field-validation-error"></span>
+                    </fieldset>
+                </div>
+
+                <div class="backup-panel" data-duty-backup @(absent ? "" : "hidden")>
+                    <p class="backup-panel__title">@Ui.Icon("user-plus")The assigned staff member is absent: choose a backup.</p>
+                    <div class="field">
+                        <label class="label" asp-for="BackupStaffId">Backup staff <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" asp-for="BackupStaffId" data-searchable>
+                            <option value="">Choose a backup…</option>
+                            @foreach (var s in Model.Staff)
+                            {
+                                <option value="@s.Id" data-note="@s.JobTitle">@s.FullName</option>
+                            }
+                        </select>
+                        <span asp-validation-for="BackupStaffId" class="field-validation-error"></span>
+                        @if (Model.CurrentBackupId is not null)
+                        {
+                            <span class="hint">
+                                Current request: <strong>@(Model.BackupStatus == BackupRequestStatus.Rejected ? "Declined" : Model.BackupStatus.ToString())</strong>@(Model.BackupStatus == BackupRequestStatus.Accepted ? $" · attendance {(Model.BackupAttendance == AttendanceStatus.NotRecorded ? "not recorded" : Model.BackupAttendance.ToString().ToLowerInvariant())}" : "").
+                                Choosing a different person sends a new request (Pending).
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="hint">The backup is recorded as a Pending request. Record whether they accept, then their attendance.</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="label" asp-for="Notes">Operational notes</label>
+                    <textarea class="input textarea" asp-for="Notes" rows="3" dir="auto" maxlength="2000"></textarea>
+                    <span asp-validation-for="Notes" class="field-validation-error"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="@DutyComponents.Href(info)">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsEdit ? "Save duty" : "Add duty")</button>
+        </div>
+    </form>
+</div>

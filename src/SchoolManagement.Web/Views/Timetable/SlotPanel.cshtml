@@ -1,0 +1,69 @@
+@model SlotPanelModel
+@{
+    var modal = Context.Request.IsAjax();
+    var s = Model.Session;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = s.Subject; ViewData["Nav"] = "Timetable"; }
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var week = SchoolWeek.Iso(Model.Week);
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <div class="modal__head">
+        <span class="modal__icon">@Ui.Icon("graduation-cap", "icon--lg")</span>
+        <div>
+            <h2 class="modal__title" dir="auto">@s.Subject · @s.ClassName</h2>
+            <p class="modal__sub">@ScheduleRules.DayName(s.Day), @Model.Slot.Label (@Model.Slot.Times) · every week since @s.StartsOn.ToString("d MMM yyyy", c)</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+    <div class="modal__body form-grid">
+        <dl class="dl" style="font-size:0.875rem">
+            <dt>Teacher</dt><dd dir="auto"><a href="/timetable/teachers/@s.TeacherId?week=@week">@s.TeacherName</a></dd>
+            <dt>Department</dt><dd>@s.DepartmentName</dd>
+            <dt>Subject</dt><dd dir="auto">@s.Subject</dd>
+            @if (!string.IsNullOrEmpty(s.Notes)) { <dt>Notes</dt><dd dir="auto">@s.Notes</dd> }
+        </dl>
+        <div>
+            <p class="dept-card__label" style="margin-bottom:6px">Substitute in the week of @SchoolWeek.Label(Model.Week)</p>
+            @if (Model.Substitutions.Count == 0)
+            {
+                <p class="muted" style="font-size:0.85rem">None — @s.TeacherName teaches this period.</p>
+            }
+            else
+            {
+                @foreach (var p in Model.Substitutions)
+                {
+                    <div class="sub-line">
+                        <span>@Ui.Icon("swap", "icon--sm")<strong dir="auto">@p.TeacherName</strong>@(p.Description is null ? "" : " · " + p.Description)</span>
+                        <form action="/timetable/periods/@p.Id/remove" method="post" data-ajax-form data-confirm="The substitution by @p.TeacherName will be removed and their workload reduced by 1 period." data-confirm-title="Remove substitution?" data-confirm-button="Remove">
+                            @Html.AntiForgeryToken()
+                            <button class="btn btn--ghost btn--sm" type="submit">Remove</button>
+                        </form>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+    <div class="modal__foot" style="justify-content:space-between;flex-wrap:wrap">
+        @if (Model.Editable)
+        {
+            <form action="/timetable/sessions/@s.Id/remove" method="post" data-ajax-form
+                  data-confirm="@s.Subject with @s.TeacherName will be removed from @s.ClassName from this week on. Earlier weeks keep it in their history, and @s.TeacherName's workload drops by 1 period a week."
+                  data-confirm-title="Remove this session?" data-confirm-button="Remove session">
+                @Html.AntiForgeryToken()
+                <button class="btn btn--soft-danger" type="submit">@Ui.Icon("trash")Remove</button>
+            </form>
+        }
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-inline-start:auto">
+            @if (Model.Substitutions.Count == 0)
+            {
+                <a class="btn btn--secondary" href="/timetable/substitute?sessionId=@s.Id&week=@week" data-modal>@Ui.Icon("swap")Substitute this week</a>
+            }
+            @if (Model.Editable)
+            {
+                <a class="btn btn--primary" href="/timetable/sessions/@s.Id/edit" data-modal>@Ui.Icon("pencil")Edit session</a>
+            }
+        </div>
+    </div>
+</div>

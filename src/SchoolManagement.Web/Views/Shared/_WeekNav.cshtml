@@ -1,0 +1,17 @@
+@model DateOnly
+@* Previous / this / next school week. Links keep the other query values of the page. *@
+@{
+    var current = SchoolWeek.Current;
+}
+<nav class="week-nav" aria-label="Week">
+    <a class="icon-btn icon-btn--bordered" href="@Context.Request.WithQuery(("week", SchoolWeek.Iso(Model.AddDays(-7))))" aria-label="Previous week">@Ui.Icon("chevron-left")</a>
+    <div class="week-nav__label">
+        <span class="week-nav__eyebrow">@(Model == current ? "This week" : Model < current ? "Past week" : "Upcoming week")</span>
+        <strong>@SchoolWeek.Label(Model)</strong>
+    </div>
+    <a class="icon-btn icon-btn--bordered" href="@Context.Request.WithQuery(("week", SchoolWeek.Iso(Model.AddDays(7))))" aria-label="Next week">@Ui.Icon("chevron-right")</a>
+    @if (Model != current)
+    {
+        <a class="btn btn--ghost btn--sm" href="@Context.Request.WithQuery(("week", null))">Back to this week</a>
+    }
+</nav>

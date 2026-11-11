@@ -1,0 +1,17 @@
+@model double?
+@* Read-only star rating (1–5). Null shows "Not rated". *@
+@if (Model is { } v)
+{
+    var full = (int)Math.Round(v, MidpointRounding.AwayFromZero);
+    <span class="stars" role="img" aria-label="@v.ToString("0.##") out of 5">
+        @for (var i = 1; i <= 5; i++)
+        {
+            <span class="stars__star @(i <= full ? "is-on" : "")" aria-hidden="true">★</span>
+        }
+        <span class="stars__value num">@v.ToString("0.0#")</span>
+    </span>
+}
+else
+{
+    <span class="faint">Not rated</span>
+}

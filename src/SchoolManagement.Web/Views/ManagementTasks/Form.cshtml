@@ -1,0 +1,130 @@
+@model TaskFormModel
+@*
+    Create / edit a Management Team task. The due time needs a due date (staff.js enables it once a
+    date is chosen; the server and a database check constraint enforce the same rule).
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit task" : "New task";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "ManagementTasks"; }
+    var action = Model.IsEdit ? $"/management/tasks/{Model.Id}/edit" : "/management/tasks/create";
+    // A new task cannot be due in the past; an existing one keeps whatever date it has.
+    var minDue = Model.IsEdit ? SchoolWeek.Iso(ManagementTaskService.EarliestDue) : SchoolWeek.Iso(SchoolWeek.Today);
+    var maxDue = SchoolWeek.Iso(SchoolWeek.Today.AddYears(ManagementTaskService.MaxYearsAhead));
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/tasks">Tasks</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "clipboard-check", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">Management Team tasks only — teacher workload is managed under Staff Workload.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <input type="hidden" asp-for="Id" />
+            @if (Model.Members.Count == 0)
+            {
+                <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>No Management Team members yet.</strong>Add a team member before creating tasks.</div></div>
+            }
+            <div class="field">
+                <label class="label" asp-for="Title">Title <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Title" dir="auto" maxlength="200" placeholder="e.g. Prepare the KG stage parent meeting" data-autofocus />
+                <span asp-validation-for="Title" class="field-validation-error"></span>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="MemberId">Assigned to <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" asp-for="MemberId" data-searchable>
+                        <option value="">Choose a team member…</option>
+                        @foreach (var m in Model.Members)
+                        {
+                            <option value="@m.Id" selected="@(Model.MemberId == m.Id)" data-note="@ManagementPositions.Name(m.Position)">@m.FullName</option>
+                        }
+                    </select>
+                    <span asp-validation-for="MemberId" class="field-validation-error"></span>
+                </div>
+                <div class="form-grid form-grid--2" style="gap:12px">
+                    <div class="field">
+                        <label class="label" for="Priority">Priority</label>
+                        <select class="select" id="Priority" name="Priority">
+                            @foreach (var p in TaskLabels.Priorities)
+                            {
+                                <option value="@p" selected="@(Model.Priority == p)">@TaskLabels.Priority(p)</option>
+                            }
+                        </select>
+                        <span asp-validation-for="Priority" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="Status">Status</label>
+                        <select class="select" id="Status" name="Status">
+                            @foreach (var s in TaskLabels.Statuses)
+                            {
+                                <option value="@s" selected="@(Model.Status == s)">@TaskLabels.Status(s)</option>
+                            }
+                        </select>
+                        <span asp-validation-for="Status" class="field-validation-error"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="DueDate">Due date</label>
+                    <input class="input picker" type="date" id="DueDate" name="DueDate" value="@(Model.DueDate is { } dd ? SchoolWeek.Iso(dd) : "")"
+                           min="@minDue" max="@maxDue" data-clears="#DueTime" />
+                    <div class="picker-quick" aria-label="Quick due dates">
+                        <button type="button" data-date-quick="0" data-target="#DueDate">Today</button>
+                        <button type="button" data-date-quick="1" data-target="#DueDate">Tomorrow</button>
+                        <button type="button" data-date-quick="7" data-target="#DueDate">In a week</button>
+                        <button type="button" data-date-quick="clear" data-target="#DueDate">No due date</button>
+                    </div>
+                    <span asp-validation-for="DueDate" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="DueTime">Due time <span class="faint" style="font-weight:600">(optional)</span></label>
+                    <input class="input picker" type="time" id="DueTime" name="DueTime" value="@Model.DueTime?.ToString("HH:mm")" data-needs="#DueDate" />
+                    <p class="hint" data-time-hint hidden="@(Model.DueDate is not null)">Choose a due date first.</p>
+                    <span asp-validation-for="DueTime" class="field-validation-error"></span>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Description">Description</label>
+                <textarea class="input textarea" asp-for="Description" rows="3" dir="auto" maxlength="2000" placeholder="What needs to be done"></textarea>
+                <span asp-validation-for="Description" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Notes">Notes</label>
+                <textarea class="input textarea" asp-for="Notes" rows="2" dir="auto" maxlength="2000" placeholder="Progress notes, follow-ups, links…"></textarea>
+                <span asp-validation-for="Notes" class="field-validation-error"></span>
+            </div>
+        </div>
+
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/management/tasks">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit" disabled="@(Model.Members.Count == 0)">@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Create task")</button>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,172 @@
+@model DepartmentDetailsViewModel
+@{
+    var d = Model.Department;
+    var q = Model.Query;
+    ViewData["Title"] = d.Name;
+    ViewData["Nav"] = "Departments";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/staff/departments">Departments</a></li><li>@d.Name</li></ol>
+        <h1 class="page-title">@d.Name</h1>
+        @if (!string.IsNullOrWhiteSpace(d.Description))
+        {
+            <p class="page-sub" dir="auto" style="white-space:pre-line">@d.Description</p>
+        }
+        else
+        {
+            <p class="page-sub">No description yet. <a href="/staff/departments/@d.Id/edit" data-modal>Add one</a>.</p>
+        }
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/staff/departments/@d.Id/edit" data-modal>@Ui.Icon("pencil")Edit details</a>
+        @if (d.Name == "Second Language")
+        {
+            <a class="btn btn--secondary" href="/staff/departments/@d.Id/subcategories/create" data-modal>@Ui.Icon("plus")Add language</a>
+        }
+        <a class="btn btn--secondary" href="/staff/departments/@d.Id/subcategories">@Ui.Icon("layers")@(d.Rules is null ? "Subcategories" : $"Manage {d.Rules.Label.ToLowerInvariant()}s")</a>
+        <a class="btn btn--secondary" href="/staff/departments/@d.Id/head" data-modal>@Ui.Icon("crown")@(d.Head is null ? "Assign HOD" : "Change HOD")</a>
+        <a class="btn btn--secondary" href="/timetable/teachers?departmentId=@d.Id">@Ui.Icon("calendar")Timetables</a>
+        <a class="btn btn--primary" href="/staff/create?departmentId=@d.Id" data-modal>@Ui.Icon("user-plus")Add member</a>
+    </div>
+</div>
+
+<div class="grid-3-1">
+    <section class="card table-card" aria-labelledby="members-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="members-title">@Ui.Icon("users")Department staff</h2>
+                <p class="card__sub">@Ui.Plural(d.MemberCount, "member", "members") · the HOD is listed first.</p>
+            </div>
+        </div>
+        <form class="toolbar" action="/staff/departments/@d.Id" method="get" role="search" data-list-filter="#dept-members" style="border-radius:0">
+            <div class="toolbar__search input-icon">
+                @Ui.Icon("search")
+                <input class="input" type="search" name="search" value="@q.Search" placeholder="Search name or job title…" aria-label="Search department members" autocomplete="off" dir="auto" />
+            </div>
+            @if (d.Rules is { } rules)
+            {
+                <div class="toolbar__filter">
+                    <select class="select" name="subcategory" aria-label="Filter by @rules.Label.ToLowerInvariant()">
+                        <option value="">All @(rules.Label.ToLowerInvariant())s</option>
+                        @foreach (var o in rules.Options)
+                        {
+                            <option value="@o.Value" selected="@(q.Subcategory == o.Value)">@o.Value (@d.CountOf(o.Value))</option>
+                            @foreach (var s in o.Subjects.Where(_ => o.Subjects.Count > 1))
+                            {
+                                var key = o.Value + "|" + s;
+                                <option value="@key" selected="@(q.Subcategory == key)">&nbsp;&nbsp;@o.Value · @s (@d.CountOf(o.Value, s))</option>
+                            }
+                        }
+                    </select>
+                </div>
+            }
+            <div class="toolbar__sort">
+                <select class="select" name="sort" aria-label="Sort members">
+                    <option value="name" selected="@(q.Sort == "name")">Sort: Name</option>
+                    <option value="job" selected="@(q.Sort == "job")">Sort: Job title</option>
+                    @if (d.Rules is not null)
+                    {
+                        <option value="sub" selected="@(q.Sort == "sub")">Sort: @d.Rules.Label</option>
+                    }
+                    <option value="added" selected="@(q.Sort == "added")">Sort: Recently added</option>
+                </select>
+            </div>
+            <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+        </form>
+        <div id="dept-members" data-ajax-list data-refresh-page aria-live="polite">
+            <partial name="_Members" model="Model" />
+        </div>
+    </section>
+
+    <div class="stack">
+        <section class="card" aria-labelledby="hod-title">
+            <div class="card__head"><h2 class="card__title" id="hod-title">@Ui.Icon("crown")Head of Department</h2></div>
+            <div class="card__body hod-card">
+                @if (d.Head is { } h)
+                {
+                    <div class="hod-card__person">
+                        <span class="avatar avatar--lg avatar--@Ui.Tone(h.FullName)" aria-hidden="true">@Ui.Initials(h.FullName)</span>
+                        <div style="min-width:0">
+                            <a class="hod-card__name" href="/staff/@h.TeacherId" dir="auto">@h.FullName</a>
+                            <div class="person__meta" dir="auto">@(h.JobTitle ?? "Academic staff")</div>
+                        </div>
+                    </div>
+                    <dl class="dl" style="font-size:0.84rem">
+                        <dt>Since</dt><dd>@h.StartDate.ToString("d MMM yyyy", c)</dd>
+                        @if (!string.IsNullOrEmpty(h.ContactNumber))
+                        {
+                            <dt>Contact</dt><dd><a class="phone-link" href="tel:@h.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@h.ContactNumber</a></dd>
+                        }
+                        @if (!string.IsNullOrEmpty(h.Note))
+                        {
+                            <dt>Note</dt><dd dir="auto">@h.Note</dd>
+                        }
+                    </dl>
+                    <a class="btn btn--secondary btn--sm" href="/staff/departments/@d.Id/head" data-modal>@Ui.Icon("swap", "icon--sm")Change HOD</a>
+                }
+                else
+                {
+                    <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>No HOD assigned.</strong>Every department needs exactly one Head of Department, chosen from its members.</div></div>
+                    @if (d.MemberCount > 0)
+                    {
+                        <a class="btn btn--primary btn--sm" href="/staff/departments/@d.Id/head" data-modal>@Ui.Icon("crown", "icon--sm")Assign HOD</a>
+                    }
+                    else
+                    {
+                        <a class="btn btn--secondary btn--sm" href="/staff/create?departmentId=@d.Id" data-modal>@Ui.Icon("user-plus", "icon--sm")Add the first member</a>
+                    }
+                }
+            </div>
+        </section>
+
+        @if (d.Rules is { } r)
+        {
+            <section class="card" aria-labelledby="subs-title">
+                <div class="card__head"><h2 class="card__title" id="subs-title">@Ui.Icon("layers")@(r.Label)s</h2><a class="btn btn--ghost btn--sm" href="/staff/departments/@d.Id/subcategories">Manage</a></div>
+                <div class="card__body sub-tree">
+                    @foreach (var o in r.Options)
+                    {
+                        <div class="sub-tree__group">
+                            <a class="sub-tree__head" href="/staff/departments/@d.Id?subcategory=@Uri.EscapeDataString(o.Value)"><span>@o.Value</span><span class="badge badge--neutral">@d.CountOf(o.Value)</span></a>
+                            @if (o.Subjects.Count > 0)
+                            {
+                                <div class="sub-tree__items">
+                                    @foreach (var s in o.Subjects)
+                                    {
+                                        <a href="/staff/departments/@d.Id?subcategory=@Uri.EscapeDataString(o.Value + "|" + s)"><span class="sub-chip">@s<b>@d.CountOf(o.Value, s)</b></span></a>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        <section class="card" aria-labelledby="hodhist-title">
+            <div class="card__head"><h2 class="card__title" id="hodhist-title">@Ui.Icon("clock")HOD history</h2></div>
+            @if (Model.HeadHistory.Count == 0)
+            {
+                <div class="empty" style="padding:24px"><p class="empty__text">No HOD has been assigned yet.</p></div>
+            }
+            else
+            {
+                <ol class="timeline" style="margin:16px 22px">
+                    @foreach (var hh in Model.HeadHistory)
+                    {
+                        <li class="timeline__item @(hh.IsCurrent ? "timeline__item--accepted" : "timeline__item--withdrawn")">
+                            <span class="timeline__when">@hh.StartDate.ToString("d MMM yyyy", c) – @(hh.IsCurrent ? "now" : hh.EndDate?.ToString("d MMM yyyy", c))</span>
+                            <span dir="auto"><strong>@hh.FullName</strong>@(hh.IsCurrent ? " · current HOD" : "")</span>
+                            @if (hh.EndReason is not null) { <span class="timeline__note" dir="auto">@hh.EndReason</span> }
+                            @if (hh.Note is not null) { <span class="timeline__note" dir="auto">@hh.Note</span> }
+                            <span class="timeline__by faint">Assigned @Ui.DateTime(hh.AssignedAt)@(hh.AssignedBy is null ? "" : " by " + hh.AssignedBy)</span>
+                        </li>
+                    }
+                </ol>
+            }
+        </section>
+    </div>
+</div>

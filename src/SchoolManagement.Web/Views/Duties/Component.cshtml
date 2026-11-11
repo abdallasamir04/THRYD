@@ -1,0 +1,38 @@
+@model DutyListViewModel
+@{
+    ViewData["Title"] = Model.Info.Name;
+    ViewData["Nav"] = "MorningDuty";
+    var date = SchoolWeek.Iso(Model.Date);
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties?date=@date">Duties</a></li><li><a href="/duties?type=@DutyComponents.TypeSlug(Model.Info.Type)&date=@date">@DutyComponents.TypeName(Model.Info.Type)</a></li><li>@Model.Info.Name</li></ol>
+        <h1 class="page-title">@Model.Info.Name</h1>
+        @if (Model.Info.Grades is not null)
+        {
+            <p class="duty-component__grades duty-component__grades--lg">@Ui.Icon("graduation-cap", "icon--sm")@Model.Info.Grades</p>
+        }
+        <p class="page-sub">@Model.Info.Summary</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--primary" href="/duties/create?component=@Model.Info.Slug&date=@date" data-modal>@Ui.Icon("plus")Add duty</a>
+    </div>
+</div>
+
+<partial name="_DayNav" model="Model.Date" />
+
+@if (Model.Info.DetailsPending)
+{
+    <div class="notice">
+        @Ui.Icon("info")
+        <div class="notice__body">
+            <strong>Assembly and proadcast details are not set up yet.</strong>
+            The school will provide the assembly schedule, locations and proadcast procedures later. Until then, record each duty with the general fields below.
+        </div>
+    </div>
+}
+
+<div id="duty-list" data-ajax-list aria-live="polite">
+    <partial name="_List" model="Model" />
+</div>

@@ -1,0 +1,140 @@
+@model TeacherIndexViewModel
+@{
+    var q = Model.Query;
+    var r = Model.Result;
+    var exportUrl = "/teachers/export" + Context.Request.QueryString;
+    string AriaSort(string key) => (q.Sort ?? "name") == key ? (q.Dir == "desc" ? "descending" : "ascending") : "none";
+}
+
+<div class="results-bar">
+    <div class="results-bar__info">
+        <span><strong class="num">@Ui.Count(r.TotalCount)</strong> @(q.HasFilters ? "matching" : "") @(r.TotalCount == 1 ? "staff member" : "staff members")</span>
+        @if (!string.IsNullOrWhiteSpace(q.Department))
+        {
+            <span class="filter-chip">Department: @q.Department<a href="@Context.Request.WithQuery(("department", null), ("subcategory", null), ("page", null))" data-list-link aria-label="Clear department filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (!string.IsNullOrWhiteSpace(q.Subcategory))
+        {
+            <span class="filter-chip">@q.Subcategory<a href="@Context.Request.WithQuery(("subcategory", null), ("page", null))" data-list-link aria-label="Clear subcategory filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (!string.IsNullOrWhiteSpace(q.Search))
+        {
+            <span class="filter-chip">Search: “@q.Search.Trim()”<a href="@Context.Request.WithQuery(("search", null), ("page", null))" data-list-link aria-label="Clear search">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (!string.IsNullOrWhiteSpace(q.JobTitle))
+        {
+            <span class="filter-chip">Job title: @(q.JobTitle == TeacherListQuery.NoJobTitle ? "not set" : q.JobTitle)<a href="@Context.Request.WithQuery(("jobTitle", null), ("page", null))" data-list-link aria-label="Clear job title filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+    </div>
+    @if (r.TotalCount > 0)
+    {
+        <a class="btn btn--ghost btn--sm" href="@exportUrl">@Ui.Icon("download", "icon--sm")Export @(q.HasFilters ? "these" : "all") to Excel</a>
+    }
+</div>
+
+@if (r.TotalCount == 0)
+{
+    @if (Model.TotalTeachers == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("presentation")</span>
+            <p class="empty__title">No teachers yet</p>
+            <p class="empty__text">Add teachers with their job title and contact number, or import the staff list from Excel.</p>
+            <div class="empty__actions">
+                <a class="btn btn--primary" href="/teachers/create" data-modal>@Ui.Icon("user-plus")Add teacher</a>
+                <a class="btn btn--secondary" href="/import-export?kind=Teachers">@Ui.Icon("upload")Import from Excel</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("search")</span>
+            <p class="empty__title">No teachers match</p>
+            <p class="empty__text">Try part of the name, the last digits of the phone number, or another job title.</p>
+            <div class="empty__actions"><a class="btn btn--secondary" href="/teachers" data-list-link>Clear filters</a></div>
+        </div>
+    }
+}
+else
+{
+    <div class="table-wrap">
+        <table class="table table--stack">
+            <thead>
+                <tr>
+                    <th scope="col" class="col-num">#</th>
+                    <th scope="col" aria-sort="@AriaSort("name")">@SortHelper.SortLink(Context.Request, "name", "Staff name", q.Sort, q.Dir)</th>
+                    <th scope="col">Department</th>
+                    <th scope="col" aria-sort="@AriaSort("job")">@SortHelper.SortLink(Context.Request, "job", "Job title / Position", q.Sort, q.Dir)</th>
+                    <th scope="col">Contact number</th>
+                    <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @{ var n = r.FirstItem; }
+                @foreach (var t in r.Items)
+                {
+                    <tr>
+                        <td class="col-num">@(n++)</td>
+                        <td data-label="Teacher">
+                            <div class="person">
+                                <span class="avatar avatar--@Ui.Tone(t.FullName)" aria-hidden="true">@Ui.Initials(t.FullName)</span>
+                                <div style="min-width:0">
+                                    <div class="person__name" dir="auto"><a href="/staff/@t.Id">@t.FullName</a></div>
+                                    <div class="person__meta">Added @Ui.Date(t.CreatedAt)</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td data-label="Department">
+                            @if (!string.IsNullOrEmpty(t.DepartmentName))
+                            {
+                                <a class="badge badge--class" href="/staff/departments/@t.DepartmentId" style="text-decoration:none">@t.DepartmentName@(t.SubcategoryLabel.Length == 0 ? "" : $" · {t.SubcategoryLabel}")</a>
+                                @if (t.IsHead)
+                                {
+                                    <span class="hod-badge" style="margin-top:4px">@Ui.Icon("crown")HOD</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="faint">—</span>
+                            }
+                        </td>
+                        <td data-label="Job title">
+                            @if (string.IsNullOrEmpty(t.JobTitle))
+                            {
+                                <span class="faint">Not set</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge--job" dir="auto">@t.JobTitle</span>
+                            }
+                        </td>
+                        <td data-label="Contact number">
+                            @if (string.IsNullOrEmpty(t.ContactNumber))
+                            {
+                                <span class="faint">—</span>
+                            }
+                            else
+                            {
+                                <a class="phone-link" href="tel:@t.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@t.ContactNumber</a>
+                            }
+                        </td>
+                        <td class="col-actions">
+                            <div class="row-actions">
+                                <a class="icon-btn icon-btn--primary" href="/teachers/details/@t.Id" data-modal title="View details" aria-label="View @t.FullName">@Ui.Icon("eye")</a>
+                                <a class="icon-btn icon-btn--primary" href="/teachers/edit/@t.Id" data-modal title="Edit" aria-label="Edit @t.FullName">@Ui.Icon("pencil")</a>
+                                <form asp-controller="Teachers" asp-action="Delete" asp-route-id="@t.Id" method="post" data-ajax-form
+                                      data-confirm="@t.FullName will be removed from the teachers list. This cannot be undone."
+                                      data-confirm-title="Delete this teacher?" data-confirm-button="Delete teacher">
+                                    <button class="icon-btn icon-btn--danger" type="submit" title="Delete" aria-label="Delete @t.FullName">@Ui.Icon("trash")</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    var pager = PagerModel.From(r, r.TotalCount == 1 ? "teacher" : "teachers");
+    <partial name="_Pager" model="pager" />
+}

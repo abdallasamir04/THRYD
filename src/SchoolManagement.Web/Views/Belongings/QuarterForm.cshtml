@@ -1,0 +1,47 @@
+@model QuarterFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Quarter"; ViewData["Nav"] = "Belongings"; }
+    var q = Model.Quarter!;
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/belongings/quarters/@Model.Id/edit" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("calendar", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@q.YearName · Quarter @q.Number</h2>
+                <p class="modal__sub">Exactly 8 school weeks (Sunday–Thursday). Start and end on school days; the end date falls in the 8th week.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" asp-for="Name">Quarter name</label>
+                <input class="input" asp-for="Name" maxlength="50" data-autofocus />
+                <span asp-validation-for="Name" class="field-validation-error"></span>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="StartDate">Start date</label>
+                    <input class="input picker" type="date" id="StartDate" name="StartDate" value="@(Model.StartDate is { } s ? SchoolWeek.Iso(s) : "")" required data-val="true" data-val-required="Enter the start date." />
+                    <span asp-validation-for="StartDate" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="EndDate">End date</label>
+                    <input class="input picker" type="date" id="EndDate" name="EndDate" value="@(Model.EndDate is { } e ? SchoolWeek.Iso(e) : "")" required data-val="true" data-val-required="Enter the end date." />
+                    <span asp-validation-for="EndDate" class="field-validation-error"></span>
+                </div>
+            </div>
+            <p class="hint">Week 1 is the school week of the start date; days before the start or after the end are not part of the quarter. Quarters may not overlap.</p>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="/belongings/calendar">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save quarter</button>
+        </div>
+    </form>
+</div>

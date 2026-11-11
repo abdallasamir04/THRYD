@@ -1,0 +1,48 @@
+@model StudentIndexViewModel
+@{
+    ViewData["Title"] = "Students";
+    ViewData["Nav"] = "Students";
+    var q = Model.Query;
+    var activeClasses = Model.Classes.Count(c => c.IsActive);
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>People</li><li>Students</li></ol>
+        <h1 class="page-title">Students</h1>
+        <p class="page-sub">@Ui.Plural(Model.TotalStudents, "student", "students") across @Ui.Plural(activeClasses, "active class", "active classes"). Search, filter by class, and keep every record in the right class.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/import-export?kind=Students">@Ui.Icon("upload")Import from Excel</a>
+        @* Inside a class (classId in the URL) the form opens fixed to that class; otherwise it shows the class dropdown. *@
+        <a class="btn btn--primary" href="@(q.ClassId is { } cid ? $"/classes/{cid}/students/create" : "/students/create")" data-modal
+           data-class-context="#students-class-filter">@Ui.Icon("user-plus")Add student</a>
+    </div>
+</div>
+
+<section class="card table-card" aria-label="Student list">
+    <form class="toolbar" action="/students" method="get" role="search" data-list-filter="#students-list">
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" name="search" value="@q.Search" placeholder="Search by student name…" aria-label="Search by student name" autocomplete="off" dir="auto" />
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" id="students-class-filter" name="classId" aria-label="Filter by class" data-searchable>
+                <option value="">All classes</option>
+                @foreach (var c in Model.Classes)
+                {
+                    <option value="@c.Id" selected="@(q.ClassId == c.Id)" data-note="@(c.IsActive ? null : "Inactive")">@c.Name</option>
+                }
+            </select>
+        </div>
+        <input type="hidden" name="sort" value="@q.Sort" />
+        <input type="hidden" name="dir" value="@q.Dir" />
+        <input type="hidden" name="pageSize" value="@q.PageSize" />
+        <input type="hidden" name="page" value="" />
+        <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+    </form>
+
+    <div id="students-list" data-ajax-list aria-live="polite">
+        <partial name="_Table" model="Model" />
+    </div>
+</section>

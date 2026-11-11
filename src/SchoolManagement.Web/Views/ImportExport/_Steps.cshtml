@@ -1,0 +1,13 @@
+@model int
+@{
+    var steps = new[] { "Upload file", "Match columns", "Preview & check", "Done" };
+}
+<ol class="steps" aria-label="Import steps">
+    @for (var i = 0; i < steps.Length; i++)
+    {
+        var n = i + 1;
+        <li class="step @(n < Model ? "is-done" : n == Model ? "is-current" : "")" aria-current="@(n == Model ? "step" : null)">
+            <span class="step__n">@(n < Model ? "✓" : n.ToString())</span>@steps[i]
+        </li>
+    }
+</ol>

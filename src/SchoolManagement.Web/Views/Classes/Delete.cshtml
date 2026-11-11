@@ -1,0 +1,65 @@
+@model ClassDeleteModel
+@*
+    Deleting a class never deletes students: an empty class is deleted directly; a class with
+    students is deleted only after they are moved to another active class (one transaction).
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var c = Model.Class!;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = $"Delete {c.Name}"; ViewData["Nav"] = "Classes"; }
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form asp-controller="Classes" asp-action="Delete" asp-route-id="@c.Id" method="post"
+          data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        <div class="modal__head">
+            <span class="modal__icon modal__icon--danger">@Ui.Icon("trash", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Delete class @c.Name?</h2>
+                <p class="modal__sub">This cannot be undone.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors" style="margin-bottom:14px"></div>
+            @if (c.StudentCount == 0)
+            {
+                <p class="muted">@c.Name has no students. It will be removed from the class list.</p>
+            }
+            else
+            {
+                <div class="notice notice--warning" style="margin-bottom:16px">
+                    @Ui.Icon("alert-triangle")
+                    <div class="notice__body">
+                        <strong>@c.Name has @Ui.Plural(c.StudentCount, "student", "students").</strong>
+                        Students are never deleted with a class. Choose where to move them; then @c.Name is deleted.
+                        If the class is only closing for now, deactivate it instead.
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label" for="ReassignToClassId">Move the students to <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="ReassignToClassId" name="ReassignToClassId" data-searchable data-val="true" data-val-required="Choose the class to move the students to.">
+                        <option value="">Choose a class…</option>
+                        @foreach (var t in Model.Targets)
+                        {
+                            <option value="@t.Id" selected="@(Model.ReassignToClassId == t.Id)">@t.Name</option>
+                        }
+                    </select>
+                    <span asp-validation-for="ReassignToClassId" class="field-validation-error"></span>
+                </div>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/classes">Cancel</a>
+            }
+            <button class="btn btn--danger" type="submit">@Ui.Icon("trash")@(c.StudentCount == 0 ? "Delete class" : "Move students & delete")</button>
+        </div>
+    </form>
+</div>

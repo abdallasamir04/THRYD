@@ -1,0 +1,67 @@
+@model DepartmentEditModel
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Edit " + Model.Name; ViewData["Nav"] = "Departments"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/staff/departments">Departments</a></li><li><a href="/staff/departments/@Model.Id">@Model.Name</a></li><li>Edit</li></ol>
+            <h1 class="page-title">Edit @Model.Name</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/staff/departments/@Model.Id/edit" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("pencil", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Edit department details</h2>
+                <p class="modal__sub">@Model.Name · department names are fixed so reports and imports stay consistent.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field">
+                <span class="label">Department name</span>
+                <div class="input locked-field" aria-readonly="true">@Model.Name</div>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Description">Description</label>
+                <textarea class="input textarea" asp-for="Description" rows="4" dir="auto" maxlength="500" placeholder="What this department covers, which stages it teaches…" data-autofocus></textarea>
+                <span asp-validation-for="Description" class="field-validation-error"></span>
+                <p class="hint">Up to 500 characters. Leave empty to remove the description.</p>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" asp-for="SubcategoryLabel">Subcategory label</label>
+                    <input class="input" asp-for="SubcategoryLabel" maxlength="50" placeholder="e.g. Language, Subdepartment" />
+                    <span asp-validation-for="SubcategoryLabel" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" asp-for="SubjectLabel">Subject label</label>
+                    <input class="input" asp-for="SubjectLabel" maxlength="50" placeholder="e.g. Subject" />
+                    <span asp-validation-for="SubjectLabel" class="field-validation-error"></span>
+                </div>
+            </div>
+            <p class="hint">Labels shown on the staff form. The options themselves are managed under <a href="/staff/departments/@Model.Id/subcategories">Subcategories</a>.</p>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/staff/departments/@Model.Id">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save changes</button>
+        </div>
+    </form>
+</div>

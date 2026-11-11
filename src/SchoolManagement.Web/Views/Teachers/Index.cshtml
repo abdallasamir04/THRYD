@@ -1,0 +1,56 @@
+@model TeacherIndexViewModel
+@{
+    ViewData["Title"] = "Staff Members";
+    ViewData["Nav"] = "Staff";
+    var q = Model.Query;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li>Staff Members</li></ol>
+        <h1 class="page-title">Academic Staff Members</h1>
+        <p class="page-sub">@Ui.Plural(Model.TotalTeachers, "staff member", "staff members") across @Model.Departments.Count departments. Management Team members are listed under <a href="/management">Management Team</a>.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/staff/departments">@Ui.Icon("layers")Departments</a>
+        <a class="btn btn--secondary" href="/import-export?kind=Teachers">@Ui.Icon("upload")Import from Excel</a>
+        <a class="btn btn--primary" href="/teachers/create" data-modal>@Ui.Icon("user-plus")Add staff member</a>
+    </div>
+</div>
+
+<section class="card table-card" aria-label="Staff member list">
+    <form class="toolbar" action="/staff/members" method="get" role="search" data-list-filter="#teachers-list">
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" name="search" value="@q.Search" placeholder="Search by name or phone…" aria-label="Search by name or phone number" autocomplete="off" dir="auto" />
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="department" aria-label="Filter by department">
+                <option value="">All departments</option>
+                @foreach (var d in Model.Departments)
+                {
+                    <option value="@d.Name" selected="@(q.Department == d.Name)">@d.Name (@d.MemberCount)</option>
+                }
+            </select>
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="jobTitle" aria-label="Filter by job title" data-searchable>
+                <option value="">All job titles</option>
+                @foreach (var j in Model.JobTitles)
+                {
+                    <option value="@j.JobTitle" selected="@(q.JobTitle == j.JobTitle)" data-note="@j.Count">@j.JobTitle</option>
+                }
+                <option value="@TeacherListQuery.NoJobTitle" selected="@(q.JobTitle == TeacherListQuery.NoJobTitle)">Job title not set</option>
+            </select>
+        </div>
+        <input type="hidden" name="sort" value="@q.Sort" />
+        <input type="hidden" name="dir" value="@q.Dir" />
+        <input type="hidden" name="pageSize" value="@q.PageSize" />
+        <input type="hidden" name="page" value="" />
+        <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+    </form>
+
+    <div id="teachers-list" data-ajax-list aria-live="polite">
+        <partial name="~/Views/Teachers/_Table.cshtml" model="Model" />
+    </div>
+</section>

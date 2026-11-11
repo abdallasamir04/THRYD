@@ -1,0 +1,27 @@
+@model StaffOverviewViewModel
+@{
+    ViewData["Title"] = "Staff Duty Records";
+    ViewData["Nav"] = "StaffDuty";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li>Staff Duty Records</li></ol>
+        <h1 class="page-title">Staff Duty Records</h1>
+        <p class="page-sub">Each staff member's duties and evaluations. Open a person for their full duty history.</p>
+    </div>
+</div>
+
+<section class="card table-card" aria-label="Staff duty records">
+    <form class="toolbar" action="/staff" method="get" role="search" data-list-filter="#staff-list">
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" name="search" value="@Model.Search" placeholder="Search staff…" aria-label="Search staff" autocomplete="off" dir="auto" />
+        </div>
+        @* Without this the search would load the staff list instead of the duty records. *@
+        <input type="hidden" name="view" value="duties" />
+    </form>
+    <div id="staff-list" data-ajax-list aria-live="polite">
+        <partial name="_Overview" model="Model" />
+    </div>
+</section>

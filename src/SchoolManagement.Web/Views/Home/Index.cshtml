@@ -1,0 +1,201 @@
+@model DashboardViewModel
+@*
+    Dashboard: every figure is counted from the database on this request. No sample data.
+    "Students without a valid class" = students whose class is inactive (every student must have a class).
+*@
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["Nav"] = "Dashboard";
+    var d = Model.Data;
+    var hour = DateTime.Now.Hour;
+    var greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    var maxCount = Math.Max(1, d.Distribution.Count == 0 ? 1 : d.Distribution.Max(x => x.Count));
+    var shown = d.Distribution.Where(x => x.IsActive || x.Count > 0).ToList();
+    var maxTitle = Math.Max(1, d.TeachersByJobTitle.Count == 0 ? 1 : d.TeachersByJobTitle.Max(x => x.Count));
+}
+
+<section class="hero" aria-labelledby="hero-title">
+    <div style="position:relative;z-index:1">
+        <p class="hero__eyebrow">@Model.Profile.SchoolName@(string.IsNullOrEmpty(Model.Profile.AcademicYear) ? "" : " · " + Model.Profile.AcademicYear)</p>
+        <h1 id="hero-title">@greeting</h1>
+        <p>Students, teachers and classes at a glance.</p>
+        <p class="live"><span class="live__dot" aria-hidden="true"></span>Live data · @Ui.DateTime(d.GeneratedAtUtc)</p>
+    </div>
+    <div class="hero__actions">
+        <a class="btn btn--light" href="/students/create" data-modal>@Ui.Icon("user-plus")Add student</a>
+        <a class="btn btn--glass" href="/import-export">@Ui.Icon("upload")Import from Excel</a>
+    </div>
+</section>
+
+<ul class="kpis" aria-label="Totals">
+    <li><a class="kpi" href="/students">
+        <span class="kpi__icon">@Ui.Icon("graduation-cap")</span>
+        <span class="kpi__label">Total students</span>
+        <span class="kpi__value">@Ui.Count(d.TotalStudents)</span>
+        <span class="kpi__meta">Across @Ui.Plural(d.ActiveClasses, "active class", "active classes")</span>
+    </a></li>
+    <li><a class="kpi kpi--blue" href="/teachers">
+        <span class="kpi__icon">@Ui.Icon("presentation")</span>
+        <span class="kpi__label">Total teachers</span>
+        <span class="kpi__value">@Ui.Count(d.TotalTeachers)</span>
+        <span class="kpi__meta">@(d.TeachersWithoutContact == 0 ? "All have a contact number" : $"{d.TeachersWithoutContact} without a contact number")</span>
+    </a></li>
+    <li><a class="kpi kpi--teal" href="/classes">
+        <span class="kpi__icon">@Ui.Icon("door")</span>
+        <span class="kpi__label">Total classes</span>
+        <span class="kpi__value">@Ui.Count(d.TotalClasses)</span>
+        <span class="kpi__meta">@d.ActiveClasses active · @(d.TotalClasses - d.ActiveClasses) inactive · @d.ClassesWithoutStudents empty</span>
+    </a></li>
+    <li><a class="kpi @(d.StudentsInInactiveClasses == 0 ? "kpi--ok" : "kpi--warn")" href="/classes?status=inactive">
+        <span class="kpi__icon">@Ui.Icon(d.StudentsInInactiveClasses == 0 ? "check-circle" : "alert-triangle")</span>
+        <span class="kpi__label">Students without a valid class</span>
+        <span class="kpi__value">@Ui.Count(d.StudentsInInactiveClasses)</span>
+        <span class="kpi__meta">@(d.StudentsInInactiveClasses == 0 ? "Every student is in an active class" : "In inactive classes · move them")</span>
+    </a></li>
+</ul>
+
+@if (Model.Operations is { } ops)
+{
+    var day = SchoolWeek.Iso(ops.Date);
+    var a = ops.Arrivals;
+    <section class="ops" aria-labelledby="ops-title">
+        <div class="ops__head">
+            <h2 class="card__title" id="ops-title">@Ui.Icon("activity")Today's operations</h2>
+            <span class="muted">@ops.Date.ToString("dddd d MMMM", System.Globalization.CultureInfo.InvariantCulture) · totals only</span>
+        </div>
+        <ul class="ops__grid" aria-label="Operational indicators">
+            <li><a class="ops-tile ops-tile--ok" href="/duties/audit?from=@day&to=@day&status=covered"><span class="ops-tile__value num">@ops.DutyStatus[SchoolManagement.Web.Entities.DutyStatus.Covered]</span><span class="ops-tile__label">Duties covered</span></a></li>
+            <li><a class="ops-tile ops-tile--bad" href="/duties/audit?from=@day&to=@day&status=not-covered"><span class="ops-tile__value num">@ops.DutyStatus[SchoolManagement.Web.Entities.DutyStatus.NotCovered]</span><span class="ops-tile__label">Duties not covered</span></a></li>
+            <li><a class="ops-tile" href="/duties/audit?from=@day&to=@day&status=pending"><span class="ops-tile__value num">@ops.DutyStatus[SchoolManagement.Web.Entities.DutyStatus.Pending]</span><span class="ops-tile__label">Duties pending</span></a></li>
+            <li><a class="ops-tile ops-tile--info" href="/duties/audit?from=@day&to=@day&status=in-progress"><span class="ops-tile__value num">@ops.DutyStatus[SchoolManagement.Web.Entities.DutyStatus.InProgress]</span><span class="ops-tile__label">Duties in progress</span></a></li>
+            <li><a class="ops-tile" href="/staff"><span class="ops-tile__value num">@(ops.AverageRating?.ToString("0.0") ?? "—")<small>/5</small></span><span class="ops-tile__label">Staff duty performance (@ops.RatedAssignments rated)</span></a></li>
+            <li><a class="ops-tile ops-tile--ok" href="/arrivals?date=@day"><span class="ops-tile__value num">@(a.OnTimePercent is { } p ? p.ToString("0.#") + "%" : "—")</span><span class="ops-tile__label">Students on time (@a.OnTime of @(a.OnTime + a.Late))</span></a></li>
+            <li><a class="ops-tile ops-tile--warn" href="/arrivals?date=@day&show=late"><span class="ops-tile__value num">@a.Late</span><span class="ops-tile__label">Late arrivals today</span></a></li>
+            <li><a class="ops-tile ops-tile--muted" href="/arrivals?date=@day&show=missing"><span class="ops-tile__value num">@a.NotRecorded</span><span class="ops-tile__label">Students not yet recorded</span></a></li>
+        </ul>
+    </section>
+}
+
+<div class="grid-3-1">
+    <section class="card" aria-labelledby="dist-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="dist-title">@Ui.Icon("chart")Students by class</h2>
+                <p class="card__sub">Active classes, plus inactive classes that still have students.</p>
+            </div>
+            <div class="legend" aria-hidden="true">
+                <span><i class="l-filled"></i>Students</span>
+                <span><i class="l-empty"></i>Empty</span>
+                <span><i class="l-inactive"></i>Inactive</span>
+            </div>
+        </div>
+        @if (d.TotalStudents == 0)
+        {
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon("chart")</span>
+                <p class="empty__title">No students yet</p>
+                <p class="empty__text">The chart fills in as students are added to classes.</p>
+                <div class="empty__actions">
+                    <a class="btn btn--primary" href="/students/create" data-modal>@Ui.Icon("user-plus")Add student</a>
+                    <a class="btn btn--secondary" href="/import-export?kind=Students">@Ui.Icon("upload")Import students</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="dist">
+                <div class="dist__chart" role="img" aria-label="@string.Join(", ", shown.Select(x => $"{x.Name}: {x.Count}"))">
+                    @foreach (var x in shown)
+                    {
+                        var h = x.Count == 0 ? 0 : Math.Max(3, x.Count * 100.0 / maxCount);
+                        <a class="dist__col" href="/students?classId=@x.ClassId" title="@x.Name: @x.Count student(s)@(x.IsActive ? "" : " (inactive class)")">
+                            <span class="dist__val">@x.Count</span>
+                            <span class="dist__bar @(x.Count == 0 ? "dist__bar--empty" : "") @(x.IsActive ? "" : "dist__bar--inactive")" style="height:@(h.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></span>
+                        </a>
+                    }
+                </div>
+                <div class="dist__labels" aria-hidden="true">
+                    @foreach (var x in shown)
+                    {
+                        <span class="dist__label">@x.Name</span>
+                    }
+                </div>
+            </div>
+        }
+    </section>
+
+    <section class="card" aria-labelledby="quick-title">
+        <div class="card__head"><h2 class="card__title" id="quick-title">@Ui.Icon("sparkles")Quick actions</h2></div>
+        <nav class="quick" aria-label="Quick actions">
+            <a href="/students/create" data-modal><span class="q-icon">@Ui.Icon("user-plus")</span>Add student</a>
+            <a href="/teachers/create" data-modal><span class="q-icon">@Ui.Icon("presentation")</span>Add teacher</a>
+            <a href="/duties"><span class="q-icon">@Ui.Icon("shield-check")</span>Morning duty</a>
+            <a href="/workload"><span class="q-icon">@Ui.Icon("chart")</span>Teacher workload</a>
+            <a href="/import-export"><span class="q-icon">@Ui.Icon("upload")</span>Import Excel</a>
+            <a href="/classes"><span class="q-icon">@Ui.Icon("door")</span>Manage classes</a>
+        </nav>
+        @if (d.TeachersByJobTitle.Count > 0)
+        {
+            <div class="card__head" style="border-top:1px solid var(--color-border-subtle)"><h3 class="card__title" style="font-size:0.9rem">Teachers by job title</h3></div>
+            <div class="hbars">
+                @foreach (var j in d.TeachersByJobTitle.Take(6))
+                {
+                    <div class="hbar__row">
+                        <span class="hbar__label" dir="auto">@(j.JobTitle == "" ? "Not set" : j.JobTitle)</span>
+                        <span class="hbar__value">@j.Count</span>
+                        <span class="hbar__track"><span class="hbar__fill" style="width:@((j.Count * 100.0 / maxTitle).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%;display:block"></span></span>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+<div class="grid-2">
+    <section class="card" aria-labelledby="recent-students">
+        <div class="card__head">
+            <h2 class="card__title" id="recent-students">@Ui.Icon("graduation-cap")Recently added students</h2>
+            <a class="btn btn--ghost btn--sm" href="/students?sort=created&dir=desc">View all</a>
+        </div>
+        @if (d.RecentStudents.Count == 0)
+        {
+            <div class="empty"><p class="empty__text">No students yet.</p></div>
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var s in d.RecentStudents)
+                {
+                    <li class="list__item">
+                        <span class="avatar avatar--@Ui.Tone(s.FullName)" aria-hidden="true">@Ui.Initials(s.FullName)</span>
+                        <div class="list__main"><a class="list__title" href="/students/details/@s.Id" data-modal dir="auto">@s.FullName</a><span class="badge badge--class">@s.ClassName</span></div>
+                        <span class="list__end" title="@Ui.DateTime(s.CreatedAt)">@Ui.Ago(s.CreatedAt)</span>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+    <section class="card" aria-labelledby="recent-teachers">
+        <div class="card__head">
+            <h2 class="card__title" id="recent-teachers">@Ui.Icon("presentation")Recently added teachers</h2>
+            <a class="btn btn--ghost btn--sm" href="/teachers?sort=created&dir=desc">View all</a>
+        </div>
+        @if (d.RecentTeachers.Count == 0)
+        {
+            <div class="empty"><p class="empty__text">No teachers yet.</p></div>
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var t in d.RecentTeachers)
+                {
+                    <li class="list__item">
+                        <span class="avatar avatar--@Ui.Tone(t.FullName)" aria-hidden="true">@Ui.Initials(t.FullName)</span>
+                        <div class="list__main"><a class="list__title" href="/teachers/details/@t.Id" data-modal dir="auto">@t.FullName</a><span class="list__meta" dir="auto">@(t.JobTitle ?? "Job title not set")</span></div>
+                        <span class="list__end" title="@Ui.DateTime(t.CreatedAt)">@Ui.Ago(t.CreatedAt)</span>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+</div>

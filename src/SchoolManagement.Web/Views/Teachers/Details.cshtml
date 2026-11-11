@@ -1,0 +1,71 @@
+@model TeacherDetailsViewModel
+@{
+    var t = Model.Teacher;
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = t.FullName; ViewData["Nav"] = "Teachers"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/teachers">Teachers</a></li><li>Details</li></ol>
+            <h1 class="page-title">Teacher details</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <div class="modal__head">
+        <div class="profile">
+            <span class="avatar avatar--lg avatar--@Ui.Tone(t.FullName)" aria-hidden="true">@Ui.Initials(t.FullName)</span>
+            <div>
+                <h2 class="profile__name" dir="auto">@t.FullName</h2>
+                <p class="modal__sub">@(string.IsNullOrEmpty(t.JobTitle) ? "Teacher" : t.JobTitle)</p>
+            </div>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+    <div class="modal__body">
+        <section aria-labelledby="wl-title" style="margin-bottom:18px">
+            <h3 id="wl-title" class="section-label">Workload this week</h3>
+            <partial name="_WorkloadMeter" model="Model.Workload" />
+        </section>
+
+        <dl class="dl">
+            <dt>Full name</dt>
+            <dd dir="auto">@t.FullName</dd>
+            <dt>Job title</dt>
+            <dd dir="auto">@(string.IsNullOrEmpty(t.JobTitle) ? "Not set" : t.JobTitle)</dd>
+            <dt>Contact number</dt>
+            <dd>
+                @if (string.IsNullOrEmpty(t.ContactNumber))
+                {
+                    <span class="faint">Not set</span>
+                }
+                else
+                {
+                    <a class="phone-link" href="tel:@t.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@t.ContactNumber</a>
+                }
+            </dd>
+            <dt>Added</dt>
+            <dd>@Ui.DateTime(t.CreatedAt)</dd>
+            <dt>Last updated</dt>
+            <dd>@Ui.DateTime(t.UpdatedAt)</dd>
+        </dl>
+    </div>
+    <div class="modal__foot">
+        @if (modal)
+        {
+            <button class="btn btn--secondary" type="button" data-modal-close>Close</button>
+        }
+        else
+        {
+            <a class="btn btn--secondary" href="/teachers">Back to teachers</a>
+        }
+        <a class="btn btn--secondary" href="/teachers/edit/@t.Id" data-modal>@Ui.Icon("pencil")Edit</a>
+        <a class="btn btn--secondary" href="/staff/@t.Id">@Ui.Icon("shield-check")Duty history</a>
+        <a class="btn btn--primary" href="/workload/teacher/@t.Id">@Ui.Icon("chart")Manage workload</a>
+    </div>
+</div>
