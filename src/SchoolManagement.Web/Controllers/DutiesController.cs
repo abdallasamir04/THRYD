@@ -9,7 +9,7 @@ namespace SchoolManagement.Web.Controllers;
 
 /// <summary>Daily Operations → Morning Duty (Students Arrival Check, In-Class Morning, Morning Assembly / Proadcast).</summary>
 [Route("duties")]
-public class DutiesController(IDutyService duties, IClassService classes, IPeService pe) : AppController
+public class DutiesController(IDutyService duties, IClassService classes, IPeService pe, IStaffDutyService staffDuty) : AppController
 {
     /// <summary>
     /// Duties landing page: Morning, Midday and Dismissal cards (?type=morning | midday | dismissal opens
@@ -88,6 +88,17 @@ public class DutiesController(IDutyService duties, IClassService classes, IPeSer
             Locations = await duties.LocationsAsync(ct),
         };
         return IsAjax ? PartialView("_AuditTable", model) : View(model);
+    }
+
+    /// <summary>
+    /// Duty Audit → Staff Duty Records tab: each staff member's duty totals and average rating (the page that
+    /// was /staff?view=duties, which now redirects here). Same service, table and PDF as before.
+    /// </summary>
+    [HttpGet("audit/staff-records")]
+    public async Task<IActionResult> StaffRecords(string? search, CancellationToken ct)
+    {
+        var model = new StaffOverviewViewModel { Rows = await staffDuty.OverviewAsync(search, ct), Search = search };
+        return IsAjax ? PartialView("~/Views/Staff/_Overview.cshtml", model) : View(model);
     }
 
     /// <summary>Download Report: every duty session matching the audit filters (all pages).</summary>

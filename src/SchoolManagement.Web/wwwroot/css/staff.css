@@ -345,6 +345,25 @@ tr.is-selected td { background: var(--tint-primary); }
 .hub-card--cyan { --hub: var(--tone-cyan); --hub-soft: var(--tone-cyan-soft); }
 .hub-extra { display: flex; flex-wrap: wrap; gap: 8px; }
 .hub-extra .chip { text-decoration: none; }
+/* Students landing page: three large cards in one row (one per row on narrow screens). */
+.hub--large.hub--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .hub--large.hub--three { grid-template-columns: minmax(0, 1fr); } }
+
+/* Classes → stage pages: one card per group or grade, each with its class cards. */
+.stage-block .card__title a { color: inherit; }
+.stage-block__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.stage-note { display: flex; align-items: center; gap: 6px; margin: 0; }
+
+/* Duty Audit: Duty Audit / Staff Duty Records as two separate buttons; the current one is highlighted. */
+.audit-tabs { display: flex; flex-wrap: wrap; gap: 12px; }
+.audit-tab { min-height: 42px; padding: 9px 18px; }
+.audit-tab .icon { color: var(--color-text-muted); }
+.audit-tab[aria-current="page"] {
+    background: var(--tint-primary); border-color: var(--color-primary); color: var(--color-primary-ink);
+    box-shadow: 0 0 0 1px var(--color-primary);
+}
+.audit-tab[aria-current="page"] .icon { color: var(--color-primary-ink); }
+@media (max-width: 520px) { .audit-tab { flex: 1 1 100%; justify-content: center; } }
 
 /* ---------- Timetable ---------- */
 .tt-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }

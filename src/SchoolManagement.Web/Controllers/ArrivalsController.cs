@@ -6,7 +6,7 @@ using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
-/// <summary>Daily Operations → Student Attendance (route /arrivals): the fast daily checklist and the correction workflow.</summary>
+/// <summary>Students → Student Attendance (route /arrivals): the fast daily checklist and the correction workflow.</summary>
 [Route("arrivals")]
 public class ArrivalsController(IArrivalService arrivals, IClassService classes, IDutyService duties, ICurrentUser currentUser) : AppController
 {

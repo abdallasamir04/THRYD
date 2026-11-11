@@ -17,6 +17,8 @@
     </div>
 </div>
 
+<partial name="_AuditTabs" model='"audit"' />
+
 <section class="card table-card" aria-label="Duty audit records">
     <form class="toolbar toolbar--wrap" action="/duties/audit" method="get" role="search" data-list-filter="#audit-list">
         <div class="field toolbar__date"><label class="label" for="f-from">From</label><input class="input picker" type="date" id="f-from" name="from" value="@q.From" /></div>

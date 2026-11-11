@@ -1,87 +1,54 @@
-@model ClassIndexViewModel
+@model HubViewModel
+@*
+    Classes landing page: four stage cards (KG Stages, Elementary, Middle School, High School), the same
+    large cards as the Staff landing page. A class's stage comes from its grade (see ClassStages).
+*@
 @{
-    ViewData["Title"] = "Classes";
-    ViewData["Nav"] = "Classes";
-    var inactive = Model.TotalClasses - Model.ActiveClasses;
+    ViewData["Title"] = Model.Title;
+    ViewData["Nav"] = Model.Nav;
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Academics</li><li>Classes</li></ol>
-        <h1 class="page-title">Classes</h1>
-        <p class="page-sub">Every student belongs to one of these classes. Deactivate a class to stop new placements without touching its students.</p>
+        <ol class="crumbs">
+            @foreach (var (label, href) in Model.Crumbs)
+            {
+                <li>@if (href is null) { <span aria-current="page">@label</span> } else { <a href="@href">@label</a> }</li>
+            }
+        </ol>
+        <h1 class="page-title">@Model.Title</h1>
+        <p class="page-sub">@Model.Subtitle</p>
     </div>
     <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/classes/all">@Ui.Icon("list")All classes</a>
         <partial name="_Download" model='DownloadLink.Report("/classes/pdf")' />
-        <a class="btn btn--primary" href="/classes/create" data-modal>@Ui.Icon("plus")Add class</a>
     </div>
 </div>
 
-<ul class="kpis" aria-label="Class totals">
-    <li class="kpi">
-        <span class="kpi__icon">@Ui.Icon("door")</span>
-        <p class="kpi__label">Classes</p>
-        <p class="kpi__value">@Ui.Count(Model.TotalClasses)</p>
-        <p class="kpi__meta">@Ui.Count(Model.ActiveClasses) active · @Ui.Count(inactive) inactive</p>
-    </li>
-    <li class="kpi kpi--teal">
-        <span class="kpi__icon">@Ui.Icon("check-circle")</span>
-        <p class="kpi__label">Active classes</p>
-        <p class="kpi__value">@Ui.Count(Model.ActiveClasses)</p>
-        <p class="kpi__meta">Open for new students</p>
-    </li>
-    <li class="kpi kpi--blue">
-        <span class="kpi__icon">@Ui.Icon("graduation-cap")</span>
-        <p class="kpi__label">Students placed</p>
-        <p class="kpi__value">@Ui.Count(Model.TotalStudents)</p>
-        <p class="kpi__meta">@(Model.ActiveClasses == 0 ? "No active classes" : $"≈ {Model.TotalStudents / (double)Math.Max(1, Model.ActiveClasses):0.#} per active class")</p>
-    </li>
-    <li class="kpi kpi--orange">
-        <span class="kpi__icon">@Ui.Icon("power")</span>
-        <p class="kpi__label">Inactive classes</p>
-        <p class="kpi__value">@Ui.Count(inactive)</p>
-        <p class="kpi__meta">Hidden from new placements</p>
-    </li>
-</ul>
+<nav class="hub hub--large" aria-label="Class stages">
+    @foreach (var c in Model.Cards)
+    {
+        <a class="hub-card hub-card--@c.Tone" href="@c.Href">
+            <span class="hub-card__icon" aria-hidden="true">@Ui.Icon(c.Icon)</span>
+            <span class="hub-card__body">
+                <span class="hub-card__title">@c.Title</span>
+                <span class="hub-card__text">@c.Description</span>
+                @if (c.Meta is not null)
+                {
+                    <span class="hub-card__meta">@c.Meta</span>
+                }
+            </span>
+            <span class="hub-card__go" aria-hidden="true">@Ui.Icon("arrow-right")</span>
+        </a>
+    }
+</nav>
 
-<section class="card table-card" aria-label="Class list">
-    <form class="toolbar" action="/classes" method="get" role="search" data-list-filter="#classes-list">
-        <div class="toolbar__search input-icon">
-            @Ui.Icon("search")
-            <input class="input" type="search" name="search" value="@Model.Search" placeholder="Find a class, e.g. G5 or KG1…" aria-label="Find a class" autocomplete="off" />
-        </div>
-        <div class="toolbar__filter">
-            <select class="select" name="status" aria-label="Status">
-                <option value="">All statuses</option>
-                <option value="active" selected="@(Model.Status == "active")">Active only</option>
-                <option value="inactive" selected="@(Model.Status == "inactive")">Inactive only</option>
-            </select>
-        </div>
-        <div class="toolbar__end">
-            <div class="segmented" role="group" aria-label="Layout">
-                <button type="submit" name="view" value="grid" aria-pressed="@(Model.View == "grid" ? "true" : "false")" data-view-toggle>@Ui.Icon("grid", "icon--sm")Cards</button>
-                <button type="submit" name="view" value="table" aria-pressed="@(Model.View == "table" ? "true" : "false")" data-view-toggle>@Ui.Icon("list", "icon--sm")Table</button>
-            </div>
-        </div>
-        <input type="hidden" name="view" value="@Model.View" data-view-value />
-    </form>
-
-    <div id="classes-list" data-ajax-list data-refresh-page aria-live="polite">
-        <partial name="_List" model="Model" />
+@if (Model.Extra.Count > 0)
+{
+    <div class="hub-extra">
+        @foreach (var (label, href, icon) in Model.Extra)
+        {
+            <a class="chip" href="@href">@Ui.Icon(icon)@label</a>
+        }
     </div>
-</section>
-
-@section Scripts {
-    <script>
-        // Cards / table toggle: remember the choice in the filter form, then reload the list.
-        document.querySelectorAll("[data-view-toggle]").forEach(function (b) {
-            b.addEventListener("click", function (e) {
-                e.preventDefault();
-                var form = b.closest("form");
-                form.querySelector("[data-view-value]").value = b.value;
-                document.querySelectorAll("[data-view-toggle]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
-                form.requestSubmit();
-            });
-        });
-    </script>
 }

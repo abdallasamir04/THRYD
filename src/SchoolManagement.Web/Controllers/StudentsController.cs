@@ -9,6 +9,40 @@ public class StudentsController(IStudentService students, IClassService classes,
 {
     public const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+    /// <summary>
+    /// Students landing page (sidebar → Students): Belongings, Student Attendance and Behavioural / Discipline.
+    /// Each card opens the existing module at its own route (/belongings, /arrivals); the student list stays at /students.
+    /// </summary>
+    [HttpGet("/students/hub")]
+    public async Task<IActionResult> Hub(CancellationToken ct)
+    {
+        var total = await students.CountAsync(ct);
+        var active = (await classes.OptionsAsync(null, ct)).Count;
+        return View("~/Views/Staff/Hub.cshtml", new HubViewModel
+        {
+            Title = "Students",
+            Subtitle = $"{Common.Ui.Plural(total, "student", "students")} across {Common.Ui.Plural(active, "active class", "active classes")}. Choose an area.",
+            Crumbs = [("Dashboard", "/"), ("Students", null)],
+            Large = true,
+            Variant = "three",
+            Nav = "Students",
+            Cards =
+            [
+                new("/belongings", "inbox", "Belongings",
+                    "Daily personal belongings and academic materials per student, with readiness by day, week and quarter.", "Personal belongings · academic materials", "teal"),
+                new("/arrivals", "clock", "Student Attendance",
+                    "Record each student's arrival for the day, with arrival times, the daily checklist and corrections.", "Daily checklist", "blue"),
+                new("/students/behaviour", "flag", "Behavioural / Discipline",
+                    "Behaviour and discipline records for students.", "Coming soon", "amber"),
+            ],
+            Extra = [("Student list", "/students", "users"), ("Import students", "/import-export?kind=Students", "upload")],
+        });
+    }
+
+    /// <summary>Students → Behavioural / Discipline: placeholder until the module is built (no records yet).</summary>
+    [HttpGet("/students/behaviour")]
+    public IActionResult Behaviour() => View();
+
     /// <summary>Student profile with the Arrival & Attendance History (recorded days only) and Transfer History.</summary>
     [HttpGet]
     public async Task<IActionResult> Profile(int id, string? from, string? to, string? order, CancellationToken ct)

@@ -17,8 +17,8 @@
     <li class="summary-tile summary-tile--muted"><span class="summary-tile__value num">@s.NotRecorded</span><span class="summary-tile__label">Not recorded</span></li>
 </ul>
 
-<section class="card table-card" aria-label="Arrival checklist">
-    <div class="toolbar">
+<section class="card table-card arrival-card" aria-label="Arrival checklist">
+    <div class="toolbar arrival-toolbar">
         <div class="segmented" role="group" aria-label="Show">
             <button type="button" data-arrival-filter="all" aria-pressed="@Tab("all")">All</button>
             <button type="button" data-arrival-filter="missing" aria-pressed="@Tab("missing")">Not recorded <span class="count">@s.NotRecorded</span></button>
@@ -39,7 +39,7 @@
 
     @if (isFuture)
     {
-        <div class="notice notice--warning" style="margin:14px 18px">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>This date is in the future.</strong>Arrivals can be recorded on the day or afterwards.</div></div>
+        <div class="notice notice--warning arrival-notice">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>This date is in the future.</strong>Arrivals can be recorded on the day or afterwards.</div></div>
     }
 
     @if (c.Rows.Count == 0)
@@ -71,7 +71,7 @@
                         if (!r.IsRecorded)
                         {
                             <tr class="arrival-row" data-student="@r.StudentId" data-state="missing" data-name="@r.StudentName.ToLowerInvariant()">
-                                <td><div class="person__name" dir="auto">@r.StudentName</div><span class="badge badge--class">@r.ClassName</span></td>
+                                <td><div class="arrival-cell"><div class="person__name" dir="auto">@r.StudentName</div><span class="badge badge--class">@r.ClassName</span></div></td>
                                 <td>
                                     @if (!isFuture)
                                     {
@@ -97,7 +97,7 @@
                                     </select>
                                 </td>
                                 <td><input class="input input--sm" data-field="notes" maxlength="500" aria-label="Notes for @r.StudentName" dir="auto" disabled="@isFuture" /></td>
-                                <td><span class="badge badge--neutral" data-row-status>Not recorded</span><div class="row-error" data-row-error></div></td>
+                                <td><div class="arrival-cell"><span class="badge badge--neutral" data-row-status>Not recorded</span><div class="row-error" data-row-error></div></div></td>
                             </tr>
                         }
                         else
@@ -105,7 +105,7 @@
                             var late = r.Late == LateStatus.Late;
                             var state = r.Status == ArrivalStatus.Absent ? "absent" : late ? "late" : "present";
                             <tr class="arrival-row is-recorded @(late ? "is-late" : "") @(r.Status == ArrivalStatus.Absent ? "is-absent" : "")" data-student="@r.StudentId" data-state="@state" data-name="@r.StudentName.ToLowerInvariant()">
-                                <td><div class="person__name" dir="auto"><a href="/students/profile/@r.StudentId">@r.StudentName</a></div><span class="badge badge--class">@r.ClassName</span></td>
+                                <td><div class="arrival-cell"><div class="person__name" dir="auto"><a href="/students/profile/@r.StudentId">@r.StudentName</a></div><span class="badge badge--class">@r.ClassName</span></div></td>
                                 <td>
                                     @if (r.Status == ArrivalStatus.Present)
                                     {
@@ -119,17 +119,21 @@
                                 <td class="num">
                                     @if (r.Time is { } t)
                                     {
-                                        <strong>@t.ToString(t.Second == 0 ? "HH:mm" : "HH:mm:ss")</strong>
-                                        @if (late) { <span class="badge badge--error">Late</span> }
-                                        else if (r.Late == LateStatus.OnTime) { <span class="badge badge--success">On time</span> }
+                                        <div class="arrival-time">
+                                            <strong>@t.ToString(t.Second == 0 ? "HH:mm" : "HH:mm:ss")</strong>
+                                            @if (late) { <span class="badge badge--error">Late</span> }
+                                            else if (r.Late == LateStatus.OnTime) { <span class="badge badge--success">On time</span> }
+                                        </div>
                                     }
                                     else { <span class="faint">—</span> }
                                 </td>
-                                <td>@(r.Status == ArrivalStatus.Present ? Arrivals.Method(r.Method) : "—")@if (r.Location is not null) { <div class="person__meta" dir="auto">@r.Location</div> }</td>
-                                <td><span dir="auto">@(r.Notes ?? "")</span>@if (r.ReceivedByName is not null) { <div class="person__meta" dir="auto">Received by @r.ReceivedByName@(r.Confirmed ? " ✓" : "")</div> }</td>
+                                <td><div class="arrival-cell"><span>@(r.Status == ArrivalStatus.Present ? Arrivals.Method(r.Method) : "—")</span>@if (r.Location is not null) { <div class="person__meta" dir="auto">@r.Location</div> }</div></td>
+                                <td><div class="arrival-cell"><span dir="auto">@(r.Notes ?? "")</span>@if (r.ReceivedByName is not null) { <div class="person__meta" dir="auto">Received by @r.ReceivedByName@(r.Confirmed ? " ✓" : "")</div> }</div></td>
                                 <td>
-                                    <div class="person__meta">Recorded by @(r.RecordedBy ?? "—")@(r.Corrections > 0 ? $" · corrected {r.Corrections}×" : "")</div>
-                                    <a class="btn btn--ghost btn--sm" href="/arrivals/@r.RecordId/correct" data-modal>@Ui.Icon("pencil", "icon--sm")Correct</a>
+                                    <div class="arrival-cell">
+                                        <div class="person__meta">Recorded by @(r.RecordedBy ?? "—")@(r.Corrections > 0 ? $" · corrected {r.Corrections}×" : "")</div>
+                                        <a class="btn btn--ghost btn--sm" href="/arrivals/@r.RecordId/correct" data-modal>@Ui.Icon("pencil", "icon--sm")Correct</a>
+                                    </div>
                                 </td>
                             </tr>
                         }

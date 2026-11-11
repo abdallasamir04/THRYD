@@ -11,14 +11,19 @@ namespace SchoolManagement.Web.Controllers;
 public class StaffController(IStaffDutyService staffDuty, IDutyService duties, IWorkloadService workload, ITeacherService teachers, ICurrentUser currentUser,
     IDepartmentService departments, IManagementService management, IManagementTaskService tasks, ITimetableService timetable) : AppController
 {
-    /// <summary>Staff landing page: choose Academic Staff or Management Team. (?view=duties keeps the Staff Duty Records page.)</summary>
+    /// <summary>
+    /// Staff landing page: choose Academic Staff or Management Team. ?view=duties (the old Staff Duty Records
+    /// page) now lives in Duty Audit → Staff Duty Records; old links redirect there with their search.
+    /// </summary>
     [HttpGet("")]
     public async Task<IActionResult> Index([FromQuery] TeacherListQuery query, string? view, CancellationToken ct)
     {
         if (view == "duties")
         {
-            var dutyModel = new StaffOverviewViewModel { Rows = await staffDuty.OverviewAsync(query.Search, ct), Search = query.Search };
-            return IsAjax ? PartialView("_Overview", dutyModel) : View("Index", dutyModel);
+            if (IsAjax)
+                return PartialView("_Overview", new StaffOverviewViewModel { Rows = await staffDuty.OverviewAsync(query.Search, ct), Search = query.Search });
+            return Redirect("/duties/audit/staff-records"
+                + (string.IsNullOrWhiteSpace(query.Search) ? "" : "?search=" + Uri.EscapeDataString(query.Search)));
         }
 
         var depts = await departments.ListAsync(new DepartmentListQuery(), ct);

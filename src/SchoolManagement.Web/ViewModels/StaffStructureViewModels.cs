@@ -19,6 +19,9 @@ public sealed class HubViewModel
     public required IReadOnlyList<HubCard> Cards { get; init; }
     public bool Large { get; init; }
 
+    /// <summary>Extra layout modifier for the card grid, e.g. "three" → hub--three (three large cards in a row).</summary>
+    public string? Variant { get; init; }
+
     /// <summary>Sidebar item to highlight.</summary>
     public string Nav { get; init; } = "Staff";
     public IReadOnlyList<(string Label, string Href, string Icon)> Extra { get; init; } = [];

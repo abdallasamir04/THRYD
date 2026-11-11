@@ -30,6 +30,14 @@ public interface IClassService
     Task<string?> NextNameAsync(string stage, string section, CancellationToken ct = default);
     /// <summary>Creates the next class in a stage + section; the number is calculated on the server.</summary>
     Task<ServiceResult> CreateInSectionAsync(string stage, string section, int capacity, bool isActive, CancellationToken ct = default);
+
+    /// <summary>The name the next class of a grade will get, e.g. KG1C after KG1A and KG1B.</summary>
+    Task<string?> NextNameInGradeAsync(string stage, int grade, CancellationToken ct = default);
+    /// <summary>
+    /// Creates a class in a grade (Classes → stage → Add Class). An empty <paramref name="section"/> takes the
+    /// next letter after the grade's highest section; the name is checked for duplicates on the server.
+    /// </summary>
+    Task<ServiceResult> CreateInGradeAsync(string stage, int grade, string? section, int capacity, bool isActive, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -71,6 +79,28 @@ public static class ClassNumbering
             .Where(p => p is { } x && x.Stage == stage && x.Section == section)
             .Select(p => p!.Value.Number)
             .DefaultIfEmpty(0).Max() + 1;
+
+    /// <summary>
+    /// Next section of a grade: the letter after the grade's highest section (A, B → C; Z → AA), or A for a
+    /// grade without classes. Null when the three-letter limit is used up (ZZZ).
+    /// </summary>
+    public static string? NextSection(IEnumerable<string> existingNames, string stage, int grade)
+    {
+        var highest = existingNames.Select(Parse)
+            .Where(p => p is { } x && x.Stage == stage && x.Number == grade)
+            .Select(p => p!.Value.Section)
+            .OrderBy(s => s.Length).ThenBy(s => s, StringComparer.Ordinal)
+            .LastOrDefault();
+        if (highest is null) return "A";
+
+        var chars = highest.ToCharArray();
+        for (var i = chars.Length - 1; i >= 0; i--)
+        {
+            if (chars[i] < 'Z') { chars[i]++; return new string(chars); }
+            chars[i] = 'A';
+        }
+        return chars.Length >= 3 ? null : "A" + new string(chars);
+    }
 }
 
 public sealed class ClassService(SchoolDbContext db) : IClassService
@@ -171,6 +201,43 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
 
         var names = await db.Classes.AsNoTracking().Select(c => c.Name).ToListAsync(ct);
         var name = $"{code}{ClassNumbering.NextNumber(names, code!, sec!)}{sec}";
+        return await AddNumberedClassAsync(tx, name, capacity, isActive, ct);
+    }
+
+    public async Task<string?> NextNameInGradeAsync(string stage, int grade, CancellationToken ct = default)
+    {
+        var code = ClassNumbering.NormalizeStage(stage);
+        if (code is null || grade is < 1 or > 999) return null;
+        var names = await db.Classes.AsNoTracking().Select(c => c.Name).ToListAsync(ct);
+        return ClassNumbering.NextSection(names, code, grade) is { } sec ? $"{code}{grade}{sec}" : null;
+    }
+
+    public async Task<ServiceResult> CreateInGradeAsync(string stage, int grade, string? section, int capacity, bool isActive, CancellationToken ct = default)
+    {
+        var result = ServiceResult.Ok();
+        var code = ClassNumbering.NormalizeStage(stage);
+        var typed = string.IsNullOrWhiteSpace(section) ? null : ClassNumbering.NormalizeSection(section);
+        if (code is null) result.AddError("GradeLevel", "Choose KG or Grade.");
+        if (grade is < 1 or > 999) result.AddError("GradeNumber", "Choose a grade.");
+        if (!string.IsNullOrWhiteSpace(section) && typed is null)
+            result.AddError("Section", "Enter a section of 1–3 letters (A–Z), e.g. C, or leave it empty for the next letter.");
+        if (capacity is < 1 or > 1000) result.AddError("Capacity", "Enter a capacity between 1 and 1,000.");
+        if (!result.Succeeded) return result;
+
+        // Same lock as CreateInSectionAsync: two people adding to one grade cannot both get the same letter.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlRawAsync(
+            "EXEC sp_getapplock @Resource = N'classes:numbering', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000", ct);
+
+        var names = await db.Classes.AsNoTracking().Select(c => c.Name).ToListAsync(ct);
+        var sec = typed ?? ClassNumbering.NextSection(names, code!, grade);
+        if (sec is null) return ServiceResult.Fail("Section", "Every automatic section letter is used in this grade. Enter a section.");
+        return await AddNumberedClassAsync(tx, $"{code}{grade}{sec}", capacity, isActive, ct);
+    }
+
+    /// <summary>Inserts a class whose name was calculated under the numbering lock, then commits.</summary>
+    private async Task<ServiceResult> AddNumberedClassAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction tx, string name, int capacity, bool isActive, CancellationToken ct)
+    {
         if (await NameExistsAsync(name, null, ct)) return DuplicateName(name);
 
         var entity = new SchoolClass

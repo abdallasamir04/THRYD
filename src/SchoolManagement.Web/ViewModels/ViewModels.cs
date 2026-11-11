@@ -151,6 +151,45 @@ public sealed class ClassFormModel
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Sections { get; set; } = new Dictionary<string, IReadOnlyList<string>>();
     /// <summary>Preview of the next class name per stage + existing section, e.g. KG3A.</summary>
     public IReadOnlyList<string> NextNames { get; set; } = [];
+
+    /// <summary>
+    /// Set when the form is opened from a stage group (Classes → KG Stages → KG1 → Add class): the grade is
+    /// chosen from that group only and the section letter is assigned automatically.
+    /// </summary>
+    public string? Group { get; set; }
+
+    [Display(Name = "Grade")]
+    public int? GradeNumber { get; set; }
+
+    /// <summary>Grades of the group with the name the next class of each will get (e.g. 1 → "KG1C").</summary>
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
+    public IReadOnlyList<(int Number, string Label, string? NextName)> GradeOptions { get; set; } = [];
+
+    /// <summary>Breadcrumb / back links of the group (stage title + href, group title + href).</summary>
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
+    public (string Title, string Href)? StageLink { get; set; }
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
+    public (string Title, string Href)? GroupLink { get; set; }
+    public bool IsGroupMode => !IsEdit && !string.IsNullOrEmpty(Group);
+}
+
+// ---------- Classes → stages ----------
+
+/// <summary>One titled block of class cards on a stage page (a group such as KG1, or a grade such as G2).</summary>
+public sealed record ClassBlock(string Title, string? Subtitle, string? AddHref, string? OpenHref, IReadOnlyList<ClassRow> Classes);
+
+/// <summary>Classes → stage (KG Stages) or stage → group (Lower Elementary): blocks of class cards.</summary>
+public sealed class ClassStagePageViewModel
+{
+    public required string Title { get; init; }
+    public required string Subtitle { get; init; }
+    public required IReadOnlyList<(string Label, string? Href)> Crumbs { get; init; }
+    public required IReadOnlyList<ClassBlock> Blocks { get; init; }
+    public string? AddHref { get; init; }
+    public string? Note { get; init; }
+    public int Classes => Blocks.Sum(b => b.Classes.Count);
+    public int Students => Blocks.Sum(b => b.Classes.Sum(c => c.StudentCount));
+    public int Capacity => Blocks.Sum(b => b.Classes.Where(c => c.IsActive).Sum(c => c.Capacity));
 }
 
 public sealed class ClassDeleteModel

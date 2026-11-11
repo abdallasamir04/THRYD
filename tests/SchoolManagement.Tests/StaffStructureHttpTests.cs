@@ -327,7 +327,7 @@ public partial class HttpTests
 
         var page = await client.GetStringAsync("/pe?date=2026-11-20");
         var sidebar = page[..page.IndexOf("</aside>", StringComparison.Ordinal)];
-        Assert.Contains("aria-current=\"page\"", sidebar); // Duties highlighted in the sidebar (P.E. opens from Duties)
+        Assert.Contains("href=\"/duties\" aria-current=\"page\"", sidebar); // Duties highlighted (P.E. opens from Duties)
         Assert.DoesNotContain("href=\"/pe\"", sidebar); // no standalone P.E. sidebar item
         Assert.Equal(10, Regex.Matches(page, "class=\"tt__period\"").Count);
         Assert.Equal(5, Regex.Matches(page, "class=\"tt__day[ \"]").Count);
@@ -409,7 +409,10 @@ public partial class HttpTests
         var page = await client.GetStringAsync("/arrivals"); // same route and checklist as before
         Assert.Contains("<h1 class=\"page-title\">Student Attendance</h1>", page);
         Assert.Contains("<li>Student Attendance</li></ol>", page);
-        Assert.Contains("Student Attendance", page[..page.IndexOf("</aside>", StringComparison.Ordinal)]);
+        // Student Attendance opens from Students (sidebar → Students → Student Attendance), so Students is highlighted.
+        var sidebar = page[..page.IndexOf("</aside>", StringComparison.Ordinal)];
+        Assert.Contains("href=\"/students/hub\" aria-current=\"page\"", sidebar);
+        Assert.DoesNotContain("href=\"/arrivals\"", sidebar);
         Assert.Contains("data-arrival-table", page);
         foreach (var url in new[] { "/arrivals", "/", "/staff/departments" })
             Assert.DoesNotContain("Student Arrivals", await client.GetStringAsync(url));

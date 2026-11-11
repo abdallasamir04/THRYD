@@ -13,16 +13,22 @@
     var current = ViewData["Nav"] as string ?? "";
     // Every page under Staff (academic and management) highlights the single Staff entry.
     if (current is "Departments" or "StaffMembers" or "Teachers" or "Workload" or "Timetable" or "Management" or "ManagementTasks") current = "Staff";
+    // Belongings, Student Attendance and Behavioural / Discipline open from the Students landing page.
+    if (current is "Belongings" or "Arrivals" or "Behaviour") current = "Students";
+    // Staff Duty Records (and staff duty profiles / evaluations) are a tab of Duty Audit.
+    if (current is "StaffDuty") current = "DutyAudit";
+    // P.E. has no sidebar item: it opens from Duties (P.E. card) and the PE department page.
+    if (current is "PE") current = "MorningDuty";
     var title = ViewData["Title"] as string ?? "Dashboard";
 
-    // "Staff" is one entry: its landing page leads to Academic Staff or the Management Team, and from
-    // there to each feature, so the sidebar does not list every Staff submodule.
+    // "Staff" and "Students" are one entry each: their landing pages lead to every submodule, so the
+    // sidebar does not list them all.
     var groups = new (string Title, (string Key, string? Href, string Label, string Icon, int? Count)[] Items)[]
     {
         ("People", new (string, string?, string, string, int?)[]
         {
             ("Staff", "/staff", "Staff", "users", counts.Teachers + counts.Management),
-            ("Belongings", "/belongings", "Belongings", "inbox", null),
+            ("Students", "/students/hub", "Students", "graduation-cap", counts.Students),
         }),
         ("Academics", new (string, string?, string, string, int?)[]
         {
@@ -32,8 +38,6 @@
         {
             ("MorningDuty", "/duties", "Duties", "shield-check", null),
             ("DutyAudit", "/duties/audit", "Duty Audit", "clipboard-check", null),
-            ("StaffDuty", "/staff?view=duties", "Staff Duty Records", "users", null),
-            ("Arrivals", "/arrivals", "Student Attendance", "clock", null),
         }),
         ("Data", new (string, string?, string, string, int?)[]
         {

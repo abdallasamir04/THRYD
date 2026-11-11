@@ -1,0 +1,88 @@
+@model ClassStagePageViewModel
+@*
+    Classes → stage (KG Stages: Pre-K, KG1, KG2 as sections) or stage → group (Lower Elementary, Middle
+    School…: one section per grade). Each section shows its classes as the same cards as All classes,
+    with Add class preselected for that group and grade. Saves reload the page.
+*@
+@{
+    ViewData["Title"] = Model.Title;
+    ViewData["Nav"] = "Classes";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs">
+            @foreach (var (label, href) in Model.Crumbs)
+            {
+                <li>@if (href is null) { <span aria-current="page">@label</span> } else { <a href="@href">@label</a> }</li>
+            }
+        </ol>
+        <h1 class="page-title">@Model.Title</h1>
+        <p class="page-sub">@Model.Subtitle</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/classes">@Ui.Icon("arrow-left")Classes</a>
+        @if (Model.AddHref is not null)
+        {
+            <a class="btn btn--primary" href="@Model.AddHref" data-modal>@Ui.Icon("plus")Add class</a>
+        }
+    </div>
+</div>
+
+<div class="hub-extra stage-summary" aria-label="Totals">
+    <span class="chip">@Ui.Icon("door")@Ui.Plural(Model.Classes, "class", "classes")</span>
+    <span class="chip">@Ui.Icon("graduation-cap")@Ui.Plural(Model.Students, "student", "students")</span>
+    <span class="chip">@Ui.Icon("users")@Model.Capacity places in active classes</span>
+</div>
+
+@if (Model.Note is not null)
+{
+    <p class="hint stage-note">@Ui.Icon("info", "icon--sm")@Model.Note</p>
+}
+
+@foreach (var b in Model.Blocks)
+{
+    var id = "block-" + b.Title.ToLowerInvariant().Replace(' ', '-').Replace("/", "");
+    <section class="card stage-block" aria-labelledby="@id">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="@id">
+                    @if (b.OpenHref is not null) { <a href="@b.OpenHref">@b.Title</a> } else { @b.Title }
+                </h2>
+                <p class="card__sub">@(b.Subtitle is null ? "" : b.Subtitle + " · ")@Ui.Plural(b.Classes.Count, "class", "classes") · @Ui.Plural(b.Classes.Sum(c => c.StudentCount), "student", "students")</p>
+            </div>
+            <div class="stage-block__actions">
+                @if (b.OpenHref is not null)
+                {
+                    <a class="btn btn--secondary btn--sm" href="@b.OpenHref">Open @b.Title@Ui.Icon("arrow-right", "icon--sm")</a>
+                }
+                @if (b.AddHref is not null)
+                {
+                    <a class="btn btn--primary btn--sm" href="@b.AddHref" data-modal aria-label="Add class to @b.Title">@Ui.Icon("plus", "icon--sm")Add class</a>
+                }
+            </div>
+        </div>
+        @if (b.Classes.Count == 0)
+        {
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon("door")</span>
+                <p class="empty__title">No @b.Title classes yet</p>
+                @if (b.AddHref is not null)
+                {
+                    <p class="empty__text">Add the first class; its name is given automatically.</p>
+                    <div class="empty__actions"><a class="btn btn--primary" href="@b.AddHref" data-modal>@Ui.Icon("plus")Add class</a></div>
+                }
+            </div>
+        }
+        else
+        {
+            <ul class="class-grid" style="list-style:none;margin:0">
+                @foreach (var c in b.Classes)
+                {
+                    <partial name="_ClassCard" model="c" />
+                }
+            </ul>
+        }
+    </section>
+}

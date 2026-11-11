@@ -1,0 +1,38 @@
+@model ClassRow
+@* One class card (enrollment / capacity, status, actions). Used by All classes and the stage pages. *@
+@{
+    var c = Model;
+    var isFull = c.StudentCount >= c.Capacity;
+    var isNear = !isFull && (c.StudentCount >= c.Capacity - 3 || c.StudentCount >= (int)(c.Capacity * 0.85));
+}
+<li class="class-card @(c.IsActive ? "" : "is-inactive")">
+    <div class="class-card__top">
+        <a href="/students?classId=@c.Id" style="text-decoration:none"><span class="class-card__code">@c.Name</span></a>
+        <div style="display:flex;gap:4px;align-items:center">
+            @if (isFull)
+            {
+                <span class="badge badge--error">Full</span>
+            }
+            else if (isNear)
+            {
+                <span class="badge badge--warning">Near</span>
+            }
+            @if (c.IsActive)
+            {
+                <span class="badge badge--success badge--dot">Active</span>
+            }
+            else
+            {
+                <span class="badge badge--neutral badge--dot">Inactive</span>
+            }
+        </div>
+    </div>
+    <div>
+        <p class="class-card__count"><strong class="num">@c.StudentCount</strong> / @c.Capacity</p>
+        <p class="class-card__label">@(c.StudentCount == 1 ? "student" : "students") enrolled</p>
+    </div>
+    <div class="class-card__foot">
+        <a class="class-card__link" href="/students?classId=@c.Id">View students</a>
+        <partial name="_Actions" model="c" />
+    </div>
+</li>

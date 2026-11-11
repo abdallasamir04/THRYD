@@ -49,8 +49,8 @@ E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\lib\jquery\dist\jquery.
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\lib\jquery\dist\jquery.min.map
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\lib\jquery\dist\jquery.slim.min.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\lib\jquery\dist\jquery.slim.min.map
-E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\operations.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\staff.css
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\operations.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\operations.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\skeleton.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\arrivals.js

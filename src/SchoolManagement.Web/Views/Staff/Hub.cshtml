@@ -21,7 +21,7 @@
     </div>
 </div>
 
-<nav class="hub @(Model.Large ? "hub--large" : "")" aria-label="@Model.Title sections">
+<nav class="hub @(Model.Large ? "hub--large" : "") @(Model.Variant is null ? "" : "hub--" + Model.Variant)" aria-label="@Model.Title sections">
     @foreach (var c in Model.Cards)
     {
         <a class="hub-card hub-card--@c.Tone" href="@c.Href">

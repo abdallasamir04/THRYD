@@ -1,0 +1,35 @@
+@model StaffOverviewViewModel
+@*
+    Duty Audit → Staff Duty Records tab (formerly the separate Staff Duty Records page, /staff?view=duties).
+    Same rows (StaffDutyService.OverviewAsync), table (_Overview) and PDF; each person opens /staff/{id}.
+*@
+@{
+    ViewData["Title"] = "Staff Duty Records";
+    ViewData["Nav"] = "DutyAudit";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/duties/audit">Duty Audit</a></li><li>Staff Duty Records</li></ol>
+        <h1 class="page-title">Duty Audit</h1>
+        <p class="page-sub">Staff Duty Records: each staff member's duties and evaluations. Open a person for their full duty history.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/duties">@Ui.Icon("shield-check")Morning Duty</a>
+        <partial name="_Download" model='DownloadLink.Report("/staff/duty-records/pdf")' />
+    </div>
+</div>
+
+<partial name="_AuditTabs" model='"staff"' />
+
+<section class="card table-card" aria-label="Staff duty records">
+    <form class="toolbar" action="/duties/audit/staff-records" method="get" role="search" data-list-filter="#staff-list">
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" name="search" value="@Model.Search" placeholder="Search staff…" aria-label="Search staff" autocomplete="off" dir="auto" />
+        </div>
+    </form>
+    <div id="staff-list" data-ajax-list aria-live="polite">
+        <partial name="~/Views/Staff/_Overview.cshtml" model="Model" />
+    </div>
+</section>

@@ -254,12 +254,21 @@ fieldset.field { border: 0; margin: 0; padding: 0; min-width: 0; }
 .previous summary { cursor: pointer; font-weight: 700; color: var(--color-primary-ink); font-size: 0.86rem; }
 .previous .feedback-list { padding: 10px 0 0; }
 
-/* ---------- Student arrivals ---------- */
-.arrival-session { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; padding: 16px 18px; }
-.arrival-session__row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; }
-.arrival-session .field { min-width: 190px; }
-.arrival-session .switch { padding-bottom: 10px; }
-.deadline-chip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; background: var(--color-info-soft); color: var(--color-info-ink); font-size: 0.82rem; font-weight: 600; }
+/* ---------- Student attendance (Students → Student Attendance, /arrivals) ----------
+   Page sections are spaced by the workspace's 24px gap; the rules below space what sits inside them. */
+.arrival-head .page-head__text { gap: 8px; }
+.arrival-daynav .week-nav { gap: 12px 14px; padding: 12px 16px; }
+.arrival-daynav .week-nav__picker { margin-inline-start: 6px; }
+
+/* Session card: Class + the three recording defaults in one grid, then the toggle and deadline on their own row. */
+.arrival-session__body { display: flex; flex-direction: column; gap: 20px; padding: 22px 24px; }
+.arrival-session__fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 22px; align-items: end; }
+.arrival-session__filter { display: contents; }
+.arrival-session__foot {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px;
+    padding-top: 18px; border-top: 1px solid var(--color-border-subtle);
+}
+.deadline-chip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 12px; background: var(--color-info-soft); color: var(--color-info-ink); font-size: 0.82rem; font-weight: 600; }
 .deadline-chip.is-missing { background: var(--color-warning-soft); color: var(--color-warning-ink); }
 .summary-tiles { margin: 0; padding: 0; list-style: none; }
 .summary-tiles--7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
@@ -276,7 +285,28 @@ fieldset.field { border: 0; margin: 0; padding: 0; min-width: 0; }
 .seg-toggle input[value="Present"]:checked + span { color: var(--color-success-ink); }
 .seg-toggle input[value="Absent"]:checked + span { color: var(--color-error-ink); }
 .seg-toggle input:focus-visible + span { outline: 3px solid var(--color-focus); outline-offset: 1px; }
-.arrival-table td { padding-block: 9px; }
+/* Summary tiles above the checklist, with room between them and the table card. */
+.arrival-list { display: flex; flex-direction: column; gap: 24px; }
+.arrival-list .summary-tiles { gap: 16px; }
+.arrival-list .summary-tile { padding: 18px 20px; gap: 6px; }
+
+/* Checklist card: toolbar, rows, save bar. On narrow screens the table scrolls sideways instead of squeezing columns. */
+.arrival-toolbar { gap: 14px 16px; padding: 18px 22px; }
+.arrival-notice { margin: 18px 22px 0; }
+.arrival-table { min-width: 960px; }
+.arrival-table thead th { padding: 13px 14px; }
+.arrival-table tbody td { padding: 16px 14px; vertical-align: middle; }
+.arrival-table thead th:first-child, .arrival-table tbody td:first-child { padding-inline-start: 22px; }
+.arrival-table thead th:last-child, .arrival-table tbody td:last-child { padding-inline-end: 22px; }
+.arrival-table tbody td:first-child { min-width: 180px; }
+.arrival-table .time-field .input { width: 118px; }
+.arrival-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.arrival-cell .btn { margin-inline-start: -8px; }
+.arrival-time { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.arrival-table .seg-toggle { white-space: nowrap; }
+.arrival-table .time-field { gap: 8px; }
+.arrival-table [data-field="method"] { min-width: 130px; }
+.arrival-table [data-field="notes"] { min-width: 136px; }
 .arrival-row.is-late td:first-child, .arrival-row.is-late-preview td:first-child, tr.is-late td:first-child { box-shadow: inset 4px 0 0 var(--color-error); }
 .arrival-row.is-late, tr.is-late { background: color-mix(in srgb, var(--color-error-soft) 55%, transparent); }
 .arrival-row.is-absent td:first-child { box-shadow: inset 4px 0 0 var(--color-border-strong); }
@@ -284,7 +314,21 @@ fieldset.field { border: 0; margin: 0; padding: 0; min-width: 0; }
 .arrival-row.has-error { background: var(--color-error-soft); }
 .row-error { color: var(--color-error-ink); font-size: 0.76rem; font-weight: 700; max-width: 260px; }
 .row-error:empty { display: none; }
-.arrival-save { margin: 0 12px 12px; }
+.arrival-save { margin: 20px 22px 22px; padding: 16px 22px; }
+@media (max-width: 1100px) {
+    .arrival-session__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+    .arrival-daynav .week-nav__picker { flex: 1 1 100%; margin-inline-start: 0; }
+    .arrival-session__body { padding: 18px; gap: 18px; }
+    .arrival-session__fields { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .arrival-session__foot { flex-direction: column; align-items: flex-start; }
+    .arrival-toolbar { padding: 16px 18px; }
+    .arrival-toolbar .segmented { flex-wrap: wrap; }
+    .arrival-notice { margin: 16px 18px 0; }
+    .arrival-save { margin: 16px 18px 18px; padding: 14px 16px; }
+    .arrival-save .btn { flex: 1 1 100%; }
+}
 .date-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .date-filter .input, .date-filter .select { width: auto; }
 

@@ -46,7 +46,7 @@
         <span class="kpi__value">@Ui.Count(d.TotalClasses)</span>
         <span class="kpi__meta">@d.ActiveClasses active · @(d.TotalClasses - d.ActiveClasses) inactive · @d.ClassesWithoutStudents empty</span>
     </a></li>
-    <li><a class="kpi @(d.StudentsInInactiveClasses == 0 ? "kpi--ok" : "kpi--warn")" href="/classes?status=inactive">
+    <li><a class="kpi @(d.StudentsInInactiveClasses == 0 ? "kpi--ok" : "kpi--warn")" href="/classes/all?status=inactive">
         <span class="kpi__icon">@Ui.Icon(d.StudentsInInactiveClasses == 0 ? "check-circle" : "alert-triangle")</span>
         <span class="kpi__label">Students without a valid class</span>
         <span class="kpi__value">@Ui.Count(d.StudentsInInactiveClasses)</span>

@@ -1,0 +1,9 @@
+@model string
+@*
+    Duty Audit sections: two separate buttons side by side — the audit of every duty session, and each
+    staff member's duty records. Model = "audit" or "staff"; the current one is highlighted.
+*@
+<nav class="audit-tabs" aria-label="Duty Audit sections">
+    <a class="btn btn--secondary audit-tab" href="/duties/audit" aria-current="@(Model == "audit" ? "page" : null)">@Ui.Icon("clipboard-check")Duty Audit</a>
+    <a class="btn btn--secondary audit-tab" href="/duties/audit/staff-records" aria-current="@(Model == "staff" ? "page" : null)">@Ui.Icon("users")Staff Duty Records</a>
+</nav>

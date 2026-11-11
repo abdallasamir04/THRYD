@@ -56,6 +56,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQmVsb25naW5nc1xfR3JhZGVXZWVrLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Classes/All.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQ2xhc3Nlc1xBbGwuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Classes/Delete.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQ2xhc3Nlc1xEZWxldGUuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
@@ -68,8 +72,16 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQ2xhc3Nlc1xJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Classes/Stage.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQ2xhc3Nlc1xTdGFnZS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Classes/_Actions.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQ2xhc3Nlc1xfQWN0aW9ucy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Classes/_ClassCard.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQ2xhc3Nlc1xfQ2xhc3NDYXJkLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Classes/_List.cshtml]
@@ -140,8 +152,16 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRHV0aWVzXEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Duties/StaffRecords.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRHV0aWVzXFN0YWZmUmVjb3Jkcy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Duties/_AuditTable.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRHV0aWVzXF9BdWRpdFRhYmxlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Duties/_AuditTabs.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRHV0aWVzXF9BdWRpdFRhYnMuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Duties/_DutyCard.cshtml]
@@ -280,10 +300,6 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3RhZmZcSHViLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Staff/Index.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3RhZmZcSW5kZXguY3NodG1s
-build_metadata.AdditionalFiles.CssScope = 
-
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Staff/Profile.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3RhZmZcUHJvZmlsZS5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
@@ -294,6 +310,10 @@ build_metadata.AdditionalFiles.CssScope =
 
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Staff/_Overview.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3RhZmZcX092ZXJ2aWV3LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Students/Behaviour.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3R1ZGVudHNcQmVoYXZpb3VyLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Students/Details.cshtml]

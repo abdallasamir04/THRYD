@@ -10,7 +10,15 @@
 {
     <div class="page-head">
         <div class="page-head__text">
-            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/classes">Classes</a></li><li>@heading</li></ol>
+            <ol class="crumbs">
+                <li><a href="/">Dashboard</a></li><li><a href="/classes">Classes</a></li>
+                @if (Model.IsGroupMode)
+                {
+                    if (Model.StageLink is { } st) { <li><a href="@st.Href">@st.Title</a></li> }
+                    if (Model.GroupLink is { } gr) { <li><a href="@gr.Href">@gr.Title</a></li> }
+                }
+                <li>@heading</li>
+            </ol>
             <h1 class="page-title">@heading</h1>
         </div>
     </div>
@@ -23,7 +31,9 @@
             <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "door", "icon--lg")</span>
             <div>
                 <h2 class="modal__title">@heading</h2>
-                <p class="modal__sub">@(Model.IsEdit ? $"{Model.StudentCount} student(s) are in this class. Renaming keeps them in it." : "Choose a stage and section; the class number is assigned for you.")</p>
+                <p class="modal__sub">@(Model.IsEdit ? $"{Model.StudentCount} student(s) are in this class. Renaming keeps them in it."
+                    : Model.IsGroupMode ? $"Adding to {Model.GroupLink?.Title}. Choose the grade; the section letter is assigned for you."
+                    : "Choose a stage and section; the class number is assigned for you.")</p>
             </div>
             <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
         </div>
@@ -31,7 +41,30 @@
             <div asp-validation-summary="ModelOnly" class="validation-summary-errors" style="margin-bottom:14px"></div>
             <input type="hidden" asp-for="Id" />
             <div class="form-grid form-grid--2">
-                @if (!Model.IsEdit)
+                @if (Model.IsGroupMode)
+                {
+                    <input type="hidden" asp-for="Group" />
+                    <div class="field">
+                        <label class="label" asp-for="GradeNumber">Grade <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" asp-for="GradeNumber" data-autofocus required>
+                            @foreach (var (number, label, next) in Model.GradeOptions)
+                            {
+                                <option value="@number" selected="@(Model.GradeNumber == number)">@label@(next is null ? "" : $" — next class {next}")</option>
+                            }
+                        </select>
+                        <span asp-validation-for="GradeNumber" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="Section">Section</label>
+                        <input class="input" asp-for="Section" maxlength="3" placeholder="Automatic"
+                               pattern="[A-Za-z]{1,3}" title="1–3 letters, e.g. C" style="text-transform:uppercase" />
+                        <span asp-validation-for="Section" class="field-validation-error"></span>
+                        @* Duplicate class names are reported on Name, which this form has no field for. *@
+                        <span asp-validation-for="Name" class="field-validation-error"></span>
+                        <span class="hint">Leave empty to use the next letter shown beside the grade.</span>
+                    </div>
+                }
+                else if (!Model.IsEdit)
                 {
                     var allSections = Model.Sections.Values.SelectMany(s => s).Distinct().OrderBy(s => s.Length).ThenBy(s => s).ToList();
                     <div class="field">
@@ -84,7 +117,13 @@
                     }
                 </div>
             </div>
-            @if (!Model.IsEdit)
+            @if (Model.IsGroupMode)
+            {
+                <p class="hint" style="margin-top:14px">
+                    The class name is the grade plus the next section letter of that grade (e.g. KG1A, KG1B → KG1C). Names are never repeated.
+                </p>
+            }
+            else if (!Model.IsEdit)
             {
                 <p class="hint" style="margin-top:14px">
                     The class number is calculated automatically for each stage and section (KG + next number + section, e.g. KG3A).
@@ -106,7 +145,7 @@
             }
             else
             {
-                <a class="btn btn--secondary" href="/classes">Cancel</a>
+                <a class="btn btn--secondary" href="@(Model.GroupLink?.Href ?? "/classes")">Cancel</a>
             }
             <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Add class")</button>
         </div>
