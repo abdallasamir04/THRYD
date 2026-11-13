@@ -1,0 +1,26 @@
+@model AlertRow
+@* One alert in a list: who, what (dates, or lesson details), status. Opens the alert (follow-up, resolve) in a dialog. *@
+@{
+    var a = Model;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var streak = a.Type == AttendanceAlertType.ConsecutiveAbsence;
+}
+<li class="att-alert att-alert--@(streak ? "streak" : "lesson") @(a.IsPending ? "" : "is-closed")">
+    <span class="att-alert__icon" aria-hidden="true">@Ui.Icon(streak ? "calendar" : "presentation")</span>
+    <div class="att-alert__main">
+        <div class="att-alert__title">
+            <a href="/students/profile/@a.StudentId" dir="auto"><strong>@a.StudentName</strong></a>
+            <span class="badge badge--class">@a.ClassName</span>
+            <span class="badge @AlertLabels.Badge(a.Status)">@AlertLabels.Status(a.Status)</span>
+        </div>
+        @if (streak)
+        {
+            <p class="att-alert__text"><strong>Absent @a.DayCount consecutive school days</strong> · @string.Join(", ", a.Dates.Select(d => d.ToString("ddd d MMM", c)))</p>
+        }
+        else
+        {
+            <p class="att-alert__text"><strong>Present at school, absent from @a.Subject</strong> · @a.FirstDate.ToString("ddd d MMM", c) · @a.Period (@a.Times) · @a.Teacher</p>
+        }
+    </div>
+    <a class="btn btn--secondary btn--sm" href="/attendance/alerts/@a.Id" data-modal>@(a.IsPending ? "Follow up" : "View")</a>
+</li>

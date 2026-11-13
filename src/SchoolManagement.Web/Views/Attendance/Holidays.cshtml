@@ -1,0 +1,84 @@
+@model HolidaysViewModel
+@*
+    School holidays: days without school. They are skipped when counting consecutive school-day absences
+    (Thursday absent, Sunday holiday, Monday + Tuesday absent = three in a row) and have no lessons.
+*@
+@{
+    ViewData["Title"] = "School holidays";
+    ViewData["Nav"] = "Attendance";
+    var f = Model.Form;
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/attendance">Student Attendance</a></li><li><span aria-current="page">School holidays</span></li></ol>
+        <h1 class="page-title">School holidays</h1>
+        <p class="page-sub">Days without school. Weekends (Friday and Saturday) are never school days; add public holidays and breaks here so they are skipped when counting consecutive absences and no lessons are expected.</p>
+    </div>
+</div>
+
+<div class="grid-3-1">
+    <section class="card table-card" aria-label="Holidays">
+        @if (Model.Holidays.Count == 0)
+        {
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon("calendar")</span>
+                <p class="empty__title">No school holidays yet</p>
+                <p class="empty__text">Until holidays are added, every Sunday–Thursday counts as a school day.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table table--stack">
+                    <thead><tr><th scope="col">Holiday</th><th scope="col">Dates</th><th scope="col" class="num">School days</th><th scope="col">Added by</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var h in Model.Holidays)
+                        {
+                            <tr>
+                                <td data-label="Holiday"><strong dir="auto">@h.Name</strong></td>
+                                <td data-label="Dates">@h.Dates</td>
+                                <td data-label="School days" class="num">@h.SchoolDays</td>
+                                <td data-label="Added by">@(h.CreatedBy ?? "—")</td>
+                                <td class="col-actions">
+                                    <form action="/attendance/holidays/@h.Id/delete" method="post" data-ajax-form
+                                          data-confirm="“@h.Name” (@h.Dates) will count as school days again, and absence alerts around it are re-checked."
+                                          data-confirm-title="Remove this holiday?" data-confirm-button="Remove holiday">
+                                        @Html.AntiForgeryToken()
+                                        <button class="icon-btn icon-btn--danger" type="submit" aria-label="Remove @h.Name" title="Remove">@Ui.Icon("trash")</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="card" aria-labelledby="add-title">
+        <div class="card__head"><h2 class="card__title" id="add-title">@Ui.Icon("plus")Add a holiday</h2></div>
+        <form class="card__body form-grid" action="/attendance/holidays" method="post" data-ajax-form data-loading>
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="Name">Name</label>
+                <input class="input" id="Name" name="Name" value="@f.Name" maxlength="@SchoolHoliday.NameMaxLength" required dir="auto" placeholder="e.g. Mid-year break" />
+                <span asp-validation-for="Form.Name" class="field-validation-error"></span>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="StartDate">First day</label>
+                    <input class="input" type="date" id="StartDate" name="StartDate" value="@(f.StartDate is { } s ? SchoolWeek.Iso(s) : "")" required />
+                </div>
+                <div class="field">
+                    <label class="label" for="EndDate">Last day</label>
+                    <input class="input" type="date" id="EndDate" name="EndDate" value="@(f.EndDate is { } e ? SchoolWeek.Iso(e) : "")" />
+                    <span class="hint">Leave empty for one day.</span>
+                </div>
+            </div>
+            <div><button class="btn btn--primary" type="submit">@Ui.Icon("plus")Add holiday</button></div>
+        </form>
+    </section>
+</div>

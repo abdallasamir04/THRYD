@@ -28,6 +28,9 @@ public abstract class PdfSection
 {
     public string? Title { get; init; }
     public string? Subtitle { get; init; }
+
+    /// <summary>Starts the section on a new page (e.g. one day of a school-wide timetable per page).</summary>
+    public bool PageBreakBefore { get; init; }
 }
 
 /// <summary>A table with repeated headers on every page, alternating rows and an optional totals row.</summary>
@@ -47,6 +50,18 @@ public sealed class PdfSummary : PdfSection
 }
 
 public sealed record PdfStat(string Label, string Value, PdfTone Tone = PdfTone.Default);
+
+/// <summary>Label / value pairs in a bordered grid (a form-like block, e.g. the incident information).</summary>
+public sealed class PdfFields : PdfSection
+{
+    public required IReadOnlyList<PdfField> Items { get; init; }
+
+    /// <summary>Pairs per row (each pair = a label cell and a value cell).</summary>
+    public int Columns { get; init; } = 2;
+}
+
+/// <summary>One field. <paramref name="Wide"/> spans the whole row (long text).</summary>
+public sealed record PdfField(string Label, PdfCell Value, bool Wide = false);
 
 /// <summary>A short highlighted note, e.g. "Past week — shown as history".</summary>
 public sealed class PdfNotice : PdfSection
@@ -93,6 +108,12 @@ public sealed class PdfReport
     public required IReadOnlyList<string?> FileNameParts { get; init; }
 
     public bool ShowAcademicYear { get; init; } = true;
+
+    /// <summary>A line above the title, e.g. the school name on an official report.</summary>
+    public string? Eyebrow { get; init; }
+
+    /// <summary>An extra footer line on every page, e.g. a confidentiality notice.</summary>
+    public string? FooterNote { get; init; }
 
     public string FileName => PdfFileName.From(FileNameParts);
 }

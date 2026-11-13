@@ -1,0 +1,194 @@
+@model SessionRegisterViewModel
+@*
+    One lesson's register (class, date, period, subject, teacher and time from the timetable). Each student:
+    Present / Late / Absent / Excused, or left "Not recorded". The school attendance of the day is shown next to it;
+    present at school + absent here raises an alert. Changes to saved entries are kept as corrections.
+*@
+@{
+    var r = Model.Register;
+    var l = r.Lesson;
+    var k = r.Counts;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var date = SchoolWeek.Iso(l.Date);
+    var editable = l.IsExpected;
+    ViewData["Title"] = $"{l.Subject} · {l.ClassName}";
+    ViewData["Nav"] = "Attendance";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/attendance?date=@date">Student Attendance</a></li><li><a href="@Model.Back">Session Attendance</a></li><li><span aria-current="page">@l.Subject · @l.ClassName</span></li></ol>
+        <h1 class="page-title" dir="auto">@l.Subject · @l.ClassName</h1>
+        <p class="page-sub">@l.Date.ToString("dddd d MMMM yyyy", c) · @l.Period (@l.Times) · @l.Teacher</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="@Model.Back">@Ui.Icon("arrow-left")All lessons</a>
+        @if (l.Cancelled)
+        {
+            <form action="/attendance/sessions/@l.SessionId/restore" method="post" data-ajax-form>
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="date" value="@date" />
+                <button class="btn btn--primary" type="submit">@Ui.Icon("refresh")Restore lesson</button>
+            </form>
+        }
+        else
+        {
+            <a class="btn btn--secondary" href="/attendance/sessions/@l.SessionId/cancel?date=@date" data-modal>@Ui.Icon("x-circle")Cancel this lesson</a>
+        }
+    </div>
+</div>
+
+<section class="card bl-student att-lesson" aria-label="Lesson">
+    <span class="hub-card__icon att-lesson__icon" aria-hidden="true">@Ui.Icon("presentation")</span>
+    <dl class="bl-student__facts">
+        <div><dt>Class</dt><dd>@l.ClassName</dd></div>
+        <div><dt>Date</dt><dd>@l.Date.ToString("ddd d MMM yyyy", c)</dd></div>
+        <div><dt>Period</dt><dd>@l.Period · <span class="num">@l.Times</span></dd></div>
+        <div><dt>Subject</dt><dd dir="auto">@l.Subject <span class="faint">· @l.DepartmentName</span></dd></div>
+        <div><dt>Teacher</dt><dd dir="auto">@l.Teacher</dd></div>
+    </dl>
+</section>
+
+@if (l.Cancelled)
+{
+    <div class="notice notice--warning">@Ui.Icon("x-circle")<div class="notice__body"><strong>This lesson is cancelled on this date.</strong><span dir="auto">@l.CancelReason</span> No attendance is expected and no alerts are raised. Restore it to record attendance.</div></div>
+}
+else if (l.Upcoming)
+{
+    <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>This lesson has not started yet.</strong>Attendance can be recorded once it starts (@l.Times).</div></div>
+}
+
+<ul class="summary-tiles summary-tiles--7" aria-label="Lesson statistics">
+    <li class="summary-tile"><span class="summary-tile__value num">@k.Expected</span><span class="summary-tile__label">Students</span></li>
+    <li class="summary-tile"><span class="summary-tile__value num">@k.Recorded</span><span class="summary-tile__label">Recorded</span></li>
+    <li class="summary-tile summary-tile--muted"><span class="summary-tile__value num">@k.Pending</span><span class="summary-tile__label">Not recorded</span></li>
+    <li class="summary-tile summary-tile--ok"><span class="summary-tile__value num">@k.Present</span><span class="summary-tile__label">Present</span></li>
+    <li class="summary-tile summary-tile--dup"><span class="summary-tile__value num">@k.Late</span><span class="summary-tile__label">Late</span></li>
+    <li class="summary-tile summary-tile--bad"><span class="summary-tile__value num">@k.Absent</span><span class="summary-tile__label">Absent</span></li>
+    <li class="summary-tile"><span class="summary-tile__value num">@k.Excused</span><span class="summary-tile__label">Excused</span></li>
+</ul>
+
+<section class="card table-card" aria-label="Register">
+    @if (r.Rows.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("users")</span>
+            <p class="empty__title">No students in @l.ClassName on this date</p>
+            <p class="empty__text">The register lists the students enrolled in the class on the lesson's date.</p>
+        </div>
+    }
+    else
+    {
+        <form action="/attendance/sessions/@l.SessionId" method="post" data-ajax-form data-loading data-session-register>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="Date" value="@date" />
+            @if (editable)
+            {
+                <div class="toolbar">
+                    <div class="toolbar__search input-icon">
+                        @Ui.Icon("search")
+                        <input class="input" type="search" placeholder="Find a student…" aria-label="Find a student" data-register-search dir="auto" />
+                    </div>
+                    <div class="toolbar__end">
+                        <button class="btn btn--secondary btn--sm" type="button" data-register-all-present>@Ui.Icon("check", "icon--sm")Mark not recorded as present</button>
+                    </div>
+                </div>
+            }
+            <div class="table-wrap">
+                <table class="table table--stack att-register">
+                    <thead>
+                        <tr>
+                            <th scope="col">Student</th>
+                            <th scope="col">School attendance</th>
+                            <th scope="col">Lesson attendance</th>
+                            <th scope="col">Notes</th>
+                            <th scope="col">Last change</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < r.Rows.Count; i++)
+                        {
+                            var row = r.Rows[i];
+                            var atSchool = row.School == ArrivalStatus.Present;
+                            var alert = atSchool && row.Status == SessionAttendanceStatus.Absent && editable;
+                            <tr class="att-row @(alert ? "is-alert" : "")" data-name="@row.Name.ToLowerInvariant()">
+                                <td data-label="Student">
+                                    <input type="hidden" name="Entries[@i].StudentId" value="@row.StudentId" />
+                                    <div class="person__name" dir="auto"><a href="/students/profile/@row.StudentId">@row.Name</a></div>
+                                    @if (alert) { <span class="badge badge--error">@Ui.Icon("alert-triangle", "icon--sm")At school, absent here</span> }
+                                </td>
+                                <td data-label="School attendance">
+                                    @if (row.School is null) { <span class="badge badge--neutral">Not recorded</span> }
+                                    else if (row.School == ArrivalStatus.Absent) { <span class="badge badge--error badge--dot">Absent</span> }
+                                    else if (row.SchoolLate == LateStatus.Late) { <span class="badge badge--warning badge--dot">Present · late</span> }
+                                    else { <span class="badge badge--success badge--dot">Present</span> }
+                                </td>
+                                <td data-label="Lesson attendance">
+                                    @if (editable)
+                                    {
+                                        <div class="seg-toggle att-status" role="radiogroup" aria-label="Attendance of @row.Name">
+                                            @foreach (var s in SessionStatuses.All)
+                                            {
+                                                <label><input type="radio" name="Entries[@i].Status" value="@s" checked="@(row.Status == s)" /><span>@SessionStatuses.Label(s)</span></label>
+                                            }
+                                        </div>
+                                        @if (row.Status is null) { <div class="person__meta">Not recorded</div> }
+                                    }
+                                    else
+                                    {
+                                        <span class="badge @SessionStatuses.Badge(row.Status)">@SessionStatuses.Label(row.Status)</span>
+                                    }
+                                </td>
+                                <td data-label="Notes">
+                                    @if (editable)
+                                    {
+                                        <input class="input input--sm" name="Entries[@i].Notes" value="@row.Notes" maxlength="@SessionAttendanceRecord.NotesMaxLength" aria-label="Notes for @row.Name" dir="auto" />
+                                    }
+                                    else { <span dir="auto">@row.Notes</span> }
+                                </td>
+                                <td data-label="Last change">
+                                    @if (row.RecordId is null) { <span class="faint">—</span> }
+                                    else
+                                    {
+                                        <div class="person__meta">@(row.RecordedBy ?? "—")@(row.UpdatedAt is { } u ? " · " + Ui.DateTime(u) : "")@(row.Corrections > 0 ? $" · corrected {row.Corrections}×" : "")</div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (editable)
+            {
+                <div class="sticky-actions att-save">
+                    <div class="field att-save__reason">
+                        <label class="label" for="Reason">Reason for changing saved entries <span class="faint">(optional, kept in the history)</span></label>
+                        <input class="input" id="Reason" name="Reason" maxlength="@SessionAttendanceCorrection.ReasonMaxLength" dir="auto" placeholder="e.g. Arrived from the clinic at 10:05" />
+                    </div>
+                    <button class="btn btn--primary btn--lg" type="submit">@Ui.Icon("check")Save attendance</button>
+                </div>
+            }
+        </form>
+    }
+</section>
+
+@if (r.History.Count > 0)
+{
+    <section class="card" aria-labelledby="hist-title">
+        <div class="card__head"><h2 class="card__title" id="hist-title">@Ui.Icon("clock")Corrections</h2></div>
+        <ol class="timeline" style="margin:16px 22px">
+            @foreach (var h in r.History)
+            {
+                <li class="timeline__item">
+                    <span class="timeline__when">@Ui.DateTime(h.At)@(h.By is null ? "" : " · " + h.By)</span>
+                    <span><strong dir="auto">@h.StudentName</strong>: @h.Before → <strong>@h.After</strong>@(h.Reason is null ? "" : " — " + h.Reason)</span>
+                </li>
+            }
+        </ol>
+    </section>
+}
+
+@section Scripts {
+    <script src="~/js/attendance.js" asp-append-version="true"></script>
+}

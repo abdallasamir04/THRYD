@@ -11,7 +11,7 @@ public class StudentsController(IStudentService students, IClassService classes,
 
     /// <summary>
     /// Students landing page (sidebar → Students): Belongings, Student Attendance and Behavioural / Discipline.
-    /// Each card opens the existing module at its own route (/belongings, /arrivals); the student list stays at /students.
+    /// Each card opens the existing module at its own route (/belongings, /attendance); the student list stays at /students.
     /// </summary>
     [HttpGet("/students/hub")]
     public async Task<IActionResult> Hub(CancellationToken ct)
@@ -30,18 +30,14 @@ public class StudentsController(IStudentService students, IClassService classes,
             [
                 new("/belongings", "inbox", "Belongings",
                     "Daily personal belongings and academic materials per student, with readiness by day, week and quarter.", "Personal belongings · academic materials", "teal"),
-                new("/arrivals", "clock", "Student Attendance",
-                    "Record each student's arrival for the day, with arrival times, the daily checklist and corrections.", "Daily checklist", "blue"),
+                new("/attendance", "clock", "Student Attendance",
+                    "School Attendance for the whole day and Session Attendance for every scheduled lesson, with absence alerts.", "School · Sessions · Alerts", "blue"),
                 new("/students/behaviour", "flag", "Behavioural / Discipline",
-                    "Behaviour and discipline records for students.", "Coming soon", "amber"),
+                    "Official student incident reports, and the discipline section.", "Incident · Discipline", "amber"),
             ],
             Extra = [("Student list", "/students", "users"), ("Import students", "/import-export?kind=Students", "upload")],
         });
     }
-
-    /// <summary>Students → Behavioural / Discipline: placeholder until the module is built (no records yet).</summary>
-    [HttpGet("/students/behaviour")]
-    public IActionResult Behaviour() => View();
 
     /// <summary>Student profile with the Arrival & Attendance History (recorded days only) and Transfer History.</summary>
     [HttpGet]

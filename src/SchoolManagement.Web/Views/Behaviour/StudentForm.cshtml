@@ -1,0 +1,72 @@
+@model IncidentStudentForm
+@* B. A student involved: chosen from the Student Directory (grade & section come from their class), role and their own involvement. *@
+@{
+    var modal = Context.Request.IsAjax();
+    var isEdit = Model.RowId is not null;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = isEdit ? "Edit student involvement" : "Add student"; ViewData["Nav"] = "Behaviour"; }
+    var baseUrl = $"/students/behaviour/incidents/{Model.IncidentId}";
+    var action = isEdit ? $"{baseUrl}/students/{Model.RowId}/edit" : $"{baseUrl}/students/add";
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents" data-incident-student>
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("users", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@(isEdit ? "Student involvement" : "Add a student involved")</h2>
+                <p class="modal__sub">@Model.Reference</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            @if (isEdit)
+            {
+                <div class="field"><span class="label">Student</span><p class="inc-readonly" dir="auto">@Model.StudentName</p></div>
+            }
+            else
+            {
+                <div class="field">
+                    <label class="label" for="StudentId">Student <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="StudentId" name="StudentId" data-searchable required>
+                        <option value="">Choose a student…</option>
+                        @foreach (var s in Model.Students)
+                        {
+                            <option value="@s.Id" selected="@(Model.StudentId == s.Id)" data-note="@IncidentLabels.GradeSection(s.ClassName)">@s.Name</option>
+                        }
+                    </select>
+                    <span class="hint">Grade and section are taken from the student's class.</span>
+                    <span asp-validation-for="StudentId" class="field-validation-error"></span>
+                </div>
+            }
+            <fieldset class="field">
+                <legend class="label">Role classification <span class="req" aria-hidden="true">*</span></legend>
+                <div class="inc-roles" role="radiogroup" aria-label="Role classification">
+                    @foreach (var r in IncidentLabels.Roles)
+                    {
+                        <label class="inc-role"><input type="radio" name="Role" value="@r" checked="@(Model.Role == r)" required data-role-option /><span>@IncidentLabels.Role(r)</span></label>
+                    }
+                </div>
+                <span asp-validation-for="Role" class="field-validation-error"></span>
+            </fieldset>
+            <div class="field" data-role-other hidden="@(Model.Role != IncidentRole.Other)">
+                <label class="label" for="RoleOther">Describe the role</label>
+                <input class="input" id="RoleOther" name="RoleOther" value="@Model.RoleOther" maxlength="@IncidentStudent.RoleOtherMaxLength" dir="auto" placeholder="e.g. Recorded the incident on a phone" />
+                <span asp-validation-for="RoleOther" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" for="Involvement">Reported conduct &amp; involvement <span class="req" aria-hidden="true">*</span></label>
+                <textarea class="input textarea" id="Involvement" name="Involvement" rows="5" maxlength="@IncidentStudent.InvolvementMaxLength" required dir="auto"
+                          placeholder="What this student did, said or experienced — factual and specific.">@Model.Involvement</textarea>
+                <span asp-validation-for="Involvement" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@baseUrl">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(isEdit ? "Save" : "Add student")</button>
+        </div>
+    </form>
+</div>

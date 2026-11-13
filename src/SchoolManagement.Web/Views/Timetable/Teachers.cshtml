@@ -23,7 +23,7 @@
             <input class="input" type="search" name="search" value="@Model.Search" placeholder="Search teacher…" aria-label="Search teacher" autocomplete="off" dir="auto" />
         </div>
         <div class="toolbar__filter">
-            <select class="select" name="departmentId" aria-label="Department" onchange="this.form.submit()">
+            <select class="select" name="departmentId" aria-label="Department" data-autosubmit>
                 <option value="">All departments</option>
                 @foreach (var d in Model.Departments)
                 {

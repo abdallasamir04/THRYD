@@ -43,6 +43,22 @@ builder.Services.AddScoped<IManagementTaskService, ManagementTaskService>();
 builder.Services.AddScoped<ITimetableService, TimetableService>();
 builder.Services.AddScoped<IPeService, PeService>();
 builder.Services.AddScoped<IBelongingsService, BelongingsService>();
+builder.Services.AddScoped<IAttendanceAlertService, AttendanceAlertService>();
+builder.Services.AddScoped<ISessionAttendanceService, SessionAttendanceService>();
+builder.Services.AddScoped<IAttendanceCalendarService, AttendanceCalendarService>();
+// Timetables Center: every timetable type is an ITimetableSource; register a new source to add a type.
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.TimetableData>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSource, SchoolManagement.Web.Services.Timetables.ClassTimetableSource>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSource, SchoolManagement.Web.Services.Timetables.TeacherTimetableSource>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSource, SchoolManagement.Web.Services.Timetables.SubjectTimetableSource>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSource, SchoolManagement.Web.Services.Timetables.DepartmentTimetableSource>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSource, SchoolManagement.Web.Services.Timetables.SchoolTimetableSource>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSource, SchoolManagement.Web.Services.Timetables.PeTimetableSource>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSource, SchoolManagement.Web.Services.Timetables.DutyRotaSource>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSource, SchoolManagement.Web.Services.Timetables.BellScheduleSource>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableCenter, SchoolManagement.Web.Services.Timetables.TimetableCenter>();
+builder.Services.AddScoped<IIncidentService, IncidentService>();
+if (testDataCommand is null) builder.Services.AddHostedService<AttendanceAlertSweep>();
 // The arrival checklist saves rows as JSON; fetch() sends the antiforgery token in this header.
 builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 builder.Services.AddSingleton<IExcelExportService, ExcelExportService>();

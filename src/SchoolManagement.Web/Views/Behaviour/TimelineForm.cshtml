@@ -1,0 +1,80 @@
+@model TimelineForm
+@* C. A timeline event: time / period, location, students present (from the students involved) and the factual account. *@
+@{
+    var modal = Context.Request.IsAjax();
+    var isEdit = Model.EntryId is not null;
+    var s = Model.Suggestions!;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = isEdit ? "Edit timeline event" : "Add timeline event"; ViewData["Nav"] = "Behaviour"; }
+    var baseUrl = $"/students/behaviour/incidents/{Model.IncidentId}";
+    var action = isEdit ? $"{baseUrl}/timeline/{Model.EntryId}/edit" : $"{baseUrl}/timeline/add";
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("clock", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@(isEdit ? "Timeline event" : "Add a timeline event")</h2>
+                <p class="modal__sub">@Model.Reference · events with a time are placed in time order automatically.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="form-grid form-grid--3">
+                <div class="field">
+                    <label class="label" for="TimePeriod">Time / period <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="TimePeriod" name="TimePeriod" value="@Model.TimePeriod" list="dl-periods" maxlength="@IncidentTimelineEntry.PeriodMaxLength" required dir="auto" placeholder="e.g. Break Time" data-autofocus />
+                    <datalist id="dl-periods">@foreach (var x in s.Periods) { <option value="@x"></option> }</datalist>
+                    <span asp-validation-for="TimePeriod" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="Time">Time <span class="faint">(optional)</span></label>
+                    <input class="input" type="time" id="Time" name="Time" value="@(Model.Time?.ToString("HH:mm"))" />
+                    <span class="hint">Used to keep the events in order.</span>
+                </div>
+                <div class="field">
+                    <label class="label" for="Location">Location <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="Location" name="Location" value="@Model.Location" list="dl-locations" maxlength="@IncidentTimelineEntry.LocationMaxLength" required dir="auto" placeholder="e.g. School Yard / Corridor" />
+                    <datalist id="dl-locations">@foreach (var x in s.Locations) { <option value="@x"></option> }</datalist>
+                    <span asp-validation-for="Location" class="field-validation-error"></span>
+                </div>
+            </div>
+            <fieldset class="field">
+                <legend class="label">Students present</legend>
+                @if (Model.Involved.Count == 0)
+                {
+                    <p class="muted" style="margin:0">Add the students involved first to tick them here, or name who was present below.</p>
+                }
+                else
+                {
+                    <div class="inc-present">
+                        @foreach (var st in Model.Involved)
+                        {
+                            <label class="inc-check"><input type="checkbox" name="PresentIds" value="@st.Id" checked="@Model.PresentIds.Contains(st.Id)" /><span dir="auto">@st.Name</span><span class="person__meta">@st.RoleLabel</span></label>
+                        }
+                    </div>
+                }
+                <span asp-validation-for="PresentIds" class="field-validation-error"></span>
+            </fieldset>
+            <div class="field">
+                <label class="label" for="OthersPresent">Others present <span class="faint">(optional)</span></label>
+                <input class="input" id="OthersPresent" name="OthersPresent" value="@Model.OthersPresent" maxlength="@IncidentTimelineEntry.OthersMaxLength" dir="auto" placeholder="e.g. Duty teacher, other Grade 7 students" />
+                <span asp-validation-for="OthersPresent" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" for="Account">Factual account of incident <span class="req" aria-hidden="true">*</span></label>
+                <textarea class="input textarea" id="Account" name="Account" rows="5" maxlength="@IncidentTimelineEntry.AccountMaxLength" required dir="auto"
+                          placeholder="What happened, in neutral, factual terms.">@Model.Account</textarea>
+                <span asp-validation-for="Account" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@baseUrl">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(isEdit ? "Save" : "Add event")</button>
+        </div>
+    </form>
+</div>

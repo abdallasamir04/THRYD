@@ -1,0 +1,68 @@
+@model IncidentHeaderForm
+@* A. Incident information: create a report (reference ID generated) or edit its header. *@
+@{
+    var modal = Context.Request.IsAjax();
+    var isEdit = Model.Id is not null;
+    var s = Model.Suggestions!;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = isEdit ? "Edit incident information" : "New incident report"; ViewData["Nav"] = "Behaviour"; }
+    var action = isEdit ? $"/students/behaviour/incidents/{Model.Id}/edit" : "/students/behaviour/incidents/new";
+    var back = isEdit ? $"/students/behaviour/incidents/{Model.Id}" : "/students/behaviour/incidents";
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("flag", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@(isEdit ? "Incident information" : "New incident report")</h2>
+                <p class="modal__sub">@(isEdit ? $"Reference ID {Model.Reference}" : "The reference ID is generated automatically when the report is created.")</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="Category">Incident category <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" id="Category" name="Category" value="@Model.Category" list="dl-categories" maxlength="@Incident.CategoryMaxLength" required dir="auto" placeholder="e.g. Physical Aggression & Verbal Misconduct" data-autofocus />
+                <datalist id="dl-categories">@foreach (var x in s.Categories) { <option value="@x"></option> }</datalist>
+                <span asp-validation-for="Category" class="field-validation-error"></span>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="Date">Date of incident <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" type="date" id="Date" name="Date" value="@(Model.Date is { } d ? SchoolWeek.Iso(d) : "")" max="@SchoolWeek.Iso(SchoolWeek.Today)" required />
+                    <span asp-validation-for="Date" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="Department">Reporting department <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="Department" name="Department" value="@Model.Department" list="dl-departments" maxlength="@Incident.DepartmentMaxLength" required dir="auto" placeholder="e.g. Discipline Department" />
+                    <datalist id="dl-departments">@foreach (var x in s.Departments) { <option value="@x"></option> }</datalist>
+                    <span asp-validation-for="Department" class="field-validation-error"></span>
+                </div>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="Severity">Severity level <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="Severity" name="Severity" required>
+                        @foreach (var v in IncidentLabels.Severities) { <option value="@v" selected="@(Model.Severity == v)">@IncidentLabels.Severity(v)</option> }
+                    </select>
+                    <span asp-validation-for="Severity" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="Status">Incident status <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="Status" name="Status" required>
+                        @foreach (var v in IncidentLabels.Statuses) { <option value="@v" selected="@(Model.Status == v)">@IncidentLabels.Status(v)</option> }
+                    </select>
+                    <span asp-validation-for="Status" class="field-validation-error"></span>
+                </div>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@back">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(isEdit ? "Save" : "Create report")</button>
+        </div>
+    </form>
+</div>

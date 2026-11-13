@@ -13,9 +13,11 @@ wwwroot\img\logo-light.png
 wwwroot\img\logo-mark.png
 wwwroot\js\app.js
 wwwroot\js\arrivals.js
+wwwroot\js\attendance.js
 wwwroot\js\operations.js
 wwwroot\js\staff.js
 wwwroot\js\theme-init.js
+wwwroot\js\timetables.js
 wwwroot\lib\jquery-validation-unobtrusive\dist\jquery.validate.unobtrusive.js
 wwwroot\lib\jquery-validation-unobtrusive\dist\jquery.validate.unobtrusive.min.js
 wwwroot\lib\jquery-validation-unobtrusive\LICENSE.txt
@@ -31,10 +33,10 @@ wwwroot\lib\jquery\dist\jquery.slim.js
 wwwroot\lib\jquery\dist\jquery.slim.min.js
 wwwroot\lib\jquery\dist\jquery.slim.min.map
 wwwroot\lib\jquery\LICENSE.txt
-E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\app.css
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\staff.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\favicon.ico
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\fonts\OFL-Manrope.txt
-E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\staff.js
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\app.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\theme-init.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\lib\jquery-validation-unobtrusive\dist\jquery.validate.unobtrusive.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\lib\jquery-validation-unobtrusive\dist\jquery.validate.unobtrusive.min.js
@@ -53,8 +55,10 @@ E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\staff.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\operations.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\operations.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\skeleton.css
-E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\arrivals.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\app.js
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\arrivals.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\fonts\OFL-NotoSansArabic.txt
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\lib\jquery\LICENSE.txt
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\lib\jquery-validation\dist\additional-methods.min.js
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\attendance.js
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\timetables.js

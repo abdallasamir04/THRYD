@@ -1,0 +1,172 @@
+@model SessionListViewModel
+@*
+    Session Attendance: the lessons of one day, read from the class timetable (no copy). Filters: date, class,
+    period, subject, teacher (assigned or substitute) and student. Lessons without records are pending, never absent.
+*@
+@{
+    ViewData["Title"] = "Session Attendance";
+    ViewData["Nav"] = "Attendance";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var day = Model.Day;
+    var f = day.Filter;
+    var o = Model.Options;
+    var t = day.Totals;
+    var date = SchoolWeek.Iso(f.Date);
+    var filtered = f.ClassId is not null || f.SlotId is not null || f.Subject is not null || f.TeacherId is not null || f.StudentId is not null;
+    var back = Model.Query();
+    string Pct(double? p) => p is { } v ? v.ToString("0.#", c) + "%" : "—";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/attendance?date=@date">Student Attendance</a></li><li><span aria-current="page">Session Attendance</span></li></ol>
+        <h1 class="page-title">Session Attendance</h1>
+        <p class="page-sub">Every scheduled lesson of the day from the class timetable — open a lesson to record Present, Late, Absent or Excused for each student.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/attendance/alerts?type=lessons">@Ui.Icon("alert-triangle")Lesson alerts</a>
+    </div>
+</div>
+
+<div class="arrival-daynav">
+    <partial name="_DayNav" model="f.Date" />
+</div>
+
+<form class="card att-filters" method="get" action="/attendance/sessions" aria-label="Filter lessons">
+    <input type="hidden" name="date" value="@date" />
+    <div class="field"><label class="label" for="f-class">Class</label>
+        <select class="select" id="f-class" name="classId" data-searchable data-autosubmit>
+            <option value="">All classes</option>
+            @foreach (var (id, name) in o.Classes) { <option value="@id" selected="@(f.ClassId == id)">@name</option> }
+        </select></div>
+    <div class="field"><label class="label" for="f-slot">Period</label>
+        <select class="select" id="f-slot" name="slotId" data-autosubmit>
+            <option value="">All periods</option>
+            @foreach (var s in o.Slots) { <option value="@s.Id" selected="@(f.SlotId == s.Id)">@s.Label@(s.HasTimes ? " · " + s.Times : "")</option> }
+        </select></div>
+    <div class="field"><label class="label" for="f-subject">Subject</label>
+        <select class="select" id="f-subject" name="subject" data-searchable data-autosubmit>
+            <option value="">All subjects</option>
+            @foreach (var s in o.Subjects) { <option value="@s" selected="@(f.Subject == s)">@s</option> }
+        </select></div>
+    <div class="field"><label class="label" for="f-teacher">Teacher</label>
+        <select class="select" id="f-teacher" name="teacherId" data-searchable data-autosubmit>
+            <option value="">All teachers</option>
+            @foreach (var (id, name) in o.Teachers) { <option value="@id" selected="@(f.TeacherId == id)">@name</option> }
+        </select></div>
+    <div class="field"><label class="label" for="f-student">Student</label>
+        <select class="select" id="f-student" name="studentId" data-searchable data-autosubmit>
+            <option value="">All students</option>
+            @foreach (var s in o.Students) { <option value="@s.Id" selected="@(f.StudentId == s.Id)" data-note="@s.ClassName">@s.Name</option> }
+        </select></div>
+    <div class="att-filters__end">
+        <noscript><button class="btn btn--primary" type="submit">Show</button></noscript>
+        @if (filtered)
+        {
+            <a class="btn btn--ghost btn--sm" href="/attendance/sessions?date=@date">@Ui.Icon("x", "icon--sm")Clear filters</a>
+        }
+    </div>
+</form>
+
+@if (day.IsWeekend)
+{
+    <div class="empty empty--boxed">
+        <span class="empty__icon">@Ui.Icon("calendar")</span>
+        <p class="empty__title">@f.Date.ToString("dddd", c) is not a school day</p>
+        <p class="empty__text">Lessons run Sunday to Thursday. Choose another date.</p>
+    </div>
+    return;
+}
+@if (day.Holiday is { } h)
+{
+    <div class="empty empty--boxed">
+        <span class="empty__icon">@Ui.Icon("calendar")</span>
+        <p class="empty__title">School holiday: @h.Name</p>
+        <p class="empty__text">@h.Dates. No lessons are expected, so no attendance is recorded and no alerts are raised.</p>
+        <div class="empty__actions"><a class="btn btn--secondary" href="/attendance/holidays">School holidays</a></div>
+    </div>
+    return;
+}
+
+@if (day.Student is { } st)
+{
+    <div class="notice notice--info">@Ui.Icon("user")<div class="notice__body"><strong dir="auto">@st.Name · @st.ClassName</strong>The status column shows this student's attendance in each lesson of the day.</div></div>
+}
+
+<ul class="summary-tiles summary-tiles--7" aria-label="Session statistics">
+    <li class="summary-tile"><span class="summary-tile__value num">@t.Expected</span><span class="summary-tile__label">Expected sessions</span></li>
+    <li class="summary-tile"><span class="summary-tile__value num">@t.Recorded</span><span class="summary-tile__label">Recorded</span></li>
+    <li class="summary-tile summary-tile--muted"><span class="summary-tile__value num">@t.Pending</span><span class="summary-tile__label">Pending</span></li>
+    <li class="summary-tile summary-tile--ok"><span class="summary-tile__value num">@t.Present</span><span class="summary-tile__label">Present</span></li>
+    <li class="summary-tile summary-tile--bad"><span class="summary-tile__value num">@t.Absent</span><span class="summary-tile__label">Absent</span></li>
+    <li class="summary-tile summary-tile--dup"><span class="summary-tile__value num">@t.Late</span><span class="summary-tile__label">Late</span></li>
+    <li class="summary-tile"><span class="summary-tile__value num">@Pct(t.Percent)</span><span class="summary-tile__label">@(t.Excused > 0 ? $"Attendance · {t.Excused} excused" : "Attendance")</span></li>
+</ul>
+
+<section class="card table-card" aria-label="Lessons">
+    @if (day.Lessons.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("presentation")</span>
+            <p class="empty__title">No lessons @(filtered ? "match these filters" : "on the timetable for this day")</p>
+            <p class="empty__text">Lessons come from the class timetable (Timetable → Classes). Sessions are not created here.</p>
+            <div class="empty__actions">@if (filtered) { <a class="btn btn--secondary" href="/attendance/sessions?date=@date">Clear filters</a> } <a class="btn btn--ghost" href="/timetable/classes">Class timetables</a></div>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack att-lessons">
+                <thead>
+                    <tr>
+                        <th scope="col">Period</th>
+                        <th scope="col">Class</th>
+                        <th scope="col">Subject</th>
+                        <th scope="col">Teacher</th>
+                        <th scope="col">@(day.Student is null ? "Attendance" : "Student status")</th>
+                        <th scope="col" class="col-actions"><span class="visually-hidden">Open</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in day.Lessons)
+                    {
+                        var l = row.Lesson;
+                        var k = row.Counts;
+                        var href = $"/attendance/sessions/{l.SessionId}?date={date}&back={Uri.EscapeDataString(back)}";
+                        <tr class="@(l.Cancelled ? "is-cancelled" : "")">
+                            <td data-label="Period"><div class="att-period"><strong>@l.Period</strong><span class="person__meta num">@l.Times</span></div></td>
+                            <td data-label="Class"><span class="badge badge--class">@l.ClassName</span></td>
+                            <td data-label="Subject"><div class="att-period"><strong dir="auto">@l.Subject</strong><span class="person__meta">@l.DepartmentName</span></div></td>
+                            <td data-label="Teacher"><span dir="auto">@(l.SubstituteName ?? l.TeacherName)</span>@if (l.SubstituteName is not null) { <div class="person__meta" dir="auto">Covering @l.TeacherName</div> }</td>
+                            <td data-label="@(day.Student is null ? "Attendance" : "Student status")">
+                                @if (l.Cancelled)
+                                {
+                                    <span class="badge badge--neutral">Cancelled</span><div class="person__meta" dir="auto">@l.CancelReason</div>
+                                }
+                                else if (day.Student is not null)
+                                {
+                                    @if (l.Upcoming) { <span class="badge badge--neutral">Not started</span> }
+                                    else { <span class="badge @SessionStatuses.Badge(row.StudentStatus)">@SessionStatuses.Label(row.StudentStatus)</span> }
+                                }
+                                else if (l.Upcoming)
+                                {
+                                    <span class="badge badge--neutral">Not started</span><div class="person__meta">@k.Expected student(s)</div>
+                                }
+                                else
+                                {
+                                    <div class="att-counts">
+                                        @if (k.Pending == 0 && k.Expected > 0) { <span class="badge badge--success">Complete</span> }
+                                        else if (k.Recorded == 0) { <span class="badge badge--warning">Not recorded</span> }
+                                        else { <span class="badge badge--warning">@k.Pending pending</span> }
+                                        <span class="att-counts__line num"><b class="g">@k.Present</b> present · <b class="w">@k.Late</b> late · <b class="r">@k.Absent</b> @(k.Excused > 0 ? $"absent · {k.Excused} excused" : "absent") · of @k.Expected</span>
+                                    </div>
+                                }
+                            </td>
+                            <td class="col-actions"><a class="btn btn--@(l.IsExpected && k.Pending > 0 && day.Student is null ? "primary" : "secondary") btn--sm" href="@href">@(l.IsExpected ? "Register" : "View")</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

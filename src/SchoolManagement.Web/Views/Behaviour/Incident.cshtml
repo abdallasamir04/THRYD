@@ -1,0 +1,282 @@
+@model IncidentPageViewModel
+@*
+    One official incident report, in the order of the printed report:
+    A. incident information · B. students involved · C. chronological timeline · D. investigation findings & actions ·
+    E. administrative sign-off & record closure — then the audit history. Changes open in dialogs (app.js)
+    and the page refreshes after each save. A closed record is read-only until reopened.
+*@
+@{
+    var d = Model.Incident;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var edit = Model.CanEdit;
+    var baseUrl = $"/students/behaviour/incidents/{d.Id}";
+    ViewData["Title"] = d.Reference;
+    ViewData["Nav"] = "Behaviour";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/behaviour">Behavioural / Discipline</a></li><li><a href="/students/behaviour/incidents">Incident</a></li><li><span aria-current="page">@d.Reference</span></li></ol>
+        <p class="inc-eyebrow" dir="auto">@Model.SchoolName</p>
+        <h1 class="page-title">Official Student Incident Report</h1>
+        <p class="page-sub"><strong>@d.Reference</strong> · <span dir="auto">@d.Category</span> · @d.Date.ToString("d MMM yyyy", c)</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--primary" href="@baseUrl/pdf" download>@Ui.Icon("file-pdf")Download official PDF</a>
+        @if (d.IsClosed && Model.Identified)
+        {
+            <a class="btn btn--secondary" href="@baseUrl/reopen" data-modal>@Ui.Icon("refresh")Reopen record</a>
+        }
+    </div>
+</div>
+
+<partial name="_Confidential" model="Model.Identified" />
+@if (d.IsClosed)
+{
+    <div class="notice notice--success">@Ui.Icon("check-circle")<div class="notice__body"><strong>Record closed</strong>@(d.ClosedAt is { } ca ? Ui.DateTime(ca) : "")@(d.ClosedBy is null ? "" : " by " + d.ClosedBy). The report is read-only; reopen it with a reason to make changes.</div></div>
+}
+
+@* ---------------------------------------------------------------- A. incident information *@
+<section class="card inc-section" aria-labelledby="sec-a">
+    <div class="card__head">
+        <div><h2 class="card__title" id="sec-a"><span class="inc-step">A</span>Incident information</h2></div>
+        @if (edit) { <a class="btn btn--secondary btn--sm" href="@baseUrl/edit" data-modal>@Ui.Icon("pencil", "icon--sm")Edit</a> }
+    </div>
+    <dl class="inc-facts">
+        <div><dt>School name</dt><dd dir="auto">@Model.SchoolName</dd></div>
+        <div><dt>Report title</dt><dd>Official Student Incident Report</dd></div>
+        <div><dt>Incident category</dt><dd dir="auto"><strong>@d.Category</strong></dd></div>
+        <div><dt>Date of incident</dt><dd>@d.Date.ToString("dddd d MMMM yyyy", c)</dd></div>
+        <div><dt>Reporting department</dt><dd dir="auto">@d.Department</dd></div>
+        <div><dt>Severity level</dt><dd><span class="badge @IncidentLabels.SeverityBadge(d.Severity)">@IncidentLabels.Severity(d.Severity)</span></dd></div>
+        <div><dt>Reference ID</dt><dd><strong class="inc-ref">@d.Reference</strong></dd></div>
+        <div><dt>Incident status</dt><dd><span class="badge @IncidentLabels.StatusBadge(d.Status)">@IncidentLabels.Status(d.Status)</span></dd></div>
+    </dl>
+</section>
+
+@* ---------------------------------------------------------------- B. students involved *@
+<section class="card table-card inc-section" aria-labelledby="sec-b">
+    <div class="card__head">
+        <div><h2 class="card__title" id="sec-b"><span class="inc-step">B</span>Students involved</h2>
+            <p class="card__sub">Each student from the Student Directory, with their grade & section and their own account of involvement.</p></div>
+        @if (edit) { <a class="btn btn--primary btn--sm" href="@baseUrl/students/add" data-modal>@Ui.Icon("plus", "icon--sm")Add student</a> }
+    </div>
+    @if (d.Students.Count == 0)
+    {
+        <p class="muted inc-empty">No students added yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack inc-grid">
+                <thead><tr><th scope="col" class="num">#</th><th scope="col">Student name</th><th scope="col">Grade &amp; section</th><th scope="col">Role classification</th><th scope="col">Reported conduct &amp; involvement</th>@if (edit) { <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th> }</tr></thead>
+                <tbody>
+                    @for (var i = 0; i < d.Students.Count; i++)
+                    {
+                        var s = d.Students[i];
+                        <tr>
+                            <td data-label="#" class="num faint">@(i + 1)</td>
+                            <td data-label="Student name"><a href="/students/behaviour/incidents/student/@s.StudentId" dir="auto"><strong>@s.Name</strong></a></td>
+                            <td data-label="Grade & section">@s.GradeSection</td>
+                            <td data-label="Role classification"><span class="badge @(s.Role == IncidentRole.ReportedConduct ? "badge--warning" : s.Role == IncidentRole.AffectedStudent ? "badge--primary" : "badge--neutral")">@s.RoleLabel</span></td>
+                            <td data-label="Reported conduct & involvement" class="inc-text" dir="auto">@s.Involvement</td>
+                            @if (edit)
+                            {
+                                <td class="col-actions">
+                                    <div class="row-actions">
+                                        <a class="icon-btn" href="@baseUrl/students/@s.Id/edit" data-modal aria-label="Edit @s.Name" title="Edit">@Ui.Icon("pencil")</a>
+                                        <form action="@baseUrl/students/@s.Id/remove" method="post" data-ajax-form
+                                              data-confirm="@s.Name will be removed from this report and from the timeline events they were listed in. The student record itself is not changed."
+                                              data-confirm-title="Remove student from the report?" data-confirm-button="Remove">
+                                            @Html.AntiForgeryToken()
+                                            <button class="icon-btn icon-btn--danger" type="submit" aria-label="Remove @s.Name" title="Remove">@Ui.Icon("trash")</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@* ---------------------------------------------------------------- C. timeline *@
+<section class="card table-card inc-section" aria-labelledby="sec-c">
+    <div class="card__head">
+        <div><h2 class="card__title" id="sec-c"><span class="inc-step">C</span>Chronological timeline of events</h2>
+            <p class="card__sub">Events in the order they happened. Events with a time are placed automatically; use the arrows to order the rest.</p></div>
+        @if (edit) { <a class="btn btn--primary btn--sm" href="@baseUrl/timeline/add" data-modal>@Ui.Icon("plus", "icon--sm")Add event</a> }
+    </div>
+    @if (d.Timeline.Count == 0)
+    {
+        <p class="muted inc-empty">No events added yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack inc-grid">
+                <thead><tr><th scope="col" class="num">#</th><th scope="col">Time / period</th><th scope="col">Location</th><th scope="col">Students present</th><th scope="col">Factual account of incident</th>@if (edit) { <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th> }</tr></thead>
+                <tbody>
+                    @for (var i = 0; i < d.Timeline.Count; i++)
+                    {
+                        var t = d.Timeline[i];
+                        <tr>
+                            <td data-label="#" class="num faint">@(i + 1)</td>
+                            <td data-label="Time / period"><strong dir="auto">@t.TimePeriod</strong>@if (t.Time is { } tm) { <div class="person__meta num">@tm.ToString("HH:mm", c)</div> }</td>
+                            <td data-label="Location" dir="auto">@t.Location</td>
+                            <td data-label="Students present" dir="auto">@t.PresentText</td>
+                            <td data-label="Factual account" class="inc-text" dir="auto">@t.Account</td>
+                            @if (edit)
+                            {
+                                <td class="col-actions">
+                                    <div class="row-actions">
+                                        <form action="@baseUrl/timeline/@t.Id/move" method="post" data-ajax-form>
+                                            @Html.AntiForgeryToken()<input type="hidden" name="direction" value="-1" />
+                                            <button class="icon-btn" type="submit" aria-label="Move up" title="Move up" disabled="@(i == 0)">@Ui.Icon("arrow-up")</button>
+                                        </form>
+                                        <form action="@baseUrl/timeline/@t.Id/move" method="post" data-ajax-form>
+                                            @Html.AntiForgeryToken()<input type="hidden" name="direction" value="1" />
+                                            <button class="icon-btn" type="submit" aria-label="Move down" title="Move down" disabled="@(i == d.Timeline.Count - 1)">@Ui.Icon("arrow-down")</button>
+                                        </form>
+                                        <a class="icon-btn" href="@baseUrl/timeline/@t.Id/edit" data-modal aria-label="Edit event" title="Edit">@Ui.Icon("pencil")</a>
+                                        <form action="@baseUrl/timeline/@t.Id/delete" method="post" data-ajax-form
+                                              data-confirm="The event “@t.TimePeriod — @t.Location” will be deleted from the timeline. This is recorded in the history."
+                                              data-confirm-title="Delete this event?" data-confirm-button="Delete event">
+                                            @Html.AntiForgeryToken()
+                                            <button class="icon-btn icon-btn--danger" type="submit" aria-label="Delete event" title="Delete">@Ui.Icon("trash")</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@* ---------------------------------------------------------------- D. findings & actions *@
+<section class="card table-card inc-section" aria-labelledby="sec-d">
+    <div class="card__head">
+        <div><h2 class="card__title" id="sec-d"><span class="inc-step">D</span>Investigation findings &amp; administrative actions</h2>
+            <p class="card__sub">Each action is tracked on its own: Pending, In Progress, Completed, Issued &amp; Logged or Resolved.</p></div>
+        @if (edit) { <a class="btn btn--primary btn--sm" href="@baseUrl/actions/add" data-modal>@Ui.Icon("plus", "icon--sm")Add action</a> }
+    </div>
+    @if (d.Actions.Count == 0)
+    {
+        <p class="muted inc-empty">No findings or actions recorded yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack inc-grid">
+                <thead><tr><th scope="col" class="num">#</th><th scope="col">Action item</th><th scope="col">Investigation finding &amp; action</th><th scope="col">Restorative &amp; disciplinary details</th><th scope="col">Status</th>@if (edit) { <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th> }</tr></thead>
+                <tbody>
+                    @for (var i = 0; i < d.Actions.Count; i++)
+                    {
+                        var a = d.Actions[i];
+                        <tr>
+                            <td data-label="#" class="num faint">@(i + 1)</td>
+                            <td data-label="Action item"><strong dir="auto">@a.ActionItem</strong></td>
+                            <td data-label="Finding & action" class="inc-text" dir="auto">@a.Finding</td>
+                            <td data-label="Restorative & disciplinary details" class="inc-text" dir="auto">@(a.Details ?? "—")</td>
+                            <td data-label="Status">
+                                @if (edit)
+                                {
+                                    <form action="@baseUrl/actions/@a.Id/status" method="post" data-ajax-form>
+                                        @Html.AntiForgeryToken()
+                                        <select class="select input--sm" name="status" aria-label="Status of @a.ActionItem" data-autosubmit>
+                                            @foreach (var st in IncidentLabels.ActionStatuses) { <option value="@st" selected="@(a.Status == st)">@IncidentLabels.ActionStatus(st)</option> }
+                                        </select>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="badge @IncidentLabels.ActionBadge(a.Status)">@IncidentLabels.ActionStatus(a.Status)</span>
+                                }
+                                <div class="person__meta">@Ui.DateTime(a.UpdatedAt)@(a.UpdatedBy is null ? "" : " · " + a.UpdatedBy)</div>
+                            </td>
+                            @if (edit)
+                            {
+                                <td class="col-actions">
+                                    <div class="row-actions">
+                                        <a class="icon-btn" href="@baseUrl/actions/@a.Id/edit" data-modal aria-label="Edit action" title="Edit">@Ui.Icon("pencil")</a>
+                                        <form action="@baseUrl/actions/@a.Id/delete" method="post" data-ajax-form
+                                              data-confirm="“@a.ActionItem” will be deleted from the report. This is recorded in the history."
+                                              data-confirm-title="Delete this action?" data-confirm-button="Delete action">
+                                            @Html.AntiForgeryToken()
+                                            <button class="icon-btn icon-btn--danger" type="submit" aria-label="Delete action" title="Delete">@Ui.Icon("trash")</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@* ---------------------------------------------------------------- E. sign-off & closure *@
+<section class="card inc-section" aria-labelledby="sec-e">
+    <div class="card__head">
+        <div><h2 class="card__title" id="sec-e"><span class="inc-step">E</span>Administrative sign-off &amp; record closure</h2></div>
+        @if (edit) { <a class="btn btn--secondary btn--sm" href="@baseUrl/signoff" data-modal>@Ui.Icon("pencil", "icon--sm")Edit sign-off</a> }
+    </div>
+    <dl class="inc-facts">
+        <div><dt>Prepared by</dt><dd dir="auto">@(d.PreparedByName ?? "—")</dd></div>
+        <div><dt>School</dt><dd dir="auto">@(d.SignOffSchool ?? Model.SchoolName)</dd></div>
+        <div><dt>Date of report</dt><dd>@(d.ReportDate?.ToString("d MMMM yyyy", c) ?? "—")</dd></div>
+        <div><dt>Reviewed by</dt><dd dir="auto">@(d.ReviewedByName ?? "—")</dd></div>
+        <div class="inc-facts__wide"><dt>Administrative approval / endorsement</dt><dd><span class="badge @(d.Approval is IncidentApproval.Approved or IncidentApproval.ApprovedWithConditions ? "badge--success" : d.Approval == IncidentApproval.NotApproved ? "badge--error" : "badge--neutral")">@IncidentLabels.Approval(d.Approval)</span>@if (d.ApprovalNotes is not null) { <div class="inc-text" dir="auto">@d.ApprovalNotes</div> }</dd></div>
+        <div class="inc-facts__wide"><dt>Record closure status</dt><dd>
+            @if (d.IsClosed)
+            {
+                <span class="badge badge--success">Closed</span>
+            }
+            else
+            {
+                <span class="badge badge--warning">Open</span>
+                @if (d.ClosureBlockers.Count > 0)
+                {
+                    <p class="muted inc-blockers-title">The record stays open until:</p>
+                    <ul class="inc-blockers">
+                        @foreach (var b in d.ClosureBlockers) { <li>@b</li> }
+                    </ul>
+                }
+                else
+                {
+                    <p class="muted inc-blockers-title">Every investigation and administrative step is complete.</p>
+                }
+                @if (edit)
+                {
+                    <form action="@baseUrl/close" method="post" data-ajax-form class="inc-close"
+                          data-confirm="@d.Reference will be closed and become read-only. It can be reopened later with a reason."
+                          data-confirm-title="Close this record?" data-confirm-button="Close record" data-confirm-tone="warning">
+                        @Html.AntiForgeryToken()
+                        <button class="btn btn--primary" type="submit" disabled="@(d.ClosureBlockers.Count > 0)">@Ui.Icon("check")Close record</button>
+                    </form>
+                }
+            }
+        </dd></div>
+    </dl>
+</section>
+
+@* ---------------------------------------------------------------- audit history *@
+<section class="card" aria-labelledby="sec-h">
+    <div class="card__head"><div><h2 class="card__title" id="sec-h">@Ui.Icon("clock")Audit history</h2><p class="card__sub">Every important change and every PDF export, newest first. Created by @(d.CreatedBy ?? "—") on @Ui.DateTime(d.CreatedAt).</p></div></div>
+    <ol class="timeline inc-history">
+        @foreach (var h in d.History)
+        {
+            <li class="timeline__item">
+                <span class="timeline__when">@h.Action · @Ui.DateTime(h.At)@(h.By is null ? "" : " · " + h.By)</span>
+                @if (h.Details is not null) { <span dir="auto">@h.Details</span> }
+            </li>
+        }
+    </ol>
+</section>

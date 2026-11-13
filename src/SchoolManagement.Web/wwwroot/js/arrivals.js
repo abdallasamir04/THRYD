@@ -217,8 +217,16 @@
                 .finally(function () { if (sk) sk.done(container); });
         }
 
-        window.addEventListener("beforeunload", function (e) {
-            if (dirtyRows().length > 0) { e.preventDefault(); e.returnValue = ""; }
+        // Unsaved entries: leaving through the app (day, date or class change, sidebar, links) asks in the
+        // THRYD dialog; a reload or closing the tab falls back to the browser's own prompt (app.js).
+        function unsavedMessage() {
+            if (!document.contains(table)) return null; // replaced by the list reload after a save
+            var n = dirtyRows().length;
+            return n === 0 ? null : n + " attendance entr" + (n === 1 ? "y is" : "ies are") + " not saved yet.";
+        }
+        if (window.App && App.unsaved) App.unsaved.register(unsavedMessage);
+        else window.addEventListener("beforeunload", function (e) {
+            if (unsavedMessage()) { e.preventDefault(); e.returnValue = ""; }
         });
 
         $$(".arrival-row", table).forEach(paintRow);

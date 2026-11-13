@@ -10,9 +10,43 @@ namespace SchoolManagement.Web.Controllers;
 [Route("belongings")]
 public class BelongingsController(IBelongingsService belongings, ITimetableService timetable, ITeacherService teachers) : AppController
 {
-    /// <summary>Year → Quarter → Week → Date → Grade → Student, all in the query string. Defaults to today.</summary>
+    /// <summary>
+    /// Belongings landing page: two cards, Personal Belongings and Academic Belongings, each opening its own section.
+    /// Old links with a selection in the query string (/belongings?grade=…) still open the personal section.
+    /// </summary>
     [HttpGet("")]
-    public async Task<IActionResult> Index(int? yearId, int? quarterId, int? week, string? date, string? grade, int? studentId, CancellationToken ct)
+    public IActionResult Index()
+    {
+        if (Request.QueryString.HasValue) return LocalRedirect("/belongings/personal" + Request.QueryString);
+        return View("~/Views/Staff/Hub.cshtml", new HubViewModel
+        {
+            Title = "Belongings",
+            Subtitle = "Daily belongings checks per student, with readiness by day, week and quarter. Choose an area.",
+            Crumbs = [("Dashboard", "/"), ("Students", "/students/hub"), ("Belongings", null)],
+            Large = true,
+            Nav = "Belongings",
+            Cards =
+            [
+                new("/belongings/personal", "briefcase", "Personal Belongings",
+                    "Jacket, School Bag, Pencil Case, Water Flask and Lunch Box / Bag, with daily notes.", "Green · Red · N/A per item", "teal"),
+                new("/belongings/academic", "graduation-cap", "Academic Belongings",
+                    "Book and Copy Book per subject, chosen by department and subject.", "Green · Red · N/A per subject", "blue"),
+            ],
+            Extra = [("Academic calendar", "/belongings/calendar", "calendar")],
+        });
+    }
+
+    /// <summary>Personal Belongings section. Year → Quarter → Week → Date → Grade → Student in the query string; defaults to today.</summary>
+    [HttpGet("personal")]
+    public Task<IActionResult> PersonalSection(int? yearId, int? quarterId, int? week, string? date, string? grade, int? studentId, CancellationToken ct) =>
+        SectionAsync(BelongingsSection.Personal, yearId, quarterId, week, date, grade, studentId, ct);
+
+    /// <summary>Academic Belongings section (Book and Copy Book per department and subject). Same selection as the personal section.</summary>
+    [HttpGet("academic")]
+    public Task<IActionResult> AcademicSection(int? yearId, int? quarterId, int? week, string? date, string? grade, int? studentId, CancellationToken ct) =>
+        SectionAsync(BelongingsSection.Academic, yearId, quarterId, week, date, grade, studentId, ct);
+
+    private async Task<IActionResult> SectionAsync(BelongingsSection section, int? yearId, int? quarterId, int? week, string? date, string? grade, int? studentId, CancellationToken ct)
     {
         var (years, year, quarter, w, day) = await SelectionAsync(yearId, quarterId, week, date, ct);
 
@@ -21,11 +55,12 @@ public class BelongingsController(IBelongingsService belongings, ITimetableServi
         var student = students.FirstOrDefault(s => s.Id == studentId); // only students of the selected grade
 
         var depts = new List<(int, string, IReadOnlyList<string>)>();
-        if (student is not null && day is not null)
+        if (section == BelongingsSection.Academic && student is not null && day is not null)
             foreach (var dept in await teachers.DepartmentsAsync(ct)) depts.Add((dept.Id, dept.Name, await timetable.SubjectsAsync(dept.Id, ct)));
 
-        return View(new BelongingsPageViewModel
+        return View("Index", new BelongingsPageViewModel
         {
+            Section = section,
             Years = years, Year = year, Quarter = quarter, Week = w, Date = day, Grade = gradeKey, Students = students, Student = student,
             Day = student is not null && day is { } dd ? await belongings.DayAsync(student.Id, dd, ct) : null,
             WeekStats = student is not null && quarter is not null && w is not null ? await belongings.WeekAsync(student.Id, quarter, w.Number, ct) : null,

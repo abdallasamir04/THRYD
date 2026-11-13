@@ -1,0 +1,81 @@
+@model AlertListViewModel
+@*
+    Attendance alerts: three consecutive school-day absences, and present at school but absent from a lesson.
+    Pending (open + following up) first; resolved and cleared ones under "Resolved".
+*@
+@{
+    ViewData["Title"] = "Attendance alerts";
+    ViewData["Nav"] = "Attendance";
+    var f = Model.Filter;
+    var n = Model.Counts;
+    var typeKey = f.Type switch { AttendanceAlertType.ConsecutiveAbsence => "absences", AttendanceAlertType.AbsentFromSession => "lessons", _ => "" };
+    var stateKey = f.State ?? "pending";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/attendance">Student Attendance</a></li><li><span aria-current="page">Alerts</span></li></ol>
+        <h1 class="page-title">Attendance alerts</h1>
+        <p class="page-sub">Raised automatically from School and Session Attendance, never duplicated, and updated — or cleared — when attendance is corrected. Follow each one up with the family.</p>
+    </div>
+    <div class="page-head__actions">
+        <form action="/attendance/alerts/recheck" method="post" data-ajax-form>
+            @Html.AntiForgeryToken()
+            <button class="btn btn--secondary" type="submit">@Ui.Icon("refresh")Re-check records</button>
+        </form>
+    </div>
+</div>
+
+<ul class="summary-tiles att-tiles" aria-label="Alert statistics">
+    <li><a class="summary-tile summary-tile--bad" href="@Model.Query(("type", "absences"), ("state", null))" aria-current="@(typeKey == "absences" && stateKey == "pending" ? "true" : null)"><span class="summary-tile__value num">@n.ConsecutivePending</span><span class="summary-tile__label">3 consecutive absences · pending</span></a></li>
+    <li><a class="summary-tile summary-tile--dup" href="@Model.Query(("type", "lessons"), ("state", null))" aria-current="@(typeKey == "lessons" && stateKey == "pending" ? "true" : null)"><span class="summary-tile__value num">@n.SessionPending</span><span class="summary-tile__label">At school, absent from a lesson · pending</span></a></li>
+    <li><a class="summary-tile" href="@Model.Query(("type", null), ("state", null))"><span class="summary-tile__value num">@n.FollowUp</span><span class="summary-tile__label">Being followed up</span></a></li>
+    <li><a class="summary-tile summary-tile--ok" href="@Model.Query(("type", null), ("state", "resolved"))" aria-current="@(stateKey == "resolved" && typeKey == "" ? "true" : null)"><span class="summary-tile__value num">@(n.Resolved + n.Cleared)</span><span class="summary-tile__label">Resolved (@n.Cleared cleared by corrections)</span></a></li>
+</ul>
+
+<section class="card table-card" aria-label="Alerts">
+    <form class="toolbar att-alert-filters" method="get" action="/attendance/alerts" role="search">
+        <div class="segmented" role="group" aria-label="Status">
+            <a href="@Model.Query(("state", null))" aria-pressed="@(stateKey == "pending" ? "true" : "false")" class="segmented__link">Pending <span class="count">@n.Pending</span></a>
+            <a href="@Model.Query(("state", "resolved"))" aria-pressed="@(stateKey == "resolved" ? "true" : "false")" class="segmented__link">Resolved</a>
+            <a href="@Model.Query(("state", "all"))" aria-pressed="@(stateKey == "all" ? "true" : "false")" class="segmented__link">All</a>
+        </div>
+        @if (f.State is not null) { <input type="hidden" name="state" value="@f.State" /> }
+        <div class="toolbar__search input-icon">
+            @Ui.Icon("search")
+            <input class="input" type="search" name="search" value="@f.Search" placeholder="Find a student…" aria-label="Find a student" dir="auto" />
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="type" aria-label="Alert type" data-autosubmit>
+                <option value="">All alert types</option>
+                <option value="absences" selected="@(typeKey == "absences")">3 consecutive absences</option>
+                <option value="lessons" selected="@(typeKey == "lessons")">At school, absent from a lesson</option>
+            </select>
+        </div>
+        <div class="toolbar__filter">
+            <select class="select" name="classId" aria-label="Class" data-searchable data-autosubmit>
+                <option value="">All classes</option>
+                @foreach (var c in Model.Classes) { <option value="@c.Id" selected="@(f.ClassId == c.Id)">@c.Name</option> }
+            </select>
+        </div>
+    </form>
+
+    @if (Model.Alerts.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("check-circle")</span>
+            <p class="empty__title">@(stateKey == "pending" ? "No pending alerts" : "No alerts to show")</p>
+            <p class="empty__text">Alerts appear when a student is absent from school three school days in a row, or is present at school but absent from a scheduled lesson.</p>
+        </div>
+    }
+    else
+    {
+        <ul class="att-alert-list">
+            @foreach (var a in Model.Alerts)
+            {
+                <partial name="_AlertItem" model="a" />
+            }
+        </ul>
+    }
+</section>

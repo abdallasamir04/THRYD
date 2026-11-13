@@ -1,0 +1,35 @@
+@model ReopenForm
+@* Reopen a closed record: the reason is kept in the audit history. *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Reopen record"; ViewData["Nav"] = "Behaviour"; }
+    var baseUrl = $"/students/behaviour/incidents/{Model.IncidentId}";
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="@baseUrl/reopen" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon modal__icon--warning">@Ui.Icon("refresh", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Reopen @Model.Reference?</h2>
+                <p class="modal__sub">The record becomes editable again. The reason is kept in the audit history.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="Reason">Reason <span class="req" aria-hidden="true">*</span></label>
+                <textarea class="input textarea" id="Reason" name="Reason" rows="3" maxlength="2000" required dir="auto" placeholder="e.g. New information from a parent meeting" data-autofocus>@Model.Reason</textarea>
+                <span asp-validation-for="Reason" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@baseUrl">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("refresh")Reopen record</button>
+        </div>
+    </form>
+</div>

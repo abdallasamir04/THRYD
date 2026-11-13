@@ -9,6 +9,8 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 
+using SchoolManagement.Web.Entities;
+
 namespace SchoolManagement.Web.Data.TestData;
 
 /// <summary>
@@ -173,18 +175,19 @@ public sealed class TestDataTracker : SaveChangesInterceptor
     /// Per table: the highest numeric key (or every text key) that exists before the first seed. Recorded
     /// once; generated rows always get higher keys, and removal refuses anything at or below these values.
     /// </summary>
-    public static async Task RecordBaselineAsync(SchoolDbContext db, CancellationToken ct = default)
+    public static async Task RecordBaselineAsync(SchoolDbContext db, IReadOnlySet<string>? alreadyRecorded = null, CancellationToken ct = default)
     {
         var rows = new List<(string, string, string, string, string?)>();
         foreach (var (table, column, numeric, _) in Tables(db.Model))
         {
+            if (alreadyRecorded?.Contains(table) == true) continue; // a table's baseline is recorded once, before its first generated row
             var sql = numeric
                 ? $"SELECT CAST(MAX([{column}]) AS nvarchar(40)) AS Value FROM [{table}]"
                 : $"SELECT (SELECT [{column}] AS k FROM [{table}] FOR JSON PATH) AS Value";
             var value = await db.Database.SqlQueryRaw<string?>(sql).SingleAsync(ct);
             rows.Add(("baseline", "B", table, column, value));
         }
-        await InsertAsync(db.Database, rows, ct);
+        if (rows.Count > 0) await InsertAsync(db.Database, rows, ct);
     }
 
     /// <summary>Mapped tables with their first key column.</summary>
@@ -248,8 +251,8 @@ public sealed class TestDataTracker : SaveChangesInterceptor
                 throw new InvalidOperationException($"Refused: {original.Count} row(s) of {table} are listed as generated but existed before seeding. Nothing was removed.");
         }
 
-        // 2) No other (non-generated) row may refer to a generated row.
-        foreach (var dependent in model.GetEntityTypes().Where(t => t.GetTableName() is not null))
+        // 2) No other (non-generated) row may refer to a generated row — except derived records, removed with it below.
+        foreach (var dependent in model.GetEntityTypes().Where(t => t.GetTableName() is not null && !Derived.Contains(t.ClrType)))
         {
             foreach (var fk in dependent.GetForeignKeys().Where(f => f.PrincipalKey.IsPrimaryKey()))
             {
@@ -271,8 +274,27 @@ public sealed class TestDataTracker : SaveChangesInterceptor
             }
         }
 
-        // 3) Delete, every table before the tables it references.
+        // 3) Derived records (alerts and their events, incident audit history) that point at generated rows go with
+        //    them, also when the application created them after seeding (the alert sweep, a follow-up note, a PDF export).
         var deleted = 0;
+        foreach (var dependent in model.GetEntityTypes().Where(t => Derived.Contains(t.ClrType)))
+        {
+            var table = dependent.GetTableName()!;
+            var store = StoreObjectIdentifier.Table(table, dependent.GetSchema());
+            foreach (var fk in dependent.GetForeignKeys().Where(f => f.Properties.Count == 1 && f.PrincipalKey.IsPrimaryKey()))
+            {
+                if (!byTable.TryGetValue(fk.PrincipalEntityType.GetTableName()!, out var principals)) continue;
+                var column = fk.Properties[0].GetColumnName(store)!;
+                foreach (var batch in principals.Where(p => p.Key[0].ValueKind == JsonValueKind.Number).Select(p => p.Key[0].GetInt64()).Chunk(1000))
+                {
+                    var args = batch.Select((k, i) => (object)new SqlParameter($"@p{i}", k)).ToList();
+                    var sql = $"DELETE FROM [{dependent.GetSchema() ?? "dbo"}].[{table}] WHERE [{column}] IN ({string.Join(", ", batch.Select((_, i) => $"@p{i}"))})";
+                    deleted += await db.Database.ExecuteSqlRawAsync(sql, args, ct);
+                }
+            }
+        }
+
+        // 4) Delete, every table before the tables it references.
         foreach (var table in DeleteOrder(model).Where(byTable.ContainsKey))
         {
             var type = byTable[table][0].Type!;
@@ -296,6 +318,9 @@ public sealed class TestDataTracker : SaveChangesInterceptor
         }
         return deleted;
     }
+
+    /// <summary>Records computed from other records: removed together with the generated rows they refer to.</summary>
+    private static readonly Type[] Derived = [typeof(AttendanceAlert), typeof(AttendanceAlertEvent), typeof(IncidentHistory)];
 
     private static string Text(JsonElement e) => e.ValueKind == JsonValueKind.Number ? e.GetInt64().ToString() : e.GetString() ?? "";
 

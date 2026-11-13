@@ -22,6 +22,8 @@ public sealed class DbFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         Environment.SetEnvironmentVariable("ConnectionStrings__SchoolDb", ConnectionString);
+        // The background alert sweep would add alerts to other tests' data while they run.
+        Environment.SetEnvironmentVariable("Attendance__AlertSweep", "false");
         await using (var db = NewContext()) await db.Database.EnsureDeletedAsync();
         Factory = new WebApplicationFactory<Program>();
         _ = Factory.Server; // starts the app: applies both migrations to the empty test database
@@ -44,6 +46,10 @@ public sealed class DbFixture : IAsyncLifetime
     public static TimetableService Timetable(SchoolDbContext db) => new(db, Workload(db), new NoUser());
     public static DepartmentService Departments(SchoolDbContext db) => new(db, new NoUser());
     public static ManagementService Management(SchoolDbContext db) => new(db, new NoUser());
+    public static AttendanceAlertService Alerts(SchoolDbContext db) => new(db, new NoUser());
+    public static ArrivalService SchoolAttendance(SchoolDbContext db) => new(db, Settings(db), new NoUser(), Alerts(db));
+    public static SessionAttendanceService Sessions(SchoolDbContext db) => new(db, new NoUser(), Alerts(db));
+    public static AttendanceCalendarService Calendar(SchoolDbContext db) => new(db, new NoUser(), Alerts(db));
 
     /// <summary>Creates a student with a unique name in the given class.</summary>
     public async Task<(int Id, string Name)> NewStudentAsync(int classId)

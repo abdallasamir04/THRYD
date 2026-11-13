@@ -98,30 +98,411 @@
     }
 
     // ------------------------------------------------------------------ toasts
+    // One shared notification for every kind of feedback: success, info, warning and error.
+    // Screen readers hear them through two hidden live regions (errors and warnings interrupt).
     var toastHost = doc.createElement("div");
     toastHost.className = "toasts";
-    toastHost.setAttribute("role", "status");
-    toastHost.setAttribute("aria-live", "polite");
+    // A manual popover lives in the top layer, so toasts stay visible above an open dialog.
+    var canPopover = typeof toastHost.showPopover === "function";
+    if (canPopover) toastHost.setAttribute("popover", "manual");
     doc.body.appendChild(toastHost);
+    function raiseToasts() {
+        if (!canPopover) return;
+        try {
+            if (toastHost.matches(":popover-open")) toastHost.hidePopover();
+            toastHost.showPopover(); // re-showing puts it above a dialog opened after it
+        } catch (e) { /* not connected yet */ }
+    }
     var toastIcons = { success: "check-circle", error: "alert-circle", warning: "alert-triangle", info: "info" };
+    var toastLabels = { success: "Success", error: "Error", warning: "Warning", info: "Information" };
+    var toastTimeouts = { success: 5000, info: 6000, warning: 8000, error: 9000 };
+    var MAX_TOASTS = 4;
+
+    function liveRegion(assertive) {
+        var r = doc.createElement("div");
+        r.className = "visually-hidden";
+        r.setAttribute("aria-live", assertive ? "assertive" : "polite");
+        r.setAttribute("aria-atomic", "true");
+        doc.body.appendChild(r);
+        return r;
+    }
+    var politeRegion = liveRegion(false), assertiveRegion = liveRegion(true);
+    function announce(text, assertive) {
+        var region = assertive ? assertiveRegion : politeRegion;
+        region.textContent = "";
+        setTimeout(function () { region.textContent = text; }, 60);
+    }
 
     function icon(name, cls) {
         return '<svg class="icon ' + (cls || "") + '" aria-hidden="true"><use href="#i-' + name + '"></use></svg>';
     }
 
     function toast(message, type) {
-        type = type || "success";
+        type = toastIcons[type] ? type : "success";
+        if (!message) return null;
+        // The same message already on screen: keep one copy and restart its timer.
+        var same = $$(".toast:not(.is-leaving)", toastHost).filter(function (t) { return t._message === message && t._type === type; })[0];
+        if (same) { same._restart(); announce(toastLabels[type] + ": " + message, type === "error" || type === "warning"); return same; }
+
         var el = doc.createElement("div");
         el.className = "toast toast--" + type;
-        el.innerHTML = '<span class="toast__icon">' + icon(toastIcons[type] || "info") + '</span><span class="toast__text"></span>' +
-            '<button class="icon-btn" type="button" aria-label="Dismiss">' + icon("x", "icon--sm") + "</button>";
+        el.innerHTML = '<span class="toast__icon">' + icon(toastIcons[type]) + '</span>' +
+            '<span class="toast__text"></span>' +
+            '<button class="icon-btn" type="button" aria-label="Dismiss notification">' + icon("x", "icon--sm") + "</button>";
         el.querySelector(".toast__text").textContent = message;
-        var remove = function () { el.classList.add("is-leaving"); setTimeout(function () { el.remove(); }, 200); };
+        el._message = message;
+        el._type = type;
+
+        var timer = null;
+        var remove = function () {
+            clearTimeout(timer);
+            if (el.classList.contains("is-leaving")) return;
+            el.classList.add("is-leaving");
+            setTimeout(function () { el.remove(); }, 200);
+        };
+        var start = function () { clearTimeout(timer); timer = setTimeout(remove, toastTimeouts[type]); };
+        var pause = function () { clearTimeout(timer); };
+        el._restart = start;
+        el._remove = remove;
         el.querySelector("button").addEventListener("click", remove);
+        // Reading or tabbing to a toast keeps it on screen.
+        el.addEventListener("mouseenter", pause);
+        el.addEventListener("mouseleave", start);
+        el.addEventListener("focusin", pause);
+        el.addEventListener("focusout", start);
+
+        var shown = $$(".toast:not(.is-leaving)", toastHost);
+        while (shown.length >= MAX_TOASTS) shown.shift()._remove();
         toastHost.appendChild(el);
-        setTimeout(remove, type === "error" ? 8000 : 5000);
+        raiseToasts();
+        announce(toastLabels[type] + ": " + message, type === "error" || type === "warning");
+        start();
+        return el;
     }
-    window.App = { toast: toast };
+    ["success", "info", "warning", "error"].forEach(function (t) { toast[t] = function (message) { return toast(message, t); }; });
+
+    // ------------------------------------------------------------------ dialog (confirm / alert)
+    // The one confirmation dialog of the application. Every "Are you sure?", unsaved-changes and
+    // message box goes through Dialog.confirm / Dialog.alert, never window.confirm or window.alert.
+    var Dialog = (function () {
+        var el = doc.getElementById("confirm-dialog");
+        if (!el) {
+            el = doc.createElement("dialog");
+            el.id = "confirm-dialog";
+            el.className = "modal modal--confirm";
+            el.setAttribute("aria-labelledby", "confirm-title");
+            el.setAttribute("aria-describedby", "confirm-text");
+            el.innerHTML = '<div class="modal__content"><div class="modal__head"><span class="modal__icon" data-confirm-icon></span><div>' +
+                '<h2 class="modal__title" id="confirm-title" data-confirm-title></h2><p class="modal__sub" id="confirm-text" data-confirm-text></p></div></div>' +
+                '<div class="modal__foot"><button class="btn btn--secondary" type="button" data-confirm-cancel>Cancel</button>' +
+                '<button class="btn btn--primary" type="button" data-confirm-ok>OK</button></div></div>';
+            doc.body.appendChild(el);
+        }
+        el.setAttribute("role", "alertdialog");
+        var titleEl = el.querySelector("[data-confirm-title]");
+        var textEl = el.querySelector("[data-confirm-text]");
+        var okBtn = el.querySelector("[data-confirm-ok]");
+        var cancelBtn = el.querySelector("[data-confirm-cancel]");
+        var iconBox = el.querySelector("[data-confirm-icon]") || el.querySelector(".modal__icon");
+        var tones = {
+            danger: { icon: "alert-triangle", button: "danger" },
+            warning: { icon: "alert-triangle", button: "primary" },
+            info: { icon: "info", button: "primary" },
+            success: { icon: "check-circle", button: "primary" },
+        };
+        var pending = null, returnFocus = null;
+
+        function finish(value) {
+            if (!pending) return;
+            var resolve = pending;
+            pending = null;
+            if (el.open) el.close();
+            if (returnFocus && doc.contains(returnFocus) && typeof returnFocus.focus === "function") {
+                try { returnFocus.focus({ preventScroll: true }); } catch (e) { returnFocus.focus(); }
+            }
+            returnFocus = null;
+            resolve(value);
+        }
+
+        /**
+         * options: { title, message, confirmText, cancelText, tone: danger|warning|info|success,
+         *            confirmTone: danger|primary, icon, focus: "confirm"|"cancel", alert: bool }
+         * Resolves true (confirmed) or false (Cancel, Escape or a click outside).
+         */
+        function open(options) {
+            var o = typeof options === "string" ? { message: options } : (options || {});
+            if (pending) finish(false);
+            var tone = tones[o.tone] ? o.tone : "danger";
+            var buttonTone = o.confirmTone || tones[tone].button;
+            titleEl.textContent = o.title || (o.alert ? "Notice" : "Are you sure?");
+            textEl.textContent = o.message || "";
+            textEl.hidden = !o.message;
+            okBtn.textContent = o.confirmText || (o.alert ? "OK" : "Confirm");
+            okBtn.className = "btn " + (buttonTone === "danger" ? "btn--danger" : "btn--primary");
+            cancelBtn.textContent = o.cancelText || "Cancel";
+            cancelBtn.hidden = !!o.alert;
+            iconBox.className = "modal__icon modal__icon--" + tone;
+            iconBox.innerHTML = icon(o.icon || tones[tone].icon, "icon--lg");
+            el.classList.add("modal--confirm");
+            returnFocus = doc.activeElement;
+            var focusCancel = !o.alert && (o.focus ? o.focus === "cancel" : buttonTone === "danger");
+            return new Promise(function (resolve) {
+                pending = resolve;
+                el.showModal();
+                setTimeout(function () { (focusCancel ? cancelBtn : okBtn).focus(); }, 30);
+            });
+        }
+
+        okBtn.addEventListener("click", function () { finish(true); });
+        cancelBtn.addEventListener("click", function () { finish(false); });
+        el.addEventListener("click", function (e) { if (e.target === el) finish(false); }); // backdrop
+        // Escape. The close event is queued: ignore one that arrives after the dialog was opened again.
+        el.addEventListener("close", function () { if (!el.open) finish(false); });
+
+        return {
+            confirm: open,
+            alert: function (options) {
+                var o = typeof options === "string" ? { message: options } : Object.assign({}, options);
+                o.alert = true;
+                if (!o.tone) o.tone = "info";
+                return open(o).then(function () { });
+            },
+        };
+    })();
+
+    window.App = { toast: toast, confirm: Dialog.confirm, alert: Dialog.alert };
+
+    // ------------------------------------------------------------------ unsaved changes
+    // A POST form is "dirty" when its values differ from what they were when the user first touched it
+    // (or when the server sent it back with validation errors). Pages can add their own sources
+    // (App.unsaved.register), e.g. the attendance checklist's unsaved rows.
+    // Inside the app (links, filters, date pickers, reloads after a save, closing a form dialog) the
+    // user gets the THRYD dialog. Reload, closing the tab and external links can only use the browser's
+    // own beforeunload prompt — browsers do not allow a custom dialog there.
+    var Unsaved = (function () {
+        var sources = [];
+        var suspendedUntil = 0;
+        var SKIP = "[data-no-unsaved], [data-confirm]";
+
+        function tracked(form) {
+            return !!form && form.nodeName === "FORM" && (form.getAttribute("method") || "get").toLowerCase() === "post" && !form.matches(SKIP);
+        }
+        function serialize(form) {
+            var parts = [];
+            new FormData(form).forEach(function (value, key) {
+                if (key === "__RequestVerificationToken") return;
+                parts.push(key + "=" + (typeof value === "string" ? value : value.name + ":" + value.size));
+            });
+            return parts.join("&");
+        }
+        // Snapshot just before the first interaction, so values filled in by scripts on load never count.
+        function watch(e) {
+            var t = e.target;
+            var form = t && (t.form || (t.closest && t.closest("form")));
+            if (tracked(form) && form._unsavedSnapshot == null) form._unsavedSnapshot = serialize(form);
+        }
+        doc.addEventListener("focusin", watch, true);
+        doc.addEventListener("pointerdown", watch, true);
+
+        function isDirty(form) {
+            if (!tracked(form) || !doc.contains(form)) return false;
+            if (form._unsavedForce) return true;
+            return form._unsavedSnapshot != null && serialize(form) !== form._unsavedSnapshot;
+        }
+        function clean(form) { if (form) { form._unsavedSnapshot = null; form._unsavedForce = false; } }
+        function force(form) { if (tracked(form)) form._unsavedForce = true; }
+
+        /** Sentences describing what is unsaved; empty when nothing is. `except` is a form being submitted. */
+        function describe(except) {
+            var list = [];
+            sources.forEach(function (fn) {
+                try { var m = fn(); if (m) list.push(m); } catch (e) { /* a source must never block navigation */ }
+            });
+            var forms = Array.prototype.filter.call(doc.forms, function (f) { return f !== except && isDirty(f); });
+            if (forms.length) list.push(list.length ? "Other changes on this page are not saved either." : "You have changes on this page that are not saved yet.");
+            return list;
+        }
+        function suspend() { suspendedUntil = Date.now() + 4000; }
+        function suspended() { return Date.now() < suspendedUntil; }
+
+        /** Asks before leaving when something is unsaved. Resolves true when it is safe to go on. */
+        function confirmLeave(except, options) {
+            var o = options || {};
+            if (suspended()) return Promise.resolve(true);
+            var list = describe(except);
+            if (list.length === 0) return Promise.resolve(true);
+            return Dialog.confirm({
+                title: o.title || "Leave without saving?",
+                message: list.join(" ") + " " + (o.consequence || "If you leave this page now, these changes will be lost."),
+                confirmText: o.confirmText || "Leave without saving",
+                cancelText: o.cancelText || "Stay on page",
+                tone: "warning", confirmTone: "danger", focus: "cancel",
+            }).then(function (ok) { if (ok) suspend(); return ok; });
+        }
+
+        function navigate(url) {
+            return confirmLeave().then(function (ok) { if (ok) window.location.href = url; return ok; });
+        }
+
+        window.addEventListener("beforeunload", function (e) {
+            if (suspended() || describe().length === 0) return;
+            e.preventDefault();
+            e.returnValue = "";
+        });
+
+        return {
+            register: function (fn) { sources.push(fn); },
+            isDirty: isDirty, clean: clean, force: force, tracked: tracked,
+            any: function (except) { return describe(except).length > 0; },
+            confirmLeave: confirmLeave, navigate: navigate, suspend: suspend,
+        };
+    })();
+    window.App.unsaved = Unsaved;
+    window.App.navigate = Unsaved.navigate;
+
+    // ------------------------------------------------------------------ validation messages
+    // Forms checked by jQuery unobtrusive validation keep it. Every other form (HTML required, min, max,
+    // pattern…) is checked here instead of with the browser's validation bubbles, and shows the same
+    // inline message style next to the field.
+    var Validate = (function () {
+        var seq = 0;
+
+        function messageFor(el) {
+            var v = el.validity;
+            var type = (el.type || "").toLowerCase();
+            if (v.customError) return el.validationMessage;
+            if (v.valueMissing) {
+                if (el.getAttribute("data-msg-required")) return el.getAttribute("data-msg-required");
+                if (type === "radio") return "Choose one option.";
+                if (type === "checkbox") return "Tick this box to continue.";
+                if (type === "file") return "Choose a file.";
+                if (el.nodeName === "SELECT") return "Choose an option.";
+                return "This field is required.";
+            }
+            if (v.typeMismatch) return type === "email" ? "Enter a valid email address." : type === "url" ? "Enter a valid web address." : "Enter a valid value.";
+            if (v.tooShort) return "Use at least " + el.minLength + " characters.";
+            if (v.tooLong) return "Use " + el.maxLength + " characters or fewer.";
+            if (v.rangeUnderflow) return "Enter " + el.min + " or more.";
+            if (v.rangeOverflow) return "Enter " + el.max + " or less.";
+            if (v.patternMismatch) return el.getAttribute("title") || "Use the format shown.";
+            if (v.stepMismatch || v.badInput) return "Enter a valid value.";
+            return el.validationMessage || "Check this field.";
+        }
+
+        function group(el) {
+            return el.type === "radio" ? el.closest("[role=radiogroup], fieldset, .radio-group") : null;
+        }
+        function members(el) {
+            if (el.type !== "radio" || !el.form || !el.name) return [el];
+            return $$('input[type=radio]', el.form).filter(function (r) { return r.name === el.name; });
+        }
+
+        function clearField(el) {
+            members(el).forEach(function (m) {
+                m.classList.remove("input-validation-error");
+                m.removeAttribute("aria-invalid");
+                if (m._appMsgId) {
+                    var ids = (m.getAttribute("aria-describedby") || "").split(" ").filter(function (id) { return id && id !== m._appMsgId; });
+                    if (ids.length) m.setAttribute("aria-describedby", ids.join(" ")); else m.removeAttribute("aria-describedby");
+                    m._appMsgId = null;
+                }
+            });
+            var g = group(el);
+            if (g) g.classList.remove("is-invalid");
+            var combo = el.closest(".combo");
+            if (combo) combo.classList.remove("is-invalid");
+            var msg = el._appMsg;
+            if (msg) {
+                if (msg._appCreated) msg.remove();
+                else { msg.textContent = ""; msg.className = "field-validation-valid"; }
+            }
+            members(el).forEach(function (m) { m._appMsg = null; });
+        }
+
+        function clear(form) {
+            $$("[aria-invalid=true]", form).forEach(clearField);
+        }
+
+        function mark(el, text) {
+            var all = members(el);
+            var form = el.form;
+            var msg = form && el.name ? form.querySelector('[data-valmsg-for="' + (window.CSS && CSS.escape ? CSS.escape(el.name) : el.name) + '"]') : null;
+            if (msg) {
+                msg.className = "field-validation-error";
+            } else {
+                msg = doc.createElement("span");
+                msg.className = "field-validation-error app-field-error";
+                msg._appCreated = true;
+                var anchor = group(el) || el.closest(".combo") || el.closest(".input-icon") || el;
+                anchor.insertAdjacentElement("afterend", msg);
+            }
+            msg.textContent = text;
+            msg.id = msg.id || "app-err-" + (++seq);
+            all.forEach(function (m) {
+                m.classList.add("input-validation-error");
+                m.setAttribute("aria-invalid", "true");
+                m._appMsg = msg;
+                m._appMsgId = msg.id;
+                var ids = (m.getAttribute("aria-describedby") || "").split(" ").filter(Boolean);
+                if (ids.indexOf(msg.id) < 0) ids.push(msg.id);
+                m.setAttribute("aria-describedby", ids.join(" "));
+            });
+            var g = group(el);
+            if (g) g.classList.add("is-invalid");
+            var combo = el.closest(".combo");
+            if (combo) combo.classList.add("is-invalid");
+        }
+
+        /** Shows every invalid field of the form and moves focus to the first. Returns false when invalid. */
+        function check(form) {
+            clear(form);
+            var seen = {};
+            var invalid = $$("input, select, textarea", form).filter(function (el) {
+                if (!el.willValidate || el.checkValidity()) return false;
+                if (el.type === "radio") { if (seen[el.name]) return false; seen[el.name] = true; }
+                return true;
+            });
+            invalid.forEach(function (el) { mark(el, messageFor(el)); });
+            if (invalid.length === 0) return true;
+            var first = invalid[0];
+            var target = first.closest(".combo") ? first.closest(".combo").querySelector(".combo__button") : first;
+            if (first.type === "radio") target = members(first).filter(function (r) { return !r.disabled; })[0] || first;
+            target.scrollIntoView({ block: "center", behavior: "smooth" });
+            try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); }
+            announce(invalid.length === 1 ? messageFor(first) : invalid.length + " fields need attention. " + messageFor(first), true);
+            return false;
+        }
+
+        /** Forms without unobtrusive validation stop using the browser bubbles. */
+        function adopt(form) {
+            if (form._appValidate) return;
+            var hasValidator = window.jQuery && jQuery(form).data("validator");
+            if (hasValidator || form.hasAttribute("novalidate")) return;
+            form.noValidate = true;
+            form._appValidate = true;
+        }
+
+        // Capture phase: runs before every other submit handler, so an invalid form goes no further.
+        doc.addEventListener("submit", function (e) {
+            var form = e.target;
+            if (!form._appValidate || (e.submitter && e.submitter.formNoValidate)) return;
+            if (check(form)) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }, true);
+
+        // A corrected field loses its message straight away.
+        var revalidate = function (e) {
+            var el = e.target;
+            if (!el || el.getAttribute("aria-invalid") !== "true" || !el.form || !el.form._appValidate) return;
+            if (el.checkValidity()) clearField(el);
+            else if (el._appMsg) el._appMsg.textContent = messageFor(el);
+        };
+        doc.addEventListener("input", revalidate);
+        doc.addEventListener("change", revalidate);
+
+        return { adopt: adopt, check: check, clear: clear };
+    })();
 
     // ------------------------------------------------------------------ skeleton loaders (shared)
     // Placeholders shaped like the content being loaded (css/skeleton.css). Used while a list reloads,
@@ -203,6 +584,13 @@
                 jQuery.validator.unobtrusive.parse(f);
             });
         }
+        var forms = $$("form", root);
+        if (root.nodeName === "FORM") forms.push(root);
+        forms.forEach(function (f) {
+            Validate.adopt(f);
+            // A form the server sent back with errors still holds what the user typed: it is not saved.
+            if (f.querySelector(".input-validation-error, .validation-summary-errors, .field-validation-error:not(:empty)")) Unsaved.force(f);
+        });
         var autofocus = root.querySelector && root.querySelector("[data-autofocus]");
         if (autofocus && root !== doc) setTimeout(function () { autofocus.focus(); }, 30);
         // Lets page-specific scripts (operations.js) set up the new content.
@@ -239,10 +627,35 @@
 
     function closeModal() { if (modal && modal.open) modal.close(); }
 
+    function modalDirty() { return !!modal && modal.open && $$("form", modal).some(Unsaved.isDirty); }
+
+    /** Cancel, Escape, a click outside or opening another dialog: never drops typed changes without asking. */
+    function confirmDiscardModal() {
+        if (!modalDirty()) return Promise.resolve(true);
+        return Dialog.confirm({
+            title: "Discard your changes?",
+            message: "The changes in this form have not been saved. If you close it now, they will be lost.",
+            confirmText: "Discard changes", cancelText: "Keep editing",
+            tone: "warning", confirmTone: "danger", focus: "cancel",
+        });
+    }
+    function requestCloseModal() {
+        confirmDiscardModal().then(function (ok) { if (ok) closeModal(); });
+    }
+
     if (modal) {
         modal.addEventListener("click", function (e) {
-            if (e.target === modal) closeModal(); // backdrop
-            if (e.target.closest("[data-modal-close]")) { e.preventDefault(); closeModal(); }
+            if (e.target === modal) requestCloseModal(); // backdrop
+            if (e.target.closest("[data-modal-close]")) { e.preventDefault(); requestCloseModal(); }
+        });
+        modal.addEventListener("keydown", function (e) {
+            if (e.key !== "Escape" || e.defaultPrevented) return; // an open dropdown handles its own Escape
+            e.preventDefault();
+            requestCloseModal();
+        });
+        modal.addEventListener("cancel", function (e) {
+            e.preventDefault();
+            requestCloseModal();
         });
         modal.addEventListener("close", function () { modal.innerHTML = ""; });
     }
@@ -256,7 +669,7 @@
         var context = link.getAttribute("data-class-context");
         var select = context && doc.querySelector(context);
         if (select) url = select.value ? "/classes/" + encodeURIComponent(select.value) + "/students/create" : "/students/create";
-        openModal(url);
+        confirmDiscardModal().then(function (ok) { if (ok) openModal(url); });
     });
 
     // ------------------------------------------------------------------ AJAX forms
@@ -273,8 +686,9 @@
                 if (r.json) {
                     if (r.data.success) {
                         var reopen = submitter && submitter.getAttribute("data-reopen");
+                        Unsaved.clean(form);
                         toast(r.data.message || "Saved.");
-                        if (r.data.redirect) { window.location.href = r.data.redirect; return; }
+                        if (r.data.redirect) { Unsaved.navigate(r.data.redirect); return; }
                         refreshLists();
                         if (reopen && modal && modal.open) openModal(fillTemplate(reopen, form));
                         else closeModal();
@@ -283,7 +697,9 @@
                         if (r.status === 404) { closeModal(); refreshLists(); }
                     }
                 } else if (r.status === 422 && modal && modal.contains(form)) {
-                    fillModal(r.data); // the form again, with the server's validation messages
+                    fillModal(r.data); // the form again, with the server's validation messages (still unsaved)
+                    $$("form", modal).forEach(Unsaved.force);
+                    toast("Some fields need attention. Nothing was saved yet.", "warning");
                 } else {
                     toast("Something went wrong (" + r.status + "). Please try again.", "error");
                 }
@@ -314,59 +730,60 @@
     doc.addEventListener("submit", function (e) {
         var form = e.target;
         var submitter = e.submitter || form.querySelector("[type=submit]");
+        var ajax = form.hasAttribute("data-ajax-form");
+        // A plain form submit loads another page (list filters and invalid forms are already prevented).
+        var navigates = !ajax && !e.defaultPrevented && (!form.target || form.target === "_self");
+        var needsConfirm = form.hasAttribute("data-confirm") && !form.dataset.confirmed;
+        var needsLeave = navigates && !form._leaveConfirmed && Unsaved.any(form);
 
-        if (form.hasAttribute("data-confirm") && !form.dataset.confirmed) {
+        if (needsConfirm || needsLeave) {
             e.preventDefault();
-            confirmDialog(form).then(function (ok) {
-                if (!ok) return;
-                if (form.hasAttribute("data-ajax-form")) submitAjax(form, submitter);
-                else { form.dataset.confirmed = "1"; setBusy(submitter, true); form.submit(); }
-            });
+            if (form._promptOpen) return; // a second change event while the question is already on screen
+            form._promptOpen = true;
+            (needsConfirm ? confirmDialog(form) : Promise.resolve(true))
+                .then(function (ok) { return ok && navigates ? Unsaved.confirmLeave(form) : ok; })
+                .then(function (ok) {
+                    form._promptOpen = false;
+                    if (!ok) { revertFilter(form); return; }
+                    if (ajax) { submitAjax(form, submitter); return; }
+                    if (needsConfirm) form.dataset.confirmed = "1";
+                    form._leaveConfirmed = true;
+                    setTimeout(function () { form._leaveConfirmed = false; }, 4000); // e.g. a download: the page stays
+                    // Submit again through the browser, keeping the button that was pressed.
+                    if (form.requestSubmit) {
+                        if (submitter && submitter.form === form && !submitter.disabled) form.requestSubmit(submitter); else form.requestSubmit();
+                    } else { setBusy(submitter, true); Unsaved.suspend(); form.submit(); }
+                });
             return;
         }
 
-        if (form.hasAttribute("data-ajax-form")) {
+        if (ajax) {
             e.preventDefault();
             submitAjax(form, submitter);
             return;
         }
 
-        if (form.hasAttribute("data-loading") && !e.defaultPrevented) {
-            if (window.jQuery && jQuery(form).data("validator") && !jQuery(form).valid()) return;
-            setBusy(submitter, true);
+        if (navigates) {
+            // The form's own values are being sent: nothing is lost, so no browser prompt.
+            Unsaved.suspend();
+            if (form.dataset.confirmed || form.hasAttribute("data-loading")) setBusy(submitter, true);
         }
     });
 
-    // ------------------------------------------------------------------ confirm dialog
-    var confirmEl = doc.getElementById("confirm-dialog");
-    function confirmDialog(form) {
-        return new Promise(function (resolve) {
-            if (!confirmEl) { resolve(window.confirm(form.getAttribute("data-confirm"))); return; }
-            var tone = form.getAttribute("data-confirm-tone") || "danger";
-            confirmEl.querySelector("[data-confirm-title]").textContent = form.getAttribute("data-confirm-title") || "Are you sure?";
-            confirmEl.querySelector("[data-confirm-text]").textContent = form.getAttribute("data-confirm");
-            var ok = confirmEl.querySelector("[data-confirm-ok]");
-            ok.textContent = form.getAttribute("data-confirm-button") || "Delete";
-            ok.className = "btn " + (tone === "danger" ? "btn--danger" : "btn--primary");
-            var iconBox = confirmEl.querySelector(".modal__icon");
-            iconBox.className = "modal__icon " + (tone === "danger" ? "modal__icon--danger" : "modal__icon--warning");
-            var done = function (value) {
-                confirmEl.removeEventListener("close", onClose);
-                ok.removeEventListener("click", onOk);
-                if (confirmEl.open) confirmEl.close();
-                resolve(value);
-            };
-            var onOk = function () { done(true); };
-            var onClose = function () { done(false); };
-            ok.addEventListener("click", onOk);
-            confirmEl.addEventListener("close", onClose);
-            confirmEl.showModal();
-            setTimeout(function () { confirmEl.querySelector("[data-confirm-cancel]").focus(); }, 30);
-        });
+    /** A filter (date, class…) whose page change was cancelled shows the current page's values again. */
+    function revertFilter(form) {
+        if ((form.getAttribute("method") || "get").toLowerCase() !== "get") return;
+        form.reset();
+        $$("select", form).forEach(function (s) { if (s._combo) s._combo.sync(); });
     }
-    if (confirmEl) {
-        confirmEl.addEventListener("click", function (e) {
-            if (e.target === confirmEl || e.target.closest("[data-confirm-cancel]")) confirmEl.close();
+
+    // ------------------------------------------------------------------ confirm dialog for data-confirm forms
+    function confirmDialog(form) {
+        return Dialog.confirm({
+            title: form.getAttribute("data-confirm-title") || "Are you sure?",
+            message: form.getAttribute("data-confirm"),
+            confirmText: form.getAttribute("data-confirm-button") || "Delete",
+            tone: form.getAttribute("data-confirm-tone") || "danger",
         });
     }
 
@@ -385,7 +802,7 @@
         var previous = null;
         var timer = setTimeout(function () { previous = Skeleton.show(container); }, 150);
         return request(url).then(function (r) {
-            if (!r.ok || r.json) { window.location.href = url; return; }
+            if (!r.ok || r.json) { Unsaved.navigate(url); return; }
             container.innerHTML = r.data;
             enhance(container);
             if (push) history.replaceState({ list: true }, "", url);
@@ -412,12 +829,21 @@
     }
 
     function reloadWithToasts() {
-        var kept = $$(".toast").map(function (t) {
-            var match = t.className.match(/toast--(\w+)/);
-            return { m: t.querySelector(".toast__text").textContent, t: match ? match[1] : "success" };
+        // Another form on the page may still hold unsaved changes: ask before the reload drops them.
+        Unsaved.confirmLeave(null, {
+            title: "Reload the page?",
+            consequence: "The page reloads to show what was just saved, and those changes would be lost.",
+            confirmText: "Reload page", cancelText: "Keep editing",
+        }).then(function (ok) {
+            if (!ok) { toast("Saved. Reload the page when you are done to see the latest records.", "info"); return; }
+            var kept = $$(".toast:not(.is-leaving)").map(function (t) {
+                var match = t.className.match(/toast--(\w+)/);
+                return { m: t.querySelector(".toast__text").textContent, t: match ? match[1] : "success" };
+            });
+            try { sessionStorage.setItem("sm.toasts", JSON.stringify(kept)); } catch (e) { /* storage blocked */ }
+            Unsaved.suspend();
+            window.location.reload();
         });
-        try { sessionStorage.setItem("sm.toasts", JSON.stringify(kept)); } catch (e) { /* storage blocked */ }
-        window.location.reload();
     }
 
     $$("form[data-list-filter]").forEach(function (form) {
@@ -659,6 +1085,21 @@
         mapForm.addEventListener("change", function (e) { if (e.target.matches("[data-map-field]")) paint(); });
         paint();
     }
+
+    // ------------------------------------------------------------------ leaving the page with unsaved changes
+    // Registered last, so links handled in place (dialogs, list paging, downloads) are left alone.
+    doc.addEventListener("click", function (e) {
+        if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        var link = e.target.closest("a[href]");
+        if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
+        var url;
+        try { url = new URL(link.href, window.location.href); } catch (err) { return; }
+        if (url.origin !== window.location.origin || !/^https?:$/.test(url.protocol)) return; // external: the browser asks
+        if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return; // same page
+        if (!Unsaved.any()) return;
+        e.preventDefault();
+        Unsaved.navigate(url.href);
+    });
 
     // ------------------------------------------------------------------ flash message from the server
     var flash = doc.getElementById("flash");

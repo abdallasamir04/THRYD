@@ -1,6 +1,6 @@
 @model ArrivalChecklistViewModel
 @{
-    ViewData["Title"] = "Student Attendance";
+    ViewData["Title"] = "School Attendance";
     ViewData["Nav"] = "Arrivals";
     var c = Model.Checklist;
     var date = SchoolWeek.Iso(c.Date);
@@ -13,11 +13,12 @@
 *@
 <div class="page-head arrival-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li>Student Attendance</li></ol>
-        <h1 class="page-title">Student Attendance</h1>
-        <p class="page-sub">Record each student's arrival for the day. Students without a record are shown as “Not recorded” — never as absent.</p>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/attendance?date=@date">Student Attendance</a></li><li>School Attendance</li></ol>
+        <h1 class="page-title">School Attendance</h1>
+        <p class="page-sub">Record each student's arrival for the day. Students without a record are shown as “Not recorded” — never as absent. Three consecutive school-day absences raise an alert.</p>
     </div>
     <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/attendance/alerts?type=absences">@Ui.Icon("alert-triangle")Absence alerts</a>
         <partial name="_Download" model='DownloadLink.Report("/arrivals/pdf")' />
     </div>
 </div>
@@ -35,7 +36,7 @@
                 <input type="hidden" name="date" value="@date" />
                 <div class="field">
                     <label class="label" for="classId">Class</label>
-                    <select class="select" id="classId" name="classId" data-searchable onchange="this.form.submit()">
+                    <select class="select" id="classId" name="classId" data-searchable data-autosubmit>
                         <option value="">All classes</option>
                         @foreach (var cls in Model.Classes)
                         {

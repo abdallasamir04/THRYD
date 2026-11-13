@@ -188,9 +188,7 @@ E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\SchoolManageme
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\ref\SchoolManagement.Web.dll
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\tiuozokxhg-of0p7qm48u.gz
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\mxyiq3mw7e-wqscx8xhwh.gz
-E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\zq8soyic97-90jjian3pv.gz
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\py3b8n4lpg-wqkgo7kpte.gz
-E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\3maigfyh0d-h2h8vbbng6.gz
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\SchoolManagement.Web.sourcelink.json
 E:\noo\SchoolManagement\src\SchoolManagement.Web\bin\Debug\net9.0\QuestPDF.Fonts.Lato.br
 E:\noo\SchoolManagement\src\SchoolManagement.Web\bin\Debug\net9.0\QuestPDF.dll
@@ -210,8 +208,12 @@ E:\noo\SchoolManagement\src\SchoolManagement.Web\bin\Debug\net9.0\runtimes\win-x
 E:\noo\SchoolManagement\src\SchoolManagement.Web\bin\Debug\net9.0\runtimes\win-x64\native\qpdf.dll
 E:\noo\SchoolManagement\src\SchoolManagement.Web\bin\Debug\net9.0\runtimes\win-x86\native\QuestPdfSkia.dll
 E:\noo\SchoolManagement\src\SchoolManagement.Web\bin\Debug\net9.0\runtimes\win-x86\native\qpdf.dll
-E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\wcwt0cg47j-2g9g8dsnmk.gz
-E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\3zu913ayaz-1on9ogxy4n.gz
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\7gfjytqs7x-zhutw5d43n.gz
-E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\echixku99h-wp6o1tlm0r.gz
+E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\3zu913ayaz-fw3f3f3mzo.gz
+E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\zq8soyic97-q3p398d9vi.gz
+E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\wcwt0cg47j-34u7ur6lie.gz
+E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\7xtzkwut1b-i5n1pv2ear.gz
+E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\9u1bd3zq42-y2grybrio5.gz
+E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\echixku99h-t7m7ety3ze.gz
+E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\3maigfyh0d-9otov3r94x.gz
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\staticwebassets.upToDateCheck.txt

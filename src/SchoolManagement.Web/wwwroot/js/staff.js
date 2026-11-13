@@ -3,7 +3,9 @@
  * that app.js fills (the "app:enhance" event). Display only: the server validates every save.
  *
  *  - Staff form: the subcategory and subject dropdowns follow the chosen department
- *  - <select data-autosubmit>: saves as soon as a new value is chosen (task status)
+ *  - <select data-autosubmit> / <input data-autosubmit>: submits its form as soon as a new value is chosen
+ *    (task status, page filters, the day picker). A real submit event, so app.js can ask before
+ *    unsaved changes on the page would be lost.
  *  - Date / time pickers (.picker): open the calendar or clock on click, quick-pick buttons
  */
 (function () {
@@ -80,9 +82,17 @@
         syncDept();
     }
 
-    // ---------------------------------------------------------------- auto-submitting selects (task status)
+    // ---------------------------------------------------------------- incident report: "Other" role needs a description
     document.addEventListener("change", function (e) {
-        var select = e.target.closest("select[data-autosubmit]");
+        var role = e.target.closest("[data-role-option]");
+        if (!role || !role.form) return;
+        var other = role.form.querySelector("[data-role-other]");
+        if (other) other.hidden = role.value !== "Other";
+    });
+
+    // ---------------------------------------------------------------- auto-submitting selects and inputs
+    document.addEventListener("change", function (e) {
+        var select = e.target.closest("select[data-autosubmit], input[data-autosubmit]");
         if (!select || !select.form) return;
         if (select.form.requestSubmit) select.form.requestSubmit();
         else select.form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
@@ -267,7 +277,15 @@
         var nav = e.target.closest("select[data-navigate]");
         if (nav && nav.value) {
             var week = nav.getAttribute("data-week");
-            window.location.href = nav.getAttribute("data-navigate") + encodeURIComponent(nav.value) + (week ? "?week=" + encodeURIComponent(week) : "");
+            var url = nav.getAttribute("data-navigate") + encodeURIComponent(nav.value) + (week ? "?week=" + encodeURIComponent(week) : "");
+            if (window.App && App.navigate) {
+                App.navigate(url).then(function (ok) {
+                    if (ok) return;
+                    // Stayed on the page: show the current choice again.
+                    Array.prototype.forEach.call(nav.options, function (o) { o.selected = o.defaultSelected; });
+                    if (nav._combo) nav._combo.sync();
+                });
+            } else window.location.href = url;
         }
     });
 

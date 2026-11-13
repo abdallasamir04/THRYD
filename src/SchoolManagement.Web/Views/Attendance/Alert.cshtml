@@ -1,0 +1,86 @@
+@model AlertActionModel
+@*
+    One alert: the student, class, dates or lesson (subject, period, time, teacher), contact information,
+    the history, and the follow-up actions (add a follow-up, resolve, reopen).
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var a = Model.Details!.Alert;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var streak = a.Type == AttendanceAlertType.ConsecutiveAbsence;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Attendance alert"; ViewData["Nav"] = "Attendance"; }
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/attendance/alerts/@a.Id" method="post" data-ajax-form="@(modal ? "" : null)" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon modal__icon--@(a.IsPending ? "danger" : "success")">@Ui.Icon(streak ? "calendar" : "presentation", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">@a.StudentName</h2>
+                <p class="modal__sub">@AlertLabels.Type(a.Type) · <span class="badge @AlertLabels.Badge(a.Status)">@AlertLabels.Status(a.Status)</span></p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <dl class="dl">
+                <dt>Student</dt><dd dir="auto"><a href="/students/profile/@a.StudentId">@a.StudentName</a></dd>
+                <dt>Class</dt><dd>@a.ClassName</dd>
+                @if (streak)
+                {
+                    <dt>Absent on</dt><dd>@a.DayCount consecutive school days: @string.Join(", ", a.Dates.Select(d => d.ToString("ddd d MMM yyyy", c)))</dd>
+                }
+                else
+                {
+                    <dt>Date</dt><dd>@a.FirstDate.ToString("dddd d MMM yyyy", c)</dd>
+                    <dt>Lesson</dt><dd dir="auto">@a.Subject · @a.Period (@a.Times)</dd>
+                    <dt>Teacher</dt><dd dir="auto">@(a.Teacher ?? "—")</dd>
+                    <dt>School attendance</dt><dd>Present that day — absent from this lesson</dd>
+                }
+                <dt>Contact</dt><dd><span class="muted">No parent / guardian contact is stored in the student record. Use the school's contact sheet.</span></dd>
+                @if (a.Resolution is not null)
+                {
+                    <dt>Resolution</dt><dd dir="auto">@a.Resolution<div class="person__meta">@(a.ResolvedBy ?? "—")@(a.ResolvedAt is { } ra ? " · " + Ui.DateTime(ra) : "")</div></dd>
+                }
+            </dl>
+
+            <div class="field">
+                <label class="label" asp-for="Note">@(a.IsPending ? "Follow-up note" : "Note (optional)")</label>
+                <textarea class="input textarea" asp-for="Note" rows="3" maxlength="1000" dir="auto"
+                          placeholder="@(a.IsPending ? "e.g. Called the mother at 10:15 — the student is ill and will return on Sunday." : "Why the alert is reopened")"></textarea>
+                <span asp-validation-for="Note" class="field-validation-error"></span>
+            </div>
+
+            @if (Model.Details.Events.Count > 0)
+            {
+                <div>
+                    <h3 class="label">History</h3>
+                    <ol class="timeline att-history">
+                        @foreach (var e in Model.Details.Events)
+                        {
+                            <li class="timeline__item">
+                                <span class="timeline__when">@AlertLabels.Event(e.Kind) · @Ui.DateTime(e.At)@(e.By is null ? "" : " · " + e.By)</span>
+                                <span dir="auto">@e.Text</span>
+                            </li>
+                        }
+                    </ol>
+                </div>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Close</button> }
+            else { <a class="btn btn--secondary" href="/attendance/alerts">Back to alerts</a> }
+            @if (a.IsPending)
+            {
+                <button class="btn btn--secondary" type="submit" name="Action" value="follow-up">@Ui.Icon("phone")Add follow-up</button>
+                <button class="btn btn--primary" type="submit" name="Action" value="resolve">@Ui.Icon("check")Resolve</button>
+            }
+            else
+            {
+                <button class="btn btn--primary" type="submit" name="Action" value="reopen">@Ui.Icon("refresh")Reopen</button>
+            }
+        </div>
+    </form>
+</div>

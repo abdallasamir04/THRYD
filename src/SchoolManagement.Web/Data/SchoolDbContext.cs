@@ -37,6 +37,18 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
     public DbSet<BelongingsRecord> BelongingsRecords => Set<BelongingsRecord>();
     public DbSet<AcademicMaterialRecord> AcademicMaterialRecords => Set<AcademicMaterialRecord>();
     public DbSet<BelongingsNoteHistory> BelongingsNoteHistory => Set<BelongingsNoteHistory>();
+    public DbSet<SchoolHoliday> SchoolHolidays => Set<SchoolHoliday>();
+    public DbSet<SessionAttendanceRecord> SessionAttendance => Set<SessionAttendanceRecord>();
+    public DbSet<SessionAttendanceCorrection> SessionAttendanceCorrections => Set<SessionAttendanceCorrection>();
+    public DbSet<SessionCancellation> SessionCancellations => Set<SessionCancellation>();
+    public DbSet<AttendanceAlert> AttendanceAlerts => Set<AttendanceAlert>();
+    public DbSet<AttendanceAlertEvent> AttendanceAlertEvents => Set<AttendanceAlertEvent>();
+    public DbSet<Incident> Incidents => Set<Incident>();
+    public DbSet<IncidentStudent> IncidentStudents => Set<IncidentStudent>();
+    public DbSet<IncidentTimelineEntry> IncidentTimeline => Set<IncidentTimelineEntry>();
+    public DbSet<IncidentTimelineStudent> IncidentTimelineStudents => Set<IncidentTimelineStudent>();
+    public DbSet<IncidentAction> IncidentActions => Set<IncidentAction>();
+    public DbSet<IncidentHistory> IncidentHistoryEntries => Set<IncidentHistory>();
 
     /// <summary>Backstop: a new or changed timetable session may not take a teacher above 24 in any week it counts.</summary>
     public const string TimetableLimitTrigger = "TR_TimetableAssignments_MaxWeeklyPeriods";
@@ -510,6 +522,163 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.Property(x => x.ChangedBy).HasMaxLength(150);
             e.HasOne(x => x.Record).WithMany().HasForeignKey(x => x.BelongingsRecordId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.BelongingsRecordId, x.ChangedAt });
+        });
+
+        // ---------------------------------------------------------------- two-level attendance
+        b.Entity<SchoolHoliday>(e =>
+        {
+            e.ToTable("SchoolHolidays", t => t.HasCheckConstraint("CK_SchoolHolidays_Range", "[EndDate] >= [StartDate]"));
+            e.Property(x => x.Name).HasMaxLength(SchoolHoliday.NameMaxLength).IsRequired();
+            e.Property(x => x.CreatedBy).HasMaxLength(150);
+            e.HasIndex(x => new { x.StartDate, x.EndDate });
+        });
+
+        b.Entity<SessionAttendanceRecord>(e =>
+        {
+            e.ToTable("SessionAttendanceRecords", t =>
+                t.HasCheckConstraint("CK_SessionAttendance_Status", "[Status] BETWEEN 1 AND 4"));
+            e.Property(x => x.Notes).HasMaxLength(SessionAttendanceRecord.NotesMaxLength);
+            e.Property(x => x.RecordedBy).HasMaxLength(150);
+            e.Property(x => x.UpdatedBy).HasMaxLength(150);
+            // History is kept: neither the student, the lesson nor the class can be deleted under a record.
+            e.HasOne(x => x.Student).WithMany().HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Session).WithMany().HasForeignKey(x => x.TimetableAssignmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
+            // One record per student per lesson per date; changes are corrections of it.
+            e.HasIndex(x => new { x.StudentId, x.TimetableAssignmentId, x.SessionDate }).IsUnique().HasDatabaseName("UX_SessionAttendance_StudentLessonDay");
+            e.HasIndex(x => new { x.TimetableAssignmentId, x.SessionDate });
+            e.HasIndex(x => new { x.SessionDate, x.SchoolClassId });
+        });
+
+        b.Entity<SessionAttendanceCorrection>(e =>
+        {
+            e.ToTable("SessionAttendanceCorrections");
+            e.Property(x => x.Before).HasMaxLength(SessionAttendanceCorrection.TextMaxLength).IsRequired();
+            e.Property(x => x.After).HasMaxLength(SessionAttendanceCorrection.TextMaxLength).IsRequired();
+            e.Property(x => x.Reason).HasMaxLength(SessionAttendanceCorrection.ReasonMaxLength);
+            e.Property(x => x.CorrectedBy).HasMaxLength(150);
+            e.HasOne(x => x.Record).WithMany(r => r.Corrections).HasForeignKey(x => x.SessionAttendanceRecordId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.SessionAttendanceRecordId, x.CorrectedAt });
+        });
+
+        b.Entity<SessionCancellation>(e =>
+        {
+            e.ToTable("SessionCancellations");
+            e.Property(x => x.Reason).HasMaxLength(SessionCancellation.ReasonMaxLength).IsRequired();
+            e.Property(x => x.CancelledBy).HasMaxLength(150);
+            e.HasOne(x => x.Session).WithMany().HasForeignKey(x => x.TimetableAssignmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.TimetableAssignmentId, x.SessionDate }).IsUnique().HasDatabaseName("UX_SessionCancellation_LessonDay");
+            e.HasIndex(x => x.SessionDate);
+        });
+
+        b.Entity<AttendanceAlert>(e =>
+        {
+            e.ToTable("AttendanceAlerts", t =>
+            {
+                t.HasCheckConstraint("CK_AttendanceAlerts_Dates", "[LastDate] >= [FirstDate]");
+                t.HasCheckConstraint("CK_AttendanceAlerts_SessionLink", "[Type] <> 2 OR [TimetableAssignmentId] IS NOT NULL");
+            });
+            e.Property(x => x.Key).HasMaxLength(AttendanceAlert.KeyMaxLength).IsRequired();
+            e.Property(x => x.AbsenceDates).HasMaxLength(AttendanceAlert.DatesMaxLength);
+            e.Property(x => x.Resolution).HasMaxLength(AttendanceAlert.ResolutionMaxLength);
+            e.Property(x => x.ResolvedBy).HasMaxLength(150);
+            // Alerts are derived from attendance records (which already block deleting a student); an alert
+            // left on a student removed by other means (e.g. remove-test-data) goes with the student.
+            e.HasOne(x => x.Student).WithMany().HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Session).WithMany().HasForeignKey(x => x.TimetableAssignmentId).OnDelete(DeleteBehavior.Restrict);
+            // Duplicate prevention: one alert per situation (see AttendanceAlertService keys).
+            e.HasIndex(x => x.Key).IsUnique().HasDatabaseName("UX_AttendanceAlert_Key");
+            e.HasIndex(x => new { x.Status, x.Type, x.LastDate });
+            e.HasIndex(x => new { x.StudentId, x.Type });
+        });
+
+        b.Entity<AttendanceAlertEvent>(e =>
+        {
+            e.ToTable("AttendanceAlertEvents");
+            e.Property(x => x.Text).HasMaxLength(AttendanceAlertEvent.TextMaxLength).IsRequired();
+            e.Property(x => x.By).HasMaxLength(150);
+            e.HasOne(x => x.Alert).WithMany(a => a.Events).HasForeignKey(x => x.AttendanceAlertId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.AttendanceAlertId, x.At });
+        });
+
+        // ---------------------------------------------------------------- incidents (Behavioural / Discipline → Incident)
+        b.Entity<Incident>(e =>
+        {
+            e.ToTable("Incidents", t =>
+            {
+                t.HasCheckConstraint("CK_Incidents_Severity", "[Severity] BETWEEN 1 AND 4");
+                t.HasCheckConstraint("CK_Incidents_Status", "[Status] BETWEEN 1 AND 4");
+                t.HasCheckConstraint("CK_Incidents_Approval", "[Approval] BETWEEN 1 AND 4");
+            });
+            e.Property(x => x.ReferenceId).HasMaxLength(Incident.ReferenceMaxLength).IsRequired();
+            e.HasIndex(x => x.ReferenceId).IsUnique().HasDatabaseName("UX_Incident_Reference");
+            e.Property(x => x.Category).HasMaxLength(Incident.CategoryMaxLength).IsRequired();
+            e.Property(x => x.ReportingDepartment).HasMaxLength(Incident.DepartmentMaxLength).IsRequired();
+            e.Property(x => x.SignOffSchool).HasMaxLength(Incident.NameMaxLength);
+            e.Property(x => x.ApprovalNotes).HasMaxLength(Incident.NotesMaxLength);
+            e.Property(x => x.ClosedBy).HasMaxLength(150);
+            e.Property(x => x.CreatedBy).HasMaxLength(150);
+            e.Property(x => x.UpdatedBy).HasMaxLength(150);
+            e.Property(x => x.Approval).HasDefaultValue(IncidentApproval.Pending);
+            e.HasOne(x => x.PreparedBy).WithMany().HasForeignKey(x => x.PreparedByStaffId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ReviewedBy).WithMany().HasForeignKey(x => x.ReviewedByStaffId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.IncidentDate);
+            e.HasIndex(x => new { x.Status, x.Severity });
+        });
+
+        b.Entity<IncidentStudent>(e =>
+        {
+            e.ToTable("IncidentStudents", t => t.HasCheckConstraint("CK_IncidentStudents_Role", "[Role] BETWEEN 1 AND 5"));
+            e.Property(x => x.Involvement).HasMaxLength(IncidentStudent.InvolvementMaxLength).IsRequired();
+            e.Property(x => x.RoleOther).HasMaxLength(IncidentStudent.RoleOtherMaxLength);
+            e.HasOne(x => x.Incident).WithMany(i => i.Students).HasForeignKey(x => x.IncidentId).OnDelete(DeleteBehavior.Cascade);
+            // Student records are never deleted under an incident (the student delete is refused instead).
+            e.HasOne(x => x.Student).WithMany().HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.IncidentId, x.StudentId }).IsUnique().HasDatabaseName("UX_IncidentStudent_Student");
+            e.HasIndex(x => x.StudentId);
+        });
+
+        b.Entity<IncidentTimelineEntry>(e =>
+        {
+            e.ToTable("IncidentTimelineEntries");
+            e.Property(x => x.TimePeriod).HasMaxLength(IncidentTimelineEntry.PeriodMaxLength).IsRequired();
+            e.Property(x => x.Location).HasMaxLength(IncidentTimelineEntry.LocationMaxLength).IsRequired();
+            e.Property(x => x.OthersPresent).HasMaxLength(IncidentTimelineEntry.OthersMaxLength);
+            e.Property(x => x.Account).HasMaxLength(IncidentTimelineEntry.AccountMaxLength).IsRequired();
+            e.HasOne(x => x.Incident).WithMany(i => i.Timeline).HasForeignKey(x => x.IncidentId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.IncidentId, x.SortOrder });
+        });
+
+        b.Entity<IncidentTimelineStudent>(e =>
+        {
+            e.ToTable("IncidentTimelineStudents");
+            e.HasKey(x => new { x.IncidentTimelineEntryId, x.IncidentStudentId });
+            e.HasOne(x => x.Entry).WithMany(t => t.Present).HasForeignKey(x => x.IncidentTimelineEntryId).OnDelete(DeleteBehavior.Cascade);
+            // Removing a student from the incident removes them from the events (NoAction avoids a second cascade path).
+            e.HasOne(x => x.Student).WithMany().HasForeignKey(x => x.IncidentStudentId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        b.Entity<IncidentAction>(e =>
+        {
+            e.ToTable("IncidentActions", t => t.HasCheckConstraint("CK_IncidentActions_Status", "[Status] BETWEEN 1 AND 5"));
+            e.Property(x => x.ActionItem).HasMaxLength(IncidentAction.ItemMaxLength).IsRequired();
+            e.Property(x => x.Finding).HasMaxLength(IncidentAction.TextMaxLength).IsRequired();
+            e.Property(x => x.Details).HasMaxLength(IncidentAction.TextMaxLength);
+            e.Property(x => x.UpdatedBy).HasMaxLength(150);
+            e.HasOne(x => x.Incident).WithMany(i => i.Actions).HasForeignKey(x => x.IncidentId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.IncidentId, x.SortOrder });
+        });
+
+        b.Entity<IncidentHistory>(e =>
+        {
+            e.ToTable("IncidentHistory");
+            e.Property(x => x.Action).HasMaxLength(IncidentHistory.ActionMaxLength).IsRequired();
+            e.Property(x => x.Details).HasMaxLength(IncidentHistory.DetailsMaxLength);
+            e.Property(x => x.By).HasMaxLength(150);
+            e.HasOne(x => x.Incident).WithMany(i => i.History).HasForeignKey(x => x.IncidentId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.IncidentId, x.At });
         });
     }
 

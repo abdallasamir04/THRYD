@@ -407,8 +407,9 @@ public partial class HttpTests
     {
         var client = fx.Factory.CreateClient();
         var page = await client.GetStringAsync("/arrivals"); // same route and checklist as before
-        Assert.Contains("<h1 class=\"page-title\">Student Attendance</h1>", page);
-        Assert.Contains("<li>Student Attendance</li></ol>", page);
+        // Student Attendance now has two sections; this page is its School Attendance section.
+        Assert.Contains("<h1 class=\"page-title\">School Attendance</h1>", page);
+        Assert.Contains("Student Attendance</a></li><li>School Attendance</li></ol>", page);
         // Student Attendance opens from Students (sidebar → Students → Student Attendance), so Students is highlighted.
         var sidebar = page[..page.IndexOf("</aside>", StringComparison.Ordinal)];
         Assert.Contains("href=\"/students/hub\" aria-current=\"page\"", sidebar);

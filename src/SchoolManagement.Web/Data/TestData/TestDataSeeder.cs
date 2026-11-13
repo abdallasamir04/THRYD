@@ -23,7 +23,7 @@ public sealed class TestDataUser : ICurrentUser
 /// Work is split into stages; a finished stage is recorded and skipped on the next run, and a stage
 /// that did not finish has its rows removed and is redone, so running the seeder again never duplicates.
 /// </summary>
-public sealed class TestDataSeeder(IServiceProvider root, TestDataTracker tracker, TestDataUser user, TextWriter log)
+public sealed partial class TestDataSeeder(IServiceProvider root, TestDataTracker tracker, TestDataUser user, TextWriter log)
 {
     private const int Seed = 20261111;
     private Random _rng = new(Seed);
@@ -110,13 +110,19 @@ public sealed class TestDataSeeder(IServiceProvider root, TestDataTracker tracke
         ("tasks", TasksAsync),
         ("belongings", BelongingsAsync),
         ("timestamps", BackdateAsync),
+        // Two-level attendance and incident reports (TestDataSeeder.Attendance.cs / .Incidents.cs).
+        ("school-attendance", SchoolAttendanceScenariosAsync),
+        ("session-attendance", SessionAttendanceAsync),
+        ("alert-followups", AlertFollowUpsAsync),
+        ("incidents", IncidentsAsync),
     ];
 
     public async Task RunAsync()
     {
         NewScope();
         var registry = await TestDataTracker.ReadAsync(Db);
-        if (!registry.Any(r => r.Kind == "B")) await TestDataTracker.RecordBaselineAsync(Db);
+        // Tables added after the first seed (attendance, incidents) get their own baseline before anything is added.
+        await TestDataTracker.RecordBaselineAsync(Db, registry.Where(r => r.Kind == "B").Select(r => r.EntityType).ToHashSet());
         tracker.Remember(registry.Where(r => r.Kind == "A").Select(r => (r.EntityType, r.KeyJson)));
         var done = registry.Where(r => r.Kind == "P").Select(r => r.Phase).ToHashSet();
 

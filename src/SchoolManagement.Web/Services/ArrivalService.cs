@@ -63,7 +63,11 @@ public static class Arrivals
         time is { } t && deadline is { } d ? (t > d ? LateStatus.Late : LateStatus.OnTime) : null;
 }
 
-public sealed class ArrivalService(SchoolDbContext db, ISettingsService settings, ICurrentUser currentUser) : IArrivalService
+/// <remarks>
+/// School Attendance. After every new record or correction the attendance alerts of the student are
+/// re-checked (three consecutive school-day absences; present at school but absent from a lesson).
+/// </remarks>
+public sealed class ArrivalService(SchoolDbContext db, ISettingsService settings, ICurrentUser currentUser, IAttendanceAlertService? alerts = null) : IArrivalService
 {
     public async Task<ArrivalChecklist> ChecklistAsync(DateOnly date, int? classId, CancellationToken ct = default)
     {
@@ -121,6 +125,7 @@ public sealed class ArrivalService(SchoolDbContext db, ISettingsService settings
             {
                 await db.SaveChangesAsync(ct);
                 results.Add(new(entry.StudentId, true, null));
+                if (alerts is not null) await alerts.SyncStudentDayAsync(entry.StudentId, date, ct);
             }
             catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
             {
@@ -159,6 +164,7 @@ public sealed class ArrivalService(SchoolDbContext db, ISettingsService settings
             CorrectedBy = currentUser.Name,
         });
         await db.SaveChangesAsync(ct);
+        if (alerts is not null) await alerts.SyncStudentDayAsync(record.StudentId, record.ArrivalDate, ct);
         return ServiceResult.Ok(record.Id);
     }
 

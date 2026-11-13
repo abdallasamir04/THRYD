@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
@@ -175,11 +176,42 @@ public partial class BelongingsTests(DbFixture fx)
         var client = fx.Factory.CreateClient();
 
         Assert.Contains("aria-current=\"page\"", (await client.GetStringAsync("/belongings/calendar")).Split("</aside>")[0]);
-        var page = WebUtility.HtmlDecode(await client.GetStringAsync($"/belongings?quarterId={quarter.Id}&yearId={quarter.YearId}&week=1&date=2033-01-04&grade=G8&studentId={s.Id}"));
-        Assert.Contains("Personal Belongings", page);
+        var query = $"?quarterId={quarter.Id}&yearId={quarter.YearId}&week=1&date=2033-01-04&grade=G8&studentId={s.Id}";
+
+        // Landing page: exactly two cards, each opening its own section.
+        var hub = WebUtility.HtmlDecode(await client.GetStringAsync("/belongings"));
+        Assert.Equal(2, Regex.Matches(hub, "class=\"hub-card ").Count);
+        Assert.Contains("href=\"/belongings/personal\"", hub);
+        Assert.Contains("href=\"/belongings/academic\"", hub);
+        Assert.Contains("Personal Belongings", hub);
+        Assert.Contains("Academic Belongings", hub);
+
+        // Old links with a selection still open the personal section with the same selection.
+        var noRedirect = fx.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var legacy = await noRedirect.GetAsync("/belongings" + query);
+        Assert.Equal(HttpStatusCode.Redirect, legacy.StatusCode);
+        Assert.Equal("/belongings/personal" + query, legacy.Headers.Location!.OriginalString);
+
+        // Personal section: the five items and notes only; no subject form.
+        var page = WebUtility.HtmlDecode(await client.GetStringAsync("/belongings/personal" + query));
+        Assert.Contains("<h1 class=\"page-title\">Personal Belongings</h1>", page);
         foreach (var item in new[] { "Jacket", "School Bag", "Pencil Case", "Water Flask", "Lunch Box / Bag" }) Assert.Contains(item, page);
-        Assert.Contains("Academic Materials", page);
+        Assert.Contains("action=\"/belongings/personal\"", page);
+        Assert.DoesNotContain("action=\"/belongings/materials\"", page);
+        Assert.DoesNotContain("data-subject-form", page);
+        Assert.Contains("action=\"/belongings/personal\" aria-label=\"Select the record\"", page);
         Assert.Contains(s.Name, page);
+
+        // Academic section: Department → Subject with Book and Copy Book only; no personal items or notes form.
+        var academic = WebUtility.HtmlDecode(await client.GetStringAsync("/belongings/academic" + query));
+        Assert.Contains("<h1 class=\"page-title\">Academic Belongings</h1>", academic);
+        Assert.Contains("action=\"/belongings/materials\"", academic);
+        Assert.Contains("id=\"DepartmentId\"", academic);
+        Assert.Contains("id=\"Subject\"", academic);
+        Assert.Contains("name=\"CopyBook\"", academic);
+        Assert.DoesNotContain("action=\"/belongings/personal\" method=\"post\"", academic);
+        foreach (var item in new[] { "name=\"Jacket\"", "name=\"SchoolBag\"", "name=\"Notes\"" }) Assert.DoesNotContain(item, academic);
+        Assert.Contains("action=\"/belongings/academic\" aria-label=\"Select the record\"", academic);
         var token = Regex.Match(page, "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"").Groups[1].Value;
 
         async Task<HttpResponseMessage> Post(string url, Dictionary<string, string> form)
@@ -198,10 +230,17 @@ public partial class BelongingsTests(DbFixture fx)
         var math = await fx.NewContext().Departments.Where(d => d.Name == "Math").Select(d => d.Id).SingleAsync();
         Assert.Equal(HttpStatusCode.OK, (await Post("/belongings/materials", new(basics) { ["DepartmentId"] = math.ToString(), ["Subject"] = "Math", ["Book"] = "Green", ["CopyBook"] = "Red" })).StatusCode);
 
-        var after = WebUtility.HtmlDecode(await client.GetStringAsync($"/belongings?quarterId={quarter.Id}&yearId={quarter.YearId}&week=1&date=2033-01-04&grade=G8&studentId={s.Id}"));
+        var after = WebUtility.HtmlDecode(await client.GetStringAsync("/belongings/personal" + query));
         Assert.Contains("Pencil case needs replacement", after);
         // Personal 3 green / 1 red (N/A excluded) = 75%; Book green + Copy Book red = 50%; overall 4 / 6 = 66.67%.
         foreach (var pct in new[] { "75%", "50%", "66.67%" }) Assert.Contains($"class=\"rd-card__value\">{pct}<", after);
+
+        // The academic section lists the saved subject and shows the same readiness from the same records.
+        var afterAcademic = WebUtility.HtmlDecode(await client.GetStringAsync("/belongings/academic" + query));
+        Assert.Contains("action=\"/belongings/materials/", afterAcademic); // the Math row's remove form
+        Assert.Contains("<strong>Math</strong>", afterAcademic);
+        foreach (var pct in new[] { "75%", "50%", "66.67%" }) Assert.Contains($"class=\"rd-card__value\">{pct}<", afterAcademic);
+        Assert.DoesNotContain("Pencil case needs replacement", afterAcademic);
     }
 
     private sealed class TestUser : ICurrentUser

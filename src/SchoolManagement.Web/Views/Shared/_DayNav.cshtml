@@ -11,7 +11,7 @@
     </div>
     <a class="icon-btn icon-btn--bordered" href="@Context.Request.WithQuery(("date", SchoolWeek.Iso(Model.AddDays(1))))" aria-label="Next day">@Ui.Icon("chevron-right")</a>
     <label class="visually-hidden" for="day-picker">Go to date</label>
-    <input class="input week-nav__picker" id="day-picker" type="date" name="date" value="@SchoolWeek.Iso(Model)" onchange="this.form.submit()" />
+    <input class="input week-nav__picker" id="day-picker" type="date" name="date" value="@SchoolWeek.Iso(Model)" data-autosubmit />
     @if (Model != today)
     {
         <a class="btn btn--ghost btn--sm" href="@Context.Request.WithQuery(("date", null))">Today</a>

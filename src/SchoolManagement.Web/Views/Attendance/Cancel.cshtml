@@ -1,0 +1,37 @@
+@model LessonCancelModel
+@* Cancel one lesson on one date (trip, exam, teacher absent without cover…): no attendance expected, no alerts. *@
+@{
+    var modal = Context.Request.IsAjax();
+    var l = Model.Lesson!;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Cancel lesson"; ViewData["Nav"] = "Attendance"; }
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/attendance/sessions/@Model.SessionId/cancel" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Date" value="@Model.Date" />
+        <div class="modal__head">
+            <span class="modal__icon modal__icon--warning">@Ui.Icon("x-circle", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">Cancel @l.Subject · @l.ClassName</h2>
+                <p class="modal__sub">@l.Date.ToString("dddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) · @l.Period (@l.Times) · @l.Teacher</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <p class="muted" style="margin:0">Only this date is cancelled; the timetable is not changed. Attendance already recorded is kept, but the lesson is no longer expected and its alerts are cleared. You can restore it later.</p>
+            <div class="field">
+                <label class="label" asp-for="Reason">Reason <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Reason" maxlength="300" dir="auto" placeholder="e.g. School trip; class exam in the hall" data-autofocus />
+                <span asp-validation-for="Reason" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Keep the lesson</button> }
+            else { <a class="btn btn--secondary" href="/attendance/sessions/@Model.SessionId?date=@Model.Date">Keep the lesson</a> }
+            <button class="btn btn--danger" type="submit">@Ui.Icon("x-circle")Cancel lesson</button>
+        </div>
+    </form>
+</div>

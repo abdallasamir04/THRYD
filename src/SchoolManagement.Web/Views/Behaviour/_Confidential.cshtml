@@ -1,0 +1,7 @@
+@model bool
+@* Confidentiality banner of the incident pages; model = the user is identified ("Working as"). *@
+<div class="notice notice--info inc-confidential">@Ui.Icon("shield-check")<div class="notice__body"><strong>Confidential student records.</strong>For official administrative use only. Every change and every PDF export is recorded with the name of the person working.</div></div>
+@if (!Model)
+{
+    <div class="notice notice--warning">@Ui.Icon("user")<div class="notice__body"><strong>You are not identified.</strong>Choose who you are working as (<a href="/settings#operator">Settings → Working as</a>) to create or change incident reports. You can still read them.</div></div>
+}

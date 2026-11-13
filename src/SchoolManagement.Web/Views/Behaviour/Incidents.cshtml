@@ -1,0 +1,84 @@
+@model IncidentListViewModel
+@*
+    Behavioural / Discipline → Incident: the official incident reports. Search by student, reference, category,
+    department and date; filter by severity, status and open / closed record. Confidential.
+*@
+@{
+    ViewData["Title"] = "Incident";
+    ViewData["Nav"] = "Behaviour";
+    var q = Model.Query;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/students/behaviour">Behavioural / Discipline</a></li><li><span aria-current="page">Incident</span></li></ol>
+        <h1 class="page-title">Incident reports</h1>
+        <p class="page-sub">Official student incident reports — students involved, timeline of events, investigation findings and actions, sign-off and closure.</p>
+    </div>
+    <div class="page-head__actions">
+        @if (Model.CanEdit)
+        {
+            <a class="btn btn--primary" href="/students/behaviour/incidents/new" data-modal>@Ui.Icon("plus")New incident report</a>
+        }
+    </div>
+</div>
+
+<partial name="_Confidential" model="Model.CanEdit" />
+
+<form class="card inc-filters" method="get" action="/students/behaviour/incidents" role="search" aria-label="Search incident reports">
+    <div class="field inc-filters__search"><label class="label" for="i-search">Search</label>
+        <div class="input-icon">@Ui.Icon("search")<input class="input" type="search" id="i-search" name="search" value="@q.Search" placeholder="Student, reference ID, category or department…" dir="auto" /></div></div>
+    <div class="field"><label class="label" for="i-category">Category</label>
+        <select class="select" id="i-category" name="category" data-autosubmit>
+            <option value="">All categories</option>
+            @foreach (var c in Model.Suggestions.Categories) { <option value="@c" selected="@(q.Category == c)">@c</option> }
+        </select></div>
+    <div class="field"><label class="label" for="i-department">Department</label>
+        <select class="select" id="i-department" name="department" data-autosubmit>
+            <option value="">All departments</option>
+            @foreach (var d in Model.Suggestions.Departments) { <option value="@d" selected="@(q.Department == d)">@d</option> }
+        </select></div>
+    <div class="field"><label class="label" for="i-severity">Severity</label>
+        <select class="select" id="i-severity" name="severity" data-autosubmit>
+            <option value="">All levels</option>
+            @foreach (var s in IncidentLabels.Severities) { <option value="@s" selected="@(q.Severity == s)">@IncidentLabels.Severity(s)</option> }
+        </select></div>
+    <div class="field"><label class="label" for="i-status">Incident status</label>
+        <select class="select" id="i-status" name="status" data-autosubmit>
+            <option value="">All statuses</option>
+            @foreach (var s in IncidentLabels.Statuses) { <option value="@s" selected="@(q.Status == s)">@IncidentLabels.Status(s)</option> }
+        </select></div>
+    <div class="field"><label class="label" for="i-closure">Record</label>
+        <select class="select" id="i-closure" name="closure" data-autosubmit>
+            <option value="">Open and closed</option>
+            <option value="open" selected="@(q.Closure == "open")">Open</option>
+            <option value="closed" selected="@(q.Closure == "closed")">Closed</option>
+        </select></div>
+    <div class="field"><label class="label" for="i-from">From</label>
+        <input class="input" type="date" id="i-from" name="from" value="@(q.From is { } f ? SchoolWeek.Iso(f) : "")" data-autosubmit /></div>
+    <div class="field"><label class="label" for="i-to">To</label>
+        <input class="input" type="date" id="i-to" name="to" value="@(q.To is { } t ? SchoolWeek.Iso(t) : "")" data-autosubmit /></div>
+    <div class="inc-filters__end">
+        <button class="btn btn--primary btn--sm" type="submit">@Ui.Icon("search", "icon--sm")Search</button>
+        @if (Model.HasFilters)
+        {
+            <a class="btn btn--ghost btn--sm" href="/students/behaviour/incidents">@Ui.Icon("x", "icon--sm")Clear</a>
+        }
+    </div>
+</form>
+
+<section class="card table-card" aria-label="Incident reports">
+    <div class="card__head"><div><h2 class="card__title">@Ui.Icon("flag")@Ui.Plural(Model.Incidents.Count, "report", "reports")</h2></div></div>
+    @if (Model.Incidents.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("flag")</span>
+            <p class="empty__title">@(Model.HasFilters ? "No reports match this search" : "No incident reports yet")</p>
+            <p class="empty__text">@(Model.HasFilters ? "Change or clear the filters." : "Create the first official incident report.")</p>
+        </div>
+    }
+    else
+    {
+        <partial name="_IncidentTable" model="Model.Incidents" />
+    }
+</section>

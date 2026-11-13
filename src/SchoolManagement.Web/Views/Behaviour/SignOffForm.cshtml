@@ -1,0 +1,70 @@
+@model SignOffForm
+@* E. Administrative sign-off: prepared by, school, date of report, reviewed by and the approval / endorsement. *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Administrative sign-off"; ViewData["Nav"] = "Behaviour"; }
+    var baseUrl = $"/students/behaviour/incidents/{Model.IncidentId}";
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@baseUrl/signoff" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("shield-check", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Administrative sign-off</h2>
+                <p class="modal__sub">@Model.Reference · the record can be closed once the report is approved and every step is complete.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="PreparedById">Prepared by</label>
+                    <select class="select" id="PreparedById" name="PreparedById" data-searchable>
+                        <option value="">Not set</option>
+                        @foreach (var s in Model.Staff) { <option value="@s.Id" selected="@(Model.PreparedById == s.Id)" data-note="@s.JobTitle">@s.FullName</option> }
+                    </select>
+                    <span asp-validation-for="PreparedById" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="School">School</label>
+                    <input class="input" id="School" name="School" value="@Model.School" maxlength="@Incident.NameMaxLength" dir="auto" />
+                    <span asp-validation-for="School" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="ReportDate">Date of report</label>
+                    <input class="input" type="date" id="ReportDate" name="ReportDate" value="@(Model.ReportDate is { } d ? SchoolWeek.Iso(d) : "")" />
+                    <span asp-validation-for="ReportDate" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="ReviewedById">Reviewed by</label>
+                    <select class="select" id="ReviewedById" name="ReviewedById" data-searchable>
+                        <option value="">Not set</option>
+                        @foreach (var s in Model.Staff) { <option value="@s.Id" selected="@(Model.ReviewedById == s.Id)" data-note="@s.JobTitle">@s.FullName</option> }
+                    </select>
+                    <span asp-validation-for="ReviewedById" class="field-validation-error"></span>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label" for="Approval">Administrative approval / endorsement</label>
+                <select class="select" id="Approval" name="Approval" required>
+                    @foreach (var v in IncidentLabels.Approvals) { <option value="@v" selected="@(Model.Approval == v)">@IncidentLabels.Approval(v)</option> }
+                </select>
+                <span asp-validation-for="Approval" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" for="ApprovalNotes">Endorsement notes <span class="faint">(optional)</span></label>
+                <textarea class="input textarea" id="ApprovalNotes" name="ApprovalNotes" rows="3" maxlength="@Incident.NotesMaxLength" dir="auto" placeholder="Conditions, comments or reasons">@Model.ApprovalNotes</textarea>
+                <span asp-validation-for="ApprovalNotes" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@baseUrl">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save sign-off</button>
+        </div>
+    </form>
+</div>

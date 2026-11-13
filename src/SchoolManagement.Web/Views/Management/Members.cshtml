@@ -26,7 +26,7 @@
             <input class="input" type="search" name="search" value="@Model.Search" placeholder="Search members…" aria-label="Search members" autocomplete="off" dir="auto" />
         </div>
         <div class="toolbar__filter">
-            <select class="select" name="position" aria-label="Filter by position" onchange="this.form.submit()">
+            <select class="select" name="position" aria-label="Filter by position" data-autosubmit>
                 <option value="">All positions</option>
                 @foreach (var p in ManagementPositions.All)
                 {

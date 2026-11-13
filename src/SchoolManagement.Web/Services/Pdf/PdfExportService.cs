@@ -52,9 +52,13 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
             page.Content().PaddingTop(10).Column(col =>
             {
                 col.Spacing(14);
-                foreach (var section in report.Sections) col.Item().Element(c => Section(c, section));
+                foreach (var section in report.Sections)
+                {
+                    if (section.PageBreakBefore) col.Item().PageBreak();
+                    col.Item().Element(c => Section(c, section));
+                }
             });
-            page.Footer().Element(c => Footer(c, profile, exported));
+            page.Footer().Element(c => Footer(c, profile, exported, report.FooterNote));
         }));
         document.WithMetadata(new DocumentMetadata
         {
@@ -114,6 +118,8 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
 
                 row.RelativeItem().AlignRight().AlignMiddle().Column(title =>
                 {
+                    if (!string.IsNullOrWhiteSpace(report.Eyebrow))
+                        title.Item().Text(t => { t.AlignRight(); t.Span(Iso(report.Eyebrow)).FontSize(11).Bold().FontColor(Ink); });
                     title.Item().Text(t => { t.AlignRight(); t.Span(Iso(report.Title)).FontSize(17).ExtraBold().FontColor(Ink); });
                     if (!string.IsNullOrWhiteSpace(report.Subtitle))
                         title.Item().Text(t => { t.AlignRight(); t.Span(Iso(report.Subtitle)).FontSize(10.5f).Bold().FontColor(Brand); });
@@ -141,8 +147,15 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
         });
     }
 
-    private static void Footer(IContainer container, SchoolProfile profile, DateTime exported) =>
-        container.PaddingTop(8).BorderTop(0.6f).BorderColor(Border).PaddingTop(5).Row(row =>
+    private static void Footer(IContainer container, SchoolProfile profile, DateTime exported, string? note) =>
+        container.PaddingTop(8).BorderTop(0.6f).BorderColor(Border).PaddingTop(5).Column(col =>
+        {
+            if (!string.IsNullOrWhiteSpace(note))
+                col.Item().PaddingBottom(4).Text(t => { t.AlignCenter(); t.Span(Iso(note)).FontSize(7.5f).SemiBold().FontColor(Ink); });
+            col.Item().Row(row => FooterRow(row, profile, exported));
+        });
+
+    private static void FooterRow(RowDescriptor row, SchoolProfile profile, DateTime exported)
         {
             row.RelativeItem().Text(t =>
             {
@@ -159,18 +172,20 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
                 t.Span(" of ").FontSize(7.5f).FontColor(Muted);
                 t.TotalPages().FontSize(7.5f).SemiBold().FontColor(Ink);
             });
-        });
+        }
 
     // ------------------------------------------------------------------ sections
 
     private static void Section(IContainer container, PdfSection section)
     {
-        container.Column(col =>
+        var headed = !string.IsNullOrWhiteSpace(section.Title) || !string.IsNullOrWhiteSpace(section.Subtitle);
+        // A heading never stays alone at the foot of a page: with less than 120 pt left, the whole section
+        // (heading + the start of its content) starts on the next page.
+        (headed ? container.EnsureSpace(120) : container).Column(col =>
         {
-            if (!string.IsNullOrWhiteSpace(section.Title) || !string.IsNullOrWhiteSpace(section.Subtitle))
+            if (headed)
             {
-                // Keep a heading together with the start of its content.
-                col.Item().EnsureSpace(80).PaddingBottom(6).Column(head =>
+                col.Item().PaddingBottom(6).Column(head =>
                 {
                     if (!string.IsNullOrWhiteSpace(section.Title))
                         head.Item().Text(t => t.Span(Iso(section.Title)).FontSize(11).Bold().FontColor(Ink));
@@ -184,12 +199,57 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
                 {
                     case PdfTable table: Table(c, table); break;
                     case PdfGrid grid: Grid(c, grid); break;
+                    case PdfFields fields: Fields(c, fields); break;
                     case PdfSummary summary: Summary(c, summary); break;
                     case PdfNotice notice: Notice(c, notice.Text, notice.Tone); break;
                 }
             });
         });
     }
+
+    /// <summary>Label / value pairs: shaded label cells, white value cells, thin borders; wide fields span the row.</summary>
+    private static void Fields(IContainer container, PdfFields fields)
+    {
+        var perRow = Math.Max(1, fields.Columns);
+        container.Border(0.6f).BorderColor(Border).Table(t =>
+        {
+            t.ColumnsDefinition(c =>
+            {
+                for (var i = 0; i < perRow; i++) { c.ConstantColumn(118); c.RelativeColumn(); }
+            });
+            var used = 0;
+            foreach (var f in fields.Items)
+            {
+                if (f.Wide && used > 0) { FillRow(t, perRow - used); used = 0; }
+                t.Cell().Element(c => FieldLabel(c, f.Label));
+                var span = f.Wide ? (uint)(perRow * 2 - 1) : 1u;
+                t.Cell().ColumnSpan(span).Element(c => FieldValue(c, f.Value));
+                used = f.Wide ? 0 : (used + 1) % perRow;
+            }
+            if (used > 0) FillRow(t, perRow - used);
+        });
+    }
+
+    private static void FillRow(TableDescriptor t, int pairs)
+    {
+        for (var i = 0; i < pairs; i++) { t.Cell().Element(c => FieldLabel(c, "")); t.Cell().Element(c => FieldValue(c, new PdfCell(""))); }
+    }
+
+    private static void FieldLabel(IContainer c, string label) =>
+        c.Border(0.4f).BorderColor(Border).Background(HeadSoft).PaddingVertical(6).PaddingHorizontal(8)
+            .Text(t => t.Span(Iso(label)).FontSize(7.5f).Bold().FontColor(Muted));
+
+    private static void FieldValue(IContainer c, PdfCell v) =>
+        c.Border(0.4f).BorderColor(Border).PaddingVertical(6).PaddingHorizontal(8).Column(col =>
+        {
+            if (v.Badge)
+                col.Item().AlignLeft().Background(Soft(v.Tone)).PaddingVertical(1.5f).PaddingHorizontal(6)
+                    .Text(t => t.Span(Iso(v.Text)).FontSize(8).Bold().FontColor(Strong(v.Tone)));
+            else
+                col.Item().Text(t => t.Span(Iso(v.Text)).FontSize(8.5f).FontColor(Ink).Style(v.Strong ? TextStyle.Default.SemiBold() : TextStyle.Default));
+            if (!string.IsNullOrWhiteSpace(v.Note))
+                col.Item().Text(t => t.Span(Iso(v.Note)).FontSize(7).FontColor(Muted));
+        });
 
     private static void Summary(IContainer container, PdfSummary summary) =>
         container.Row(row =>

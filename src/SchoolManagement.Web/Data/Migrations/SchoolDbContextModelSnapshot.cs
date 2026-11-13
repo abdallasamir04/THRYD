@@ -149,6 +149,119 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.ToTable("AppSettings", (string)null);
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.AttendanceAlert", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AbsenceDates")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DayCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("FirstDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("LastDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Resolution")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ResolvedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("SchoolClassId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TimetableAssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AttendanceAlert_Key");
+
+                    b.HasIndex("SchoolClassId");
+
+                    b.HasIndex("TimetableAssignmentId");
+
+                    b.HasIndex("StudentId", "Type");
+
+                    b.HasIndex("Status", "Type", "LastDate");
+
+                    b.ToTable("AttendanceAlerts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AttendanceAlerts_Dates", "[LastDate] >= [FirstDate]");
+
+                            t.HasCheckConstraint("CK_AttendanceAlerts_SessionLink", "[Type] <> 2 OR [TimetableAssignmentId] IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.AttendanceAlertEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("AttendanceAlertId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("By")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttendanceAlertId", "At");
+
+                    b.ToTable("AttendanceAlertEvents", (string)null);
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.BelongingsNoteHistory", b =>
                 {
                     b.Property<long>("Id")
@@ -933,6 +1046,296 @@ namespace SchoolManagement.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.Incident", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Approval")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("ApprovalNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ClosedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateOnly>("IncidentDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("PreparedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReferenceId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateOnly?>("ReportDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ReportingDepartment")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("ReviewedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SignOffSchool")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncidentDate");
+
+                    b.HasIndex("PreparedByStaffId");
+
+                    b.HasIndex("ReferenceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Incident_Reference");
+
+                    b.HasIndex("ReviewedByStaffId");
+
+                    b.HasIndex("Status", "Severity");
+
+                    b.ToTable("Incidents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Incidents_Approval", "[Approval] BETWEEN 1 AND 4");
+
+                            t.HasCheckConstraint("CK_Incidents_Severity", "[Severity] BETWEEN 1 AND 4");
+
+                            t.HasCheckConstraint("CK_Incidents_Status", "[Status] BETWEEN 1 AND 4");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentAction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionItem")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Finding")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<int>("IncidentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncidentId", "SortOrder");
+
+                    b.ToTable("IncidentActions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_IncidentActions_Status", "[Status] BETWEEN 1 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("By")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("IncidentId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncidentId", "At");
+
+                    b.ToTable("IncidentHistory", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentStudent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("IncidentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Involvement")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RoleOther")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SchoolClassId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchoolClassId");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("IncidentId", "StudentId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_IncidentStudent_Student");
+
+                    b.ToTable("IncidentStudents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_IncidentStudents_Role", "[Role] BETWEEN 1 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentTimelineEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Account")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<int>("IncidentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("OthersPresent")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly?>("Time")
+                        .HasColumnType("time");
+
+                    b.Property<string>("TimePeriod")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncidentId", "SortOrder");
+
+                    b.ToTable("IncidentTimelineEntries", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentTimelineStudent", b =>
+                {
+                    b.Property<int>("IncidentTimelineEntryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IncidentStudentId")
+                        .HasColumnType("int");
+
+                    b.HasKey("IncidentTimelineEntryId", "IncidentStudentId");
+
+                    b.HasIndex("IncidentStudentId");
+
+                    b.ToTable("IncidentTimelineStudents", (string)null);
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.ManagementPositionAssignment", b =>
                 {
                     b.Property<int>("Id")
@@ -1499,6 +1902,180 @@ namespace SchoolManagement.Web.Data.Migrations
                             SortOrder = 250,
                             UpdatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SchoolHoliday", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartDate", "EndDate");
+
+                    b.ToTable("SchoolHolidays", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SchoolHolidays_Range", "[EndDate] >= [StartDate]");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SessionAttendanceCorrection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("After")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<string>("Before")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<DateTime>("CorrectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CorrectedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("SessionAttendanceRecordId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionAttendanceRecordId", "CorrectedAt");
+
+                    b.ToTable("SessionAttendanceCorrections", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SessionAttendanceRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("RecordedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("SchoolClassId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("SessionDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TimetableAssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchoolClassId");
+
+                    b.HasIndex("SessionDate", "SchoolClassId");
+
+                    b.HasIndex("TimetableAssignmentId", "SessionDate");
+
+                    b.HasIndex("StudentId", "TimetableAssignmentId", "SessionDate")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SessionAttendance_StudentLessonDay");
+
+                    b.ToTable("SessionAttendanceRecords", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SessionAttendance_Status", "[Status] BETWEEN 1 AND 4");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SessionCancellation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateOnly>("SessionDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("TimetableAssignmentId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionDate");
+
+                    b.HasIndex("TimetableAssignmentId", "SessionDate")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SessionCancellation_LessonDay");
+
+                    b.ToTable("SessionCancellations", (string)null);
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.StaffDutyFeedback", b =>
@@ -2231,6 +2808,43 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("AcademicYear");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.AttendanceAlert", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.SchoolClass", "SchoolClass")
+                        .WithMany()
+                        .HasForeignKey("SchoolClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.TimetableAssignment", "Session")
+                        .WithMany()
+                        .HasForeignKey("TimetableAssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("SchoolClass");
+
+                    b.Navigation("Session");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.AttendanceAlertEvent", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.AttendanceAlert", "Alert")
+                        .WithMany("Events")
+                        .HasForeignKey("AttendanceAlertId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Alert");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.BelongingsNoteHistory", b =>
                 {
                     b.HasOne("SchoolManagement.Web.Entities.BelongingsRecord", "Record")
@@ -2381,6 +2995,102 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("StaffMember");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.Incident", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "PreparedBy")
+                        .WithMany()
+                        .HasForeignKey("PreparedByStaffId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "ReviewedBy")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByStaffId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PreparedBy");
+
+                    b.Navigation("ReviewedBy");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentAction", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.Incident", "Incident")
+                        .WithMany("Actions")
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Incident");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentHistory", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.Incident", "Incident")
+                        .WithMany("History")
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Incident");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentStudent", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.Incident", "Incident")
+                        .WithMany("Students")
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.SchoolClass", "SchoolClass")
+                        .WithMany()
+                        .HasForeignKey("SchoolClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Incident");
+
+                    b.Navigation("SchoolClass");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentTimelineEntry", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.Incident", "Incident")
+                        .WithMany("Timeline")
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Incident");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentTimelineStudent", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.IncidentStudent", "Student")
+                        .WithMany()
+                        .HasForeignKey("IncidentStudentId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.IncidentTimelineEntry", "Entry")
+                        .WithMany("Present")
+                        .HasForeignKey("IncidentTimelineEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Entry");
+
+                    b.Navigation("Student");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.ManagementPositionAssignment", b =>
                 {
                     b.HasOne("SchoolManagement.Web.Entities.ManagementMember", "Member")
@@ -2439,6 +3149,55 @@ namespace SchoolManagement.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("CoTeacher");
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SessionAttendanceCorrection", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.SessionAttendanceRecord", "Record")
+                        .WithMany("Corrections")
+                        .HasForeignKey("SessionAttendanceRecordId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Record");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SessionAttendanceRecord", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.SchoolClass", "SchoolClass")
+                        .WithMany()
+                        .HasForeignKey("SchoolClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.TimetableAssignment", "Session")
+                        .WithMany()
+                        .HasForeignKey("TimetableAssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SchoolClass");
+
+                    b.Navigation("Session");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SessionCancellation", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.TimetableAssignment", "Session")
+                        .WithMany()
+                        .HasForeignKey("TimetableAssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Session");
                 });
@@ -2630,6 +3389,11 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("Quarters");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.AttendanceAlert", b =>
+                {
+                    b.Navigation("Events");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.BelongingsRecord", b =>
                 {
                     b.Navigation("Materials");
@@ -2663,6 +3427,22 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("Feedback");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.Incident", b =>
+                {
+                    b.Navigation("Actions");
+
+                    b.Navigation("History");
+
+                    b.Navigation("Students");
+
+                    b.Navigation("Timeline");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.IncidentTimelineEntry", b =>
+                {
+                    b.Navigation("Present");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.PeSessionDetail", b =>
                 {
                     b.Navigation("Equipment");
@@ -2671,6 +3451,11 @@ namespace SchoolManagement.Web.Data.Migrations
             modelBuilder.Entity("SchoolManagement.Web.Entities.SchoolClass", b =>
                 {
                     b.Navigation("Students");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SessionAttendanceRecord", b =>
+                {
+                    b.Navigation("Corrections");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.StudentArrivalRecord", b =>

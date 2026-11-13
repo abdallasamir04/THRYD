@@ -92,6 +92,12 @@ public sealed class StudentService(SchoolDbContext db) : IStudentService
         var arrivals = await db.StudentArrivals.CountAsync(a => a.StudentId == id, ct);
         if (arrivals > 0)
             return ServiceResult.Fail("", $"This student has {arrivals} arrival record(s), which are kept as attendance history. Move them to another class instead of deleting.");
+        var lessons = await db.SessionAttendance.CountAsync(r => r.StudentId == id, ct);
+        if (lessons > 0)
+            return ServiceResult.Fail("", $"This student has {lessons} lesson attendance record(s), which are kept as attendance history. Move them to another class instead of deleting.");
+        var incidents = await db.IncidentStudents.CountAsync(i => i.StudentId == id, ct);
+        if (incidents > 0)
+            return ServiceResult.Fail("", $"This student is named in {incidents} incident report(s), which are kept as confidential records. Move them to another class instead of deleting.");
         var belongings = await db.BelongingsRecords.CountAsync(b => b.StudentId == id, ct);
         if (belongings > 0)
             return ServiceResult.Fail("", $"This student has {belongings} belongings record(s), which are kept as history. Move them to another class instead of deleting.");

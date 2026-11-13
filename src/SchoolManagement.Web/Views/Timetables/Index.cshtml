@@ -1,0 +1,190 @@
+@model TimetableCenterViewModel
+@using SchoolManagement.Web.Services.Timetables
+@*
+    Academics → Timetables: every timetable of the school in one place. Categories come from the registered
+    ITimetableSource types; the filters shown depend on the category. Download one timetable, the ticked ones,
+    a whole category, a department's schedules or the entire school (several PDFs → one ZIP with folders).
+*@
+@{
+    ViewData["Title"] = "Timetables";
+    ViewData["Nav"] = "Timetables";
+    var m = Model;
+    var r = m.Request;
+    var s = m.Source;
+    string[] tones = ["violet", "blue", "teal", "green", "amber", "rose", "indigo", "cyan"];
+    var docs = m.Items.Count * r.Weeks.Count;
+    var weekly = r.Weeks.Count > 1 ? $" × {r.Weeks.Count} weeks" : "";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><span aria-current="page">Timetables</span></li></ol>
+        <h1 class="page-title">Timetables</h1>
+        <p class="page-sub">Every timetable of the school in one place — read live from the class timetable, P.E., duties and time slots. Download any one, a group, a whole category, or the entire school.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--primary" href="@m.Query("/timetables/download-all", ("category", "all"), ("departmentId", null), ("subject", null), ("teacherId", null), ("classId", null))"
+           data-preparing="Preparing every timetable of the school as one ZIP — the download starts when it is ready.">@Ui.Icon("download")Download entire school (ZIP)</a>
+    </div>
+</div>
+
+<nav class="hub hub--compact tt-cats" aria-label="Timetable categories">
+    @for (var i = 0; i < m.Sources.Count; i++)
+    {
+        var src = m.Sources[i];
+        var n = m.Counts.GetValueOrDefault(src.Key);
+        <a class="hub-card hub-card--@tones[i % tones.Length]" href="@m.Query("/timetables", ("category", src.Key), ("departmentId", src.Filters.HasFlag(TimetableFilters.Department) ? r.DepartmentId : null), ("subject", null), ("teacherId", null), ("classId", null))"
+           aria-current="@(src.Key == s.Key ? "page" : null)">
+            <span class="hub-card__icon" aria-hidden="true">@Ui.Icon(src.Icon)</span>
+            <span class="hub-card__body">
+                <span class="hub-card__title">@src.Title</span>
+                <span class="hub-card__meta">@Ui.Plural(n, "timetable", "timetables")</span>
+            </span>
+        </a>
+    }
+</nav>
+
+<form class="card tt-filters" method="get" action="/timetables" aria-label="Choose timetables">
+    <input type="hidden" name="category" value="@s.Key" />
+    <div class="tt-filters__grid">
+        <div class="field"><label class="label" for="tt-year">Academic year</label>
+            <select class="select" id="tt-year" name="yearId" data-autosubmit>
+                @if (m.Years.Count == 0) { <option value="">Current (Settings)</option> }
+                @foreach (var y in m.Years) { <option value="@y.Id" selected="@(m.Year?.Id == y.Id)">@y.Name</option> }
+            </select></div>
+        <div class="field"><label class="label" for="tt-from">From</label>
+            <input class="input" type="date" id="tt-from" name="from" value="@m.From" data-autosubmit /></div>
+        <div class="field"><label class="label" for="tt-to">To</label>
+            <input class="input" type="date" id="tt-to" name="to" value="@m.To" data-autosubmit /></div>
+        @if (m.Has(TimetableFilters.Day))
+        {
+            <div class="field"><label class="label" for="tt-day">Day</label>
+                <select class="select" id="tt-day" name="day" data-autosubmit>
+                    <option value="">All school days</option>
+                    @foreach (var d in ScheduleRules.Days) { <option value="@d.ToString().ToLowerInvariant()" selected="@(r.Day == d)">@ScheduleRules.DayName(d)</option> }
+                </select></div>
+        }
+        @if (m.Has(TimetableFilters.Department))
+        {
+            <div class="field"><label class="label" for="tt-dept">Department</label>
+                <select class="select" id="tt-dept" name="departmentId" data-searchable data-autosubmit>
+                    <option value="">All departments</option>
+                    @foreach (var (id, name) in m.Options.Departments) { <option value="@id" selected="@(r.DepartmentId == id)">@name</option> }
+                </select></div>
+        }
+        @if (m.Has(TimetableFilters.Subject))
+        {
+            <div class="field"><label class="label" for="tt-subject">Subject</label>
+                <select class="select" id="tt-subject" name="subject" data-searchable data-autosubmit>
+                    <option value="">All subjects</option>
+                    @foreach (var subj in m.Options.Subjects) { <option value="@subj" selected="@(r.Subject == subj)">@subj</option> }
+                </select></div>
+        }
+        @if (m.Has(TimetableFilters.Teacher))
+        {
+            <div class="field"><label class="label" for="tt-teacher">Teacher</label>
+                <select class="select" id="tt-teacher" name="teacherId" data-searchable data-autosubmit>
+                    <option value="">All teachers</option>
+                    @foreach (var (id, name, dept) in m.Options.Teachers) { <option value="@id" selected="@(r.TeacherId == id)" data-note="@dept">@name</option> }
+                </select></div>
+        }
+        @if (m.Has(TimetableFilters.Class))
+        {
+            <div class="field"><label class="label" for="tt-class">Class</label>
+                <select class="select" id="tt-class" name="classId" data-searchable data-autosubmit>
+                    <option value="">All classes</option>
+                    @foreach (var (id, name) in m.Options.Classes) { <option value="@id" selected="@(r.ClassId == id)">@name</option> }
+                </select></div>
+        }
+    </div>
+    <div class="tt-filters__foot">
+        <span class="muted">@m.WeeksLabel@(r.Day is { } dd ? " · " + ScheduleRules.DayName(dd) + " only" : "")@(m.Year is null ? "" : " · " + m.Year.Name)</span>
+        <noscript><button class="btn btn--primary btn--sm" type="submit">Show</button></noscript>
+        @if (r.DepartmentId is not null || r.Subject is not null || r.TeacherId is not null || r.ClassId is not null || r.Day is not null)
+        {
+            <a class="btn btn--ghost btn--sm" href="/timetables?category=@s.Key">@Ui.Icon("x", "icon--sm")Clear filters</a>
+        }
+    </div>
+    @if (m.RangeNote is not null)
+    {
+        <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body">@m.RangeNote</div></div>
+    }
+</form>
+
+<section class="card table-card" aria-labelledby="tt-list-title">
+    <div class="card__head tt-list-head">
+        <div>
+            <h2 class="card__title" id="tt-list-title">@Ui.Icon(s.Icon)@s.Title@(m.DepartmentName is null ? "" : " · " + m.DepartmentName)@(r.Subject is null ? "" : " · " + r.Subject)</h2>
+            <p class="card__sub">@s.Description</p>
+        </div>
+        <div class="tt-actions">
+            @if (m.Items.Count > 0)
+            {
+                <button class="btn btn--primary" type="submit" form="tt-download" data-preparing="Preparing the selected timetables — the download starts when it is ready.">@Ui.Icon("download")Download selected</button>
+            }
+            <a class="btn btn--secondary" href="@m.Query("/timetables/download-all", ("departmentId", null), ("subject", null), ("teacherId", null), ("classId", null))"
+               data-preparing="Preparing all @s.Title.ToLowerInvariant() — the download starts when it is ready.">@Ui.Icon("download")Download all @s.Title.ToLowerInvariant()</a>
+            @if (r.DepartmentId is { } deptId && m.DepartmentName is { } deptName)
+            {
+                <a class="btn btn--secondary" href="@m.Query("/timetables/department", ("category", null), ("departmentId", deptId), ("subject", null), ("teacherId", null), ("classId", null))"
+                   data-preparing="Preparing all @deptName schedules — the download starts when it is ready.">@Ui.Icon("layers")All @deptName schedules (ZIP)</a>
+            }
+        </div>
+    </div>
+
+    @if (m.Items.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon(s.Icon)</span>
+            <p class="empty__title">No @s.Title.ToLowerInvariant() for this selection</p>
+            <p class="empty__text">Timetables are read from the existing records — change the filters or the week.</p>
+        </div>
+    }
+    else
+    {
+        <form id="tt-download" method="get" action="/timetables/download" data-no-unsaved>
+            <input type="hidden" name="category" value="@s.Key" />
+            @if (r.YearId is { } yid) { <input type="hidden" name="yearId" value="@yid" /> }
+            <input type="hidden" name="from" value="@m.From" />
+            <input type="hidden" name="to" value="@m.To" />
+            @if (r.Day is { } day) { <input type="hidden" name="day" value="@day.ToString().ToLowerInvariant()" /> }
+            @if (m.Has(TimetableFilters.Department) && r.DepartmentId is { } did) { <input type="hidden" name="departmentId" value="@did" /> }
+            @if (m.Has(TimetableFilters.Subject) && r.Subject is { } subj) { <input type="hidden" name="subject" value="@subj" /> }
+            @if (m.Has(TimetableFilters.Teacher) && r.TeacherId is { } tid) { <input type="hidden" name="teacherId" value="@tid" /> }
+            @if (m.Has(TimetableFilters.Class) && r.ClassId is { } cid) { <input type="hidden" name="classId" value="@cid" /> }
+        </form>
+        <div class="tt-select-bar">
+            <label class="tt-check"><input type="checkbox" data-tt-all checked /><span>Select all</span></label>
+            <span class="muted" data-tt-count>@m.Items.Count of @m.Items.Count selected · @Ui.Plural(docs, "PDF", "PDFs")@weekly@(docs > 1 ? " in one ZIP" : "")</span>
+        </div>
+        <ul class="tt-list" data-weeks="@r.Weeks.Count">
+            @{ string? lastGroup = null; }
+            @foreach (var item in m.Items)
+            {
+                if (item.Group is not null && item.Group != lastGroup)
+                {
+                    lastGroup = item.Group;
+                    <li class="tt-group" role="presentation">@item.Group</li>
+                }
+                <li class="tt-item">
+                    <label class="tt-check"><input type="checkbox" name="ids" value="@item.Id" form="tt-download" checked data-tt-item aria-label="Select @item.Name" /></label>
+                    <div class="tt-item__main">
+                        <strong dir="auto">@item.Name</strong>
+                        <span class="person__meta" dir="auto">@item.Detail</span>
+                    </div>
+                    <div class="tt-item__actions">
+                        @if (item.PageUrl is not null)
+                        {
+                            <a class="btn btn--ghost btn--sm" href="@item.PageUrl">@Ui.Icon("eye", "icon--sm")Open</a>
+                        }
+                        <a class="btn btn--secondary btn--sm" href="@m.Query("/timetables/download", ("ids", item.Id))" title="Download @item.Name">@Ui.Icon("file-pdf", "icon--sm")@(r.Weeks.Count > 1 ? "ZIP" : "PDF")</a>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@section Scripts {
+    <script src="~/js/timetables.js" asp-append-version="true"></script>
+}

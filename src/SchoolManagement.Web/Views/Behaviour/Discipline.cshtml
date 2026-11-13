@@ -1,0 +1,27 @@
+@*
+    Students → Behavioural / Discipline → Discipline. A separate section with its own landing page, kept
+    independent from incident reports: incidents are never turned into discipline records automatically.
+    Its records and workflow are to be defined; nothing is stored here yet.
+*@
+@{
+    ViewData["Title"] = "Discipline";
+    ViewData["Nav"] = "Behaviour";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/students/behaviour">Behavioural / Discipline</a></li><li><span aria-current="page">Discipline</span></li></ol>
+        <h1 class="page-title">Discipline</h1>
+        <p class="page-sub">The discipline section of Behavioural / Discipline — separate from incident reports.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/students/behaviour">@Ui.Icon("arrow-left")Behavioural / Discipline</a>
+    </div>
+</div>
+
+<div class="empty empty--boxed">
+    <span class="empty__icon">@Ui.Icon("shield-check")</span>
+    <p class="empty__title">Discipline records are not set up yet</p>
+    <p class="empty__text">This section will have its own records and workflow, added here later. Incident reports stay in the Incident section and are not copied into Discipline.</p>
+    <div class="empty__actions"><a class="btn btn--secondary" href="/students/behaviour/incidents">@Ui.Icon("flag")Go to Incident reports</a></div>
+</div>

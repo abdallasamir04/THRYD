@@ -1,0 +1,60 @@
+@model IReadOnlyList<IncidentRow>
+@* The incident list (used by the Incident page and a student's incident history). *@
+<div class="table-wrap">
+    <table class="table table--stack inc-table">
+        <thead>
+            <tr>
+                <th scope="col">Reference ID</th>
+                <th scope="col">Date</th>
+                <th scope="col">Category</th>
+                <th scope="col">Students involved</th>
+                <th scope="col">Severity</th>
+                <th scope="col">Status</th>
+                <th scope="col">Record</th>
+                <th scope="col" class="col-actions"><span class="visually-hidden">Open</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var i in Model)
+            {
+                <tr>
+                    <td data-label="Reference ID"><a class="inc-ref" href="/students/behaviour/incidents/@i.Id">@i.Reference</a></td>
+                    <td data-label="Date" class="num">@i.Date.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</td>
+                    <td data-label="Category"><strong dir="auto">@i.Category</strong><div class="person__meta" dir="auto">@i.Department</div></td>
+                    <td data-label="Students involved">
+                        @if (i.Students.Count == 0)
+                        {
+                            <span class="faint">None yet</span>
+                        }
+                        else
+                        {
+                            <ul class="inc-names">
+                                @foreach (var s in i.Students.Take(4))
+                                {
+                                    <li><span dir="auto">@s.Name</span> <span class="person__meta">· @IncidentLabels.Role(s.Role)</span></li>
+                                }
+                                @if (i.Students.Count > 4)
+                                {
+                                    <li class="person__meta">+@(i.Students.Count - 4) more</li>
+                                }
+                            </ul>
+                        }
+                    </td>
+                    <td data-label="Severity"><span class="badge @IncidentLabels.SeverityBadge(i.Severity)" title="@IncidentLabels.Severity(i.Severity)">@IncidentLabels.SeverityShort(i.Severity)</span></td>
+                    <td data-label="Status"><span class="badge @IncidentLabels.StatusBadge(i.Status)">@IncidentLabels.Status(i.Status)</span></td>
+                    <td data-label="Record">
+                        @if (i.IsClosed)
+                        {
+                            <span class="badge badge--neutral">Closed</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge--warning">Open</span>
+                        }
+                    </td>
+                    <td class="col-actions"><a class="btn btn--secondary btn--sm" href="/students/behaviour/incidents/@i.Id">Open</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

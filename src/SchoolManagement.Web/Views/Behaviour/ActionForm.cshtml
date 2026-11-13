@@ -1,0 +1,60 @@
+@model IncidentActionForm
+@* D. An investigation finding / administrative action (any wording: the examples are suggestions only). *@
+@{
+    var modal = Context.Request.IsAjax();
+    var isEdit = Model.ActionId is not null;
+    var s = Model.Suggestions!;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = isEdit ? "Edit action" : "Add action"; ViewData["Nav"] = "Behaviour"; }
+    var baseUrl = $"/students/behaviour/incidents/{Model.IncidentId}";
+    var action = isEdit ? $"{baseUrl}/actions/{Model.ActionId}/edit" : $"{baseUrl}/actions/add";
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("clipboard-check", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@(isEdit ? "Finding & action" : "Add a finding or action")</h2>
+                <p class="modal__sub">@Model.Reference</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="ActionItem">Action item <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="ActionItem" name="ActionItem" value="@Model.ActionItem" list="dl-actions" maxlength="@IncidentAction.ItemMaxLength" required dir="auto" placeholder="Choose a suggestion or type your own" data-autofocus />
+                    <datalist id="dl-actions">@foreach (var x in s.ActionItems) { <option value="@x"></option> }</datalist>
+                    <span asp-validation-for="ActionItem" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="Status">Status <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="Status" name="Status" required>
+                        @foreach (var v in IncidentLabels.ActionStatuses) { <option value="@v" selected="@(Model.Status == v)">@IncidentLabels.ActionStatus(v)</option> }
+                    </select>
+                    <span asp-validation-for="Status" class="field-validation-error"></span>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label" for="Finding">Investigation finding &amp; action <span class="req" aria-hidden="true">*</span></label>
+                <textarea class="input textarea" id="Finding" name="Finding" rows="4" maxlength="@IncidentAction.TextMaxLength" required dir="auto"
+                          placeholder="e.g. All students involved were interviewed and given the opportunity to share their accounts.">@Model.Finding</textarea>
+                <span asp-validation-for="Finding" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" for="Details">Restorative &amp; disciplinary details <span class="faint">(optional)</span></label>
+                <textarea class="input textarea" id="Details" name="Details" rows="4" maxlength="@IncidentAction.TextMaxLength" dir="auto"
+                          placeholder="e.g. Students exchanged apologies and acknowledged the importance of respectful conduct.">@Model.Details</textarea>
+                <span asp-validation-for="Details" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@baseUrl">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(isEdit ? "Save" : "Add action")</button>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,34 @@
+@model StudentIncidentsViewModel
+@* A student's incident history: every report naming the student, with their role. *@
+@{
+    ViewData["Title"] = $"Incidents · {Model.StudentName}";
+    ViewData["Nav"] = "Behaviour";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/behaviour">Behavioural / Discipline</a></li><li><a href="/students/behaviour/incidents">Incident</a></li><li dir="auto"><span aria-current="page">@Model.StudentName</span></li></ol>
+        <h1 class="page-title" dir="auto">Incident history · @Model.StudentName</h1>
+        <p class="page-sub"><span class="badge badge--class">@Model.ClassName</span> @IncidentLabels.GradeSection(Model.ClassName) · @Ui.Plural(Model.Incidents.Count, "incident report", "incident reports")</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/students/profile/@Model.StudentId">@Ui.Icon("user")Student profile</a>
+    </div>
+</div>
+
+<partial name="_Confidential" model="true" />
+
+<section class="card table-card" aria-label="Incident history">
+    @if (Model.Incidents.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("check-circle")</span>
+            <p class="empty__title">No incident reports</p>
+            <p class="empty__text">This student is not named in any incident report.</p>
+        </div>
+    }
+    else
+    {
+        <partial name="_IncidentTable" model="Model.Incidents" />
+    }
+</section>

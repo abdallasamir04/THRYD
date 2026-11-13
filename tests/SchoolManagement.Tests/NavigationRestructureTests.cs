@@ -44,7 +44,7 @@ public partial class HttpTests
         var client = fx.Factory.CreateClient();
         var hub = await client.GetStringAsync("/students/hub");
         Assert.Equal(3, Regex.Matches(hub, "class=\"hub-card ").Count);
-        foreach (var (href, title) in new[] { ("/belongings", "Belongings"), ("/arrivals", "Student Attendance"), ("/students/behaviour", "Behavioural / Discipline") })
+        foreach (var (href, title) in new[] { ("/belongings", "Belongings"), ("/attendance", "Student Attendance"), ("/students/behaviour", "Behavioural / Discipline") })
         {
             Assert.Matches($"<a class=\"hub-card hub-card--\\w+\" href=\"{Regex.Escape(href)}\">", hub);
             Assert.Contains($"<span class=\"hub-card__title\">{title}</span>", hub);
@@ -52,7 +52,7 @@ public partial class HttpTests
         Assert.Contains("href=\"/students/hub\" aria-current=\"page\"", Sidebar(hub));
 
         // Each card opens its module, with Students highlighted in the sidebar.
-        foreach (var url in new[] { "/belongings", "/belongings/calendar", "/arrivals", "/students/behaviour", "/students" })
+        foreach (var url in new[] { "/belongings", "/belongings/personal", "/belongings/academic", "/belongings/calendar", "/attendance", "/arrivals", "/attendance/sessions", "/attendance/alerts", "/attendance/holidays", "/students/behaviour", "/students" })
         {
             var response = await client.GetAsync(url);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -65,9 +65,11 @@ public partial class HttpTests
         foreach (var id in new[] { "id=\"classId\"", "id=\"session-receiver\"", "id=\"session-location\"", "id=\"session-method\"", "id=\"session-confirmed\"", "deadline-chip" })
             Assert.Contains(id, session);
         Assert.True(session.IndexOf("arrival-session__foot", StringComparison.Ordinal) > session.IndexOf("id=\"session-method\"", StringComparison.Ordinal));
+        // Behavioural / Discipline: exactly two section cards (Incident, Discipline).
         var behaviour = await client.GetStringAsync("/students/behaviour");
-        Assert.Contains("Coming soon", behaviour);
-        Assert.DoesNotContain("<table", behaviour);                                        // placeholder: no records
+        Assert.Equal(2, Regex.Matches(behaviour, "class=\"hub-card ").Count);
+        Assert.Contains("href=\"/students/behaviour/incidents\"", behaviour);
+        Assert.Contains("href=\"/students/behaviour/discipline\"", behaviour);
     }
 
     // ---------- Duty Audit ----------

@@ -16,10 +16,11 @@ public static class PdfReports
     // ================================================================== timetables
 
     /// <summary>Class timetable: days down the side, periods across the top (as on the website).</summary>
-    public static PdfReport ClassTimetable(TimetableGrid g, string className, string? details)
+    public static PdfReport ClassTimetable(TimetableGrid g, string className, string? details, IReadOnlyList<DayOfWeek>? days = null)
     {
         var slots = Active(g);
-        var cells = ScheduleRules.Days.Select(day => Row(slots.Select(slot =>
+        var shown = days ?? ScheduleRules.Days;
+        var cells = shown.Select(day => Row(slots.Select(slot =>
         {
             var list = new List<PdfGridEntry>();
             if (g.Session(day, slot.Id) is { } s) list.Add(new(s.Subject, Lines(s.Subject, s.TeacherName, s.DepartmentName)));
@@ -40,7 +41,7 @@ public static class PdfReports
                 {
                     Corner = "Day / Period",
                     Columns = slots.Select(SlotAxis).ToList(),
-                    Rows = ScheduleRules.Days.Select(d => DayAxis(g.Week, d)).ToList(),
+                    Rows = shown.Select(d => DayAxis(g.Week, d)).ToList(),
                     Cells = cells,
                     Legend = [("Teaching session (every week)", PdfTone.Primary), ("Substitute this week", PdfTone.Warning)],
                 },
@@ -50,10 +51,11 @@ public static class PdfReports
     }
 
     /// <summary>Teacher timetable: periods down the side, days across the top (as on the website), plus duties and workload.</summary>
-    public static PdfReport TeacherTimetable(TimetableGrid g, string teacherName, string? department, WorkloadSummary? workload)
+    public static PdfReport TeacherTimetable(TimetableGrid g, string teacherName, string? department, WorkloadSummary? workload, IReadOnlyList<DayOfWeek>? days = null)
     {
         var slots = Active(g);
-        var cells = slots.Select(slot => Row(ScheduleRules.Days.Select(day =>
+        var shown = days ?? ScheduleRules.Days;
+        var cells = slots.Select(slot => Row(shown.Select(day =>
         {
             var list = new List<PdfGridEntry>();
             if (g.Session(day, slot.Id) is { } s) list.Add(new(s.ClassName, Lines(s.ClassName, s.Subject, s.DepartmentName)));
@@ -70,7 +72,7 @@ public static class PdfReports
         sections.Add(new PdfGrid
         {
             Corner = "Period / Day",
-            Columns = ScheduleRules.Days.Select(d => DayAxis(g.Week, d)).ToList(),
+            Columns = shown.Select(d => DayAxis(g.Week, d)).ToList(),
             Rows = slots.Select(SlotAxis).ToList(),
             Cells = cells,
             RowHeaderWidth = 82,
@@ -87,12 +89,13 @@ public static class PdfReports
                     new PdfStat("Status", WorkloadRules.Label(w.Status), StatusTone(w.Status)),
                 ],
             });
-        if (g.Duties.Count > 0)
+        var duties = g.Duties.Where(d => shown.Contains(d.Date.DayOfWeek)).ToList();
+        if (duties.Count > 0)
             sections.Add(new PdfTable
             {
                 Title = "Duties this week",
                 Columns = [new("Day", 1.2f), new("Duty", 2.6f), new("Time", 1), new("Location", 1.4f), new("Role", 1), new("Counted in workload", 1.1f, PdfAlign.Center)],
-                Rows = g.Duties.OrderBy(d => d.Date).ThenBy(d => d.Start).Select(d => R(
+                Rows = duties.OrderBy(d => d.Date).ThenBy(d => d.Start).Select(d => R(
                     d.Date.ToString("ddd d MMM", C),
                     new PdfCell(d.Description, DutyComponents.Name(d.Component)),
                     ScheduleRules.Times(d.Start, d.End),
@@ -112,8 +115,9 @@ public static class PdfReports
     }
 
     /// <summary>P.E. timetable (the same module on /pe and on the PE department page).</summary>
-    public static PdfReport PeTimetable(DateOnly week, IReadOnlyList<SlotView> slots, IReadOnlyList<PeChip> sessions, string? department, int teachers)
+    public static PdfReport PeTimetable(DateOnly week, IReadOnlyList<SlotView> slots, IReadOnlyList<PeChip> sessions, string? department, int teachers, IReadOnlyList<DayOfWeek>? days = null)
     {
+        var shown = days ?? ScheduleRules.Days;
         static PdfTone Tone(PeFacility? f) => f switch
         {
             PeFacility.KgGarden => PdfTone.Success,
@@ -122,7 +126,7 @@ public static class PdfReports
             _ => PdfTone.Muted,
         };
         var active = slots.Where(s => s.IsActive).ToList();
-        var cells = ScheduleRules.Days.Select(day => Row(active.Select(slot => (IReadOnlyList<PdfGridEntry>)sessions
+        var cells = shown.Select(day => Row(active.Select(slot => (IReadOnlyList<PdfGridEntry>)sessions
             .Where(s => s.Day == day && s.SlotId == slot.Id)
             .Select(s => new PdfGridEntry(s.ClassName,
                 [s.CoTeacherName is null ? s.TeacherName : $"{s.TeacherName} + {s.CoTeacherName}", s.Facility is { } f ? PeService.FacilityName(f) : "Facility not set"],
@@ -145,7 +149,7 @@ public static class PdfReports
                 {
                     Corner = "Day / Period",
                     Columns = active.Select(SlotAxis).ToList(),
-                    Rows = ScheduleRules.Days.Select(d => DayAxis(week, d)).ToList(),
+                    Rows = shown.Select(d => DayAxis(week, d)).ToList(),
                     Cells = cells,
                     Legend = [("KG Garden", PdfTone.Success), ("Swimming Pool", PdfTone.Info), ("Main Garden", PdfTone.Warning), ("Facility not set", PdfTone.Muted)],
                 },

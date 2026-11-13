@@ -5,7 +5,8 @@ namespace SchoolManagement.Web.Data.TestData;
 
 /// <summary>
 /// Command line (Development only, against the configured database):
-/// <c>dotnet run -- seed-test-data</c>, <c>dotnet run -- test-data-status</c>, <c>dotnet run -- remove-test-data</c>.
+/// <c>dotnet run -- seed-test-data</c>, <c>dotnet run -- test-data-status</c>, <c>dotnet run -- remove-test-data</c>
+/// (everything generated) or <c>dotnet run -- remove-test-data incidents alert-followups …</c> (only those stages).
 /// The app runs the command and exits; a normal start (no command) is unchanged.
 /// </summary>
 public static class TestDataCommand
@@ -38,7 +39,7 @@ public static class TestDataCommand
         return command switch
         {
             Seed => await SeedAsync(app, db, database, log),
-            Remove => await RemoveAsync(db, database, log),
+            Remove => StagesToRemove() is { Count: > 0 } stages ? await RemoveStagesAsync(db, database, stages, log) : await RemoveAsync(db, database, log),
             _ => await PrintStatusAsync(db, database, log),
         };
     }
@@ -89,6 +90,53 @@ public static class TestDataCommand
             log.WriteLine($"  {g.Key,-34} {g.Count(),6} generated   {total - g.Count(),6} other");
         }
         return 0;
+    }
+
+    /// <summary>Stage names after "remove-test-data" on the command line (none = remove everything generated).</summary>
+    private static List<string> StagesToRemove()
+    {
+        var args = Environment.GetCommandLineArgs().ToList();
+        var at = args.IndexOf(Remove);
+        return at < 0 ? [] : args.Skip(at + 1).Where(a => !a.StartsWith('-')).ToList();
+    }
+
+    /// <summary>
+    /// Removes only the rows of the named stages (e.g. the attendance and incident stages), with the same safety
+    /// checks as a full removal: nothing that existed before seeding, and nothing other records still refer to.
+    /// The stages are marked as not done, so seeding again recreates them.
+    /// </summary>
+    private static async Task<int> RemoveStagesAsync(SchoolDbContext db, string database, List<string> stages, TextWriter log)
+    {
+        if (!await TestDataTracker.TableExistsAsync(db))
+        {
+            log.WriteLine($"{database}: no test data recorded. Nothing was changed.");
+            return 0;
+        }
+        var rows = await TestDataTracker.ReadAsync(db);
+        var unknown = stages.Where(s => rows.All(r => r.Phase != s)).ToList();
+        if (unknown.Count > 0)
+        {
+            log.WriteLine($"Unknown stage(s): {string.Join(", ", unknown)}. Known stages: {string.Join(", ", rows.Where(r => r.Kind == "P").Select(r => r.Phase))}. Nothing was removed.");
+            return 1;
+        }
+        await using var tx = await db.Database.BeginTransactionAsync();
+        try
+        {
+            var generated = rows.Where(r => r.Kind == "A" && stages.Contains(r.Phase)).ToList();
+            var deleted = await TestDataTracker.DeleteGeneratedAsync(db, generated, rows.Where(r => r.Kind == "B").ToList());
+            foreach (var stage in stages)
+                await db.Database.ExecuteSqlRawAsync($"DELETE FROM dbo.{TestDataTracker.Table} WHERE Phase = {{0}} AND Kind IN ('A', 'P')", stage);
+            await tx.CommitAsync();
+            log.WriteLine($"{database}: removed {deleted} generated rows of {string.Join(", ", stages)}. Other records were not touched.");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+            log.WriteLine(ex.GetBaseException().Message);
+            log.WriteLine("Nothing was removed.");
+            return 1;
+        }
     }
 
     private static async Task<int> RemoveAsync(SchoolDbContext db, string database, TextWriter log)

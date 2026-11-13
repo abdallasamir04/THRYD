@@ -4,8 +4,16 @@ using SchoolManagement.Web.Services;
 
 namespace SchoolManagement.Web.ViewModels;
 
+/// <summary>The two sections of Belongings, each opened from its own card on the landing page.</summary>
+public enum BelongingsSection { Personal, Academic }
+
 public sealed class BelongingsPageViewModel
 {
+    public BelongingsSection Section { get; init; } = BelongingsSection.Personal;
+
+    /// <summary>Route of the current section: /belongings/personal or /belongings/academic.</summary>
+    public string Path => Section == BelongingsSection.Academic ? "/belongings/academic" : "/belongings/personal";
+
     public required IReadOnlyList<YearView> Years { get; init; }
     public YearView? Year { get; init; }
     public QuarterView? Quarter { get; init; }
@@ -30,7 +38,7 @@ public sealed class BelongingsPageViewModel
             ["date"] = Date is { } d ? Common.SchoolWeek.Iso(d) : null, ["grade"] = Grade, ["studentId"] = Student?.Id.ToString(),
         };
         foreach (var (k, v) in changes) values[k] = v?.ToString();
-        return "/belongings?" + string.Join("&", values.Where(v => !string.IsNullOrEmpty(v.Value)).Select(v => $"{v.Key}={Uri.EscapeDataString(v.Value!)}"));
+        return Path + "?" + string.Join("&", values.Where(v => !string.IsNullOrEmpty(v.Value)).Select(v => $"{v.Key}={Uri.EscapeDataString(v.Value!)}"));
     }
 }
 

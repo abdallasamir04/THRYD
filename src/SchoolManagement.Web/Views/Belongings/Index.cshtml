@@ -1,11 +1,14 @@
 @model BelongingsPageViewModel
 @using SchoolManagement.Web.Entities
 @*
-    Belongings (administration). Selection: Year → Quarter → Week → Date → Grade → Student (query string).
+    Belongings (administration): one section per landing card — Personal Belongings (/belongings/personal) or
+    Academic Belongings (/belongings/academic). Selection: Year → Quarter → Week → Date → Grade → Student (query string).
     Readiness everywhere = Green ÷ (Green + Red); N/A and missing records are excluded (ReadinessCounts).
 *@
 @{
-    ViewData["Title"] = "Belongings";
+    var isAcademic = Model.Section == BelongingsSection.Academic;
+    var sectionTitle = isAcademic ? "Academic Belongings" : "Personal Belongings";
+    ViewData["Title"] = sectionTitle;
     ViewData["Nav"] = "Belongings";
     var c = System.Globalization.CultureInfo.InvariantCulture;
     var m = Model;
@@ -75,9 +78,11 @@
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li>Belongings</li></ol>
-        <h1 class="page-title">Belongings</h1>
-        <p class="page-sub">Daily personal belongings and academic materials per student, with readiness by day, week and quarter.</p>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/belongings">Belongings</a></li><li><span aria-current="page">@sectionTitle</span></li></ol>
+        <h1 class="page-title">@sectionTitle</h1>
+        <p class="page-sub">@(isAcademic
+            ? "Daily Book and Copy Book checks per subject and student, with readiness by day, week and quarter."
+            : "Daily personal belongings and notes per student, with readiness by day, week and quarter.")</p>
     </div>
     <div class="page-head__actions">
         <a class="btn btn--secondary" href="/belongings/calendar">@Ui.Icon("calendar")Academic calendar</a>
@@ -96,33 +101,33 @@
 }
 
 @* ---------------------------------------------------------------- selection *@
-<form class="card bl-filters" method="get" action="/belongings" aria-label="Select the record">
+<form class="card bl-filters" method="get" action="@m.Path" aria-label="Select the record">
     <div class="field"><label class="label" for="f-year">1 · Academic year</label>
-        <select class="select" id="f-year" name="yearId" onchange="this.form.submit()">
+        <select class="select" id="f-year" name="yearId" data-autosubmit>
             @foreach (var y in m.Years) { <option value="@y.Id" selected="@(m.Year?.Id == y.Id)">@y.Name</option> }
         </select></div>
     <div class="field"><label class="label" for="f-quarter">2 · Quarter</label>
-        <select class="select" id="f-quarter" name="quarterId" onchange="this.form.submit()">
+        <select class="select" id="f-quarter" name="quarterId" data-autosubmit>
             @foreach (var q in m.Year?.Quarters ?? [])
             {
                 <option value="@q.Id" selected="@(m.Quarter?.Id == q.Id)" disabled="@(!q.IsConfigured)">@q.Name@(q.IsConfigured ? "" : " (dates not set)")</option>
             }
         </select></div>
     <div class="field"><label class="label" for="f-week">3 · Week</label>
-        <select class="select" id="f-week" name="week" onchange="this.form.submit()">
+        <select class="select" id="f-week" name="week" data-autosubmit>
             @foreach (var w in m.Quarter?.Weeks ?? []) { <option value="@w.Number" selected="@(m.Week?.Number == w.Number)">@w.Label</option> }
         </select></div>
     <div class="field"><label class="label" for="f-date">4 · Date</label>
-        <select class="select" id="f-date" name="date" onchange="this.form.submit()">
+        <select class="select" id="f-date" name="date" data-autosubmit>
             @foreach (var d in m.Week?.Days ?? []) { <option value="@SchoolWeek.Iso(d)" selected="@(m.Date == d)">@d.ToString("dddd d MMM", c)</option> }
         </select></div>
     <div class="field"><label class="label" for="f-grade">5 · Grade</label>
-        <select class="select" id="f-grade" name="grade" onchange="this.form.submit()">
+        <select class="select" id="f-grade" name="grade" data-autosubmit>
             <option value="">Choose a grade…</option>
             @foreach (var (key, label) in GradeCatalog.All) { <option value="@key" selected="@(m.Grade == key)">@label</option> }
         </select></div>
     <div class="field"><label class="label" for="f-student">6 · Student</label>
-        <select class="select" id="f-student" name="studentId" onchange="this.form.submit()" disabled="@(m.Grade is null)" data-searchable>
+        <select class="select" id="f-student" name="studentId" data-autosubmit disabled="@(m.Grade is null)" data-searchable>
             <option value="">@(m.Grade is null ? "Choose a grade first" : m.Students.Count == 0 ? "No students in this grade" : "Choose a student…")</option>
             @foreach (var s in m.Students) { <option value="@s.Id" selected="@(m.Student?.Id == s.Id)" data-note="@s.ClassName">@s.Name</option> }
         </select></div>
@@ -165,6 +170,8 @@
 
 <div class="grid-3-1">
     <div class="stack">
+        @if (!isAcademic)
+        {
         @* ---------------------------------------------------------------- B + D: personal belongings and notes *@
         <section class="card" aria-labelledby="pb-title">
             <div class="card__head"><div><h2 class="card__title" id="pb-title">@Ui.Icon("briefcase")Personal Belongings</h2><p class="card__sub">Each item has its own status. N/A items do not count in readiness.</p></div></div>
@@ -191,7 +198,9 @@
                 <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save belongings &amp; notes</button></div>
             </form>
         </section>
-
+        }
+        else
+        {
         @* ---------------------------------------------------------------- C: academic materials *@
         <section class="card" aria-labelledby="am-title">
             <div class="card__head"><div><h2 class="card__title" id="am-title">@Ui.Icon("graduation-cap")Academic Materials</h2><p class="card__sub">Book and Copy Book per subject. Saving a subject again updates it.</p></div></div>
@@ -252,6 +261,7 @@
                 <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save subject</button></div>
             </form>
         </section>
+        }
     </div>
 
     @* ---------------------------------------------------------------- E: readiness *@
@@ -266,7 +276,7 @@
                 @{ Cards(day.Readiness, "Daily"); }
             </div>
         </section>
-        @if (day.NoteHistory.Count > 0)
+        @if (!isAcademic && day.NoteHistory.Count > 0)
         {
             <section class="card" aria-labelledby="nh-title">
                 <div class="card__head"><h2 class="card__title" id="nh-title">@Ui.Icon("clock")Earlier notes</h2></div>
