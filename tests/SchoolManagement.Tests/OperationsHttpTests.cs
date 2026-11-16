@@ -17,7 +17,10 @@ public partial class OperationsHttpTests(DbFixture fx)
     [InlineData("/duties/audit?status=not-covered&type=Morning&component=students-arrival&followUp=true")]
     [InlineData("/staff")]
     [InlineData("/arrivals")]
+    [InlineData("/arrivals?classId=all")]
     [InlineData("/arrivals?show=late")]
+    [InlineData("/arrivals/history")]
+    [InlineData("/arrivals/history?mode=school&period=range")]
     [InlineData("/settings")]
     [InlineData("/")]
     public async Task New_pages_render(string url)
@@ -61,7 +64,7 @@ public partial class OperationsHttpTests(DbFixture fx)
     }
 
     [Fact]
-    public async Task Arrival_checklist_saves_json_once_per_student_and_needs_the_token()
+    public async Task One_click_arrival_saves_once_with_the_server_time_and_needs_the_token()
     {
         var classId = await fx.NewClassAsync();
         var (student, _) = await fx.NewStudentAsync(classId);
@@ -70,14 +73,14 @@ public partial class OperationsHttpTests(DbFixture fx)
         var token = TokenPattern().Match(page).Groups[1].Value;
         Assert.False(string.IsNullOrEmpty(token));
 
-        HttpRequestMessage Request(bool withToken)
+        HttpRequestMessage Request(string action, bool withToken = true)
         {
-            var r = new HttpRequestMessage(HttpMethod.Post, "/arrivals/save")
+            var r = new HttpRequestMessage(HttpMethod.Post, $"/arrivals/{action}")
             {
-                Content = JsonContent.Create(new
+                // Only the student: no time, method, location or receiver is ever sent.
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
-                    date = SchoolWeek.Iso(SchoolWeek.Today),
-                    entries = new[] { new { studentId = student, status = 1, time = "07:31:15", method = 3, notes = "via http" } },
+                    ["studentId"] = student.ToString(), ["date"] = SchoolWeek.Iso(SchoolWeek.Today), ["classId"] = classId.ToString(),
                 }),
             };
             r.Headers.Add("X-Requested-With", "XMLHttpRequest");
@@ -85,19 +88,42 @@ public partial class OperationsHttpTests(DbFixture fx)
             return r;
         }
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(Request(withToken: false))).StatusCode);
-
-        var first = await client.SendAsync(Request(withToken: true));
-        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-        Assert.Contains("\"saved\":1", await first.Content.ReadAsStringAsync());
-
-        var second = await (await client.SendAsync(Request(withToken: true))).Content.ReadAsStringAsync();
-        Assert.Contains("\"saved\":0", second);
-        Assert.Contains("Already recorded", second);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(Request("register", withToken: false))).StatusCode);
 
         await using var db = fx.NewContext();
+        var schoolDay = (await SchoolDays.LoadAsync(db, default)).IsSchoolDay(SchoolWeek.Today);
+        var cutoff = await DbFixture.Settings(db).GetLateCutoffAsync();
+        var before = SchoolTime.Current.Now;
+        var first = await client.SendAsync(Request("register"));
+        var body = await first.Content.ReadAsStringAsync();
+        if (!schoolDay || TimeOnly.FromDateTime(SchoolTime.Current.Now) >= cutoff)
+        {
+            // Weekends and holidays take no attendance; from the cutoff (09:30) a direct request is refused on the server too.
+            Assert.Equal(HttpStatusCode.Conflict, first.StatusCode);
+            if (schoolDay) Assert.Contains("\"closed\":true", body);
+            Assert.False(await db.StudentArrivals.AnyAsync(r => r.StudentId == student));
+            return;
+        }
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Contains("\"success\":true", body);
+        Assert.Contains("\"notRecorded\":0", body);
+
         var record = await db.StudentArrivals.AsNoTracking().SingleAsync(r => r.StudentId == student);
-        Assert.Equal((new TimeOnly(7, 31, 15), ArrivalMethod.ParentDropOff), (record.ArrivalTime!.Value, record.Method!.Value));
+        var start = await DbFixture.Settings(db).GetArrivalDeadlineAsync();
+        Assert.Equal(ArrivalStatus.Present, record.Status);
+        Assert.InRange(record.ArrivalTime!.Value, TimeOnly.FromDateTime(before).Add(TimeSpan.FromSeconds(-1)), TimeOnly.FromDateTime(SchoolTime.Current.Now).Add(TimeSpan.FromSeconds(1)));
+        Assert.Equal(start is { } st && record.ArrivalTime > st ? LateStatus.Late : LateStatus.OnTime, record.LateStatus);
+        Assert.Null(record.Method);
+        Assert.Null(record.ArrivalLocation);
+        Assert.Null(record.ReceivedByStaffId);
+
+        // A second click (or another device) never records the student again, and Absent is refused too.
+        var second = await client.SendAsync(Request("register"));
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        Assert.Contains("already recorded", await second.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Conflict, (await client.SendAsync(Request("absent"))).StatusCode);
+        Assert.Equal(1, await db.StudentArrivals.CountAsync(r => r.StudentId == student));
+        Assert.Equal(record.ArrivalTime, (await db.StudentArrivals.AsNoTracking().SingleAsync(r => r.StudentId == student)).ArrivalTime);
     }
 
     [Fact]
@@ -107,8 +133,12 @@ public partial class OperationsHttpTests(DbFixture fx)
         var html = await fx.Factory.CreateClient().GetStringAsync("/");
         var summary = await DbFixture.Arrivals(db).DaySummaryAsync(SchoolWeek.Today);
         var counts = await DbFixture.Duties(db).StatusCountsAsync(SchoolWeek.Today);
-        Assert.Contains($"\">{summary.NotRecorded}</span><span class=\"ops-tile__label\">Students not yet recorded", html);
-        Assert.Contains($"\">{summary.Late}</span><span class=\"ops-tile__label\">Late arrivals today", html);
+        Assert.Contains($"\">{summary.Absent}</span><span class=\"ops-tile__label\">Absent today", html);
+        Assert.Contains($"\">{summary.Late}</span><span class=\"ops-tile__label\">Late today", html);
+        Assert.Contains($"\">{summary.Present}</span><span class=\"ops-tile__label\">Present today", html);
+        // Removed categories: no "not yet recorded" tile and no "without a valid class" card.
+        Assert.DoesNotContain("not yet recorded", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("without a valid class", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"\">{counts[DutyStatus.Covered]}</span><span class=\"ops-tile__label\">Duties covered", html);
         Assert.Contains($"\">{counts[DutyStatus.Pending]}</span><span class=\"ops-tile__label\">Duties pending", html);
         // No individual feedback text on the general dashboard.

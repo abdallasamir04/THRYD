@@ -48,6 +48,9 @@ public sealed class StaffProfileViewModel
     public WorkloadSummary? Workload { get; init; }
     public IReadOnlyList<WorkloadAssignmentRow> WorkloadAssignments { get; init; } = [];
     public IReadOnlyList<WorkloadHistoryRow> WorkloadHistory { get; init; } = [];
+
+    /// <summary>KG class teaching-team roles (Homeroom Teacher / Co-Teacher), all academic years — not teaching periods.</summary>
+    public IReadOnlyList<StaffClassAssignmentView> ClassAssignments { get; init; } = [];
 }
 
 public sealed class FeedbackFormModel
@@ -85,33 +88,19 @@ public sealed class FeedbackFormModel
 
 // ---------- Student arrivals ----------
 
-public sealed class ArrivalChecklistViewModel
+/// <summary>Daily Attendance: the day (today by default), the class chosen (or all classes) and its register.</summary>
+public sealed class DailyAttendanceViewModel
 {
-    public required ArrivalChecklist Checklist { get; init; }
+    public required DateOnly Date { get; init; }
     public required IReadOnlyList<ClassOption> Classes { get; init; }
-    public required IReadOnlyList<StaffOption> Staff { get; init; }
-    public string Show { get; init; } = "all";
-    public int? OperatorStaffId { get; init; }
-}
+    public int? ClassId { get; init; }
+    public bool AllClasses { get; init; }
+    public ArrivalChecklist? Checklist { get; init; }
+    public required ArrivalDay Day { get; init; }
 
-public sealed class ArrivalBatchRequest
-{
-    public string? Date { get; set; }
-    public List<ArrivalBatchEntry> Entries { get; set; } = [];
-}
-
-public sealed class ArrivalBatchEntry
-{
-    public int StudentId { get; set; }
-    public ArrivalStatus? Status { get; set; }
-    public string? Time { get; set; }
-    public ArrivalMethod? Method { get; set; }
-    public string? Location { get; set; }
-    public int? ReceivedByStaffId { get; set; }
-    public bool ReceivingConfirmed { get; set; }
-    public string? Notes { get; set; }
-
-    public ArrivalEntry ToEntry() => new(StudentId, Status, ArrivalForm.ParseTime(Time), Method, Location, ReceivedByStaffId, ReceivingConfirmed, Notes);
+    /// <summary>School start time (later = Late) and the 09:30 cutoff (registration closes).</summary>
+    public required ArrivalRules Rules { get; init; }
+    public string? ClassName => ClassId is { } id ? Classes.FirstOrDefault(c => c.Id == id)?.Name : AllClasses ? "All classes" : null;
 }
 
 public static class ArrivalForm
@@ -120,18 +109,26 @@ public static class ArrivalForm
         TimeOnly.TryParseExact(value, ["HH:mm", "HH:mm:ss"], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var t) ? t : null;
 }
 
+/// <summary>A past day: an arrival entered with its time (the outcome still comes from the time).</summary>
+public sealed class ArrivalAddModel
+{
+    public int StudentId { get; set; }
+    public string? Date { get; set; }
+    public string? Time { get; set; }
+
+    [StringLength(StudentArrivalRecord.NotesMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    public string? Notes { get; set; }
+
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever] public ArrivalRow? Row { get; set; }
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever] public ArrivalRules? Rules { get; set; }
+}
+
+/// <summary>Explicit correction of a record: the outcome, the arrival time (Present / Late), notes and a reason.</summary>
 public sealed class ArrivalCorrectionModel
 {
     public int Id { get; set; }
-    public ArrivalStatus? Status { get; set; }
+    public ArrivalOutcome Outcome { get; set; } = ArrivalOutcome.Present;
     public string? Time { get; set; }
-    public ArrivalMethod? Method { get; set; }
-
-    [StringLength(StudentArrivalRecord.LocationMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
-    public string? Location { get; set; }
-
-    public int? ReceivedByStaffId { get; set; }
-    public bool ReceivingConfirmed { get; set; }
 
     [StringLength(StudentArrivalRecord.NotesMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
     public string? Notes { get; set; }
@@ -141,10 +138,38 @@ public sealed class ArrivalCorrectionModel
     [StringLength(StudentArrivalCorrection.ReasonMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
     public string? Reason { get; set; }
 
-    public ArrivalRow? Record { get; set; }
-    public IReadOnlyList<StaffOption> Staff { get; set; } = [];
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever] public ArrivalRow? Record { get; set; }
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever] public ArrivalRules? Rules { get; set; }
+}
 
-    public ArrivalEntry ToEntry(int studentId) => new(studentId, Status, ArrivalForm.ParseTime(Time), Method, Location, ReceivedByStaffId, ReceivingConfirmed, Notes);
+/// <summary>Attendance History &amp; Reports: what (student / class / grade / school), which day or period, and an optional status.</summary>
+public sealed class AttendanceHistoryQuery
+{
+    /// <summary>student, class, grade or school.</summary>
+    public string Mode { get; set; } = "school";
+    public int? StudentId { get; set; }
+    public int? ClassId { get; set; }
+    public string? Grade { get; set; }
+
+    /// <summary>day (one date) or range (from / to).</summary>
+    public string Period { get; set; } = "day";
+    public string? Date { get; set; }
+    public string? From { get; set; }
+    public string? To { get; set; }
+
+    /// <summary>present, late, absent or notrecorded (class / grade / school).</summary>
+    public string? Status { get; set; }
+}
+
+public sealed class AttendanceHistoryViewModel
+{
+    public required AttendanceHistoryQuery Query { get; init; }
+    public required DateOnly From { get; init; }
+    public required DateOnly To { get; init; }
+    public required IReadOnlyList<AttendanceStudentPick> Students { get; init; }
+    public required IReadOnlyList<ClassOption> Classes { get; init; }
+    public StudentAttendanceReport? Student { get; set; }
+    public GroupAttendanceReport? Group { get; set; }
 }
 
 public sealed class StudentProfileViewModel
@@ -175,4 +200,31 @@ public sealed class OperationsIndicators
     public required double? AverageRating { get; init; }
     public required int RatedAssignments { get; init; }
     public required ArrivalSummary Arrivals { get; init; }
+
+    /// <summary>Coverage per section for the day: Morning, Midday, Dismissal (covered / total) and Activities (scheduled).</summary>
+    public IReadOnlyList<DutyCoverage> Coverage { get; init; } = [];
+}
+
+/// <summary>
+/// One category of the dashboard's duty coverage: fully covered sections ÷ sections (<see cref="SectionCoverage"/>).
+/// <paramref name="One"/> / <paramref name="Many"/> name a section ("section", "activity").
+/// </summary>
+public sealed record DutyCoverage(string Name, string Href, SectionCoverage Sections, string One, string Many)
+{
+    public int Percent => Sections.Total == 0 ? 0 : (int)Math.Round(100.0 * Sections.Covered / Sections.Total);
+
+    /// <summary>Tells "no sections" apart from "nothing scheduled", "still open", "not covered" and "fully covered".</summary>
+    public string Summary
+    {
+        get
+        {
+            var s = Sections;
+            if (s.Total == 0) return One == "section" ? $"No {Name.ToLowerInvariant()} sections" : $"No {Many} scheduled today";
+            var parts = new List<string> { $"{s.Covered} of {Ui.Plural(s.Total, One, Many)} fully covered" };
+            if (s.Open > 0) parts.Add($"{s.Open} pending or in progress");
+            if (s.NotCovered > 0) parts.Add($"{s.NotCovered} not covered");
+            if (s.NothingScheduled > 0) parts.Add($"{s.NothingScheduled} with no duties scheduled");
+            return string.Join(" · ", parts);
+        }
+    }
 }

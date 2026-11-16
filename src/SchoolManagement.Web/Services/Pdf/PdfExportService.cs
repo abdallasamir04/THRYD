@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Common;
 using System.Globalization;
 using QuestPDF.Drawing;
 using QuestPDF.Fluent;
@@ -39,7 +40,7 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
     {
         _ = Setup.Value;
         var profile = await settings.GetProfileAsync(ct);
-        var exported = DateTime.Now;
+        var exported = SchoolTime.Now; // "Exported" in school time (Africa/Cairo)
         var document = Document.Create(container => container.Page(page =>
         {
             page.Size(PageSizes.A4.Landscape());
@@ -67,8 +68,8 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
             Subject = report.Title,
             Creator = "THRYD",
             Producer = "THRYD School Management",
-            CreationDate = DateTimeOffset.Now,
-            ModifiedDate = DateTimeOffset.Now,
+            CreationDate = new DateTimeOffset(exported, SchoolTime.Current.OffsetAt()),
+            ModifiedDate = new DateTimeOffset(exported, SchoolTime.Current.OffsetAt()),
         });
         return document.GeneratePdf();
     }

@@ -8,12 +8,12 @@ using SchoolManagement.Web.ViewModels;
 namespace SchoolManagement.Web.Controllers;
 
 /// <summary>
-/// Academic Staff → Class Timetable / Teacher Timetable / Time Slots, and the Assign Period workflow.
+/// Academic Staff → Class Timetable / Teacher Timetable / Periods, and the Assign Period workflow.
 /// Both timetables read the same session rows; every save goes through ITimetableService or
 /// IWorkloadService, which enforce conflicts and the weekly maximum on the server.
 /// </summary>
 [Route("timetable")]
-public class TimetableController(ITimetableService timetable, IWorkloadService workload, ITeacherService teachers, IClassService classes) : AppController
+public class TimetableController(ITimetableService timetable, IWorkloadService workload, ITeacherService teachers, IClassService classes, IPeriodService periods) : AppController
 {
     [HttpGet("")]
     public IActionResult Index() => Redirect("/timetable/classes");
@@ -91,42 +91,170 @@ public class TimetableController(ITimetableService timetable, IWorkloadService w
             await workload.SummaryAsync(id, start, ct)), ct);
     }
 
-    // ------------------------------------------------------------------ time slots
+    // ------------------------------------------------------------------ period management
 
+    /// <summary>The old Time Slots page is now Period Management.</summary>
     [HttpGet("slots")]
-    public async Task<IActionResult> Slots(CancellationToken ct)
-    {
-        var slots = await timetable.SlotsAsync(ct);
-        var inUse = new Dictionary<int, int>();
-        foreach (var s in slots) inUse[s.Id] = await timetable.SessionsInSlotAsync(s.Id, ct);
-        return View(new SlotsViewModel { Slots = slots, InUse = inUse });
-    }
+    public IActionResult Slots() => RedirectPermanent("/timetable/periods");
 
-    [HttpGet("slots/{id:int}/edit")]
-    public async Task<IActionResult> EditSlot(int id, CancellationToken ct)
+    /// <summary>All periods (school-wide and class-specific), or one class's period structure (<paramref name="classId"/>).</summary>
+    [HttpGet("periods")]
+    public async Task<IActionResult> Periods(int? classId, CancellationToken ct)
     {
-        var s = await timetable.GetSlotAsync(id, ct);
-        if (s is null) return NotFoundResult("This time slot no longer exists.");
-        return PageOrPartial("SlotForm", new SlotFormModel
+        var map = await periods.MapAsync(ct);
+        if (classId is { } c && map.Classes.All(x => x.Id != c)) return NotFound();
+        return View(new PeriodsPageViewModel
         {
-            Id = s.Id, Number = s.Number, Name = s.Name, StartTime = s.Start, EndTime = s.End, IsActive = s.IsActive,
-            InUse = await timetable.SessionsInSlotAsync(id, ct),
+            Map = map, ClassId = classId, ClassName = classId is { } id ? map.ClassName(id) : null,
+            Lessons = await timetable.LessonsPerSlotAsync(classId, ct),
         });
     }
 
-    [HttpPost("slots/{id:int}/edit"), ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditSlot(int id, SlotFormModel model, CancellationToken ct)
+    [HttpGet("periods/add")]
+    public async Task<IActionResult> AddPeriod(int? classId, CancellationToken ct)
     {
-        var s = await timetable.GetSlotAsync(id, ct);
-        if (s is null) return NotFoundResult("This time slot no longer exists.");
-        (model.Id, model.Number, model.InUse) = (id, s.Number, await timetable.SessionsInSlotAsync(id, ct));
+        var map = await periods.MapAsync(ct);
+        var model = new PeriodFormModel { ContextClassId = classId, ClassId = classId, Scope = classId is null ? PeriodScope.AllClasses : PeriodScope.ThisClass };
+        Fill(model, map, null);
+        return PageOrPartial("PeriodForm", model);
+    }
+
+    [HttpPost("periods/add"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddPeriod(PeriodFormModel model, CancellationToken ct)
+    {
         if (ModelState.IsValid)
         {
-            var result = await timetable.UpdateSlotAsync(id, model.Name, model.StartTime, model.EndTime, model.IsActive, model.ConfirmAffected, ct);
-            if (result.Succeeded) return Saved($"Period {s.Number} saved{(model.StartTime is { } st && model.EndTime is { } et ? $" ({ScheduleRules.Times(st, et)})" : "")}.", "/timetable/slots");
+            var outcome = await periods.AddAsync(model.ToInput(), model.Scope, model.Scope == PeriodScope.ThisClass ? model.ClassId : null, model.Confirmation, ct);
+            if (outcome.Result.Succeeded) return Saved(outcome.Message ?? "Period added.", PeriodsUrl(model.ContextClassId));
+            AddErrors(outcome.Result);
+            model.Plan = outcome.Plan;
+            model.Confirmation = outcome.NeedsConfirmation ? outcome.Plan!.Fingerprint : null;
+        }
+        Fill(model, await periods.MapAsync(ct), null);
+        return FormView("PeriodForm", model);
+    }
+
+    [HttpGet("periods/{id:int}/edit")]
+    public async Task<IActionResult> EditPeriod(int id, int? classId, bool? active, CancellationToken ct)
+    {
+        var map = await periods.MapAsync(ct);
+        if (map.Get(id) is not { Archived: false } p) return NotFoundResult("This period no longer exists.");
+        var model = new PeriodFormModel
+        {
+            Id = id, ContextClassId = classId, ClassId = p.ClassId ?? classId,
+            // From a class timetable, a school-wide period is changed for that class unless "all classes" is chosen.
+            Scope = p.ClassId is null && classId is not null ? PeriodScope.ThisClass : PeriodScope.AllClasses,
+            Name = p.Name, StartTime = p.Start, EndTime = p.End, Order = p.Number, IsActive = active ?? p.IsActive,
+            AllDays = p.AllDays, Days = PeriodDays.Days(p.DayMask).ToList(),
+        };
+        Fill(model, map, p);
+        return PageOrPartial("PeriodForm", model);
+    }
+
+    [HttpPost("periods/{id:int}/edit"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditPeriod(int id, PeriodFormModel model, CancellationToken ct)
+    {
+        model.Id = id;
+        if (ModelState.IsValid)
+        {
+            var outcome = await periods.EditAsync(id, model.ToInput(), model.Scope, model.ClassId, model.Confirmation, ct);
+            if (outcome.Result.Succeeded) return Saved(outcome.Message ?? "Period saved.", PeriodsUrl(model.ContextClassId));
+            AddErrors(outcome.Result);
+            model.Plan = outcome.Plan;
+            model.Confirmation = outcome.NeedsConfirmation ? outcome.Plan!.Fingerprint : null;
+        }
+        var map = await periods.MapAsync(ct);
+        if (map.Get(id) is not { Archived: false } p) return NotFoundResult("This period no longer exists.");
+        Fill(model, map, p);
+        return FormView("PeriodForm", model);
+    }
+
+    [HttpGet("periods/{id:int}/delete")]
+    public async Task<IActionResult> DeletePeriod(int id, int? classId, CancellationToken ct)
+    {
+        var map = await periods.MapAsync(ct);
+        if (map.Get(id) is not { Archived: false } p) return NotFoundResult("This period no longer exists.");
+        var model = new PeriodDeleteModel
+        {
+            Id = id, ContextClassId = classId, ClassId = p.ClassId ?? classId,
+            Scope = p.ClassId is null && classId is not null ? PeriodScope.ThisClass : PeriodScope.AllClasses,
+        };
+        await FillAsync(model, map, p, ct);
+        return PageOrPartial("PeriodDelete", model);
+    }
+
+    [HttpPost("periods/{id:int}/delete"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeletePeriod(int id, PeriodDeleteModel model, CancellationToken ct)
+    {
+        model.Id = id;
+        var outcome = await periods.DeleteAsync(id, model.Scope, model.ClassId, model.EndLessons, model.Confirmation, ct);
+        if (outcome.Result.Succeeded) return Saved(outcome.Message ?? "Period deleted.", PeriodsUrl(model.ContextClassId));
+        AddErrors(outcome.Result);
+        model.Plan = outcome.Plan;
+        model.Confirmation = outcome.NeedsConfirmation ? outcome.Plan!.Fingerprint : null;
+        var map = await periods.MapAsync(ct);
+        if (map.Get(id) is not { Archived: false } p) return NotFoundResult("This period no longer exists.");
+        await FillAsync(model, map, p, ct);
+        return FormView("PeriodDelete", model);
+    }
+
+    /// <summary>The class uses the school-wide period again (its own version, or its removal, is undone).</summary>
+    [HttpPost("periods/{id:int}/restore"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> RestorePeriod(int id, int? classId, CancellationToken ct)
+    {
+        var result = await periods.RestoreAsync(id, ct);
+        if (!result.Succeeded) return Failure(string.Join(" ", result.Errors.Select(e => e.Value)), PeriodsUrl(classId));
+        return Saved("The class uses the school period again.", PeriodsUrl(classId));
+    }
+
+    private static string PeriodsUrl(int? classId) => classId is { } c ? $"/timetable/periods?classId={c}" : "/timetable/periods";
+
+    private static void Fill(PeriodFormModel model, PeriodMap map, SlotView? p)
+    {
+        model.Period = p;
+        model.Classes = map.Classes.Select(c => (c.Id, c.Name)).ToList();
+        model.ClassesUsing = p is null ? map.Classes.Count : map.ClassesUsing(p).Count;
+        model.ContextClassName = model.ContextClassId is { } c ? map.ClassName(c) : null;
+    }
+
+    private async Task FillAsync(PeriodDeleteModel model, PeriodMap map, SlotView p, CancellationToken ct)
+    {
+        model.Period = p;
+        model.Classes = map.ClassesUsing(p).Select(id => (id, map.ClassName(id))).ToList();
+        model.ContextClassName = model.ContextClassId is { } c ? map.ClassName(c) : null;
+        model.Lessons = await periods.LessonsInAsync(p.Id, null, ct);
+    }
+
+    // ------------------------------------------------------------------ move a lesson (form, or drag and drop on the class timetable)
+
+    [HttpGet("sessions/{id:int}/move")]
+    public async Task<IActionResult> MoveSession(int id, CancellationToken ct)
+    {
+        var s = await timetable.GetSessionAsync(id, ct);
+        if (s is null || s.EndedOn is not null) return NotFoundResult("This session is no longer on the timetable.");
+        return PageOrPartial("MoveSession", new MoveSessionModel { SessionId = id, Session = s, Slot = await timetable.GetSlotAsync(s.SlotId, ct), Targets = await timetable.MoveTargetsAsync(id, ct) });
+    }
+
+    [HttpPost("sessions/{id:int}/move"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> MoveSession(int id, MoveSessionModel model, CancellationToken ct)
+    {
+        var s = await timetable.GetSessionAsync(id, ct);
+        if (s is null || s.EndedOn is not null) return NotFoundResult("This session is no longer on the timetable.");
+        var (day, slotId) = model.Parse();
+        if (day is null || slotId is null) ModelState.AddModelError("Target", "Choose the day and period to move the lesson to.");
+        else
+        {
+            var result = await timetable.MoveSessionAsync(id, day.Value, slotId.Value, ct);
+            if (result.Succeeded)
+            {
+                var slot = await timetable.GetSlotAsync(slotId.Value, ct);
+                return Saved($"{s.Subject} with {s.TeacherName} moved to {ScheduleRules.DayName(day.Value)}, {slot?.Label} ({slot?.Times}) from this week.", $"/timetable/classes/{s.ClassId}");
+            }
+            if (IsAjax && model.DragDrop) return AjaxFailure(string.Join(" ", result.Errors.Select(e => e.Value)), 409);
             AddErrors(result);
         }
-        return FormView("SlotForm", model);
+        (model.SessionId, model.Session, model.Slot, model.Targets) = (id, s, await timetable.GetSlotAsync(s.SlotId, ct), await timetable.MoveTargetsAsync(id, ct));
+        return FormView("MoveSession", model);
     }
 
     // ------------------------------------------------------------------ assign period (class timetable)
@@ -138,7 +266,7 @@ public class TimetableController(ITimetableService timetable, IWorkloadService w
         var start = SchoolWeek.ParseOrCurrent(week);
         var grid = await timetable.ClassGridAsync(classId, start, ct);
         var slot = grid.Slots.FirstOrDefault(s => s.Id == slotId);
-        if (slot is null || !ScheduleRules.IsSchoolDay(day)) return NotFoundResult("This slot does not exist.");
+        if (slot is null || !ScheduleRules.IsSchoolDay(day)) return NotFoundResult("This period does not exist.");
         if (grid.Session(day, slotId) is { } session)
             return PageOrPartial("SlotPanel", new SlotPanelModel
             {
@@ -146,6 +274,7 @@ public class TimetableController(ITimetableService timetable, IWorkloadService w
                 Substitutions = grid.PeriodsAt(day, slotId).Where(p => p.Category == WorkloadCategory.Substitution).ToList(),
             });
         if (!grid.Editable) return NotFoundResult("Past weeks are history and cannot be changed. Go to this week to assign periods.");
+        if (!grid.Scheduled(day, slot)) return NotFoundResult($"{slot.Label} does not run on {ScheduleRules.DayName(day)} in this class's timetable.");
         var model = new AssignPeriodModel { ClassId = classId, Day = day, SlotId = slotId, Week = SchoolWeek.Iso(start) };
         if (!await FillAsync(model, ct)) return NotFoundResult("This class no longer exists.");
         return PageOrPartial("AssignPeriod", model);
@@ -237,7 +366,7 @@ public class TimetableController(ITimetableService timetable, IWorkloadService w
             var note = string.IsNullOrWhiteSpace(model.Description) ? $"Covering {s.Subject} for {s.TeacherName}" : model.Description;
             var result = await workload.CreateAsync(new WorkloadInput(model.TeacherId!.Value, model.WeekStart, WorkloadCategory.Substitution, 1,
                 s.ClassId, null, note, s.Day, s.SlotId), ct);
-            if (result.Succeeded) return Saved($"Substitution saved for {ScheduleRules.DayName(s.Day)}, period {model.Slot!.Number}, week of {SchoolWeek.Label(model.WeekStart)}.", $"/timetable/classes/{s.ClassId}?week={SchoolWeek.Iso(model.WeekStart)}");
+            if (result.Succeeded) return Saved($"Substitution saved for {ScheduleRules.DayName(s.Day)}, {model.Slot!.Label}, week of {SchoolWeek.Label(model.WeekStart)}.", $"/timetable/classes/{s.ClassId}?week={SchoolWeek.Iso(model.WeekStart)}");
             AddErrors(result);
         }
         return FormView("Substitute", model);
@@ -258,6 +387,8 @@ public class TimetableController(ITimetableService timetable, IWorkloadService w
     {
         if (!await FillAsync(model, ct)) return NotFoundResult("This teacher or slot no longer exists.");
         if (model.Kind == "duty" && model.DutyAssignmentId is null) ModelState.AddModelError("DutyAssignmentId", "Choose the duty to count.");
+        if (model.Kind != "duty" && (!model.Slot!.IsSchoolWide || !model.Slot.IsActive || !model.Slot.AppliesOn(model.Day)))
+            ModelState.AddModelError("", $"Office hours go in a school-wide period that runs on {ScheduleRules.DayName(model.Day)}.");
         if (ModelState.IsValid)
         {
             // Office hours sit in the slot; a duty keeps its own date and times and is linked to the existing duty record.
@@ -266,7 +397,7 @@ public class TimetableController(ITimetableService timetable, IWorkloadService w
                 : new WorkloadInput(model.TeacherId, model.WeekStart, WorkloadCategory.Office, 1, null, null, model.Description, model.Day, model.SlotId);
             var result = await workload.CreateAsync(input, ct);
             if (result.Succeeded)
-                return Saved(model.Kind == "duty" ? "Duty counted in the teacher's workload (Duties)." : $"Office hours added on {ScheduleRules.DayName(model.Day)}, period {model.Slot!.Number}.",
+                return Saved(model.Kind == "duty" ? "Duty counted in the teacher's workload (Duties)." : $"Office hours added on {ScheduleRules.DayName(model.Day)}, {model.Slot!.Label}.",
                     $"/timetable/teachers/{model.TeacherId}?week={SchoolWeek.Iso(model.WeekStart)}");
             AddErrors(result);
         }
@@ -346,10 +477,10 @@ public class TimetableController(ITimetableService timetable, IWorkloadService w
         return Redirect(back);
     }
 
-    private IActionResult Failure(string message)
+    private IActionResult Failure(string message, string back = "/timetable/classes")
     {
         if (IsAjax) return AjaxFailure(message, 409);
         Toast(message, "error");
-        return Redirect("/timetable/classes");
+        return Redirect(back);
     }
 }

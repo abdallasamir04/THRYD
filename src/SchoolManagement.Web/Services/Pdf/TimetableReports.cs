@@ -157,23 +157,26 @@ public static class TimetableReports
         };
     }
 
-    /// <summary>The school day's periods (Time Slots): the same ten periods apply Sunday to Thursday.</summary>
+    /// <summary>The school's periods: school-wide and class-specific, with the days each one runs.</summary>
     public static PdfReport BellSchedule(DateOnly week, IReadOnlyList<SlotView> slots, IReadOnlyDictionary<int, int> lessonsPerSlot) => new()
     {
         Title = "Bell Schedule",
-        Subtitle = "School periods (Sunday – Thursday)",
+        Subtitle = "School periods: times, classes and days",
         Meta = Meta(week, ("Active periods", slots.Count(s => s.IsActive).ToString(C))),
         Sections =
         [
             new PdfTable
             {
-                Columns = [new("Period", 0.7f, PdfAlign.Center), new("Name", 1.6f), new("Start", 1, PdfAlign.Center), new("End", 1, PdfAlign.Center), new("Status", 1, PdfAlign.Center), new("Lessons this week", 1.2f, PdfAlign.End)],
-                Rows = slots.OrderBy(s => s.Number).Select(s => (IReadOnlyList<PdfCell>)
+                Columns = [new("Order", 0.6f, PdfAlign.Center), new("Name", 1.5f), new("Start", 0.8f, PdfAlign.Center), new("End", 0.8f, PdfAlign.Center),
+                    new("Classes", 1.3f), new("Days", 1.4f), new("Status", 0.9f, PdfAlign.Center), new("Lessons this week", 1.1f, PdfAlign.End)],
+                Rows = slots.Select(s => (IReadOnlyList<PdfCell>)
                 [
                     PdfCell.Num(s.Number),
                     new PdfCell(s.Label, Strong: true),
                     s.Start?.ToString("HH:mm", C),
                     s.End?.ToString("HH:mm", C),
+                    s.ScopeLabel,
+                    s.DaysLabel,
                     PdfCell.Status(s.IsActive ? "Active" : "Inactive", s.IsActive ? PdfTone.Success : PdfTone.Muted),
                     PdfCell.Num(lessonsPerSlot.GetValueOrDefault(s.Id)),
                 ]).ToList(),
@@ -202,7 +205,8 @@ public static class TimetableReports
     private static PdfSection[] Past(DateOnly week) =>
         week >= SchoolWeek.Current ? [] : [new PdfNotice { Text = "Past week — shown as history. Changes to the timetable take effect from the current week.", Tone = PdfTone.Muted }];
 
-    private static PdfAxis SlotAxis(SlotView s) => new(s.Label, s.HasTimes ? s.Times : "Time not set");
+    /// <summary>Cross-class grids: a class's own period carries its class ("Period 11 (KG1A)").</summary>
+    private static PdfAxis SlotAxis(SlotView s) => new(s.FullLabel, s.HasTimes ? s.Times : "Time not set");
 
     private static PdfAxis DayAxis(DateOnly week, DayOfWeek day)
     {

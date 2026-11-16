@@ -573,6 +573,8 @@
         }
     };
     window.App.skeleton = Skeleton;
+    // Pages that add HTML themselves (e.g. a new entry of the incident report form) set it up like any other new content.
+    window.App.enhance = function (root) { enhance(root); };
 
     // ------------------------------------------------------------------ enhancements applied to new HTML
     function enhance(root) {
@@ -604,7 +606,7 @@
     function openModal(url) {
         if (!modal) { window.location.href = url; return; }
         modalUrl = url;
-        modal.classList.remove("modal--wide");
+        modal.classList.remove("modal--wide", "modal--xl");
         modal.innerHTML = Skeleton.modal();
         if (!modal.open) modal.showModal();
         request(url).then(function (r) {
@@ -620,6 +622,7 @@
     function fillModal(html) {
         modal.innerHTML = html;
         if (modal.querySelector("[data-modal-wide]")) modal.classList.add("modal--wide");
+        if (modal.querySelector("[data-modal-xl]")) modal.classList.add("modal--xl");
         enhance(modal);
         var focus = modal.querySelector("[data-autofocus]") || modal.querySelector("input:not([type=hidden]), select, button");
         if (focus) setTimeout(function () { focus.focus(); }, 30);
@@ -699,7 +702,9 @@
                 } else if (r.status === 422 && modal && modal.contains(form)) {
                     fillModal(r.data); // the form again, with the server's validation messages (still unsaved)
                     $$("form", modal).forEach(Unsaved.force);
-                    toast("Some fields need attention. Nothing was saved yet.", "warning");
+                    // A form can name its own message (e.g. a change shown for confirmation before it is applied).
+                    var notice = modal.querySelector("[data-form-notice]");
+                    toast(notice ? notice.getAttribute("data-form-notice") : "Some fields need attention. Nothing was saved yet.", notice ? "info" : "warning");
                 } else {
                     toast("Something went wrong (" + r.status + "). Please try again.", "error");
                 }
@@ -943,7 +948,9 @@
                 var term = (filter || "").trim().toLowerCase();
                 items = options().filter(function (o) {
                     if (o.placeholder && (select.hasAttribute("required") || select.hasAttribute("data-val-required"))) return false;
-                    return !term || o.text.toLowerCase().indexOf(term) >= 0;
+                    // data-search-notes: the note (e.g. department · job title) is searched too.
+                    var hay = select.hasAttribute("data-search-notes") ? o.text + " " + o.note : o.text;
+                    return !term || hay.toLowerCase().indexOf(term) >= 0;
                 });
                 list.innerHTML = "";
                 if (items.length === 0) {

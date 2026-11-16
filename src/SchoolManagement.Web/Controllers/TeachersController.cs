@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Common;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.Services.Excel;
@@ -111,7 +112,7 @@ public class TeachersController(ITeacherService teachers, IExcelExportService ex
         if (query.JobTitle == TeacherListQuery.NoJobTitle) filters.Add("Job title: not set");
         else if (!string.IsNullOrWhiteSpace(query.JobTitle)) filters.Add($"Job title: {query.JobTitle}");
         var bytes = excel.Teachers(rows, filters.Count == 0 ? "All teachers" : string.Join("; ", filters));
-        return File(bytes, StudentsController.ExcelContentType, $"teachers-{DateTime.Now:yyyy-MM-dd}.xlsx");
+        return File(bytes, StudentsController.ExcelContentType, $"teachers-{SchoolTime.Now:yyyy-MM-dd}.xlsx");
     }
 
     [HttpGet]

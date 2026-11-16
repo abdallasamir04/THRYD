@@ -1,0 +1,249 @@
+@model LeadershipViewModel
+@*
+    Staff → Management Team → School Leadership: ONE section. Its members (cards) and its seven positions (table with
+    appointment history) sit in the same card, one after the other — no tabs. #members and #positions are anchors.
+*@
+@{
+    ViewData["Title"] = "School Leadership";
+    ViewData["Nav"] = "Management";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var t = Model.Tasks;
+    IEnumerable<PositionSlot> slots = Model.Status switch
+    {
+        "filled" => Model.Positions.Where(s => s.Holder is not null),
+        "vacant" => Model.Positions.Where(s => s.Holder is null),
+        _ => Model.Positions,
+    };
+    string StatusLink(string? status) => Context.Request.WithQuery(("status", status)) + "#positions";
+    var filtered = !string.IsNullOrWhiteSpace(Model.Search) || !string.IsNullOrEmpty(Model.Position);
+    var today = SchoolWeek.Iso(SchoolWeek.Today);
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><span aria-current="page">School Leadership</span></li></ol>
+        <h1 class="page-title">School Leadership</h1>
+        <p class="page-sub">Leadership members, the seven positions, their responsibilities and the appointment history in one place.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/management/tasks">@Ui.Icon("clipboard-check")All tasks</a>
+        <partial name="_Download" model='DownloadLink.Report("/management/members/pdf")' />
+        <a class="btn btn--primary" href="/management/members/create" data-modal>@Ui.Icon("user-plus")Add member</a>
+    </div>
+</div>
+
+<ul class="kpis leadership-kpis" aria-label="School Leadership totals">
+    <li><a class="kpi kpi--blue" href="#members" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Members</p><p class="kpi__value">@Model.AllMembers.Count</p><p class="kpi__meta">@(Model.Unpositioned == 0 ? "All hold a position" : $"{Model.Unpositioned} without a position")</p></a></li>
+    <li><a class="kpi @(Model.Vacant > 0 ? "kpi--full" : "kpi--ok")" href="@StatusLink(Model.Vacant > 0 ? "vacant" : null)" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("crown")</span><p class="kpi__label">Positions filled</p><p class="kpi__value">@Model.Filled<span class="faint" style="font-size:1rem"> / @Model.Positions.Count</span></p><p class="kpi__meta">@(Model.Vacant == 0 ? "No vacancies" : Ui.Plural(Model.Vacant, "vacant position", "vacant positions"))</p></a></li>
+    <li><a class="kpi kpi--teal" href="/management/tasks?status=open" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("list")</span><p class="kpi__label">Open tasks</p><p class="kpi__value">@t.Open</p><p class="kpi__meta">@t.InProgress in progress · @t.OnHold on hold</p></a></li>
+    <li><a class="kpi @(t.Overdue > 0 ? "kpi--full" : "kpi--ok")" href="/management/tasks?status=overdue" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("alert-circle")</span><p class="kpi__label">Overdue</p><p class="kpi__value">@t.Overdue</p><p class="kpi__meta">@t.DueToday due today · @t.Completed done</p></a></li>
+</ul>
+
+<section class="card leadership" aria-labelledby="sl-title">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title" id="sl-title">@Ui.Icon("crown")School Leadership</h2>
+            <p class="card__sub">@Ui.Plural(Model.AllMembers.Count, "member", "members") · @Model.Filled of @Model.Positions.Count positions filled. Members hold the positions below; open a member or a position for its tasks and history.</p>
+        </div>
+    </div>
+
+    @* ---------------------------------------------------------------- Members *@
+    <div class="leadership__part" id="members" role="group" aria-labelledby="members-title">
+        <div class="leadership__part-head">
+            <h3 class="leadership__part-title" id="members-title">@Ui.Icon("users")Leadership Members <span class="leadership__tally">@Model.AllMembers.Count</span></h3>
+            <form class="leadership__filters" action="/management/leadership#members" method="get" role="search">
+                <div class="input-icon leadership__search">
+                    @Ui.Icon("search")
+                    <input class="input" type="search" name="search" value="@Model.Search" placeholder="Search members…" aria-label="Search members" autocomplete="off" dir="auto" />
+                </div>
+                <select class="select leadership__select" name="position" aria-label="Filter by position" data-autosubmit>
+                    <option value="">All positions</option>
+                    @foreach (var p in ManagementPositions.All)
+                    {
+                        <option value="@p" selected="@(Model.Position == p.ToString())">@ManagementPositions.Name(p)</option>
+                    }
+                    <option value="none" selected="@(Model.Position == "none")">No position</option>
+                </select>
+                <button class="btn btn--secondary" type="submit">@Ui.Icon("search")Search</button>
+                @if (filtered)
+                {
+                    <a class="btn btn--ghost" href="/management/leadership#members">Clear</a>
+                }
+            </form>
+        </div>
+
+        @if (Model.Members.Count == 0)
+        {
+            var none = Model.AllMembers.Count == 0;
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon(none ? "users" : "search")</span>
+                <p class="empty__title">@(none ? "No leadership members yet" : "No members match")</p>
+                <p class="empty__text">@(none ? "Add the School Director, SQAM and the stage coordinators." : "Try another name or position.")</p>
+                <div class="empty__actions">
+                    @if (none)
+                    {
+                        <a class="btn btn--primary" href="/management/members/create" data-modal>@Ui.Icon("user-plus")Add member</a>
+                    }
+                    else
+                    {
+                        <a class="btn btn--secondary" href="/management/leadership#members">Clear filters</a>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            @if (filtered)
+            {
+                <p class="hint leadership__note">Showing @Model.Members.Count of @Model.AllMembers.Count members.</p>
+            }
+            <div class="leader-grid">
+                @foreach (var m in Model.Members)
+                {
+                    var tone = Ui.Tone(m.FullName);
+                    var since = m.Position is { } mp ? Model.Positions.First(s => s.Position == mp).Since : null;
+                    var start = since ?? m.AppointedOn;
+                    <article class="leader-card leader-card--@tone" aria-labelledby="lm-@m.Id">
+                        <div class="leader-card__head">
+                            <span class="avatar avatar--lg avatar--@tone" aria-hidden="true">@Ui.Initials(m.FullName)</span>
+                            <div class="leader-card__who">
+                                <h4 class="leader-card__name" id="lm-@m.Id" dir="auto"><a class="stretched" href="/management/members/@m.Id" title="@m.FullName">@m.FullName</a></h4>
+                                <span class="leader-card__since">@Ui.Icon("calendar", "icon--sm")@(start is { } s ? (since is null ? "Appointed " : "Since ") + s.ToString("d MMM yyyy", c) : "No start date")</span>
+                            </div>
+                        </div>
+                        @if (m.Position is { } pi)
+                        {
+                            <a class="leader-card__position" href="@ManagementPositions.Href(pi)" title="Open the @m.PositionName position">@Ui.Icon(ManagementPositions.Icon(pi), "icon--sm")<span>@m.PositionName</span></a>
+                        }
+                        else
+                        {
+                            <span class="leader-card__position is-none">@Ui.Icon("briefcase", "icon--sm")<span>@m.PositionName</span></span>
+                        }
+                        <div class="leader-card__stats" aria-label="Tasks">
+                            <div class="leader-card__stat"><strong>@m.OpenTasks</strong><span>Open</span></div>
+                            <div class="leader-card__stat @(m.OverdueTasks > 0 ? "is-bad" : "")"><strong>@m.OverdueTasks</strong><span>Overdue</span></div>
+                            <div class="leader-card__stat is-ok"><strong>@m.CompletedTasks</strong><span>Done</span></div>
+                        </div>
+                        <div class="leader-card__foot">
+                            @if (!string.IsNullOrEmpty(m.ContactNumber))
+                            {
+                                <a class="leader-card__contact" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")<span>@m.ContactNumber</span></a>
+                            }
+                            else if (!string.IsNullOrEmpty(m.Email))
+                            {
+                                <a class="leader-card__contact" href="mailto:@m.Email" dir="ltr">@Ui.Icon("send", "icon--sm")<span>@m.Email</span></a>
+                            }
+                            else
+                            {
+                                <span class="leader-card__contact is-empty">@Ui.Icon("phone", "icon--sm")<span>No phone</span></span>
+                            }
+                            <div class="row-actions">
+                                <a class="icon-btn icon-btn--primary" href="/management/tasks/create?memberId=@m.Id" data-modal title="New task" aria-label="New task for @m.FullName">@Ui.Icon("plus")</a>
+                                <a class="icon-btn icon-btn--primary" href="/management/members/@m.Id/edit" data-modal title="Edit" aria-label="Edit @m.FullName">@Ui.Icon("pencil")</a>
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </div>
+
+    @* ---------------------------------------------------------------- Positions *@
+    <div class="leadership__part leadership__part--positions" id="positions" role="group" aria-labelledby="positions-title">
+        <div class="leadership__part-head">
+            <h3 class="leadership__part-title" id="positions-title">@Ui.Icon("layers")Leadership Positions <span class="leadership__tally">@Model.Filled / @Model.Positions.Count filled</span></h3>
+            <nav class="segmented" aria-label="Filter positions">
+                <a href="@StatusLink(null)" aria-current="@(Model.Status is null ? "true" : "false")">All <span class="count">@Model.Positions.Count</span></a>
+                <a href="@StatusLink("filled")" aria-current="@(Model.Status == "filled" ? "true" : "false")">Filled <span class="count">@Model.Filled</span></a>
+                <a href="@StatusLink("vacant")" aria-current="@(Model.Status == "vacant" ? "true" : "false")">Vacant <span class="count">@Model.Vacant</span></a>
+            </nav>
+        </div>
+        <p class="hint leadership__note">One holder per position. Assign, replace or remove a holder; the appointment history keeps every change.</p>
+
+        @if (!slots.Any())
+        {
+            <div class="empty" style="padding:28px"><p class="empty__text">@(Model.Status == "vacant" ? "Every position has a holder." : "No position has a holder yet.")</p></div>
+        }
+        else
+        {
+            <div class="table-wrap leadership__table">
+                <table class="table table--stack leadership-table">
+                    <thead><tr><th scope="col">Position</th><th scope="col">Current holder</th><th scope="col">Since</th><th scope="col">Tasks</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var slot in slots)
+                        {
+                            var name = ManagementPositions.Name(slot.Position);
+                            <tr class="@(slot.Holder is null ? "is-vacant" : "")">
+                                <td data-label="Position">
+                                    <div class="person">
+                                        <span class="position-card__icon" aria-hidden="true">@Ui.Icon(ManagementPositions.Icon(slot.Position))</span>
+                                        <div style="min-width:0">
+                                            <div class="person__name"><a href="@ManagementPositions.Href(slot.Position)">@name</a></div>
+                                            <div class="person__meta">@ManagementPositions.Description(slot.Position)</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td data-label="Current holder">
+                                    @if (slot.Holder is { } m)
+                                    {
+                                        <div class="person">
+                                            <span class="avatar avatar--@Ui.Tone(m.FullName)" aria-hidden="true">@Ui.Initials(m.FullName)</span>
+                                            <div class="person__name" dir="auto"><a href="/management/members/@m.Id">@m.FullName</a></div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge--warning">@Ui.Icon("alert-circle", "icon--sm")Vacant</span>
+                                    }
+                                </td>
+                                <td data-label="Since" class="nowrap">@(slot.Since?.ToString("d MMM yyyy", c) ?? "—")</td>
+                                <td data-label="Tasks" class="nowrap">
+                                    @if (slot.Holder is { } h)
+                                    {
+                                        <span>@h.OpenTasks open</span>
+                                        @if (h.OverdueTasks > 0) { <span class="badge badge--error">@h.OverdueTasks overdue</span> }
+                                    }
+                                    else { <span class="faint">—</span> }
+                                </td>
+                                <td class="col-actions">
+                                    <div class="row-actions">
+                                        <a class="btn btn--ghost btn--sm" href="@ManagementPositions.Href(slot.Position)">View</a>
+                                        @if (slot.Holder is { } holder)
+                                        {
+                                            <a class="btn btn--secondary btn--sm" href="/management/positions/@slot.Position/assign" data-modal>@Ui.Icon("swap", "icon--sm")Replace</a>
+                                            <form action="/management/positions/@slot.Position/assign" method="post" data-ajax-form
+                                                  data-confirm="@holder.FullName will no longer be @name. The position becomes vacant today and the appointment stays in the history."
+                                                  data-confirm-title="Remove from this position?" data-confirm-button="Remove">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="MemberId" value="" />
+                                                <input type="hidden" name="StartDate" value="@today" />
+                                                <button class="icon-btn icon-btn--danger" type="submit" title="Remove holder" aria-label="Remove @holder.FullName from @name">@Ui.Icon("x")</button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <a class="btn btn--secondary btn--sm" href="/management/positions/@slot.Position/assign" data-modal>@Ui.Icon("user-plus", "icon--sm")Assign</a>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <details class="leadership__history" open="@(Model.History.Count <= 12)">
+            <summary>@Ui.Icon("clock")<span>Appointment history</span><span class="leadership__tally">@Model.History.Count</span><span class="hint">Every appointment, current ones first. Replaced holders stay on record.</span></summary>
+            @if (Model.History.Count == 0)
+            {
+                <div class="empty" style="padding:24px"><p class="empty__text">No appointments recorded yet.</p></div>
+            }
+            else
+            {
+                <partial name="_AppointmentTable" model="Model.History" />
+            }
+        </details>
+    </div>
+</section>

@@ -5,6 +5,7 @@
     var g = Model.Grid;
     var week = SchoolWeek.Iso(g.Week);
     var noTimes = g.Slots.Where(s => s.IsActive).All(s => !s.HasTimes);
+    var periodsUrl = Model.IsClass ? $"/timetable/periods?classId={Model.EntityId}" : "/timetable/periods";
     var sessions = g.Sessions.Count;
     var pdfPath = (Model.IsClass ? "/timetable/classes/" : "/timetable/teachers/") + Model.EntityId + "/pdf";
 }
@@ -39,7 +40,7 @@
         {
             <a class="btn btn--secondary" href="/workload/teacher/@Model.EntityId?week=@week">@Ui.Icon("chart")Workload</a>
         }
-        <a class="btn btn--secondary" href="/timetable/slots">@Ui.Icon("clock")Time slots</a>
+        <a class="btn btn--secondary" href="@periodsUrl">@Ui.Icon("clock")@(Model.IsClass ? "Periods of this class" : "Periods")</a>
         <partial name="_Download" model="DownloadLink.Timetable(pdfPath)" />
     </div>
 </div>
@@ -58,12 +59,23 @@
             <li><span class="tt-swatch tt-swatch--sub"></span>Substitution (this week)</li>
         }
         <li><span class="tt-swatch tt-swatch--empty"></span>Free</li>
+        <li><span class="tt-swatch tt-swatch--na"></span>No period that day</li>
+        @if (g.Problems.Count > 0) { <li><span class="tt-swatch tt-swatch--conflict"></span>Conflict</li> }
+        @if (g.Cancelled.Count > 0) { <li><span class="tt-swatch tt-swatch--cancelled"></span>Cancelled lesson</li> }
     </ul>
 </div>
 
 @if (noTimes)
 {
-    <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>The time slots have no times yet.</strong>Periods are numbered 1–10 until the school enters its times in <a href="/timetable/slots">Time Slots</a>. Assignments keep their slot when times are added.</div></div>
+    <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>The periods have no times yet.</strong>Periods show their names until the school enters their times in <a href="@periodsUrl">Periods</a>. Lessons keep their period when times are added.</div></div>
+}
+@if (g.Problems.Count > 0)
+{
+    <div class="notice notice--error">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>@Ui.Plural(g.Problems.Count, "lesson needs", "lessons need") attention.</strong>@g.Problems.First().Value Open a lesson marked “Conflict” to move or remove it.</div></div>
+}
+@if (Model.IsClass && g.Editable && sessions > 0)
+{
+    <p class="hint tt-dnd-hint">@Ui.Icon("info", "icon--sm")Drag a lesson onto a free period to move it, or open the lesson and choose “Move”.</p>
 }
 @if (!g.Editable)
 {
@@ -89,6 +101,10 @@ else if (Model.IsClass && sessions == 0 && g.Editable)
     <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>No sessions yet.</strong>Click any free slot to assign a subject and teacher. Each session counts once in the teacher's weekly workload.</div></div>
 }
 
+@if (Model.IsClass && g.Editable)
+{
+    <form id="tt-dnd-token" hidden>@Html.AntiForgeryToken()</form>
+}
 <section class="card tt-card" aria-label="Weekly timetable">
     <partial name="_Grid" model="Model" />
 </section>

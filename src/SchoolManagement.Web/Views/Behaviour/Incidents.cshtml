@@ -16,14 +16,11 @@
         <p class="page-sub">Official student incident reports — students involved, timeline of events, investigation findings and actions, sign-off and closure.</p>
     </div>
     <div class="page-head__actions">
-        @if (Model.CanEdit)
-        {
-            <a class="btn btn--primary" href="/students/behaviour/incidents/new" data-modal>@Ui.Icon("plus")New incident report</a>
-        }
+        <a class="btn btn--primary btn--lg inc-add-report" href="/students/behaviour/incidents/new">@Ui.Icon("plus")Add Report</a>
     </div>
 </div>
 
-<partial name="_Confidential" model="Model.CanEdit" />
+<partial name="_Confidential" />
 
 <form class="card inc-filters" method="get" action="/students/behaviour/incidents" role="search" aria-label="Search incident reports">
     <div class="field inc-filters__search"><label class="label" for="i-search">Search</label>
@@ -55,9 +52,9 @@
             <option value="closed" selected="@(q.Closure == "closed")">Closed</option>
         </select></div>
     <div class="field"><label class="label" for="i-from">From</label>
-        <input class="input" type="date" id="i-from" name="from" value="@(q.From is { } f ? SchoolWeek.Iso(f) : "")" data-autosubmit /></div>
+        <input class="input picker" type="date" id="i-from" name="from" value="@(q.From is { } f ? SchoolWeek.Iso(f) : "")" data-autosubmit data-datepicker data-empty-text="Any date" /></div>
     <div class="field"><label class="label" for="i-to">To</label>
-        <input class="input" type="date" id="i-to" name="to" value="@(q.To is { } t ? SchoolWeek.Iso(t) : "")" data-autosubmit /></div>
+        <input class="input picker" type="date" id="i-to" name="to" value="@(q.To is { } t ? SchoolWeek.Iso(t) : "")" data-autosubmit data-datepicker data-empty-text="Any date" /></div>
     <div class="inc-filters__end">
         <button class="btn btn--primary btn--sm" type="submit">@Ui.Icon("search", "icon--sm")Search</button>
         @if (Model.HasFilters)
@@ -75,6 +72,10 @@
             <span class="empty__icon">@Ui.Icon("flag")</span>
             <p class="empty__title">@(Model.HasFilters ? "No reports match this search" : "No incident reports yet")</p>
             <p class="empty__text">@(Model.HasFilters ? "Change or clear the filters." : "Create the first official incident report.")</p>
+            @if (!Model.HasFilters)
+            {
+                <div class="empty__actions"><a class="btn btn--primary" href="/students/behaviour/incidents/new">@Ui.Icon("plus")Add Report</a></div>
+            }
         </div>
     }
     else

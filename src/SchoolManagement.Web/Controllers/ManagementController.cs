@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
@@ -6,17 +7,20 @@ using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
-/// <summary>Management Team → Team Members: the seven positions, member records and member profiles.</summary>
+/// <summary>Management Team → School Leadership: leadership members, the seven positions, appointments and member profiles.</summary>
 [Route("management")]
 public class ManagementController(IManagementService members, IManagementTaskService tasks) : AppController
 {
-    /// <summary>Management Team landing page.</summary>
+    public const string LeadershipHref = "/management/leadership";
+
+    /// <summary>Management Team landing page: School Leadership and Tasks.</summary>
     [HttpGet("")]
     public async Task<IActionResult> Index(CancellationToken ct)
     {
         var all = await members.ListAsync(null, ct);
         var slots = await members.PositionsAsync(ct);
         var counts = await tasks.CountsAsync(null, ct);
+        var filled = slots.Count(s => s.Holder is not null);
         return View("~/Views/Staff/Hub.cshtml", new HubViewModel
         {
             Title = "Management Team",
@@ -24,49 +28,86 @@ public class ManagementController(IManagementService members, IManagementTaskSer
             Crumbs = [("Dashboard", "/"), ("Staff", "/staff"), ("Management Team", null)],
             Cards =
             [
-                new("/management/members", "users", "Team Members", "Profiles of every Management Team member, with their position and tasks.", Ui.Plural(all.Count, "member", "members"), "blue"),
-                new("/management/positions", "crown", "Management Positions", "The seven positions, who holds each one, and the appointment history.",
-                    $"{slots.Count(s => s.Holder is not null)} of {slots.Count} filled", "violet"),
+                new(LeadershipHref, "crown", "School Leadership",
+                    "Manage school leadership members, positions, responsibilities, and appointment history in one place.",
+                    $"{Ui.Plural(all.Count, "member", "members")} · {filled} of {slots.Count} positions filled", "violet"),
                 new("/management/tasks", "clipboard-check", "Tasks", "Individual tasks with priority, due date and status.",
                     counts.Overdue > 0 ? $"{counts.Open} open · {counts.Overdue} overdue" : $"{counts.Open} open", counts.Overdue > 0 ? "rose" : "teal"),
             ],
         });
     }
 
-    /// <summary>Management Team → Team Members.</summary>
-    [HttpGet("members")]
-    public async Task<IActionResult> Members(string? search, string? position, CancellationToken ct)
+    /// <summary>
+    /// Management Team → School Leadership: one section with the leadership members (cards, with search and position
+    /// filter) and the seven positions (holders, vacancies, appointment history). A link from the former tabs
+    /// (<c>?tab=positions</c>) lands on the positions part.
+    /// </summary>
+    [HttpGet("leadership")]
+    public async Task<IActionResult> Leadership(string? tab, string? search, string? position, string? status, CancellationToken ct)
     {
+        if (!string.IsNullOrEmpty(tab))
+            return Redirect(QueryHelpers.AddQueryString(LeadershipHref, Params(("search", search), ("position", position), ("status", status)))
+                            + (tab == LeadershipViewModel.PositionsTab ? "#positions" : "#members"));
         var all = await members.ListAsync(null, ct);
-        IEnumerable<ManagementMemberRow> list = await members.ListAsync(search, ct);
-        if (position == "none") list = list.Where(m => m.Position is null);
-        else if (Enum.TryParse<ManagementPosition>(position, out var p)) list = list.Where(m => m.Position == p);
-        return View(new ManagementMembersViewModel { Members = list.ToList(), Total = all.Count, Search = search, Position = position });
-    }
-
-    /// <summary>Team Members → Download Report (same search and position filter).</summary>
-    [HttpGet("members/pdf")]
-    public async Task<IActionResult> MembersPdf(string? search, string? position, CancellationToken ct)
-    {
-        IEnumerable<ManagementMemberRow> list = await members.ListAsync(search, ct);
-        if (position == "none") list = list.Where(m => m.Position is null);
-        else if (Enum.TryParse<ManagementPosition>(position, out var p)) list = list.Where(m => m.Position == p);
-        return await PdfFile(Services.Pdf.PdfReports.ManagementMembers(list.ToList(), search, position), ct);
-    }
-
-    /// <summary>Management Team → Management Positions: the seven positions, holders and history.</summary>
-    [HttpGet("positions")]
-    public async Task<IActionResult> Positions(CancellationToken ct)
-    {
-        var all = await members.ListAsync(null, ct);
-        return View("Index", new ManagementIndexViewModel
+        return View(new LeadershipViewModel
         {
+            AllMembers = all,
             Positions = await members.PositionsAsync(ct),
-            Unpositioned = all.Where(m => m.Position is null).ToList(),
             Tasks = await tasks.CountsAsync(null, ct),
+            Members = Filter(string.IsNullOrWhiteSpace(search) ? all : await members.ListAsync(search, ct), position),
+            Search = search,
+            Position = position,
+            Status = status is "filled" or "vacant" ? status : null,
             History = await members.PositionHistoryAsync(null, ct),
         });
     }
+
+    /// <summary>School Leadership → one position: description, holder, the holder's tasks and the appointment history.</summary>
+    [HttpGet("leadership/positions/{position}")]
+    public async Task<IActionResult> Position(ManagementPosition position, [FromQuery] TaskListQuery query, CancellationToken ct)
+    {
+        if (!Enum.IsDefined(position)) return NotFoundResult("Unknown position.");
+        var slot = (await members.PositionsAsync(ct)).First(s => s.Position == position);
+        TaskIndexViewModel? list = null;
+        if (slot.Holder is { } holder)
+        {
+            query.MemberId = holder.Id;
+            list = new TaskIndexViewModel
+            {
+                Query = query,
+                Result = await tasks.ListAsync(query, ct),
+                Counts = await tasks.CountsAsync(holder.Id, ct),
+                BaseUrl = ManagementPositions.Href(position),
+            };
+            if (IsAjax) return PartialView("~/Views/ManagementTasks/_TaskList.cshtml", list);
+        }
+        var history = await members.PositionHistoryAsync(null, ct);
+        return View(new LeadershipPositionViewModel { Slot = slot, Tasks = list, History = history.Where(h => h.Position == position).ToList() });
+    }
+
+    /// <summary>Former Team Members page: now the members part of School Leadership (filters kept).</summary>
+    [HttpGet("members")]
+    public IActionResult Members(string? search, string? position) =>
+        Redirect(QueryHelpers.AddQueryString(LeadershipHref, Params(("search", search), ("position", position))) + "#members");
+
+    /// <summary>Former Management Positions page: now the positions part of School Leadership.</summary>
+    [HttpGet("positions")]
+    public IActionResult Positions() => Redirect($"{LeadershipHref}#positions");
+
+    /// <summary>Leadership Members → Download Report (same search and position filter).</summary>
+    [HttpGet("members/pdf")]
+    public async Task<IActionResult> MembersPdf(string? search, string? position, CancellationToken ct) =>
+        await PdfFile(Services.Pdf.PdfReports.ManagementMembers(Filter(await members.ListAsync(search, ct), position), search, position), ct);
+
+    private static IReadOnlyList<ManagementMemberRow> Filter(IEnumerable<ManagementMemberRow> list, string? position)
+    {
+        if (position == "none") list = list.Where(m => m.Position is null);
+        else if (Enum.TryParse<ManagementPosition>(position, out var p)) list = list.Where(m => m.Position == p);
+        return list.ToList();
+    }
+
+    private static Dictionary<string, string?> Params(params (string Key, string? Value)[] pairs) =>
+        pairs.Where(p => !string.IsNullOrWhiteSpace(p.Value)).ToDictionary(p => p.Key, p => p.Value);
 
     [HttpGet("positions/{position}/assign")]
     public async Task<IActionResult> AssignPosition(ManagementPosition position, CancellationToken ct)
@@ -88,7 +129,10 @@ public class ManagementController(IManagementService members, IManagementTaskSer
             if (result.Succeeded)
             {
                 var who = model.MemberId is null ? null : (await members.GetAsync(model.MemberId.Value, ct))?.FullName;
-                return Saved(who is null ? $"{Common.ManagementPositions.Name(position)} is now vacant." : $"{who} is now {Common.ManagementPositions.Name(position)}.", null);
+                var message = who is null ? $"{ManagementPositions.Name(position)} is now vacant." : $"{who} is now {ManagementPositions.Name(position)}.";
+                if (IsAjax) return AjaxSuccess(message);
+                Toast(message);
+                return Redirect(ManagementPositions.Href(position));
             }
             AddErrors(result);
         }
@@ -187,9 +231,9 @@ public class ManagementController(IManagementService members, IManagementTaskSer
         var member = await members.GetAsync(id, ct);
         var result = await members.DeleteAsync(id, ct);
         var message = result.Succeeded ? $"{member?.FullName} was removed from the Management Team." : result.Errors[0].Value;
-        if (IsAjax) return result.Succeeded ? AjaxSuccess(message, "/management/members") : AjaxFailure(message, 409);
+        if (IsAjax) return result.Succeeded ? AjaxSuccess(message, LeadershipHref) : AjaxFailure(message, 409);
         Toast(message, result.Succeeded ? "success" : "error");
-        return Redirect(result.Succeeded ? "/management/members" : $"/management/members/{id}");
+        return Redirect(result.Succeeded ? LeadershipHref : $"/management/members/{id}");
     }
 
     [HttpGet("members/check-duplicate")]
@@ -207,6 +251,6 @@ public class ManagementController(IManagementService members, IManagementTaskSer
     {
         if (IsAjax) return AjaxSuccess(message, redirect);
         Toast(message);
-        return Redirect(redirect ?? "/management/members");
+        return Redirect(redirect ?? LeadershipHref);
     }
 }

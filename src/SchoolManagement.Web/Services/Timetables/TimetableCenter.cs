@@ -59,6 +59,13 @@ public sealed class TimetableData(SchoolDbContext db, ITimetableService timetabl
 {
     public Task<IReadOnlyList<SlotView>> SlotsAsync(CancellationToken ct) => timetable.SlotsAsync(ct);
 
+    /// <summary>Columns for a cross-class report: the enabled school-wide periods plus the class-specific periods its lessons use.</summary>
+    public Task<IReadOnlyList<SlotView>> SlotsForAsync(IEnumerable<WeekLesson> lessons, CancellationToken ct) => timetable.SlotsForAsync(lessons.Select(l => l.SlotId), ct);
+
+    /// <summary>Every current period, school-wide and class-specific (bell schedule).</summary>
+    public async Task<IReadOnlyList<SlotView>> AllPeriodsAsync(CancellationToken ct) =>
+        PeriodMap.Order((await PeriodMap.LoadAsync(db, ct)).All.Where(s => !s.Archived));
+
     public IQueryable<TimetableAssignment> Active(DateOnly week) => db.TimetableAssignments.AsNoTracking().ActiveIn(SchoolWeek.StartOf(week));
 
     public async Task<List<WeekLesson>> LessonsAsync(DateOnly week, Func<IQueryable<TimetableAssignment>, IQueryable<TimetableAssignment>>? filter, CancellationToken ct)
@@ -186,7 +193,7 @@ public sealed class SubjectTimetableSource(TimetableData data) : ITimetableSourc
         var lessons = await data.LessonsAsync(week, q => q.Where(t => t.DepartmentId == deptId && t.Subject == subject), ct);
         var department = lessons.FirstOrDefault()?.DepartmentName;
         if (department is null) return null;
-        return TimetableReports.Subject(SchoolWeek.StartOf(week), await data.SlotsAsync(ct), department, subject, lessons, days);
+        return TimetableReports.Subject(SchoolWeek.StartOf(week), await data.SlotsForAsync(lessons, ct), department, subject, lessons, days);
     }
 }
 
@@ -222,7 +229,7 @@ public sealed class DepartmentTimetableSource(SchoolDbContext db, TimetableData 
         var teacherIds = lessons.Select(l => l.TeacherId).Distinct().ToList();
         var teachers = (await db.Teachers.AsNoTracking().Where(t => t.DepartmentId == deptId || teacherIds.Contains(t.Id)).OrderBy(t => t.FullName)
             .Select(t => new { t.Id, t.FullName }).ToListAsync(ct)).Select(t => (t.Id, t.FullName)).ToList();
-        return TimetableReports.Department(SchoolWeek.StartOf(week), await data.SlotsAsync(ct), name, teachers, lessons, days);
+        return TimetableReports.Department(SchoolWeek.StartOf(week), await data.SlotsForAsync(lessons, ct), name, teachers, lessons, days);
     }
 }
 
@@ -250,7 +257,7 @@ public sealed class SchoolTimetableSource(SchoolDbContext db, TimetableData data
         var withLessons = lessons.Select(l => l.ClassId).ToHashSet();
         var classes = (await db.Classes.AsNoTracking().OrderBy(c => c.SortOrder).ThenBy(c => c.Name).Select(c => new { c.Id, c.Name, c.IsActive }).ToListAsync(ct))
             .Where(c => c.IsActive || withLessons.Contains(c.Id)).Select(c => (c.Id, c.Name)).ToList();
-        return TimetableReports.School(SchoolWeek.StartOf(week), await data.SlotsAsync(ct), classes, lessons, days);
+        return TimetableReports.School(SchoolWeek.StartOf(week), await data.SlotsForAsync(lessons, ct), classes, lessons, days);
     }
 }
 
@@ -278,10 +285,11 @@ public sealed class PeTimetableSource(IPeService pe, ITimetableService timetable
         var dept = await pe.DepartmentIdAsync(ct);
         if (dept is null) return null;
         week = SchoolWeek.StartOf(week);
-        var slots = (await timetable.SlotsAsync(ct)).Where(s => s.IsActive).ToList();
+        var sessions = await pe.WeekAsync(week, ct);
+        var slots = await timetable.SlotsForAsync(sessions.Select(s => s.SlotId), ct);
         var department = (await teachers.DepartmentsAsync(ct)).FirstOrDefault(d => d.Id == dept)?.Name;
         var count = (await teachers.ListAllAsync(new TeacherListQuery { DepartmentId = dept, PageSize = 10_000 }, ct)).Count;
-        return PdfReports.PeTimetable(week, slots, await pe.WeekAsync(week, ct), department, count, days);
+        return PdfReports.PeTimetable(week, slots, sessions, department, count, days);
     }
 }
 
@@ -318,12 +326,12 @@ public sealed class DutyRotaSource(IDutyService duties) : ITimetableSource
     }
 }
 
-/// <summary>The bell schedule (Timetable → Time Slots): the ten periods and their times.</summary>
+/// <summary>The bell schedule (Timetable → Periods): every period, its times, classes and days.</summary>
 public sealed class BellScheduleSource(TimetableData data) : ITimetableSource
 {
     public string Key => "bells";
     public string Title => "Bell Schedule";
-    public string Description => "The school day's periods and their start and end times (Time Slots).";
+    public string Description => "The school's periods: start and end times, which classes and which days (Periods).";
     public string Icon => "clock";
     public string Folder => "Bell Schedule";
     public int Order => 80;
@@ -331,14 +339,14 @@ public sealed class BellScheduleSource(TimetableData data) : ITimetableSource
 
     public async Task<IReadOnlyList<TimetableItem>> ItemsAsync(TimetableScope s, CancellationToken ct)
     {
-        var slots = await data.SlotsAsync(ct);
-        return [new TimetableItem(Key, "slots", "Bell Schedule", $"{slots.Count(x => x.IsActive)} active periods · {slots.Count(x => x.HasTimes)} with times", null, "/timetable/slots")];
+        var slots = await data.AllPeriodsAsync(ct);
+        return [new TimetableItem(Key, "slots", "Bell Schedule", $"{slots.Count(x => x.IsActive)} active periods · {slots.Count(x => !x.IsSchoolWide)} class-specific · {slots.Count(x => x.HasTimes)} with times", null, "/timetable/periods")];
     }
 
     public async Task<PdfReport?> ReportAsync(string id, DateOnly week, IReadOnlyList<DayOfWeek> days, CancellationToken ct)
     {
         var perSlot = await data.Active(week).GroupBy(t => t.TimeSlotId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count, ct);
-        return TimetableReports.BellSchedule(SchoolWeek.StartOf(week), await data.SlotsAsync(ct), perSlot);
+        return TimetableReports.BellSchedule(SchoolWeek.StartOf(week), await data.AllPeriodsAsync(ct), perSlot);
     }
 }
 

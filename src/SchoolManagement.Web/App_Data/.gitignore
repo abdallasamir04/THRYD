@@ -1,0 +1,3 @@
+# Uploaded task attachments (and any other runtime data) are never committed.
+*
+!.gitignore

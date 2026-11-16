@@ -1,5 +1,6 @@
-using System.Text;
+﻿using System.Text;
 using Microsoft.EntityFrameworkCore;
+using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Data;
 using SchoolManagement.Web.Data.TestData;
 using SchoolManagement.Web.Services;
@@ -25,6 +26,11 @@ builder.Services.AddDbContext<SchoolDbContext>((sp, options) =>
 });
 
 builder.Services.AddMemoryCache();
+// One school time reference (Egyptian local time, Africa/Cairo, DST from the OS time zone database) for every module.
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ISchoolTimeService>(sp => SchoolTimeService.FromConfiguration(
+    sp.GetRequiredService<IConfiguration>(), sp.GetRequiredService<TimeProvider>(),
+    message => sp.GetRequiredService<ILogger<SchoolTimeService>>().LogError("{Message}", message)));
 builder.Services.AddScoped<IClassService, ClassService>();
 builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<ITeacherService, TeacherService>();
@@ -39,8 +45,14 @@ builder.Services.AddScoped<IStaffDutyService, StaffDutyService>();
 builder.Services.AddScoped<IArrivalService, ArrivalService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 builder.Services.AddScoped<IManagementService, ManagementService>();
+builder.Services.AddSingleton<ITaskFileStore, DiskTaskFileStore>();
 builder.Services.AddScoped<IManagementTaskService, ManagementTaskService>();
 builder.Services.AddScoped<ITimetableService, TimetableService>();
+builder.Services.AddScoped<IPeriodService, PeriodService>();
+builder.Services.AddScoped<IActivityService, ActivityService>();
+builder.Services.AddScoped<IClassTeamService, ClassTeamService>();
+builder.Services.AddScoped<IStaffDirectoryService, StaffDirectoryService>();
+builder.Services.AddScoped<IAttendanceReportService, AttendanceReportService>();
 builder.Services.AddScoped<IPeService, PeService>();
 builder.Services.AddScoped<IBelongingsService, BelongingsService>();
 builder.Services.AddScoped<IAttendanceAlertService, AttendanceAlertService>();
@@ -59,6 +71,10 @@ builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSo
 builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableCenter, SchoolManagement.Web.Services.Timetables.TimetableCenter>();
 builder.Services.AddScoped<IIncidentService, IncidentService>();
 if (testDataCommand is null) builder.Services.AddHostedService<AttendanceAlertSweep>();
+// After the 09:30 cutoff students with no arrival are Absent; ArrivalFinalizer stores those records (off in tests).
+var automaticAbsences = builder.Configuration.GetValue("Attendance:AutoFinalize", true);
+builder.Services.AddSingleton(new AttendanceOptions(automaticAbsences));
+if (testDataCommand is null && automaticAbsences) builder.Services.AddHostedService<ArrivalFinalizer>();
 // The arrival checklist saves rows as JSON; fetch() sends the antiforgery token in this header.
 builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 builder.Services.AddSingleton<IExcelExportService, ExcelExportService>();
@@ -75,6 +91,9 @@ builder.Services.AddControllersWithViews(options =>
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
 
 var app = builder.Build();
+
+// Static helpers (SchoolWeek.Today, Ui.DateTime, views) use the same school clock as the injected services.
+SchoolTime.Current = app.Services.GetRequiredService<ISchoolTimeService>();
 
 // Applies pending migrations (the first one creates the tables and the 25 default classes).
 if (app.Configuration.GetValue("Database:MigrateOnStartup", true))

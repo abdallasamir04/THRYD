@@ -1,0 +1,136 @@
+@model PeriodDeleteModel
+@*
+    Delete a period, for one class or for all classes. Lessons are never deleted silently: if the period has current
+    lessons the administrator must move them or explicitly tick "End these lessons" (they end from this week; earlier
+    weeks, attendance and workload history stay). A period that was ever used is archived, not erased.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var p = Model.Period!;
+    var heading = $"Delete {p.Label}";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Timetable"; }
+    var back = Model.ContextClassId is { } cc ? $"/timetable/periods?classId={cc}" : "/timetable/periods";
+    var confirming = Model.Plan is not null && Model.Confirmation is not null;
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="@back">Periods</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/timetable/periods/@Model.Id/delete" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="ContextClassId" value="@Model.ContextClassId" />
+        @if (confirming)
+        {
+            <input type="hidden" name="Confirmation" value="@Model.Confirmation" />
+            <span data-form-notice="Review what will be deleted, then confirm. Nothing was deleted yet." hidden></span>
+        }
+        <div class="modal__head">
+            <span class="modal__icon modal__icon--danger">@Ui.Icon("trash", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">@heading</h2>
+                <p class="modal__sub">@p.Times · @p.DaysLabel · @p.ScopeLabel</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+            @if (Model.Plan is { } plan)
+            {
+                <section class="period-plan @(plan.Conflicts.Count > 0 ? "period-plan--blocked" : "")" aria-label="What this deletion does">
+                    <p class="period-plan__summary">@Ui.Icon(plan.Conflicts.Count > 0 ? "alert-triangle" : "info", "icon--sm")<strong dir="auto">@plan.Summary</strong></p>
+                    @if (plan.Classes.Count > 1)
+                    {
+                        <ul class="period-plan__chips">@foreach (var c in plan.Classes) { <li>@c</li> }</ul>
+                    }
+                    @if (plan.LessonsNote is not null) { <p class="period-plan__label">@plan.LessonsNote</p> }
+                    @if (confirming)
+                    {
+                        <p class="period-plan__confirm">@Ui.Icon("check-circle", "icon--sm")Press <strong>Confirm and delete</strong> to apply.</p>
+                    }
+                </section>
+            }
+
+            @if (p.IsSchoolWide)
+            {
+                <fieldset class="field">
+                    <legend class="label">Delete it from</legend>
+                    <div class="choice-cards" role="radiogroup">
+                        <label class="choice-card">
+                            <input type="radio" name="Scope" value="ThisClass" checked="@(Model.Scope == PeriodScope.ThisClass)" />
+                            <span class="choice-card__body">
+                                <span class="choice-card__title">One class only@(Model.ContextClassName is null ? "" : $" ({Model.ContextClassName})")</span>
+                                <span class="choice-card__text">The period disappears from that class's timetable; other classes keep it. Can be undone on the class's Periods page.</span>
+                            </span>
+                        </label>
+                        <label class="choice-card">
+                            <input type="radio" name="Scope" value="AllClasses" checked="@(Model.Scope == PeriodScope.AllClasses)" />
+                            <span class="choice-card__body">
+                                <span class="choice-card__title">All classes (@Model.Classes.Count)</span>
+                                <span class="choice-card__text">The school-wide period is deleted. You will confirm the affected classes first.</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="field" data-show-if="Scope=ThisClass">
+                        <label class="label" for="ClassId">Class</label>
+                        <select class="select" id="ClassId" name="ClassId" data-searchable>
+                            <option value="">Choose a class…</option>
+                            @foreach (var c in Model.Classes)
+                            {
+                                <option value="@c.Id" selected="@(Model.ClassId == c.Id)">@c.Name</option>
+                            }
+                        </select>
+                    </div>
+                </fieldset>
+            }
+            else
+            {
+                <input type="hidden" name="Scope" value="ThisClass" />
+                <input type="hidden" name="ClassId" value="@p.ClassId" />
+                <p class="notice">@Ui.Icon("info")<span class="notice__body">This is <strong>@p.ClassName</strong>'s own period; only @p.ClassName is affected.@(p.ReplacesId is null ? "" : " The school's version of this period stays removed for this class (restore it on the class's Periods page).")</span></p>
+            }
+
+            <div>
+                <p class="period-plan__label">Current lessons in this period</p>
+                @if (Model.Lessons.Count == 0)
+                {
+                    <p class="muted" style="font-size:0.88rem;margin:4px 0 0">None — no lesson is affected.</p>
+                }
+                else
+                {
+                    <ul class="period-plan__lessons">
+                        @foreach (var l in Model.Lessons.Take(15)) { <li dir="auto">@l.Text</li> }
+                        @if (Model.Lessons.Count > 15) { <li class="muted">…and @(Model.Lessons.Count - 15) more</li> }
+                    </ul>
+                    <p class="hint">With “One class only”, only that class's lessons are affected.</p>
+                    <label class="switch">
+                        <input type="checkbox" name="EndLessons" value="true" checked="@Model.EndLessons" />
+                        <span class="switch__track" aria-hidden="true"></span>
+                        <span>End these lessons from this week. Earlier weeks, attendance and workload history are kept. (Or cancel and move them first.)</span>
+                    </label>
+                }
+            </div>
+            <p class="hint">A period that was ever used is archived rather than erased, so earlier weeks still show their lessons at the right times. Single-week substitutions or office hours in this period must be removed first.</p>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="@back">Cancel</a>
+            }
+            <button class="btn btn--danger" type="submit">@Ui.Icon("trash")@(confirming ? "Confirm and delete" : "Delete period")</button>
+        </div>
+    </form>
+</div>

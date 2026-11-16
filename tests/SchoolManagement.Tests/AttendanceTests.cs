@@ -65,7 +65,8 @@ public class AttendanceTests(DbFixture fx)
     {
         var id = await SchoolRecordIdAsync(studentId, date);
         await using var db = fx.NewContext();
-        var r = await DbFixture.SchoolAttendance(db).CorrectAsync(id, entry, "Test correction");
+        var outcome = entry.Status == ArrivalStatus.Absent ? ArrivalOutcome.Absent : ArrivalOutcome.Present;
+        var r = await DbFixture.SchoolAttendance(db).CorrectAsync(id, outcome, entry.Time, entry.Notes, "Test correction");
         Assert.True(r.Succeeded, string.Join("; ", r.Errors.Select(e => e.Value)));
     }
 
@@ -348,7 +349,7 @@ public class AttendanceTests(DbFixture fx)
         Assert.Equal(2, Regex.Matches(hub, "class=\"hub-card ").Count);
         Assert.Contains("href=\"/arrivals?date=2025-06-16\"", hub);
         Assert.Contains("href=\"/attendance/sessions?date=2025-06-16\"", hub);
-        foreach (var label in new[] { "Total students", "Not recorded", "Expected sessions", "Pending", "3 consecutive absences · pending" }) Assert.Contains(label, hub);
+        foreach (var label in new[] { "Total students", "Absent", "Expected sessions", "Pending", "3 consecutive absences · pending" }) Assert.Contains(label, hub);
 
         var list = WebUtility.HtmlDecode(await client.GetStringAsync($"/attendance/sessions?date=2025-06-16&classId={classId}"));
         Assert.Contains($"/attendance/sessions/{lesson}?date=2025-06-16", list);
@@ -380,6 +381,7 @@ public class AttendanceTests(DbFixture fx)
 
         Assert.Contains("School holidays", await client.GetStringAsync("/attendance/holidays"));
         var school = await client.GetStringAsync("/arrivals?date=2025-06-16");
-        Assert.Contains("data-arrival-table", school); // the existing checklist is unchanged
+        Assert.Contains("Daily Attendance", school); // School Attendance opens on its class picker
+        Assert.Contains("data-att-row", await client.GetStringAsync($"/arrivals?date=2025-06-16&classId={classId}"));
     }
 }

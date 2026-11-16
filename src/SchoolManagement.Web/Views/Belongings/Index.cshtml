@@ -84,18 +84,14 @@
             ? "Daily Book and Copy Book checks per subject and student, with readiness by day, week and quarter."
             : "Daily personal belongings and notes per student, with readiness by day, week and quarter.")</p>
     </div>
-    <div class="page-head__actions">
-        <a class="btn btn--secondary" href="/belongings/calendar">@Ui.Icon("calendar")Academic calendar</a>
-    </div>
 </div>
 
 @if (m.Years.Count == 0 || m.Years.All(y => y.Quarters.All(q => !q.IsConfigured)))
 {
     <div class="empty empty--boxed">
         <span class="empty__icon">@Ui.Icon("calendar")</span>
-        <p class="empty__title">Set up the academic calendar first</p>
-        <p class="empty__text">Add the academic year and the dates of its four quarters (8 school weeks each). Daily records are kept per quarter, week and date.</p>
-        <div class="empty__actions"><a class="btn btn--primary" href="/belongings/calendar">@Ui.Icon("calendar")Academic calendar</a></div>
+        <p class="empty__title">No academic year with quarter dates yet</p>
+        <p class="empty__text">Daily records are kept per quarter, week and date. Add the academic year and the dates of its four quarters under Academics → Academic Calendar in the sidebar.</p>
     </div>
     return;
 }

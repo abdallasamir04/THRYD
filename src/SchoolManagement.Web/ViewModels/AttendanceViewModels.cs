@@ -16,7 +16,7 @@ public sealed class AttendanceHubViewModel
     public required IReadOnlyList<AlertRow> RecentAlerts { get; init; }
 
     /// <summary>Present (on time or late) ÷ recorded; null when nothing is recorded.</summary>
-    public double? SchoolPercent => School.Recorded == 0 ? null : Math.Round(School.Present * 100.0 / School.Recorded, 1);
+    public double? SchoolPercent => School.Recorded == 0 ? null : Math.Round(School.Attended * 100.0 / School.Recorded, 1);
 }
 
 public sealed class SessionListViewModel

@@ -1,0 +1,21 @@
+@model (TeamMemberView Member, int YearId, int ClassId)
+@* One teaching-team member as a compact staff card: name (links to the staff profile), role, and Remove. *@
+@using SchoolManagement.Web.Entities
+@{
+    var m = Model.Member;
+    var role = ClassTeachingRoles.Label(m.Role);
+}
+<div class="team-chip @(m.Role == ClassTeachingRole.HomeroomTeacher ? "team-chip--homeroom" : "")">
+    <span class="avatar avatar--@Ui.Tone(m.Name)" aria-hidden="true">@Ui.Initials(m.Name)</span>
+    <span class="team-chip__body">
+        <a class="team-chip__name" href="/staff/@m.StaffId" dir="auto">@m.Name</a>
+        <span class="team-chip__role">@role@(m.JobTitle is null ? "" : $" · {m.JobTitle}")</span>
+    </span>
+    <form method="post" action="/classes/@Model.ClassId/team/@m.AssignmentId/remove"
+          data-confirm="@m.Name will no longer be @role of this class. The assignment stays in the history; the rest of the team is unchanged."
+          data-confirm-title="Remove this assignment?" data-confirm-button="Remove">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="yearId" value="@Model.YearId" />
+        <button class="icon-btn icon-btn--danger" type="submit" title="Remove" aria-label="Remove @m.Name as @role">@Ui.Icon("x", "icon--sm")</button>
+    </form>
+</div>

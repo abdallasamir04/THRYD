@@ -42,7 +42,7 @@
     <div class="field"><label class="label" for="f-slot">Period</label>
         <select class="select" id="f-slot" name="slotId" data-autosubmit>
             <option value="">All periods</option>
-            @foreach (var s in o.Slots) { <option value="@s.Id" selected="@(f.SlotId == s.Id)">@s.Label@(s.HasTimes ? " · " + s.Times : "")</option> }
+            @foreach (var s in o.Slots) { <option value="@s.Id" selected="@(f.SlotId == s.Id)">@s.FullLabel@(s.HasTimes ? " · " + s.Times : "")</option> }
         </select></div>
     <div class="field"><label class="label" for="f-subject">Subject</label>
         <select class="select" id="f-subject" name="subject" data-searchable data-autosubmit>

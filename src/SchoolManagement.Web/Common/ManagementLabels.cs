@@ -21,6 +21,22 @@ public static class ManagementPositions
 
     public static string Name(ManagementPosition? p) => p is { } v ? Name(v) : "No position assigned";
 
+    /// <summary>One-line scope of each position, shown on the School Leadership pages (display text only).</summary>
+    public static string Description(ManagementPosition p) => p switch
+    {
+        ManagementPosition.SchoolDirector => "Leads the school and its Management Team.",
+        ManagementPosition.Sqam => "School quality assurance and monitoring.",
+        ManagementPosition.KgStageCoordinator => "Coordinates the KG Stage: Pre-K, KG1 and KG2.",
+        ManagementPosition.LowerElementaryCoordinator => "Coordinates Lower Elementary.",
+        ManagementPosition.UpperElementaryCoordinator => "Coordinates Upper Elementary.",
+        ManagementPosition.MiddleSchoolCoordinator => "Coordinates Middle School.",
+        ManagementPosition.HighSchoolCoordinator => "Coordinates High School.",
+        _ => "",
+    };
+
+    /// <summary>The position's page under School Leadership, e.g. /management/leadership/positions/Sqam.</summary>
+    public static string Href(ManagementPosition p) => $"/management/leadership/positions/{p}";
+
     public static string Icon(ManagementPosition p) => p switch
     {
         ManagementPosition.SchoolDirector => "crown",
@@ -31,10 +47,18 @@ public static class ManagementPositions
 
 public static class TaskLabels
 {
+    /// <summary>Statuses offered for a task. On Hold is only offered to a task that already has it.</summary>
     public static readonly ManagementTaskStatus[] Statuses =
-        [ManagementTaskStatus.ToDo, ManagementTaskStatus.InProgress, ManagementTaskStatus.OnHold, ManagementTaskStatus.Completed];
+        [ManagementTaskStatus.ToDo, ManagementTaskStatus.InProgress, ManagementTaskStatus.Completed, ManagementTaskStatus.Cancelled];
 
-    public static readonly TaskPriority[] Priorities = [TaskPriority.Urgent, TaskPriority.High, TaskPriority.Medium, TaskPriority.Low];
+    /// <summary>The statuses a task in <paramref name="current"/> can be set to.</summary>
+    public static IEnumerable<ManagementTaskStatus> StatusesFor(ManagementTaskStatus current) =>
+        current == ManagementTaskStatus.OnHold ? [.. Statuses.Take(2), ManagementTaskStatus.OnHold, .. Statuses.Skip(2)] : Statuses;
+
+    public static readonly TaskPriority[] Priorities = [TaskPriority.Critical, TaskPriority.High, TaskPriority.Medium, TaskPriority.Low];
+
+    /// <summary>Statuses that close a task: no longer open, never overdue.</summary>
+    public static bool IsClosed(ManagementTaskStatus s) => s is ManagementTaskStatus.Completed or ManagementTaskStatus.Cancelled;
 
     public static string Status(ManagementTaskStatus s) => s switch
     {
@@ -42,16 +66,18 @@ public static class TaskLabels
         ManagementTaskStatus.InProgress => "In Progress",
         ManagementTaskStatus.Completed => "Completed",
         ManagementTaskStatus.OnHold => "On Hold",
+        ManagementTaskStatus.Cancelled => "Cancelled",
         _ => s.ToString(),
     };
 
-    /// <summary>CSS modifier: task-status--todo, --in-progress, --completed, --on-hold.</summary>
+    /// <summary>CSS modifier and filter value: task-status--todo, --in-progress, --completed, --on-hold, --cancelled.</summary>
     public static string StatusSlug(ManagementTaskStatus s) => s switch
     {
         ManagementTaskStatus.ToDo => "todo",
         ManagementTaskStatus.InProgress => "in-progress",
         ManagementTaskStatus.Completed => "completed",
         ManagementTaskStatus.OnHold => "on-hold",
+        ManagementTaskStatus.Cancelled => "cancelled",
         _ => "todo",
     };
 
@@ -59,20 +85,51 @@ public static class TaskLabels
 
     public static string PrioritySlug(TaskPriority p) => p.ToString().ToLowerInvariant();
 
+    /// <summary>A priority filter value; "urgent" (the former name of Critical) still works in saved links.</summary>
+    public static TaskPriority? ParsePriority(string? value) =>
+        string.Equals(value, "urgent", StringComparison.OrdinalIgnoreCase) ? TaskPriority.Critical
+        : Enum.TryParse<TaskPriority>(value, true, out var p) && Enum.IsDefined(p) && !int.TryParse(value, out _) ? p : null;
+
     public static string Due(DateOnly? date, TimeOnly? time)
     {
         if (date is not { } d) return "No due date";
         var c = CultureInfo.InvariantCulture;
         var text = d.Year == SchoolWeek.Today.Year ? d.ToString("ddd d MMM", c) : d.ToString("d MMM yyyy", c);
-        return time is { } t ? $"{text}, {t.ToString("HH:mm", c)}" : text;
+        return time is { } t ? $"{text}, {Time(t)}" : text;
     }
 
-    /// <summary>Overdue = not completed and the due moment has passed (a date without a time is due at the end of that day).</summary>
+    /// <summary>12-hour clock with AM/PM ("3:30 PM"); the stored value stays a 24-hour <see cref="TimeOnly"/>.</summary>
+    public static string Time(TimeOnly t) => t.ToString("h:mm tt", CultureInfo.InvariantCulture);
+
+    /// <summary>Overdue = still open and the due moment has passed (a date without a time is due at the end of that day). <paramref name="now"/> is school-local time.</summary>
     public static bool IsOverdue(ManagementTaskStatus status, DateOnly? date, TimeOnly? time, DateTime now)
     {
-        if (status == ManagementTaskStatus.Completed || date is not { } d) return false;
+        if (IsClosed(status) || date is not { } d) return false;
         var today = DateOnly.FromDateTime(now);
         if (d < today) return true;
         return d == today && time is { } t && t < TimeOnly.FromDateTime(now);
+    }
+
+    /// <summary>
+    /// The real time left until the due moment (negative once overdue), or null without a due date. Due dates and times
+    /// are school-local wall times; both ends go through the school time zone, so a daylight-saving change in between
+    /// is counted correctly (a day across the spring change is 23 hours). A date without a time is due at the end of it.
+    /// </summary>
+    public static TimeSpan? Remaining(DateOnly? date, TimeOnly? time, ISchoolTimeService clock)
+    {
+        if (date is not { } d) return null;
+        var dueUtc = time is { } t ? clock.ToUtc(d, t) : clock.StartOfDayUtc(d.AddDays(1));
+        return dueUtc - clock.UtcNow;
+    }
+
+    /// <summary>"3 days left", "5 h left", "Overdue by 2 days"…</summary>
+    public static string? RemainingText(ManagementTaskStatus status, DateOnly? date, TimeOnly? time, ISchoolTimeService clock)
+    {
+        if (IsClosed(status) || Remaining(date, time, clock) is not { } left) return null;
+        var span = left.Duration();
+        var amount = span.TotalDays >= 1 ? Ui.Plural((int)span.TotalDays, "day", "days")
+            : span.TotalHours >= 1 ? Ui.Plural((int)span.TotalHours, "hour", "hours")
+            : Ui.Plural(Math.Max(1, (int)span.TotalMinutes), "minute", "minutes");
+        return left < TimeSpan.Zero ? $"Overdue by {amount}" : $"{amount} left";
     }
 }

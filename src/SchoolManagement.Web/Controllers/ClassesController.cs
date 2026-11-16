@@ -9,8 +9,108 @@ namespace SchoolManagement.Web.Controllers;
 /// Classes: a landing page with the four academic stages (see <see cref="ClassStages"/>), each stage's
 /// classes, and the full class list (/classes/all). Every page reads the same Classes table.
 /// </summary>
-public class ClassesController(IClassService classes) : AppController
+public class ClassesController(IClassService classes, IClassTeamService teams, IStudentService studentList) : AppController
 {
+    // ---------- class details / KG Class Teaching Team ----------
+
+    /// <summary>
+    /// Class page. By default it shows the class's students (the same list as /students, limited to this class). For KG
+    /// Stage classes (Pre-K, KG1, KG2) a Teaching Team button opens the team panel (<c>?panel=team</c>), and the edit form
+    /// appears only on request (<c>&amp;edit=1</c>); other stages have no teaching team at all.
+    /// </summary>
+    [HttpGet("/classes/{id:int}")]
+    public async Task<IActionResult> Details(int id, int? year, string? panel, string? edit, [FromQuery] StudentListQuery students, CancellationToken ct)
+    {
+        var row = await classes.GetAsync(id, ct);
+        if (row is null) return NotFound();
+        var isKg = ClassStages.IsKgStage(row.Name);
+        var showTeam = isKg && panel == "team";
+
+        students.ClassId = id;
+        students.Search = null;
+        // Sorting, paging and refresh after a student is edited or deleted reload just the list.
+        if (IsAjax && !showTeam) return PartialView("~/Views/Students/_Table.cshtml", await StudentListAsync(students, row, ct));
+
+        var model = await DetailsModelAsync(row, year, showTeam ? (edit is "1" or "true" ? ClassPanel.TeamEdit : ClassPanel.Team) : ClassPanel.Students, ct);
+        if (!showTeam) model.Students = await StudentListAsync(students, row, ct);
+        if (model.Team is { } t)
+        {
+            model.HomeroomId = t.Homeroom?.StaffId;
+            model.CoTeacherIds = t.CoTeachers.Select(c => c.StaffId).ToList();
+        }
+        return View(model);
+    }
+
+    /// <summary>Save Changes: the Homeroom Teacher (one, optional) and the Co-Teachers (any number) for the class and year.</summary>
+    [HttpPost("/classes/{id:int}/team"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveTeam(int id, int yearId, int? homeroomId, List<int>? coTeacherIds, CancellationToken ct)
+    {
+        var result = await teams.SaveAsync(id, yearId, homeroomId, coTeacherIds ?? [], ct);
+        if (result.Succeeded)
+        {
+            Toast("Class teaching team saved.");
+            return Redirect(TeamHref(id, yearId));
+        }
+        var row = await classes.GetAsync(id, ct);
+        if (row is null) return NotFound();
+        var model = await DetailsModelAsync(row, yearId, ClassPanel.TeamEdit, ct);
+        if (model.Team is null)
+        {
+            // Not a KG class (or the year is gone): nothing to re-show, say why.
+            Toast(result.Errors[0].Value, "error");
+            return Redirect($"/classes/{id}");
+        }
+        // Back to the edit form with the posted choices and the messages.
+        AddErrors(result);
+        model.HomeroomId = homeroomId;
+        model.CoTeacherIds = coTeacherIds ?? [];
+        Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
+        return View("Details", model);
+    }
+
+    /// <summary>Remove Assignment: ends one Homeroom Teacher or Co-Teacher assignment; the rest of the team is unchanged.</summary>
+    [HttpPost("/classes/{id:int}/team/{assignmentId:int}/remove"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemoveTeamMember(int id, int assignmentId, int yearId, CancellationToken ct)
+    {
+        var result = await teams.RemoveAsync(id, assignmentId, ct);
+        Toast(result.Succeeded ? "Assignment removed. It stays in the class history." : result.Errors[0].Value, result.Succeeded ? "success" : "error");
+        return Redirect(TeamHref(id, yearId));
+    }
+
+    /// <summary>The Teaching Team panel of a class for an academic year.</summary>
+    public static string TeamHref(int classId, int? yearId, bool edit = false) =>
+        $"/classes/{classId}?panel=team{(yearId is { } y ? $"&year={y}" : "")}{(edit ? "&edit=1" : "")}";
+
+    private async Task<ClassDetailsViewModel> DetailsModelAsync(ClassRow row, int? yearId, ClassPanel panel, CancellationToken ct)
+    {
+        var place = ClassStages.Locate(row.Name);
+        var isKg = ClassStages.IsKgStage(row.Name);
+        IReadOnlyList<AcademicYearOption> years = isKg ? await teams.YearsAsync(ct) : [];
+        var year = years.FirstOrDefault(y => y.Id == yearId) ?? years.FirstOrDefault(y => y.IsCurrent);
+        return new ClassDetailsViewModel
+        {
+            Class = row,
+            StageTitle = place?.Stage.Title,
+            StageHref = place?.Stage.Href,
+            GroupTitle = place?.Group.Title,
+            IsKg = isKg,
+            Panel = isKg ? panel : ClassPanel.Students,
+            Years = years,
+            Team = year is null ? null : await teams.TeamAsync(row.Id, year.Id, ct),
+            // The staff list is loaded only for the edit form; it is never on the page otherwise.
+            Staff = isKg && panel == ClassPanel.TeamEdit ? await teams.StaffOptionsAsync(ct) : [],
+        };
+    }
+
+    private async Task<StudentIndexViewModel> StudentListAsync(StudentListQuery query, ClassRow row, CancellationToken ct) => new()
+    {
+        Query = query,
+        Result = await studentList.ListAsync(query, ct),
+        Classes = [new ClassOption(row.Id, row.Name, row.IsActive, row.StudentCount, row.Capacity)],
+        TotalStudents = row.StudentCount,
+        FixedClass = true,
+    };
+
     /// <summary>Classes landing page: KG Stages, Elementary, Middle School and High School.</summary>
     [HttpGet]
     public async Task<IActionResult> Index(string? search, string? status, string? view, CancellationToken ct)

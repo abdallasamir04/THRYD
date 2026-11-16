@@ -5,22 +5,29 @@
         <thead>
             <tr>
                 <th scope="col">Reference ID</th>
-                <th scope="col">Date</th>
-                <th scope="col">Category</th>
+                <th scope="col">Incident category</th>
+                <th scope="col">Date of incident</th>
                 <th scope="col">Students involved</th>
                 <th scope="col">Severity</th>
                 <th scope="col">Status</th>
-                <th scope="col">Record</th>
-                <th scope="col" class="col-actions"><span class="visually-hidden">Open</span></th>
+                <th scope="col">Department</th>
+                <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
             </tr>
         </thead>
         <tbody>
             @foreach (var i in Model)
             {
+                var grades = i.GradeSections;
                 <tr>
-                    <td data-label="Reference ID"><a class="inc-ref" href="/students/behaviour/incidents/@i.Id">@i.Reference</a></td>
-                    <td data-label="Date" class="num">@i.Date.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</td>
-                    <td data-label="Category"><strong dir="auto">@i.Category</strong><div class="person__meta" dir="auto">@i.Department</div></td>
+                    <td data-label="Reference ID">
+                        <a class="inc-ref" href="/students/behaviour/incidents/@i.Id">@i.Reference</a>
+                        <div class="inc-flags">
+                            @if (i.IsDraft) { <span class="badge badge--neutral">Draft</span> }
+                            @if (i.IsClosed) { <span class="badge badge--neutral">Closed</span> } else { <span class="badge badge--warning">Open record</span> }
+                        </div>
+                    </td>
+                    <td data-label="Category"><strong dir="auto">@i.Category</strong></td>
+                    <td data-label="Date" class="num nowrap">@i.Date.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</td>
                     <td data-label="Students involved">
                         @if (i.Students.Count == 0)
                         {
@@ -29,9 +36,10 @@
                         else
                         {
                             <ul class="inc-names">
-                                @foreach (var s in i.Students.Take(4))
+                                @for (var n = 0; n < Math.Min(4, i.Students.Count); n++)
                                 {
-                                    <li><span dir="auto">@s.Name</span> <span class="person__meta">· @IncidentLabels.Role(s.Role)</span></li>
+                                    var s = i.Students[n];
+                                    <li><span class="inc-names__name" dir="auto">@s.Name</span><span class="person__meta">@(n < grades.Count ? grades[n] : "") · @IncidentLabels.Role(s.Role)</span></li>
                                 }
                                 @if (i.Students.Count > 4)
                                 {
@@ -42,17 +50,17 @@
                     </td>
                     <td data-label="Severity"><span class="badge @IncidentLabels.SeverityBadge(i.Severity)" title="@IncidentLabels.Severity(i.Severity)">@IncidentLabels.SeverityShort(i.Severity)</span></td>
                     <td data-label="Status"><span class="badge @IncidentLabels.StatusBadge(i.Status)">@IncidentLabels.Status(i.Status)</span></td>
-                    <td data-label="Record">
-                        @if (i.IsClosed)
-                        {
-                            <span class="badge badge--neutral">Closed</span>
-                        }
-                        else
-                        {
-                            <span class="badge badge--warning">Open</span>
-                        }
+                    <td data-label="Department" dir="auto">@(string.IsNullOrEmpty(i.Department) ? "—" : i.Department)</td>
+                    <td class="col-actions">
+                        <div class="row-actions">
+                            <a class="icon-btn icon-btn--primary" href="/students/behaviour/incidents/@i.Id" title="Open report" aria-label="Open @i.Reference">@Ui.Icon("eye")</a>
+                            @if (!i.IsClosed)
+                            {
+                                <a class="icon-btn icon-btn--primary" href="/students/behaviour/incidents/@i.Id/report" title="Edit report" aria-label="Edit @i.Reference">@Ui.Icon("pencil")</a>
+                            }
+                            <a class="icon-btn icon-btn--primary" href="/students/behaviour/incidents/@i.Id/pdf" download title="Official PDF" aria-label="PDF of @i.Reference">@Ui.Icon("file-pdf")</a>
+                        </div>
                     </td>
-                    <td class="col-actions"><a class="btn btn--secondary btn--sm" href="/students/behaviour/incidents/@i.Id">Open</a></td>
                 </tr>
             }
         </tbody>

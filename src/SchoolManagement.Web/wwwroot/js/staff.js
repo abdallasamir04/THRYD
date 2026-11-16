@@ -131,9 +131,13 @@
             var linked = target.getAttribute("data-clears") && form.querySelector(target.getAttribute("data-clears"));
             if (linked) { linked.value = ""; linked.dispatchEvent(new Event("change", { bubbles: true })); }
         } else {
-            var d = new Date();
-            d.setDate(d.getDate() + parseInt(value, 10));
-            target.value = iso(d);
+            // "Today" / "Tomorrow" are school dates (Africa/Cairo), not the browser's date.
+            if (window.SchoolClock) target.value = window.SchoolClock.date(parseInt(value, 10));
+            else {
+                var d = new Date();
+                d.setDate(d.getDate() + parseInt(value, 10));
+                target.value = iso(d);
+            }
         }
         target.dispatchEvent(new Event("change", { bubbles: true }));
         revalidate(target);
@@ -180,7 +184,9 @@
             '<div><span class="slot-facts__label">Remaining</span><strong>' + i.Remaining + "</strong></div>" +
             '<div><span class="slot-facts__label">Workload</span><span class="wl-status wl-status--' + esc(i.status) + '">' + esc(i.statusLabel) + "</span></div>" +
             '<div class="teacher-info__avail"><span class="slot-facts__label">This slot</span><strong>' +
-            (i.Available ? "Available" : esc(i.Reason || "Not available")) + "</strong></div>";
+            (i.Available ? "Available" : esc(i.Reason || "Not available")) + "</strong></div>" +
+            (select.value ? '<div class="teacher-info__avail"><a href="/timetable/teachers/' + encodeURIComponent(select.value) +
+                '" target="_blank" rel="noopener">View this teacher\'s weekly timetable and assignments</a></div>' : "");
     }
 
     function initAssignPeriod(form) {
@@ -349,7 +355,82 @@
         });
     });
 
+    // ------------------------------------------------------------------ periods: dependent fields, class switcher
+    // An element with data-show-if="Scope=ThisClass" is shown only while that radio choice is checked in its form.
+    function syncShowIf(root) {
+        $$("[data-show-if]", root).forEach(function (el) {
+            var parts = el.getAttribute("data-show-if").split("=");
+            var form = el.closest("form") || document;
+            var checked = form.querySelector('input[name="' + parts[0] + '"]:checked');
+            el.hidden = !checked || checked.value !== parts[1];
+        });
+    }
+    document.addEventListener("change", function (e) {
+        if (e.target.matches("input[type=radio]") && e.target.form) syncShowIf(e.target.form);
+        var nav = e.target.closest("select[data-navigate-query]");
+        if (nav) {
+            var url = nav.value ? nav.getAttribute("data-navigate-query") + encodeURIComponent(nav.value) : nav.getAttribute("data-navigate-empty");
+            if (window.App && App.navigate) App.navigate(url); else window.location.href = url;
+        }
+    });
+
+    // ------------------------------------------------------------------ class timetable: drag a lesson onto a free period
+    // Only a shortcut: the server checks the move exactly like the Move form (period runs that day, class and teacher free).
+    var dragId = null;
+    function dropTarget(e) { return dragId ? e.target.closest("[data-drop-slot]") : null; }
+    document.addEventListener("dragstart", function (e) {
+        var cell = e.target.closest && e.target.closest("[data-move-session]");
+        if (!cell) return;
+        dragId = cell.getAttribute("data-move-session");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", dragId);
+        var grid = cell.closest("[data-tt-dnd]");
+        if (grid) grid.classList.add("is-dragging");
+    });
+    document.addEventListener("dragend", function () {
+        dragId = null;
+        $$(".is-dragging, .is-drop-target").forEach(function (el) { el.classList.remove("is-dragging", "is-drop-target"); });
+    });
+    document.addEventListener("dragover", function (e) {
+        var t = dropTarget(e);
+        if (!t) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        t.classList.add("is-drop-target");
+    });
+    document.addEventListener("dragleave", function (e) {
+        var t = dropTarget(e);
+        if (t && !t.contains(e.relatedTarget)) t.classList.remove("is-drop-target");
+    });
+    document.addEventListener("drop", function (e) {
+        var t = dropTarget(e);
+        if (!t) return;
+        e.preventDefault();
+        var id = dragId;
+        var token = document.querySelector("#tt-dnd-token input[name=__RequestVerificationToken]");
+        if (!token) return;
+        var body = new FormData();
+        body.append("__RequestVerificationToken", token.value);
+        body.append("Day", t.getAttribute("data-drop-day"));
+        body.append("SlotId", t.getAttribute("data-drop-slot"));
+        body.append("DragDrop", "true");
+        t.classList.add("is-busy");
+        fetch("/timetable/sessions/" + encodeURIComponent(id) + "/move", { method: "POST", body: body, headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .then(function (r) { return r.json().catch(function () { return { success: false, message: "The lesson could not be moved (" + r.status + ")." }; }); })
+            .then(function (d) {
+                if (d.success) {
+                    try { sessionStorage.setItem("sm.toasts", JSON.stringify([{ m: d.message, t: "success" }])); } catch (err) { /* storage blocked */ }
+                    window.location.reload();
+                } else {
+                    t.classList.remove("is-busy");
+                    if (window.App) App.toast(d.message || "The lesson could not be moved.", "error");
+                }
+            })
+            .catch(function () { t.classList.remove("is-busy"); if (window.App) App.toast("No connection to the server. Nothing was moved.", "error"); });
+    });
+
     function init(root) {
+        syncShowIf(root);
         $$("[data-dept-picker]", root).forEach(initDeptPicker);
         $$("form[data-assign-period]", root).forEach(initAssignPeriod);
         $$("form[data-teacher-picker] [data-ap-teacher]", root).forEach(showTeacherInfo);

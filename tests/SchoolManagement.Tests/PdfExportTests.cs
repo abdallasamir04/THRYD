@@ -133,15 +133,17 @@ public class PdfExportTests(DbFixture fx)
 
         var all = await DownloadAsync(client, $"/arrivals/pdf?classId={classId}", "attendance");
         Assert.True(all.Landscape);
-        Assert.Equal($"Student_Attendance_{className}_{SchoolWeek.Iso(SchoolWeek.Today)}.pdf", all.FileName);
-        Has(all, "Student Attendance", $"Class: {className}", "Present", "07:20", "School bus", "On the 7:00 bus", missingName, "Not recorded");
+        Assert.Equal($"Daily_Attendance_{className}_{SchoolWeek.Iso(SchoolWeek.Today)}.pdf", all.FileName);
+        Has(all, "Daily Attendance", $"Class: {className}", "Present", "7:20 AM", "On the 7:00 bus", missingName, "Late after", "Not Recorded");
+        Assert.DoesNotContain("Schoolbus", all.Text.Replace(" ", "")); // no method / receiver columns
         // The Arabic name is embedded as Arabic text (shaped with the bundled Noto Sans Arabic font).
         Assert.Contains(all.Text, ch => ch is >= '؀' and <= 'ۿ' or >= 'ﭐ' and <= '﻿');
 
-        // The "Not recorded" tab exports only the students without a record.
-        var tab = await DownloadAsync(client, $"/arrivals/pdf?classId={classId}&show=missing");
-        Has(tab, "Showing: Not recorded", missingName);
+        // The Absent filter: the unrecorded student is Not Recorded, never absent, so neither student is listed.
+        var tab = await DownloadAsync(client, $"/arrivals/pdf?classId={classId}&show=absent");
+        Has(tab, "Showing: Absent");
         Assert.DoesNotContain("Onthe7:00bus", tab.Text);
+        Assert.DoesNotContain(missingName.Replace(" ", ""), tab.Text.Replace(" ", ""));
     }
 
     [Fact]
@@ -188,7 +190,7 @@ public class PdfExportTests(DbFixture fx)
             ("/staff/members", "/staff/members/pdf"),
             ("/students", "/students/pdf"),
             ("/classes", "/classes/pdf"),
-            ("/management/members", "/management/members/pdf"),
+            ("/management/leadership", "/management/members/pdf"),
             ("/management/tasks", "/management/tasks/pdf"),
             ("/pe", "/pe/pdf"),
             ($"/timetable/classes/{classId}", $"/timetable/classes/{classId}/pdf"),

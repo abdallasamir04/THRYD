@@ -1,0 +1,9 @@
+@model TaskPerson
+@* A staff member on a task, from the current staff record: name (linked to the profile), department and job title. *@
+<div class="person">
+    <span class="avatar avatar--@Ui.Tone(Model.Name)" aria-hidden="true">@Ui.Initials(Model.Name)</span>
+    <div style="min-width:0">
+        <div class="person__name" dir="auto"><a href="@Model.Href">@Model.Name</a></div>
+        <div class="person__meta">@(string.IsNullOrEmpty(Model.Describe) ? "Staff" : Model.Describe)</div>
+    </div>
+</div>

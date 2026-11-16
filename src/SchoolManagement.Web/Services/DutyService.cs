@@ -199,7 +199,53 @@ public sealed record DutyStaffRow(
     int Id, int StaffId, string StaffName, DutyRole Role, AttendanceStatus Attendance, BackupRequestStatus BackupStatus,
     bool IsCurrent, string? EndReason, DateTime AssignedAt, int EvaluationCount, int? LatestRating, bool CanEvaluate);
 
-public sealed record DutyComponentSummary(DutyComponentInfo Info, int Total, int Pending, int InProgress, int Covered, int NotCovered, int NeedsStaffAction);
+/// <summary>Where one section stands on a date (a duty card such as Students Arrival Check, or one activity).</summary>
+public enum SectionState
+{
+    /// <summary>The section exists but nothing is scheduled in it that date.</summary>
+    NothingScheduled,
+
+    /// <summary>Something scheduled is still Pending or In Progress (and nothing is Not Covered).</summary>
+    Open,
+
+    /// <summary>At least one scheduled record is Not Covered.</summary>
+    NotCovered,
+
+    /// <summary>Every scheduled record in the section is Covered.</summary>
+    Covered,
+}
+
+public static class SectionStates
+{
+    /// <summary>
+    /// A section is fully covered only when it has scheduled records and every one of them has the Covered status
+    /// (which the duty workflow allows only with someone recorded present). One record that is pending, in progress or
+    /// not covered keeps the whole section from counting; how many records or staff it holds does not matter.
+    /// </summary>
+    public static SectionState Of(int scheduled, int covered, int notCovered) =>
+        scheduled == 0 ? SectionState.NothingScheduled
+        : covered == scheduled ? SectionState.Covered
+        : notCovered > 0 ? SectionState.NotCovered
+        : SectionState.Open;
+}
+
+/// <summary>Section-level coverage of one dashboard category: each section counts once, whatever it contains.</summary>
+public sealed record SectionCoverage(int Total, int Covered, int Open, int NotCovered, int NothingScheduled)
+{
+    public static readonly SectionCoverage None = new(0, 0, 0, 0, 0);
+
+    public static SectionCoverage Of(IEnumerable<SectionState> sections)
+    {
+        var s = sections.ToList();
+        return new(s.Count, s.Count(x => x == SectionState.Covered), s.Count(x => x == SectionState.Open),
+            s.Count(x => x == SectionState.NotCovered), s.Count(x => x == SectionState.NothingScheduled));
+    }
+}
+
+public sealed record DutyComponentSummary(DutyComponentInfo Info, int Total, int Pending, int InProgress, int Covered, int NotCovered, int NeedsStaffAction)
+{
+    public SectionState State => SectionStates.Of(Total, Covered, NotCovered);
+}
 
 public sealed record DutyInput(
     DutyComponent Component, DateOnly Date, string Description, TimeOnly? StartTime, TimeOnly? EndTime, string? Location,
@@ -231,6 +277,12 @@ public interface IDutyService
     Task<PagedResult<DutyRow>> AuditListAsync(DutyAuditQuery query, CancellationToken ct = default);
     Task<IReadOnlyList<DutyRow>> AuditListAllAsync(DutyAuditQuery query, CancellationToken ct = default);
     Task<IReadOnlyDictionary<DutyStatus, int>> StatusCountsAsync(DateOnly date, CancellationToken ct = default);
+
+    /// <summary>
+    /// Per duty type (Morning, Midday, Dismissal): its sections (the duty cards in <see cref="DutyComponents"/>) and how
+    /// many of them are fully covered on <paramref name="date"/>, from the same summaries the duty cards show.
+    /// </summary>
+    Task<IReadOnlyDictionary<DutyType, SectionCoverage>> SectionCoverageAsync(DateOnly date, CancellationToken ct = default);
     Task<DutyRow?> GetAsync(int id, CancellationToken ct = default);
     Task<IReadOnlyList<BackupResponseRow>> BackupHistoryAsync(int id, CancellationToken ct = default);
     Task<IReadOnlyList<DutyAuditRow>> AuditTrailAsync(int id, CancellationToken ct = default);
@@ -318,6 +370,14 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
         var counts = await db.DutyAssignments.AsNoTracking().Where(d => d.DutyDate == date)
             .GroupBy(d => d.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct);
         return DutyStatuses.All.ToDictionary(s => s, s => counts.FirstOrDefault(c => c.Key == s)?.Count ?? 0);
+    }
+
+    public async Task<IReadOnlyDictionary<DutyType, SectionCoverage>> SectionCoverageAsync(DateOnly date, CancellationToken ct = default)
+    {
+        var result = new Dictionary<DutyType, SectionCoverage>();
+        foreach (var type in DutyComponents.Types)
+            result[type] = SectionCoverage.Of((await SummaryAsync(type, date, ct)).Select(s => s.State));
+        return result;
     }
 
     public Task<DutyRow?> GetAsync(int id, CancellationToken ct = default) =>

@@ -1,0 +1,79 @@
+@model ReportEntry<ReportTimelineEntry>
+@*
+    One event of section 3 (Chronological Timeline of Events): a period and / or an exact time (12-hour picker),
+    a location, the students present (chosen from section 2, kept in sync by incidents.js), others present and the
+    factual account.
+*@
+@{
+    var e = Model.Entry;
+    var k = Model.Key;
+    var f = Model.Form;
+    var s = f.Suggestions!;
+    var hasErrors = !Model.IsTemplate && ViewContext.ViewData.ModelState.Keys.Any(x => x.StartsWith($"Timeline[{k}]", StringComparison.Ordinal) && ViewContext.ViewData.ModelState[x]!.Errors.Count > 0);
+    var open = Model.IsTemplate || hasErrors || string.IsNullOrWhiteSpace(e.Account);
+    var when = string.Join(" · ", new[] { e.TimePeriod, e.Time is { } t ? TaskLabels.Time(t) : null }.Where(x => !string.IsNullOrWhiteSpace(x)));
+    string json(object v) => System.Text.Json.JsonSerializer.Serialize(v);
+}
+<article class="inc-entry inc-entry--event @(open ? "is-open" : "")" data-entry data-entry-kind="event">
+    <input type="hidden" name="Timeline[@k].EntryId" value="@e.EntryId" data-field="EntryId" />
+    <header class="inc-entry__head">
+        <span class="inc-entry__num" data-entry-num></span>
+        <div class="inc-entry__summary">
+            <strong class="inc-entry__title" data-summary-title dir="auto">@(when.Length > 0 ? when : "New event")</strong>
+            <span class="inc-entry__meta" data-summary-meta dir="auto">@(string.IsNullOrWhiteSpace(e.Location) ? "Location not set" : e.Location)</span>
+        </div>
+        <div class="inc-entry__tools">
+            <button class="icon-btn" type="button" data-entry-move="-1" aria-label="Move this event up" title="Move up">@Ui.Icon("arrow-up")</button>
+            <button class="icon-btn" type="button" data-entry-move="1" aria-label="Move this event down" title="Move down">@Ui.Icon("arrow-down")</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-entry-toggle aria-expanded="@(open ? "true" : "false")">@Ui.Icon("pencil", "icon--sm")<span>@(open ? "Done" : "Edit")</span></button>
+            <button class="icon-btn icon-btn--danger" type="button" data-entry-remove aria-label="Remove this event" title="Remove">@Ui.Icon("trash")</button>
+        </div>
+    </header>
+    <div class="inc-entry__body">
+        <div class="inc-fields inc-fields--event">
+            <div class="field">
+                <label class="label" for="ev-@k-period">Time / period <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" id="ev-@k-period" name="Timeline[@k].TimePeriod" value="@e.TimePeriod" data-field="TimePeriod" maxlength="@IncidentTimelineEntry.PeriodMaxLength"
+                       data-suggest='@json(s.Periods)' placeholder="Morning Line, Period 2, Break Time…" autocomplete="off" dir="auto" />
+                @Html.ValidationMessage($"Timeline[{k}].TimePeriod", new { @class = "field-validation-error" })
+            </div>
+            <div class="field">
+                <label class="label" for="ev-@k-time">Exact time <span class="faint" style="font-weight:600">(optional)</span></label>
+                <input class="input picker" type="time" id="ev-@k-time" name="Timeline[@k].Time" value="@e.Time?.ToString("HH:mm")" data-field="Time" data-timepicker />
+                <p class="hint">Events with a time are put in time order.</p>
+            </div>
+            <div class="field">
+                <label class="label" for="ev-@k-loc">Location <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" id="ev-@k-loc" name="Timeline[@k].Location" value="@e.Location" data-field="Location" maxlength="@IncidentTimelineEntry.LocationMaxLength"
+                       data-suggest='@json(s.Locations)' placeholder="Classroom, School Yard, Corridor…" autocomplete="off" dir="auto" required />
+                @Html.ValidationMessage($"Timeline[{k}].Location", new { @class = "field-validation-error" })
+            </div>
+        </div>
+        <fieldset class="field inc-present-field">
+            <legend class="label">Students present</legend>
+            <div class="inc-present__list" data-present data-name="Timeline[@k].PresentStudentIds" data-selected='@json(e.PresentStudentIds)'>
+                @* Filled from section 2 by incidents.js (server copy for pages without JavaScript). *@
+                @foreach (var st in f.Students.Where(x => x.StudentId is not null))
+                {
+                    var p = f.StudentList.FirstOrDefault(x => x.Id == st.StudentId);
+                    if (p is null) { continue; }
+                    <label class="inc-chip"><input type="checkbox" name="Timeline[@k].PresentStudentIds" value="@p.Id" checked="@e.PresentStudentIds.Contains(p.Id)" /><span>@p.Name<small>@p.ClassName</small></span></label>
+                }
+            </div>
+            <p class="hint" data-present-empty hidden="@(f.Students.Any(x => x.StudentId is not null))">Add students in section 2 to tick who was present.</p>
+            @Html.ValidationMessage($"Timeline[{k}].PresentStudentIds", new { @class = "field-validation-error" })
+        </fieldset>
+        <div class="field">
+            <label class="label" for="ev-@k-others">Others present <span class="faint" style="font-weight:600">(staff, other students, visitors)</span></label>
+            <input class="input" id="ev-@k-others" name="Timeline[@k].OthersPresent" value="@e.OthersPresent" data-field="OthersPresent" maxlength="@IncidentTimelineEntry.OthersMaxLength" dir="auto"
+                   placeholder="e.g. Duty teacher Ms. Laila, canteen staff" />
+            @Html.ValidationMessage($"Timeline[{k}].OthersPresent", new { @class = "field-validation-error" })
+        </div>
+        <div class="field">
+            <label class="label" for="ev-@k-acc">Factual account of incident <span class="req" aria-hidden="true">*</span></label>
+            <textarea class="input textarea inc-textarea--lg" id="ev-@k-acc" name="Timeline[@k].Account" data-field="Account" rows="4" maxlength="@IncidentTimelineEntry.AccountMaxLength" dir="auto" required
+                      placeholder="Exactly what happened at this point — observed facts, no opinions.">@e.Account</textarea>
+            @Html.ValidationMessage($"Timeline[{k}].Account", new { @class = "field-validation-error" })
+        </div>
+    </div>
+</article>

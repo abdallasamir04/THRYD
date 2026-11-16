@@ -1,33 +1,94 @@
 @model DashboardViewModel
 @*
     Dashboard: every figure is counted from the database on this request. No sample data.
-    "Students without a valid class" = students whose class is inactive (every student must have a class).
+    Students in inactive classes are a data check in Settings → System, not a dashboard category.
 *@
 @{
     ViewData["Title"] = "Dashboard";
     ViewData["Nav"] = "Dashboard";
     var d = Model.Data;
-    var hour = DateTime.Now.Hour;
+    var hour = SchoolTime.Now.Hour;
     var greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
     var maxCount = Math.Max(1, d.Distribution.Count == 0 ? 1 : d.Distribution.Max(x => x.Count));
     var shown = d.Distribution.Where(x => x.IsActive || x.Count > 0).ToList();
     var maxTitle = Math.Max(1, d.TeachersByJobTitle.Count == 0 ? 1 : d.TeachersByJobTitle.Max(x => x.Count));
 }
 
+@{
+    // Hero: greeting, live school time (12-hour, Cairo; ticked by the top-bar clock script) and a compact "today" panel
+    // built from the figures this page already loads (no new queries, no invented numbers).
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var nowLocal = SchoolTime.Now;
+    var counted = SchoolTime.Current.ToLocal(d.GeneratedAtUtc);
+    var heroOps = Model.Operations;
+    var heroDay = heroOps is null ? null : SchoolWeek.Iso(heroOps.Date);
+}
 <section class="hero" aria-labelledby="hero-title">
-    <div style="position:relative;z-index:1">
+    <div class="hero__main">
         <p class="hero__eyebrow">@Model.Profile.SchoolName@(string.IsNullOrEmpty(Model.Profile.AcademicYear) ? "" : " · " + Model.Profile.AcademicYear)</p>
         <h1 id="hero-title">@greeting</h1>
-        <p>Students, teachers and classes at a glance.</p>
-        <p class="live"><span class="live__dot" aria-hidden="true"></span>Live data · @Ui.DateTime(d.GeneratedAtUtc)</p>
+        <p class="hero__lead">Students, teachers and classes at a glance.</p>
+        <p class="live" title="Figures counted at @counted.ToString("hh:mm tt", inv) (Cairo time)">
+            <span class="live__dot" aria-hidden="true"></span><span>Live data</span><span class="live__sep" aria-hidden="true"></span>
+            <time data-school-now datetime="@nowLocal.ToString("yyyy-MM-dd'T'HH:mm", inv)">@nowLocal.ToString("d MMM yyyy", inv) · @nowLocal.ToString("hh:mm tt", inv)</time>
+        </p>
+        <div class="hero__actions">
+            <a class="btn btn--light" href="/students/create" data-modal>@Ui.Icon("user-plus")Add student</a>
+            <a class="btn btn--glass" href="/import-export">@Ui.Icon("upload")Import from Excel</a>
+        </div>
     </div>
-    <div class="hero__actions">
-        <a class="btn btn--light" href="/students/create" data-modal>@Ui.Icon("user-plus")Add student</a>
-        <a class="btn btn--glass" href="/import-export">@Ui.Icon("upload")Import from Excel</a>
-    </div>
+
+    <ul class="hero__stats" aria-label="Today at a glance">
+        @if (heroOps is not null)
+        {
+            var a = heroOps.Arrivals;
+            <li><a class="hero-stat" href="/arrivals?date=@heroDay">
+                <span class="hero-stat__icon" aria-hidden="true">@Ui.Icon("school")</span>
+                <span class="hero-stat__body">
+                    <span class="hero-stat__label">Arrived today</span>
+                    <span class="hero-stat__value">@Ui.Count(a.Attended)<small> / @Ui.Count(a.Students)</small></span>
+                    <span class="hero-stat__meta">@a.Late late · @a.Absent absent</span>
+                </span>
+            </a></li>
+        }
+        <li><a class="hero-stat" href="/students">
+            <span class="hero-stat__icon" aria-hidden="true">@Ui.Icon("graduation-cap")</span>
+            <span class="hero-stat__body">
+                <span class="hero-stat__label">Students</span>
+                <span class="hero-stat__value">@Ui.Count(d.TotalStudents)</span>
+                <span class="hero-stat__meta">In @Ui.Plural(d.ActiveClasses, "active class", "active classes")</span>
+            </span>
+        </a></li>
+        <li><a class="hero-stat" href="/teachers">
+            <span class="hero-stat__icon" aria-hidden="true">@Ui.Icon("presentation")</span>
+            <span class="hero-stat__body">
+                <span class="hero-stat__label">Teachers</span>
+                <span class="hero-stat__value">@Ui.Count(d.TotalTeachers)</span>
+                <span class="hero-stat__meta">Academic staff</span>
+            </span>
+        </a></li>
+        @if (heroOps is { Coverage.Count: > 0 })
+        {
+            @* Fully covered sections ÷ sections per category today (each duty card / activity counts once); none shows 0 / 0. *@
+            <li class="hero-cover">
+                <span class="hero-cover__head">@Ui.Icon("shield-check")Duties covered today</span>
+                <ul class="hero-cover__list">
+                    @foreach (var cv in heroOps.Coverage)
+                    {
+                        <li><a class="hero-cover__item" href="@cv.Href" title="@cv.Summary">
+                            <span class="hero-cover__name">@cv.Name</span>
+                            <span class="hero-cover__value">@cv.Sections.Covered<small> / @cv.Sections.Total</small></span>
+                            <span class="hero-cover__bar" aria-hidden="true"><span style="width:@cv.Percent%"></span></span>
+                            <span class="visually-hidden">@cv.Summary</span>
+                        </a></li>
+                    }
+                </ul>
+            </li>
+        }
+    </ul>
 </section>
 
-<ul class="kpis" aria-label="Totals">
+<ul class="kpis kpis--3" aria-label="Totals">
     <li><a class="kpi" href="/students">
         <span class="kpi__icon">@Ui.Icon("graduation-cap")</span>
         <span class="kpi__label">Total students</span>
@@ -46,12 +107,6 @@
         <span class="kpi__value">@Ui.Count(d.TotalClasses)</span>
         <span class="kpi__meta">@d.ActiveClasses active · @(d.TotalClasses - d.ActiveClasses) inactive · @d.ClassesWithoutStudents empty</span>
     </a></li>
-    <li><a class="kpi @(d.StudentsInInactiveClasses == 0 ? "kpi--ok" : "kpi--warn")" href="/classes/all?status=inactive">
-        <span class="kpi__icon">@Ui.Icon(d.StudentsInInactiveClasses == 0 ? "check-circle" : "alert-triangle")</span>
-        <span class="kpi__label">Students without a valid class</span>
-        <span class="kpi__value">@Ui.Count(d.StudentsInInactiveClasses)</span>
-        <span class="kpi__meta">@(d.StudentsInInactiveClasses == 0 ? "Every student is in an active class" : "In inactive classes · move them")</span>
-    </a></li>
 </ul>
 
 @if (Model.Operations is { } ops)
@@ -69,9 +124,9 @@
             <li><a class="ops-tile" href="/duties/audit?from=@day&to=@day&status=pending"><span class="ops-tile__value num">@ops.DutyStatus[SchoolManagement.Web.Entities.DutyStatus.Pending]</span><span class="ops-tile__label">Duties pending</span></a></li>
             <li><a class="ops-tile ops-tile--info" href="/duties/audit?from=@day&to=@day&status=in-progress"><span class="ops-tile__value num">@ops.DutyStatus[SchoolManagement.Web.Entities.DutyStatus.InProgress]</span><span class="ops-tile__label">Duties in progress</span></a></li>
             <li><a class="ops-tile" href="/staff"><span class="ops-tile__value num">@(ops.AverageRating?.ToString("0.0") ?? "—")<small>/5</small></span><span class="ops-tile__label">Staff duty performance (@ops.RatedAssignments rated)</span></a></li>
-            <li><a class="ops-tile ops-tile--ok" href="/arrivals?date=@day"><span class="ops-tile__value num">@(a.OnTimePercent is { } p ? p.ToString("0.#") + "%" : "—")</span><span class="ops-tile__label">Students on time (@a.OnTime of @(a.OnTime + a.Late))</span></a></li>
-            <li><a class="ops-tile ops-tile--warn" href="/arrivals?date=@day&show=late"><span class="ops-tile__value num">@a.Late</span><span class="ops-tile__label">Late arrivals today</span></a></li>
-            <li><a class="ops-tile ops-tile--muted" href="/arrivals?date=@day&show=missing"><span class="ops-tile__value num">@a.NotRecorded</span><span class="ops-tile__label">Students not yet recorded</span></a></li>
+            <li><a class="ops-tile ops-tile--ok" href="/arrivals?date=@day&classId=all"><span class="ops-tile__value num">@a.Present</span><span class="ops-tile__label">Present today (@(a.OnTimePercent is { } p ? p.ToString("0.#") + "% on time" : "—"))</span></a></li>
+            <li><a class="ops-tile ops-tile--warn" href="/arrivals?date=@day&classId=all"><span class="ops-tile__value num">@a.Late</span><span class="ops-tile__label">Late today</span></a></li>
+            <li><a class="ops-tile ops-tile--bad" href="/arrivals?date=@day&classId=all"><span class="ops-tile__value num">@a.Absent</span><span class="ops-tile__label">Absent today</span></a></li>
         </ul>
     </section>
 }

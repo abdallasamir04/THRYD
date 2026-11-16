@@ -39,22 +39,36 @@ public class TimetableTests(DbFixture fx)
     {
         await using var db = fx.NewContext();
         var tt = DbFixture.Timetable(db);
+        var periods = DbFixture.Periods(db);
+        static PeriodInput Times(TimeOnly? start, TimeOnly? end, bool active = true, string? name = null) => new(name, start, end, null, active, true, null);
+        // School-wide edits are shown as a plan first and applied with its fingerprint.
+        async Task<PeriodOutcome> Apply(int id, PeriodInput input)
+        {
+            var first = await periods.EditAsync(id, input, PeriodScope.AllClasses, null, null);
+            return first.NeedsConfirmation ? await periods.EditAsync(id, input, PeriodScope.AllClasses, null, first.Plan!.Fingerprint) : first;
+        }
         try
         {
-            Assert.Contains((await tt.UpdateSlotAsync(SlotId(7), null, new(10, 0), new(9, 0), true, false)).Errors, e => e.Key == "EndTime");
-            Assert.Contains((await tt.UpdateSlotAsync(SlotId(7), null, new(10, 0), null, true, false)).Errors, e => e.Key == "EndTime");
-            Assert.True((await tt.UpdateSlotAsync(SlotId(7), "Period 7", new(12, 0), new(12, 45), true, false)).Succeeded);
-            // Overlapping another active slot is refused.
-            var overlap = await tt.UpdateSlotAsync(SlotId(8), null, new(12, 30), new(13, 15), true, false);
-            Assert.Contains(overlap.Errors, e => e.Value.Contains("overlap"));
+            Assert.Contains((await periods.EditAsync(SlotId(7), Times(new(10, 0), new(9, 0)), PeriodScope.AllClasses, null, null)).Result.Errors, e => e.Key == "EndTime");
+            Assert.Contains((await periods.EditAsync(SlotId(7), Times(new(10, 0), null), PeriodScope.AllClasses, null, null)).Result.Errors, e => e.Key == "EndTime");
+            var unconfirmed = await periods.EditAsync(SlotId(7), Times(new(12, 0), new(12, 45), name: "Period 7"), PeriodScope.AllClasses, null, null);
+            Assert.True(unconfirmed.NeedsConfirmation);
+            Assert.Null((await db.TimeSlots.AsNoTracking().SingleAsync(s => s.Id == SlotId(7))).StartTime); // nothing saved before confirming
+            Assert.True((await Apply(SlotId(7), Times(new(12, 0), new(12, 45), name: "Period 7"))).Result.Succeeded);
+            // Overlapping another active period is refused.
+            var overlap = await periods.EditAsync(SlotId(8), Times(new(12, 30), new(13, 15)), PeriodScope.AllClasses, null, null);
+            Assert.Contains(overlap.Result.Errors, e => e.Value.Contains("overlap"));
 
-            // A slot with a current session: a time change needs confirmation; deactivation is refused.
+            // A period with a current session: a time change lists the lesson and needs confirmation; disabling is refused.
             var cls = await fx.NewClassAsync();
             var teacher = await TeacherAsync();
             Assert.True((await tt.AssignAsync(Session(cls, DayOfWeek.Tuesday, SlotId(7), teacher))).Succeeded);
-            Assert.Contains((await tt.UpdateSlotAsync(SlotId(7), null, new(12, 5), new(12, 50), true, false)).Errors, e => e.Key == "ConfirmAffected");
-            Assert.True((await tt.UpdateSlotAsync(SlotId(7), null, new(12, 5), new(12, 50), true, true)).Succeeded);
-            Assert.Contains((await tt.UpdateSlotAsync(SlotId(7), null, new(12, 5), new(12, 50), false, true)).Errors, e => e.Key == "IsActive");
+            var moved = await periods.EditAsync(SlotId(7), Times(new(12, 5), new(12, 50), name: "Period 7"), PeriodScope.AllClasses, null, null);
+            Assert.True(moved.NeedsConfirmation);
+            Assert.Contains(moved.Plan!.Lessons, l => l.ClassId == cls);
+            Assert.True((await Apply(SlotId(7), Times(new(12, 5), new(12, 50), name: "Period 7"))).Result.Succeeded);
+            Assert.Contains((await periods.EditAsync(SlotId(7), Times(new(12, 5), new(12, 50), active: false, name: "Period 7"), PeriodScope.AllClasses, null, null)).Result.Errors,
+                e => e.Value.Contains("before disabling"));
 
             // The session stayed in its slot and shows the new times.
             var grid = await tt.ClassGridAsync(cls, SchoolWeek.Current);
@@ -64,7 +78,7 @@ public class TimetableTests(DbFixture fx)
         finally
         {
             await using var reset = fx.NewContext();
-            await reset.TimeSlots.Where(s => s.Id == SlotId(7)).ExecuteUpdateAsync(u => u.SetProperty(s => s.StartTime, (TimeOnly?)null).SetProperty(s => s.EndTime, (TimeOnly?)null).SetProperty(s => s.IsActive, true));
+            await reset.TimeSlots.Where(s => s.Id == SlotId(7)).ExecuteUpdateAsync(u => u.SetProperty(s => s.StartTime, (TimeOnly?)null).SetProperty(s => s.EndTime, (TimeOnly?)null).SetProperty(s => s.IsActive, true).SetProperty(s => s.Name, (string?)null));
         }
     }
 
@@ -122,7 +136,7 @@ public class TimetableTests(DbFixture fx)
         // Real time overlap: a duty on a Thursday 07:15–08:00 and period 9 set to 07:30–08:10.
         try
         {
-            Assert.True((await tt.UpdateSlotAsync(SlotId(9), null, new(7, 30), new(8, 10), true, true)).Succeeded);
+            await db.TimeSlots.Where(s => s.Id == SlotId(9)).ExecuteUpdateAsync(u => u.SetProperty(s => s.StartTime, new TimeOnly(7, 30)).SetProperty(s => s.EndTime, new TimeOnly(8, 10)));
             var thursday = ScheduleRules.DateOf(SchoolWeek.Current.AddDays(7), DayOfWeek.Thursday);
             var duty = await DbFixture.Duties(db).CreateAsync(new DutyInput(DutyComponent.StudentsArrival, thursday, "Gate", new(7, 15), new(8, 0), null,
                 teacher, AttendanceStatus.NotRecorded, null, null, []));

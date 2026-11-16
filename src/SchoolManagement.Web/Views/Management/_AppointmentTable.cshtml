@@ -1,0 +1,22 @@
+@model IReadOnlyList<PositionHistoryRow>
+@* Appointment history rows (School Leadership → Positions, and one position's page). Ended appointments stay on record. *@
+@{
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+<div class="table-wrap">
+    <table class="table table--stack">
+        <thead><tr><th scope="col">Position</th><th scope="col">Member</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Note</th></tr></thead>
+        <tbody>
+            @foreach (var h in Model)
+            {
+                <tr class="@(h.IsCurrent ? "" : "is-ended")">
+                    <td data-label="Position"><a class="badge @(h.IsCurrent ? "badge--primary" : "badge--neutral")" href="@ManagementPositions.Href(h.Position)">@ManagementPositions.Name(h.Position)</a></td>
+                    <td data-label="Member" dir="auto"><a href="/management/members/@h.MemberId">@h.MemberName</a></td>
+                    <td data-label="From" class="nowrap">@h.StartDate.ToString("d MMM yyyy", c)</td>
+                    <td data-label="To" class="nowrap">@(h.IsCurrent ? "Current" : h.EndDate?.ToString("d MMM yyyy", c))</td>
+                    <td data-label="Note" class="muted" dir="auto">@(h.EndReason ?? (h.AssignedBy is null ? "—" : "Assigned by " + h.AssignedBy))</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

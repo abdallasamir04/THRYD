@@ -23,7 +23,11 @@ public static class PdfReports
         var cells = shown.Select(day => Row(slots.Select(slot =>
         {
             var list = new List<PdfGridEntry>();
-            if (g.Session(day, slot.Id) is { } s) list.Add(new(s.Subject, Lines(s.Subject, s.TeacherName, s.DepartmentName)));
+            if (g.Session(day, slot.Id) is { } s)
+                list.Add(g.CancelReason(s) is { } why
+                    ? new(s.Subject, [.. Lines(s.Subject, s.TeacherName, s.DepartmentName), $"Cancelled: {why}"], PdfTone.Muted)
+                    : new(s.Subject, Lines(s.Subject, s.TeacherName, s.DepartmentName)));
+            else if (!g.Scheduled(day, slot)) list.Add(new("—", ["No period this day"], PdfTone.Muted));
             foreach (var sub in g.PeriodsAt(day, slot.Id).Where(p => p.Category == WorkloadCategory.Substitution))
                 list.Add(new("Substitute", [sub.TeacherName, "This week only"], PdfTone.Warning));
             return (IReadOnlyList<PdfGridEntry>)list;
@@ -40,7 +44,7 @@ public static class PdfReports
                 new PdfGrid
                 {
                     Corner = "Day / Period",
-                    Columns = slots.Select(SlotAxis).ToList(),
+                    Columns = slots.Select(s => new PdfAxis(s.Label, s.HasTimes ? s.Times : "Time not set")).ToList(),
                     Rows = shown.Select(d => DayAxis(g.Week, d)).ToList(),
                     Cells = cells,
                     Legend = [("Teaching session (every week)", PdfTone.Primary), ("Substitute this week", PdfTone.Warning)],
@@ -165,22 +169,22 @@ public static class PdfReports
     {
         var rows = c.Rows.Where(r => show switch
         {
-            "missing" => !r.IsRecorded,
-            "late" => r.Late == LateStatus.Late,
-            "absent" => r.Status == ArrivalStatus.Absent,
-            "present" => r.Status == ArrivalStatus.Present,
+            "late" => r.Outcome == ArrivalOutcome.Late,
+            "absent" => r.Outcome == ArrivalOutcome.Absent,
+            "present" => r.Outcome == ArrivalOutcome.Present,
+            "notrecorded" => r.Outcome is null,
             _ => true,
         }).ToList();
         var s = c.Summary;
         return new PdfReport
         {
-            Title = "Student Attendance",
+            Title = "Daily Attendance",
             Subtitle = $"Date: {c.Date.ToString("dddd, d MMMM yyyy", C)}",
             Meta =
             [
                 new("Class", className ?? "All classes"),
-                new("Showing", show switch { "missing" => "Not recorded", "late" => "Late", "absent" => "Absent", "present" => "Present", _ => "All students" }),
-                new("Arrival deadline", c.Deadline?.ToString("HH:mm", C) ?? "Not set"),
+                new("Showing", show switch { "late" => "Late", "absent" => "Absent", "present" => "Present", "notrecorded" => "Not Recorded", _ => "All students" }),
+                new("Late after", Arrivals.Time(c.Cutoff)),
             ],
             Sections =
             [
@@ -188,35 +192,31 @@ public static class PdfReports
                 {
                     Items =
                     [
-                        new("Students", s.Students.ToString(C)), new("Recorded", s.Recorded.ToString(C)),
-                        new("Present", s.Present.ToString(C), PdfTone.Success), new("Absent", s.Absent.ToString(C), PdfTone.Error),
-                        new("Late", s.Late.ToString(C), PdfTone.Warning), new("On time", s.OnTimePercent is { } p ? p.ToString("0.#", C) + "%" : "—"),
-                        new("Not recorded", s.NotRecorded.ToString(C), PdfTone.Muted),
+                        new("Students", s.Students.ToString(C)), new("Present", s.Present.ToString(C), PdfTone.Success), new("Late", s.Late.ToString(C), PdfTone.Warning),
+                        new("Absent", s.Absent.ToString(C), PdfTone.Error), new("Not Recorded", s.NotRecorded.ToString(C), PdfTone.Muted),
                     ],
                 },
                 new PdfTable
                 {
                     RowNumbers = true,
-                    Columns =
-                    [
-                        new("Student", 2.2f), new("Class", 1), new("Attendance", 1.3f), new("Arrival time", 0.9f), new("Punctuality", 1),
-                        new("Method", 1.4f), new("Received by", 1.5f), new("Notes", 1.8f), new("Recorded by", 1.3f),
-                    ],
+                    Columns = [new("Student", 2.4f), new("Class", 1), new("Status", 1.2f), new("Arrival time", 1), new("Notes", 2.2f), new("Recorded by", 1.5f)],
                     Rows = rows.Select(r => R(
                         new PdfCell(r.StudentName, Strong: true),
                         r.ClassName,
-                        !r.IsRecorded ? PdfCell.Status("Not recorded", PdfTone.Muted)
-                            : r.Status == ArrivalStatus.Present ? PdfCell.Status("Present", PdfTone.Success) : PdfCell.Status("Absent", PdfTone.Error),
-                        r.Time is { } t ? t.ToString(t.Second == 0 ? "HH:mm" : "HH:mm:ss", C) : "—",
-                        r.Late switch { LateStatus.Late => PdfCell.Status("Late", PdfTone.Error), LateStatus.OnTime => PdfCell.Status("On time", PdfTone.Success), _ => "—" },
-                        r.Status == ArrivalStatus.Present ? new PdfCell(Arrivals.Method(r.Method), r.Location) : "—",
-                        r.ReceivedByName is null ? "—" : new PdfCell(r.ReceivedByName, r.Confirmed ? "Receiving confirmed" : null),
+                        r.Outcome switch
+                        {
+                            ArrivalOutcome.Present => PdfCell.Status("Present", PdfTone.Success),
+                            ArrivalOutcome.Late => PdfCell.Status("Late", PdfTone.Warning),
+                            ArrivalOutcome.Absent => PdfCell.Status("Absent", PdfTone.Error),
+                            _ => PdfCell.Status("Not Recorded", PdfTone.Muted),
+                        },
+                        r.Time is { } t ? Arrivals.Time(t) : "—",
                         r.Notes,
                         r.IsRecorded ? new PdfCell(r.RecordedBy ?? "—", r.Corrections > 0 ? $"Corrected {r.Corrections}×" : null) : "—")).ToList(),
                     EmptyText = "No students match this filter on this date.",
                 },
             ],
-            FileNameParts = ["Student Attendance", className, SchoolWeek.Iso(c.Date)],
+            FileNameParts = ["Daily Attendance", className, SchoolWeek.Iso(c.Date)],
         };
     }
 
@@ -627,15 +627,17 @@ public static class PdfReports
         FileNameParts = ["Management Team", position],
     };
 
-    public static PdfReport Tasks(IReadOnlyList<TaskRow> rows, TaskListQuery q, string? memberName) => new()
+    public static PdfReport Tasks(IReadOnlyList<TaskRow> rows, TaskListQuery q, string? memberName, string? reviewerName = null, string? departmentName = null) => new()
     {
         Title = "Management Team Tasks",
-        Subtitle = memberName is null ? "All team members" : $"Member: {memberName}",
+        Subtitle = memberName is null ? "All staff" : $"Assigned to: {memberName}",
         Meta =
         [
             new("Search", string.IsNullOrWhiteSpace(q.Search) ? null : q.Search.Trim()),
-            new("Status", q.Status switch { "open" => "Open", "overdue" => "Overdue", "todo" => "To Do", "in-progress" => "In Progress", "on-hold" => "On Hold", "completed" => "Completed", _ => null }),
-            new("Priority", string.IsNullOrWhiteSpace(q.Priority) ? null : C.TextInfo.ToTitleCase(q.Priority)),
+            new("Submitted to", reviewerName),
+            new("Department", departmentName),
+            new("Status", q.Status switch { "open" => "Open", "overdue" => "Overdue", "todo" or "pending" => "To Do", "in-progress" => "In Progress", "on-hold" => "On Hold", "completed" => "Completed", "cancelled" => "Cancelled", _ => null }),
+            new("Priority", TaskLabels.ParsePriority(q.Priority) is { } pr ? TaskLabels.Priority(pr) : null),
             new("Due", q.Due switch { "overdue" => "Overdue", "today" => "Due today", "week" => "Next 7 days", "later" => "Due later", "none" => "No due date", _ => null }),
             new("Tasks", rows.Count.ToString(C)),
         ],
@@ -646,17 +648,21 @@ public static class PdfReports
                 Items =
                 [
                     .. TaskLabels.Statuses.Select(s => new PdfStat(TaskLabels.Status(s), rows.Count(r => r.Status == s).ToString(C), TaskTone(s))),
+                    .. rows.Any(r => r.Status == ManagementTaskStatus.OnHold)
+                        ? [new PdfStat(TaskLabels.Status(ManagementTaskStatus.OnHold), rows.Count(r => r.Status == ManagementTaskStatus.OnHold).ToString(C), TaskTone(ManagementTaskStatus.OnHold))]
+                        : Array.Empty<PdfStat>(),
                     new PdfStat("Overdue", rows.Count(r => r.IsOverdue).ToString(C), PdfTone.Error),
                 ],
             },
             new PdfTable
             {
                 RowNumbers = true,
-                Columns = [new("Task", 3), new("Assigned to", 1.8f), new("Priority", 0.9f), new("Status", 1.1f), new("Due", 1.3f), new("Last updated", 1.3f)],
+                Columns = [new("Task", 2.8f), new("Assigned to", 1.7f), new("Submitted to", 1.5f), new("Priority", 0.9f), new("Status", 1.1f), new("Due", 1.3f), new("Last updated", 1.3f)],
                 Rows = rows.Select(t => R(
-                    new PdfCell(t.Title, t.Description, Strong: true),
-                    new PdfCell(t.MemberName, ManagementPositions.Name(t.MemberPosition)),
-                    PdfCell.Status(TaskLabels.Priority(t.Priority), t.Priority switch { TaskPriority.Urgent => PdfTone.Error, TaskPriority.High => PdfTone.Warning, TaskPriority.Medium => PdfTone.Info, _ => PdfTone.Muted }),
+                    new PdfCell(t.Title, t.AttachmentCount == 0 ? t.Description : Ui.Plural(t.AttachmentCount, "attachment", "attachments") + (string.IsNullOrWhiteSpace(t.Description) ? "" : " · " + t.Description), Strong: true),
+                    new PdfCell(t.AssignedTo.Name, t.AssignedTo.Describe),
+                    t.Reviewer is { } rv ? new PdfCell(rv.Name, rv.Describe) : new PdfCell("—", Tone: PdfTone.Muted),
+                    PdfCell.Status(TaskLabels.Priority(t.Priority), t.Priority switch { TaskPriority.Critical => PdfTone.Error, TaskPriority.High => PdfTone.Warning, TaskPriority.Medium => PdfTone.Info, _ => PdfTone.Muted }),
                     PdfCell.Status(TaskLabels.Status(t.Status), TaskTone(t.Status)),
                     t.Status == ManagementTaskStatus.Completed && t.CompletedAt is { } done
                         ? new PdfCell("Completed " + Ui.Date(done), Tone: PdfTone.Success)
@@ -717,7 +723,8 @@ public static class PdfReports
             .Select(l => l!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     private static IReadOnlyList<IReadOnlyList<PdfGridEntry>> Row(IEnumerable<IReadOnlyList<PdfGridEntry>> cells) => cells.ToList();
     private static List<SlotView> Active(TimetableGrid g) => g.Slots.Where(s => s.IsActive).ToList();
-    private static PdfAxis SlotAxis(SlotView s) => new(s.Label, s.HasTimes ? s.Times : "Time not set");
+    /// <summary>Teacher and P.E. grids span classes: a class's own period carries its class.</summary>
+    private static PdfAxis SlotAxis(SlotView s) => new(s.FullLabel, s.HasTimes ? s.Times : "Time not set");
 
     private static PdfAxis DayAxis(DateOnly week, DayOfWeek day)
     {

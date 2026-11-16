@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Common;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.Services.Excel;
@@ -229,7 +230,7 @@ public class StudentsController(IStudentService students, IClassService classes,
             if (c is not null) filters.Add($"Class: {c.Name}");
         }
         var bytes = excel.Students(rows, filters.Count == 0 ? "All students" : string.Join("; ", filters));
-        return File(bytes, ExcelContentType, $"students-{DateTime.Now:yyyy-MM-dd}.xlsx");
+        return File(bytes, ExcelContentType, $"students-{SchoolTime.Now:yyyy-MM-dd}.xlsx");
     }
 
     /// <summary>Download Report: every student matching the list's filters, in its sort order.</summary>

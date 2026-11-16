@@ -1,0 +1,197 @@
+@model TaskDetailsViewModel
+@*
+    One task, laid out for the person carrying it out: what to do, who is involved (creator, executor, reviewer),
+    the deadline with the time left, the instruction files, and every change since it was created.
+*@
+@{
+    var t = Model.Task;
+    ViewData["Title"] = t.Title;
+    ViewData["Nav"] = "ManagementTasks";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var done = t.Status == ManagementTaskStatus.Completed;
+    var cancelled = t.Status == ManagementTaskStatus.Cancelled;
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/tasks">Tasks</a></li><li><span aria-current="page">Task #@t.Id</span></li></ol>
+        <h1 class="page-title" dir="auto">@t.Title</h1>
+        <p class="page-sub task-detail__badges">
+            <span class="task-status task-status--@TaskLabels.StatusSlug(t.Status)">@TaskLabels.Status(t.Status)</span>
+            <span class="priority priority--@TaskLabels.PrioritySlug(t.Priority)">@Ui.Icon("flag")@TaskLabels.Priority(t.Priority) priority</span>
+            @if (t.IsOverdue) { <span class="badge badge--error">@Ui.Icon("alert-circle", "icon--sm")Overdue</span> }
+            else if (t.IsDueToday) { <span class="badge badge--warning">Due today</span> }
+            @if (Model.Attachments.Count > 0) { <span class="badge badge--neutral">@Ui.Icon("paperclip", "icon--sm")@Ui.Plural(Model.Attachments.Count, "attachment", "attachments")</span> }
+        </p>
+    </div>
+    <div class="page-head__actions">
+        <form class="task-card__status" action="/management/tasks/@t.Id/status" method="post" data-ajax-form>
+            @Html.AntiForgeryToken()
+            <label class="visually-hidden" for="detail-status">Status</label>
+            <select class="select" id="detail-status" name="status" data-autosubmit>
+                @foreach (var s in TaskLabels.StatusesFor(t.Status))
+                {
+                    <option value="@s" selected="@(t.Status == s)">@TaskLabels.Status(s)</option>
+                }
+            </select>
+            <noscript><button class="btn btn--secondary btn--sm" type="submit">Update</button></noscript>
+        </form>
+        <a class="btn btn--secondary" href="/management/tasks/@t.Id/edit" data-modal>@Ui.Icon("pencil")Edit task</a>
+        <form action="/management/tasks/@t.Id/delete" method="post" data-ajax-form
+              data-confirm="“@t.Title” will be deleted with its attachments. The task history keeps a record that it was deleted."
+              data-confirm-title="Delete this task?" data-confirm-button="Delete task">
+            @Html.AntiForgeryToken()
+            <button class="btn btn--soft-danger" type="submit">@Ui.Icon("trash")Delete</button>
+        </form>
+    </div>
+</div>
+
+<div class="grid-3-1">
+    <div class="stack">
+        <section class="card" aria-labelledby="instructions-title">
+            <div class="card__head"><h2 class="card__title" id="instructions-title">@Ui.Icon("clipboard-check")Description / Instructions</h2></div>
+            <div class="card__body">
+                @if (string.IsNullOrWhiteSpace(t.Description))
+                {
+                    <p class="faint" style="margin:0">No description was given.</p>
+                }
+                else
+                {
+                    <p class="task-detail__text" dir="auto">@t.Description</p>
+                }
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="files-title">
+            <div class="card__head">
+                <div>
+                    <h2 class="card__title" id="files-title">@Ui.Icon("paperclip")Attachments</h2>
+                    <p class="card__sub">Instruction and reference files for this task.</p>
+                </div>
+            </div>
+            @if (Model.Attachments.Count == 0)
+            {
+                <div class="empty" style="padding:24px"><p class="empty__text">No files are attached. <a href="/management/tasks/@t.Id/edit" data-modal>Edit the task</a> to add some.</p></div>
+            }
+            else
+            {
+                <ul class="task-files task-files--detail">
+                    @foreach (var a in Model.Attachments)
+                    {
+                        var href = $"/management/tasks/{t.Id}/attachments/{a.Id}";
+                        <li class="task-file">
+                            <span class="task-file__icon task-file__icon--@a.Extension">@Ui.Icon(TaskAttachmentRules.Icon(a.Extension))</span>
+                            <span class="task-file__body">
+                                <a class="task-file__name" href="@href" target="_blank" rel="noopener" dir="auto">@a.FileName</a>
+                                <span class="task-file__meta">@a.Kind · @a.Size · added @Ui.DateTime(a.UploadedAt)@(a.UploadedBy is null ? "" : " by " + a.UploadedBy)</span>
+                            </span>
+                            <span class="row-actions">
+                                @if (a.OpensInBrowser)
+                                {
+                                    <a class="btn btn--ghost btn--sm" href="@href" target="_blank" rel="noopener">@Ui.Icon("external-link", "icon--sm")Open</a>
+                                }
+                                <a class="btn btn--secondary btn--sm" href="@href?download=true" download>@Ui.Icon("download", "icon--sm")Download</a>
+                            </span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="card" aria-labelledby="progress-title">
+            <div class="card__head">
+                <div>
+                    <h2 class="card__title" id="progress-title">@Ui.Icon("activity")Notes and progress</h2>
+                    <p class="card__sub">Notes, then every change to the task, newest first.</p>
+                </div>
+            </div>
+            <div class="card__body">
+                @if (!string.IsNullOrWhiteSpace(t.Notes))
+                {
+                    <p class="dept-card__label" style="margin:0 0 6px">Notes</p>
+                    <p class="task-detail__text" dir="auto" style="margin:0 0 16px">@t.Notes</p>
+                }
+                @if (Model.History.Count == 0)
+                {
+                    <p class="faint" style="margin:0">No changes recorded yet.</p>
+                }
+                else
+                {
+                    <ol class="timeline" style="margin:0">
+                        @foreach (var h in Model.History)
+                        {
+                            var tone = h.Action switch
+                            {
+                                TaskHistoryAction.Deleted => "timeline__item--rejected",
+                                _ when h.StatusAfter == ManagementTaskStatus.Completed => "timeline__item--accepted",
+                                TaskHistoryAction.Created => "timeline__item--audit",
+                                _ => "",
+                            };
+                            <li class="timeline__item @tone">
+                                <span class="timeline__when">@Ui.DateTime(h.ChangedAt)@(h.ChangedBy is null ? "" : " · " + h.ChangedBy)</span>
+                                <span class="timeline__note" dir="auto" style="font-style:normal">@h.Summary</span>
+                            </li>
+                        }
+                    </ol>
+                }
+            </div>
+        </section>
+    </div>
+
+    <div class="stack">
+        <section class="card" aria-labelledby="people-title">
+            <div class="card__head"><h2 class="card__title" id="people-title">@Ui.Icon("users")People</h2></div>
+            <div class="card__body task-roles task-roles--stack">
+                <div class="task-role task-role--executor">
+                    <span class="task-role__tag">@Ui.Icon("user", "icon--sm")Assigned to</span>
+                    <partial name="_TaskPerson" model="t.AssignedTo" />
+                </div>
+                <div class="task-role task-role--reviewer">
+                    <span class="task-role__tag">@Ui.Icon("send", "icon--sm")Submitted to / Reviewer</span>
+                    @if (t.Reviewer is { } r) { <partial name="_TaskPerson" model="r" /> }
+                    else { <p class="task-role__empty">No reviewer — the task ends when it is completed.</p> }
+                </div>
+                <div class="task-role task-role--creator">
+                    <span class="task-role__tag">@Ui.Icon("pencil", "icon--sm")Created by</span>
+                    @if (t.Creator is { } cr) { <partial name="_TaskPerson" model="cr" /> }
+                    else if (t.CreatedBy is { } name)
+                    {
+                        <div class="person">
+                            <span class="avatar avatar--@Ui.Tone(name)" aria-hidden="true">@Ui.Initials(name)</span>
+                            <div style="min-width:0"><div class="person__name" dir="auto">@name</div><div class="person__meta">Name recorded at creation</div></div>
+                        </div>
+                    }
+                    else { <p class="task-role__empty">Not recorded.</p> }
+                </div>
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="schedule-title">
+            <div class="card__head"><h2 class="card__title" id="schedule-title">@Ui.Icon("calendar")Schedule</h2></div>
+            <div class="card__body">
+                <dl class="dl" style="font-size:0.875rem">
+                    <dt>Due date</dt><dd>@(t.DueDate is { } d ? d.ToString("dddd d MMMM yyyy", c) : "No due date")</dd>
+                    <dt>Due time</dt><dd>@(t.DueTime is { } tm ? TaskLabels.Time(tm) : t.DueDate is null ? "—" : "End of the day")</dd>
+                    @if (done && t.CompletedAt is { } ca) { <dt>Completed</dt><dd>@Ui.DateTime(ca)</dd> }
+                </dl>
+                @if (Model.Remaining is { } left)
+                {
+                    <p class="task-countdown @(t.IsOverdue ? "is-overdue" : t.IsDueToday ? "is-today" : "")">@Ui.Icon(t.IsOverdue ? "alert-circle" : "clock", "icon--sm")@left</p>
+                }
+                else if (cancelled) { <p class="task-countdown">@Ui.Icon("x-circle", "icon--sm")Cancelled — no deadline applies</p> }
+                <p class="hint" style="margin:8px 0 0">Times are school time (Cairo, @SchoolTime.Current.OffsetLabel()).</p>
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="record-title">
+            <div class="card__head"><h2 class="card__title" id="record-title">@Ui.Icon("clock")Record</h2></div>
+            <div class="card__body">
+                <dl class="dl" style="font-size:0.875rem">
+                    <dt>Created</dt><dd>@Ui.DateTime(t.CreatedAt)</dd>
+                    <dt>Updated</dt><dd>@Ui.DateTime(t.UpdatedAt)@(t.UpdatedBy is null ? "" : " · " + t.UpdatedBy)</dd>
+                </dl>
+            </div>
+        </section>
+    </div>
+</div>

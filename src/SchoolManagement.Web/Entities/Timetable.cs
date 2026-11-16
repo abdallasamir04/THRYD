@@ -1,22 +1,51 @@
 namespace SchoolManagement.Web.Entities;
 
 /// <summary>
-/// One of the 10 daily time slots. The same slots apply to every school day (Sunday–Thursday).
-/// Times start empty: the school sets them in Time Slots. Active slots may not overlap.
+/// A period of the school day (the table keeps its original name, TimeSlots). The administrator defines
+/// as many periods as needed — nothing about their number, names or times is fixed in code:
+/// <list type="bullet">
+/// <item><b>School-wide</b> (<see cref="SchoolClassId"/> null): part of every class's timetable.</item>
+/// <item><b>Class-specific</b> (<see cref="SchoolClassId"/> set): only in that class's timetable. When it
+/// <see cref="ReplacesTimeSlotId">replaces</see> a school-wide period, that class uses this one instead
+/// (e.g. different times for one class). An archived replacement removes the school period from that class.</item>
+/// </list>
+/// <see cref="DayMask"/> chooses the weekdays (0 = every configured school day). Deleted periods that were
+/// ever used are archived, not removed, so historical lessons and attendance keep their period and times.
+/// The ten periods created by the first migration are school-wide, every day, with no times until the school sets them.
 /// </summary>
 public class TimeSlot
 {
-    public const int Count = 10;
+    /// <summary>Periods created by the original migration (ids 1–10). Only a default: more can be added.</summary>
+    public const int SeededCount = 10;
     public const int NameMaxLength = 50;
+    public const int MaxOrder = 999;
 
     public int Id { get; set; }
 
-    /// <summary>1–10, unique.</summary>
+    /// <summary>Display order (1, 2, 3…). Within one class and day, the order follows the start times.</summary>
     public int Number { get; set; }
     public string? Name { get; set; }
     public TimeOnly? StartTime { get; set; }
     public TimeOnly? EndTime { get; set; }
+
+    /// <summary>Disabled periods stay in the timetable structure (shown as disabled) but take no lessons.</summary>
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Null: school-wide period. Set: this class only.</summary>
+    public int? SchoolClassId { get; set; }
+    public SchoolClass? SchoolClass { get; set; }
+
+    /// <summary>For a class-specific period: the school-wide period it replaces for that class.</summary>
+    public int? ReplacesTimeSlotId { get; set; }
+    public TimeSlot? Replaces { get; set; }
+
+    /// <summary>Weekdays the period runs: bit (1 &lt;&lt; (int)DayOfWeek); 0 = every school day.</summary>
+    public int DayMask { get; set; }
+
+    /// <summary>Set when the period was deleted after being used (kept for history, never shown as current).</summary>
+    public DateTime? ArchivedAt { get; set; }
+
+    public string? UpdatedBy { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 

@@ -1,42 +1,63 @@
 @model (TaskRow Task, bool ForMember)
+@*
+    One task card: title + priority, status / due / file / notes badges, a two-line description, who carries it out and
+    who reviews it, then status and actions in the footer. The left stripe is the priority colour.
+*@
 @{
     var t = Model.Task;
     var done = t.Status == ManagementTaskStatus.Completed;
-    var dueTone = done ? "due-chip--done" : t.IsOverdue ? "due-chip--overdue" : t.IsDueToday ? "due-chip--today" : "";
+    var cancelled = t.Status == ManagementTaskStatus.Cancelled;
+    var dueTone = done ? "due-chip--done" : cancelled ? "" : t.IsOverdue ? "due-chip--overdue" : t.IsDueToday ? "due-chip--today" : "";
+    var notes = string.IsNullOrWhiteSpace(t.Notes) ? null : t.Notes.Trim();
 }
-<article class="task-card task-card--@TaskLabels.PrioritySlug(t.Priority) @(t.IsOverdue ? "is-overdue" : "") @(done ? "is-done" : "")" aria-labelledby="task-@t.Id">
+<article class="task-card task-card--@TaskLabels.PrioritySlug(t.Priority) @(t.IsOverdue ? "is-overdue" : "") @(done ? "is-done" : "") @(cancelled ? "is-cancelled" : "")" aria-labelledby="task-@t.Id">
     <div class="task-card__top">
-        <h3 class="task-card__title" id="task-@t.Id" dir="auto">@t.Title</h3>
+        <h3 class="task-card__title" id="task-@t.Id" dir="auto"><a href="/management/tasks/@t.Id" title="@t.Title">@t.Title</a></h3>
         <span class="priority priority--@TaskLabels.PrioritySlug(t.Priority)" title="Priority">@Ui.Icon("flag")@TaskLabels.Priority(t.Priority)</span>
     </div>
 
     <div class="task-card__badges">
         <span class="task-status task-status--@TaskLabels.StatusSlug(t.Status)">@TaskLabels.Status(t.Status)</span>
-        @if (t.IsOverdue) { <span class="badge badge--error">Overdue</span> }
+        @if (t.IsOverdue) { <span class="badge badge--error">@Ui.Icon("alert-circle", "icon--sm")Overdue</span> }
         else if (t.IsDueToday) { <span class="badge badge--warning">Due today</span> }
+        @if (t.AttachmentCount > 0)
+        {
+            <span class="task-chip" title="@Ui.Plural(t.AttachmentCount, "attachment", "attachments")">@Ui.Icon("paperclip", "icon--sm")@t.AttachmentCount</span>
+        }
+        @if (notes is not null)
+        {
+            <span class="task-chip" title="@(notes.Length > 240 ? notes[..240] + "…" : notes)">@Ui.Icon("file-text", "icon--sm")Notes</span>
+        }
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(t.Description))
-    {
-        <p class="task-card__desc" dir="auto">@t.Description</p>
-    }
-    @if (!string.IsNullOrWhiteSpace(t.Notes))
-    {
-        <details class="task-card__notes">
-            <summary>Notes</summary>
-            <p dir="auto">@t.Notes</p>
-        </details>
-    }
+    <p class="task-card__desc @(string.IsNullOrWhiteSpace(t.Description) ? "is-empty" : "")" dir="auto">@(string.IsNullOrWhiteSpace(t.Description) ? "No description." : t.Description)</p>
 
-    <div class="meta-row">
-        <span class="due-chip @dueTone">@Ui.Icon(done ? "check-circle" : "calendar")@(done && t.CompletedAt is { } ca ? "Completed " + Ui.Date(ca) : TaskLabels.Due(t.DueDate, t.DueTime))</span>
+    <div class="task-card__people">
         @if (!Model.ForMember)
         {
-            <span class="task-card__who">
-                <span class="avatar avatar--@Ui.Tone(t.MemberName)" aria-hidden="true">@Ui.Initials(t.MemberName)</span>
-                <a href="/management/members/@t.MemberId" dir="auto" title="@ManagementPositions.Name(t.MemberPosition)">@t.MemberName</a>
-            </span>
+            <div class="task-card__person task-card__person--executor">
+                <span class="avatar avatar--@Ui.Tone(t.AssignedTo.Name)" aria-hidden="true">@Ui.Initials(t.AssignedTo.Name)</span>
+                <div class="task-card__person-text">
+                    <span class="task-card__person-label">Assigned to</span>
+                    <a href="@t.AssignedTo.Href" dir="auto" title="@t.AssignedTo.Name · @t.AssignedTo.Describe">@t.AssignedTo.Name</a>
+                    <span class="task-card__role" title="@t.AssignedTo.Describe">@t.AssignedTo.Describe</span>
+                </div>
+            </div>
         }
+        @if (t.Reviewer is { } r)
+        {
+            <div class="task-card__person task-card__person--reviewer">
+                <span class="task-card__person-icon" aria-hidden="true">@Ui.Icon("send", "icon--sm")</span>
+                <div class="task-card__person-text">
+                    <span class="task-card__person-label">Submitted to</span>
+                    <a href="@r.Href" dir="auto" title="@r.Name · @r.Describe">@r.Name</a>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="task-card__due">
+        <span class="due-chip @dueTone">@Ui.Icon(done ? "check-circle" : cancelled ? "x-circle" : "calendar")@(done && t.CompletedAt is { } ca ? "Completed " + Ui.Date(ca) : cancelled ? "Cancelled" : TaskLabels.Due(t.DueDate, t.DueTime))</span>
     </div>
 
     <div class="task-card__foot">
@@ -44,7 +65,7 @@
             @Html.AntiForgeryToken()
             <label class="visually-hidden" for="status-@t.Id">Status of @t.Title</label>
             <select class="select" id="status-@t.Id" name="status" data-autosubmit>
-                @foreach (var s in TaskLabels.Statuses)
+                @foreach (var s in TaskLabels.StatusesFor(t.Status))
                 {
                     <option value="@s" selected="@(t.Status == s)">@TaskLabels.Status(s)</option>
                 }
@@ -52,10 +73,11 @@
             <noscript><button class="btn btn--secondary btn--sm" type="submit">Update</button></noscript>
         </form>
         <div class="row-actions">
-            <span class="faint" style="font-size:0.72rem" title="Last updated @Ui.DateTime(t.UpdatedAt)">@Ui.Ago(t.UpdatedAt)</span>
+            <span class="task-card__ago" title="Last updated @Ui.DateTime(t.UpdatedAt)">@Ui.Ago(t.UpdatedAt)</span>
+            <a class="icon-btn icon-btn--primary" href="/management/tasks/@t.Id" title="Open task" aria-label="Open @t.Title">@Ui.Icon("eye")</a>
             <a class="icon-btn icon-btn--primary" href="/management/tasks/@t.Id/edit" data-modal title="Edit task" aria-label="Edit @t.Title">@Ui.Icon("pencil")</a>
             <form action="/management/tasks/@t.Id/delete" method="post" data-ajax-form
-                  data-confirm="“@t.Title” will be deleted. The member's task history keeps a record that it was deleted."
+                  data-confirm="“@t.Title” will be deleted with its attachments. The task history keeps a record that it was deleted."
                   data-confirm-title="Delete this task?" data-confirm-button="Delete task">
                 @Html.AntiForgeryToken()
                 <button class="icon-btn icon-btn--danger" type="submit" title="Delete task" aria-label="Delete @t.Title">@Ui.Icon("trash")</button>

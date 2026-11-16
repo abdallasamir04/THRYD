@@ -1,0 +1,73 @@
+@model MoveSessionModel
+@*
+    Move a lesson to another day / period of its class (the keyboard-friendly twin of drag and drop on the grid).
+    Only the class's free, enabled periods on the days they run are offered; the server re-checks class and
+    teacher conflicts at the real times. The lesson moves from this week on; earlier weeks keep it where it was.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var s = Model.Session!;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Move lesson"; ViewData["Nav"] = "Timetable"; }
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/timetable/classes/@s.ClassId">@s.ClassName</a></li><li>Move lesson</li></ol>
+            <h1 class="page-title">Move lesson</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/timetable/sessions/@Model.SessionId/move" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("arrow-right", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">Move @s.Subject · @s.ClassName</h2>
+                <p class="modal__sub" dir="auto">Now: @ScheduleRules.DayName(s.Day), @Model.Slot?.Label (@Model.Slot?.Times) with @s.TeacherName</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            @if (Model.Targets.Count == 0)
+            {
+                <p class="notice">@Ui.Icon("info")<span class="notice__body">@s.ClassName has no free period to move this lesson to. Add a period or free one first.</span></p>
+            }
+            else
+            {
+                <div class="field">
+                    <label class="label" for="Target">Move to</label>
+                    <select class="select" id="Target" name="Target" data-autofocus>
+                        <option value="">Choose a day and period…</option>
+                        @foreach (var g in Model.Targets.GroupBy(t => t.Day))
+                        {
+                            <optgroup label="@ScheduleRules.DayName(g.Key)">
+                                @foreach (var t in g)
+                                {
+                                    <option value="@t.Day:@t.Slot.Id" selected="@(Model.Target == $"{t.Day}:{t.Slot.Id}")">@ScheduleRules.DayShort(t.Day) · @t.Slot.Label (@t.Slot.Times)</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                    <p class="hint">Only free periods of @s.ClassName are listed. @s.TeacherName must be free at the new time. The lesson moves from this week; earlier weeks and attendance stay as they were. Tip: on the class timetable you can also drag a lesson onto a free period.</p>
+                </div>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/timetable/classes/@s.ClassId">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit" disabled="@(Model.Targets.Count == 0)">@Ui.Icon("check")Move lesson</button>
+        </div>
+    </form>
+</div>

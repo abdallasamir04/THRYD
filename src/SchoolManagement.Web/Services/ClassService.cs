@@ -296,6 +296,9 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
             + await db.BelongingsRecords.CountAsync(b => b.SchoolClassId == id, ct);
         if (references > 0)
             return ServiceResult.Fail("", $"{entity.Name} is used in the timetable, teacher workload, morning duty or student arrival records, so it cannot be deleted. Deactivate it instead.");
+        // KG teaching-team assignments and their history are kept as records.
+        if (await db.ClassTeachingAssignments.AnyAsync(a => a.SchoolClassId == id, ct) || await db.ClassTeachingHistory.AnyAsync(h => h.SchoolClassId == id, ct))
+            return ServiceResult.Fail("", $"{entity.Name} has class teaching team records (current or past), which are kept for history, so it cannot be deleted. Deactivate it instead.");
 
         var students = await db.Students.Where(s => s.SchoolClassId == id).ToListAsync(ct);
         if (students.Count == 0)

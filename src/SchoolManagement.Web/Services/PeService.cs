@@ -74,8 +74,7 @@ public sealed class PeService(SchoolDbContext db, ICurrentUser currentUser) : IP
                 t.Subject, t.TeacherId, t.Teacher.FullName, t.Notes, t.StartsOn, t.EndedOn))
             .FirstOrDefaultAsync(ct);
         if (s is null) return null;
-        var slot = await db.TimeSlots.AsNoTracking().Where(x => x.Id == s.SlotId)
-            .Select(x => new SlotView(x.Id, x.Number, x.Name, x.StartTime, x.EndTime, x.IsActive)).FirstAsync(ct);
+        var slot = await db.TimeSlots.AsNoTracking().Where(x => x.Id == s.SlotId).Select(PeriodMap.Project).FirstAsync(ct);
         var d = await db.PeSessionDetails.AsNoTracking().Where(x => x.TimetableAssignmentId == sessionId)
             .Select(x => new
             {

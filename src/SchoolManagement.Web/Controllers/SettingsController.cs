@@ -30,14 +30,19 @@ public class SettingsController(ISettingsService settings, IDutyService duties, 
         return View(await BuildAsync(profile, ct));
     }
 
-    /// <summary>The school arrival deadline used to mark students On Time or Late.</summary>
+    /// <summary>School Attendance times: the school start time (later = Late) and the cutoff (registration closes; no arrival = Absent).</summary>
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> ArrivalDeadline(string? deadline, CancellationToken ct)
+    public async Task<IActionResult> ArrivalDeadline(string? deadline, string? cutoff, CancellationToken ct)
     {
-        var time = ArrivalForm.ParseTime(deadline);
-        var result = await settings.SaveArrivalDeadlineAsync(time, ct);
+        var start = ArrivalForm.ParseTime(deadline);
+        var last = ArrivalForm.ParseTime(cutoff) ?? await settings.GetLateCutoffAsync(ct);
+        // Save in the order that keeps start < cutoff valid at every step.
+        var current = await settings.GetLateCutoffAsync(ct);
+        Common.ServiceResult result;
+        if (last > current) { result = await settings.SaveLateCutoffAsync(last, ct); if (result.Succeeded) result = await settings.SaveArrivalDeadlineAsync(start, ct); }
+        else { result = await settings.SaveArrivalDeadlineAsync(start, ct); if (result.Succeeded) result = await settings.SaveLateCutoffAsync(last, ct); }
         Toast(result.Succeeded
-            ? $"Arrival deadline set to {time:HH\\:mm}. Arrivals recorded from now on use it; existing records keep the deadline they were recorded with."
+            ? $"Present until {Arrivals.Time(start)}, Late after; registration closes at {Arrivals.Time(last)}. Existing records keep the status they were saved with."
             : result.Errors[0].Value, result.Succeeded ? "success" : "error");
         return RedirectToAction(nameof(Index));
     }
@@ -55,6 +60,7 @@ public class SettingsController(ISettingsService settings, IDutyService duties, 
         Profile = profile,
         System = await settings.GetSystemInfoAsync(ct),
         ArrivalDeadline = await settings.GetArrivalDeadlineAsync(ct),
+        LateCutoff = await settings.GetLateCutoffAsync(ct),
         MaxWeeklyPeriods = await settings.GetMaxWeeklyPeriodsAsync(ct),
         Staff = await duties.StaffOptionsAsync(ct),
         OperatorStaffId = currentUser.StaffId,

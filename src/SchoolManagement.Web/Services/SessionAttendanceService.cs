@@ -141,6 +141,18 @@ public static class Lessons
         // One lesson per class and slot: the row that was recorded, otherwise the active one.
         rows = rows.GroupBy(r => (r.SchoolClassId, r.TimeSlotId))
             .Select(g => g.OrderByDescending(r => withRecords.Contains(r.Id)).ThenByDescending(r => r.Active).First()).ToList();
+        // A lesson moved to another period during the week: the recorded one stands for that date, not a second overlapping one.
+        var recordedRows = rows.Where(r => withRecords.Contains(r.Id)).ToList();
+        rows = rows.Where(r => withRecords.Contains(r.Id) || !recordedRows.Any(x => x.SchoolClassId == r.SchoolClassId && x.Id != r.Id
+            && x.StartTime is not null && ScheduleRules.Overlaps(x.TimeSlotId, x.StartTime, x.EndTime, r.TimeSlotId, r.StartTime, r.EndTime))).ToList();
+        // From this week on, only periods that run for the class on that day (enabled, that weekday) are expected.
+        // Earlier weeks are history and stay as they were, whatever changed in the periods since.
+        if (week >= SchoolWeek.Current)
+        {
+            var map = await PeriodMap.LoadAsync(db, ct);
+            rows = rows.Where(r => withRecords.Contains(r.Id) || map.Schedules(r.SchoolClassId, r.TimeSlotId, day)).ToList();
+        }
+        if (rows.Count == 0) return [];
 
         var subs = (await db.WorkloadAssignments.AsNoTracking()
                 .Where(w => w.Category == WorkloadCategory.Substitution && w.WeekStart == week && w.Day == day && w.SchoolClassId != null && w.TimeSlotId != null)
@@ -151,8 +163,9 @@ public static class Lessons
         var cancelled = await db.SessionCancellations.AsNoTracking().Where(x => x.SessionDate == date && lessonIds.Contains(x.TimetableAssignmentId))
             .ToDictionaryAsync(x => x.TimetableAssignmentId, x => x.Reason, ct);
 
-        var today = SchoolWeek.Today;
-        var now = TimeOnly.FromDateTime(DateTime.Now);
+        // A lesson has started when its school-local start time has passed (Africa/Cairo), not the server's clock.
+        var today = SchoolTime.Today;
+        var now = SchoolTime.Current.TimeOfDay;
         return rows.Select(r =>
             {
                 subs.TryGetValue((r.SchoolClassId, r.TimeSlotId), out var sub);
@@ -160,7 +173,7 @@ public static class Lessons
                 return new LessonView(r.Id, date, r.SchoolClassId, r.ClassName, r.ClassOrder, r.TimeSlotId, r.SlotNumber, r.SlotName, r.StartTime, r.EndTime,
                     r.Department, r.Subject, r.TeacherId, r.Teacher, sub?.TeacherId, sub?.FullName, cancelled.GetValueOrDefault(r.Id), upcoming);
             })
-            .OrderBy(l => l.SlotNumber).ThenBy(l => l.ClassOrder).ThenBy(l => l.ClassName).ToList();
+            .OrderBy(l => l.SlotNumber).ThenBy(l => l.Start ?? TimeOnly.MinValue).ThenBy(l => l.ClassOrder).ThenBy(l => l.ClassName).ToList();
     }
 
     /// <summary>
@@ -170,7 +183,7 @@ public static class Lessons
     public static async Task<List<StudentPick>> RosterAsync(SchoolDbContext db, IReadOnlyCollection<int> classIds, DateOnly date, CancellationToken ct)
     {
         if (classIds.Count == 0) return [];
-        var dayEndUtc = date.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
+        var dayEndUtc = SchoolTime.Current.StartOfDayUtc(date.AddDays(1));
         var movedLater = db.StudentTransfers.Where(t => t.TransferredAt >= dayEndUtc);
         var candidates = await db.Students.AsNoTracking()
             .Where(s => classIds.Contains(s.SchoolClassId) || movedLater.Any(t => t.StudentId == s.Id && classIds.Contains(t.FromClassId)))
@@ -181,7 +194,7 @@ public static class Lessons
             })
             .ToListAsync(ct);
         var names = await db.Classes.AsNoTracking().Where(c => classIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
-        return candidates.Where(s => DateOnly.FromDateTime(s.CreatedAt.ToLocalTime()) <= date)
+        return candidates.Where(s => SchoolTime.Current.LocalDate(s.CreatedAt) <= date)
             .Select(s => new { s.Id, s.FullName, ClassId = s.ThatDay ?? s.SchoolClassId })
             .Where(s => classIds.Contains(s.ClassId))
             .OrderBy(s => s.FullName, StringComparer.CurrentCultureIgnoreCase)
@@ -191,7 +204,7 @@ public static class Lessons
     /// <summary>The student's class on a date (current class unless a later transfer moved them).</summary>
     public static async Task<StudentPick?> StudentOnAsync(SchoolDbContext db, int studentId, DateOnly date, CancellationToken ct)
     {
-        var dayEndUtc = date.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
+        var dayEndUtc = SchoolTime.Current.StartOfDayUtc(date.AddDays(1));
         var s = await db.Students.AsNoTracking().Where(x => x.Id == studentId).Select(x => new
         {
             x.Id, x.FullName, x.SchoolClassId,
@@ -244,8 +257,11 @@ public sealed class SessionAttendanceService(SchoolDbContext db, ICurrentUser cu
     {
         var classes = (await db.Classes.AsNoTracking().OrderBy(c => c.SortOrder).ThenBy(c => c.Name).Select(c => new { c.Id, c.Name }).ToListAsync(ct))
             .Select(c => (c.Id, c.Name)).ToList();
-        var slots = await db.TimeSlots.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Number)
-            .Select(s => new SlotView(s.Id, s.Number, s.Name, s.StartTime, s.EndTime, s.IsActive)).ToListAsync(ct);
+        // A chosen class: its own periods. Otherwise every enabled period (class-specific ones carry their class in the label).
+        var map = await PeriodMap.LoadAsync(db, ct);
+        var slots = classId is { } cid
+            ? map.ForClass(cid).Where(s => s.IsActive).ToList()
+            : PeriodMap.Order(map.All.Where(s => s.IsActive && !s.Archived));
         var week = SchoolWeek.StartOf(date);
         var active = db.TimetableAssignments.AsNoTracking().ActiveIn(week);
         var subjects = await active.Select(t => t.Subject).Distinct().OrderBy(s => s).ToListAsync(ct);

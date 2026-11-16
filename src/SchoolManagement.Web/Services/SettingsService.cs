@@ -16,7 +16,8 @@ public sealed record SystemInfo(
     IReadOnlyList<string> PendingMigrations,
     int Students,
     int Teachers,
-    int Classes);
+    int Classes,
+    int StudentsInInactiveClasses = 0);
 
 public interface ISettingsService
 {
@@ -24,9 +25,16 @@ public interface ISettingsService
     Task<ServiceResult> SaveProfileAsync(string schoolName, string? academicYear, CancellationToken ct = default);
     Task<SystemInfo> GetSystemInfoAsync(CancellationToken ct = default);
 
-    /// <summary>The school arrival deadline: arriving after it is Late. Null until set in Settings.</summary>
+    /// <summary>The school start time: arriving after it is Late. Null until set in Settings.</summary>
     Task<TimeOnly?> GetArrivalDeadlineAsync(CancellationToken ct = default);
     Task<ServiceResult> SaveArrivalDeadlineAsync(TimeOnly? deadline, CancellationToken ct = default);
+
+    /// <summary>The arrival cutoff (default 09:30, Africa/Cairo): registration closes at it; students with no arrival by then are Absent.</summary>
+    Task<TimeOnly> GetLateCutoffAsync(CancellationToken ct = default);
+    Task<ServiceResult> SaveLateCutoffAsync(TimeOnly? cutoff, CancellationToken ct = default);
+
+    /// <summary>The first day that is finalized automatically (set on first use; earlier days are left as recorded).</summary>
+    Task<DateOnly> GetAutoFinalizeFromAsync(CancellationToken ct = default);
 
     Task<int> GetMaxWeeklyPeriodsAsync(CancellationToken ct = default);
     Task<ServiceResult> SaveMaxWeeklyPeriodsAsync(int max, CancellationToken ct = default);
@@ -109,23 +117,59 @@ public sealed class SettingsService(SchoolDbContext db, IMemoryCache cache) : IS
             (await db.Database.GetPendingMigrationsAsync(ct)).ToList(),
             await db.Students.CountAsync(ct),
             await db.Teachers.CountAsync(ct),
-            await db.Classes.CountAsync(ct));
+            await db.Classes.CountAsync(ct),
+            // Data check (administrative correction, not an attendance category): every student should be in an active class.
+            await db.Students.CountAsync(st => !st.SchoolClass.IsActive, ct));
     }
 
     private const string ArrivalDeadlineKey = "Arrival.Deadline";
+    public const string LateCutoffKey = "Arrival.LateCutoff";
+    private const string AutoFinalizeFromKey = "Arrival.AutoFinalizeFrom";
 
-    public async Task<TimeOnly?> GetArrivalDeadlineAsync(CancellationToken ct = default)
-    {
-        var value = await db.Settings.AsNoTracking().Where(s => s.Key == ArrivalDeadlineKey).Select(s => s.Value).FirstOrDefaultAsync(ct);
-        return TimeOnly.TryParseExact(value, "HH:mm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var t) ? t : null;
-    }
+    /// <summary>The latest arrival that still counts as Late (later = Absent) when not configured.</summary>
+    public static readonly TimeOnly DefaultLateCutoff = new(9, 30);
+
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    private async Task<string?> ValueAsync(string key, CancellationToken ct) =>
+        await db.Settings.AsNoTracking().Where(s => s.Key == key).Select(s => s.Value).FirstOrDefaultAsync(ct);
+
+    private static TimeOnly? Time(string? value) =>
+        TimeOnly.TryParseExact(value, "HH:mm", Inv, System.Globalization.DateTimeStyles.None, out var t) ? t : null;
+
+    public async Task<TimeOnly?> GetArrivalDeadlineAsync(CancellationToken ct = default) => Time(await ValueAsync(ArrivalDeadlineKey, ct));
 
     public async Task<ServiceResult> SaveArrivalDeadlineAsync(TimeOnly? deadline, CancellationToken ct = default)
     {
-        if (deadline is null) return ServiceResult.Fail("ArrivalDeadline", "Enter the arrival deadline.");
-        await UpsertAsync(ArrivalDeadlineKey, deadline.Value.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture), ct);
+        if (deadline is null) return ServiceResult.Fail("ArrivalDeadline", "Enter the school start time.");
+        var cutoff = await GetLateCutoffAsync(ct);
+        if (deadline.Value >= cutoff)
+            return ServiceResult.Fail("ArrivalDeadline", $"The school start time must be earlier than the late cutoff ({cutoff.ToString("HH:mm", Inv)}).");
+        await UpsertAsync(ArrivalDeadlineKey, deadline.Value.ToString("HH:mm", Inv), ct);
         await db.SaveChangesAsync(ct);
         return ServiceResult.Ok();
+    }
+
+    public async Task<TimeOnly> GetLateCutoffAsync(CancellationToken ct = default) => Time(await ValueAsync(LateCutoffKey, ct)) ?? DefaultLateCutoff;
+
+    public async Task<ServiceResult> SaveLateCutoffAsync(TimeOnly? cutoff, CancellationToken ct = default)
+    {
+        if (cutoff is null) return ServiceResult.Fail("LateCutoff", "Enter the time arrival registration closes.");
+        if (await GetArrivalDeadlineAsync(ct) is { } start && cutoff.Value <= start)
+            return ServiceResult.Fail("LateCutoff", $"Registration must close after the school start time ({start.ToString("HH:mm", Inv)}).");
+        await UpsertAsync(LateCutoffKey, cutoff.Value.ToString("HH:mm", Inv), ct);
+        await db.SaveChangesAsync(ct);
+        return ServiceResult.Ok();
+    }
+
+    public async Task<DateOnly> GetAutoFinalizeFromAsync(CancellationToken ct = default)
+    {
+        if (DateOnly.TryParseExact(await ValueAsync(AutoFinalizeFromKey, ct), "yyyy-MM-dd", Inv, System.Globalization.DateTimeStyles.None, out var d)) return d;
+        // First use: automatic finalization starts today; earlier days are history and are only finalized on request.
+        var today = SchoolWeek.Today;
+        await UpsertAsync(AutoFinalizeFromKey, today.ToString("yyyy-MM-dd", Inv), ct);
+        await db.SaveChangesAsync(ct);
+        return today;
     }
 
     private async Task UpsertAsync(string key, string? value, CancellationToken ct)

@@ -9,11 +9,11 @@ namespace SchoolManagement.Web.Controllers;
 
 /// <summary>Daily Operations → Morning Duty (Students Arrival Check, In-Class Morning, Morning Assembly / Proadcast).</summary>
 [Route("duties")]
-public class DutiesController(IDutyService duties, IClassService classes, IPeService pe, IStaffDutyService staffDuty) : AppController
+public class DutiesController(IDutyService duties, IClassService classes, IStaffDutyService staffDuty, IActivityService activities) : AppController
 {
     /// <summary>
     /// Duties landing page: Morning, Midday and Dismissal cards (?type=morning | midday | dismissal opens
-    /// that duty's page) plus a P.E. card that opens the P.E. module (/pe).
+    /// that duty's page) plus an Activities card (/duties/activities: P.E., Add Activity and every created activity).
     /// </summary>
     [HttpGet("")]
     public async Task<IActionResult> Index(string? date, string? type, CancellationToken ct)
@@ -32,10 +32,10 @@ public class DutiesController(IDutyService duties, IClassService classes, IPeSer
                     $"{summary.Count} sections · {(total == 0 ? "no duties today" : $"{total} today{(open > 0 ? $" · {open} need action" : "")}")}",
                     t switch { DutyType.Midday => "amber", DutyType.Dismissal => "teal", _ => "violet" }));
             }
-            var peWeek = await pe.WeekAsync(SchoolWeek.StartOf(day), ct);
-            var peToday = ScheduleRules.IsSchoolDay(day.DayOfWeek) ? peWeek.Count(s => s.Day == day.DayOfWeek) : 0;
-            cards.Add(new HubCard($"/pe?date={SchoolWeek.Iso(day)}", "activity", "P.E.", "Physical Education",
-                $"{Ui.Plural(peWeek.Count, "session", "sessions")} this week{(peToday > 0 ? $" · {peToday} today" : "")}", "green"));
+            // P.E. now opens from Activities (with the activities the school adds).
+            var others = (await activities.ListAsync(false, ct)).Count;
+            cards.Add(new HubCard($"/duties/activities?date={SchoolWeek.Iso(day)}", "activity", "Activities", "P.E. and the school's other activities: staff, classes and schedules.",
+                others == 0 ? "P.E." : $"P.E. + {Ui.Plural(others, "activity", "activities")}", "green"));
             return View("~/Views/Staff/Hub.cshtml", new HubViewModel
             {
                 Title = "Duties",

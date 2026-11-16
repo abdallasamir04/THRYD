@@ -11,12 +11,24 @@ public class HomeController(
     ISettingsService settings,
     IDutyService duties,
     IStaffDutyService staffDuty,
-    IArrivalService arrivals) : AppController
+    IArrivalService arrivals,
+    IActivityService activities) : AppController
 {
     public async Task<IActionResult> Index(CancellationToken ct)
     {
         var today = SchoolWeek.Today;
         var (average, rated) = await staffDuty.AverageRatingAsync(ct);
+        // Section-level coverage for today (school timezone), read per request: fully covered sections ÷ sections.
+        // Morning / Midday / Dismissal = the duty cards of each type (DutyComponents), each covered when every duty in it
+        // dated today is Covered; Activities = each activity scheduled today (P.E. counts once), covered when every one
+        // of its sessions today is Covered.
+        var byType = await duties.SectionCoverageAsync(today, ct);
+        var coverage = DutyComponents.Types
+            .Select(t => new DutyCoverage(DutyComponents.TypeName(t).Replace(" Duty", ""),
+                $"/duties?type={DutyComponents.TypeSlug(t)}&date={SchoolWeek.Iso(today)}", byType[t], "section", "sections"))
+            .ToList();
+        var sessions = await activities.SessionsOnAsync(today, ct);
+        coverage.Add(new DutyCoverage("Activities", $"/duties/activities?date={SchoolWeek.Iso(today)}#sessions", sessions.Sections, "activity", "activities"));
         var model = new DashboardViewModel
         {
             Data = await dashboard.GetAsync(ct),
@@ -29,6 +41,7 @@ public class HomeController(
                 AverageRating = average,
                 RatedAssignments = rated,
                 Arrivals = await arrivals.DaySummaryAsync(today, ct),
+                Coverage = coverage,
             },
         };
         return View(model);

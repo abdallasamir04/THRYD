@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Data;
 using SchoolManagement.Web.Entities;
@@ -14,11 +15,12 @@ namespace SchoolManagement.Web.Controllers;
 /// <summary>
 /// Students → Behavioural / Discipline: a landing page with two independent sections — Incident (official
 /// incident reports) and Discipline (its own landing page, to be implemented later). Incident records are
-/// confidential: responses are never cached or indexed, every change needs a named author and is audited,
-/// and every PDF export is logged.
+/// confidential: responses are never cached or indexed, every change is audited and every PDF export is logged.
+/// Nothing here requires "Working as".
 /// </summary>
 [Route("students/behaviour")]
-public class BehaviourController(IIncidentService incidents, ISettingsService settings, IDutyService duties, ICurrentUser currentUser, SchoolDbContext db) : AppController
+public class BehaviourController(IIncidentService incidents, ISettingsService settings, IDutyService duties, SchoolDbContext db,
+    IMemoryCache cache) : AppController
 {
     public override void OnActionExecuting(ActionExecutingContext context)
     {
@@ -66,7 +68,6 @@ public class BehaviourController(IIncidentService incidents, ISettingsService se
         return View(new IncidentListViewModel
         {
             Incidents = await incidents.ListAsync(query, ct), Query = query, Suggestions = await incidents.SuggestionsAsync(ct),
-            CanEdit = currentUser.Name is not null,
         });
     }
 
@@ -75,7 +76,7 @@ public class BehaviourController(IIncidentService incidents, ISettingsService se
     {
         var details = await incidents.GetAsync(id, ct);
         if (details is null) return NotFound();
-        return View(new IncidentPageViewModel { Incident = details, SchoolName = (await settings.GetProfileAsync(ct)).SchoolName, Identified = currentUser.Name is not null });
+        return View(new IncidentPageViewModel { Incident = details, SchoolName = (await settings.GetProfileAsync(ct)).SchoolName });
     }
 
     [HttpGet("incidents/student/{studentId:int}")]
@@ -102,28 +103,94 @@ public class BehaviourController(IIncidentService incidents, ISettingsService se
         return result;
     }
 
-    // ------------------------------------------------------------------ A. create / edit header
+    // ------------------------------------------------------------------ the complete report: Add Report / Edit Report
 
+    /// <summary>Add Report: the five sections of the official report on one page.</summary>
     [HttpGet("incidents/new")]
-    public async Task<IActionResult> Create(CancellationToken ct) =>
-        PageOrPartial("HeaderForm", new IncidentHeaderForm
-        {
-            Date = SchoolWeek.Today, Severity = IncidentSeverity.Level1, Status = IncidentStatus.Reported, Suggestions = await incidents.SuggestionsAsync(ct),
-        });
+    public async Task<IActionResult> Create(CancellationToken ct)
+    {
+        var school = (await settings.GetProfileAsync(ct)).SchoolName;
+        var model = new IncidentReportForm { Date = SchoolWeek.Today, ReportDate = SchoolWeek.Today, School = school };
+        await FillReportAsync(model, ct);
+        return View("ReportForm", model);
+    }
 
     [HttpPost("incidents/new"), ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(IncidentHeaderForm form, CancellationToken ct)
+    public async Task<IActionResult> Create(IncidentReportForm form, string? intent, string? chosenIntent, CancellationToken ct)
     {
-        var result = await incidents.CreateAsync(form.ToInput(), ct);
-        if (result.Succeeded)
-        {
-            var reference = await db.Incidents.Where(i => i.Id == result.EntityId).Select(i => i.ReferenceId).FirstAsync(ct);
-            return Saved($"Incident report {reference} created. Add the students, timeline and actions.", $"/students/behaviour/incidents/{result.EntityId}", navigate: true);
-        }
-        AddErrors(result);
-        form.Suggestions = await incidents.SuggestionsAsync(ct);
-        return FormView("HeaderForm", form);
+        intent ??= chosenIntent;
+        // The same form sent twice (double click, refresh after a slow save): open the report created the first time.
+        var key = $"incident-submit:{form.SubmissionKey}";
+        if (form.SubmissionKey != Guid.Empty && cache.TryGetValue<int>(key, out var already)) return LocalRedirect(Details(already));
+        form.Id = null;
+        return await SaveReportAsync(form, intent, key, ct);
     }
+
+    /// <summary>Edit Report: the whole report in the same form.</summary>
+    [HttpGet("incidents/{id:int}/report")]
+    public async Task<IActionResult> EditReport(int id, CancellationToken ct)
+    {
+        var d = await incidents.GetAsync(id, ct);
+        if (d is null) return NotFound();
+        if (d.IsClosed)
+        {
+            Toast("This record is closed. Reopen it (with a reason) to make changes.", "warning");
+            return LocalRedirect(Details(id));
+        }
+        var model = IncidentReportForm.From(d);
+        model.School ??= (await settings.GetProfileAsync(ct)).SchoolName;
+        await FillReportAsync(model, ct);
+        return View("ReportForm", model);
+    }
+
+    [HttpPost("incidents/{id:int}/report"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditReport(int id, IncidentReportForm form, string? intent, string? chosenIntent, CancellationToken ct)
+    {
+        intent ??= chosenIntent;
+        form.Id = id;
+        return await SaveReportAsync(form, intent, null, ct);
+    }
+
+    private async Task<IActionResult> SaveReportAsync(IncidentReportForm form, string? intent, string? submissionKey, CancellationToken ct)
+    {
+        var draft = intent == "draft";
+        // Fields that could not be read (e.g. a date typed wrongly) are reported by the model binder.
+        if (ModelState.IsValid)
+        {
+            var result = await incidents.SaveReportAsync(form.Id, form.ToInput(), draft, ct);
+            if (result.Succeeded)
+            {
+                var id = result.EntityId!.Value;
+                if (submissionKey is not null) cache.Set(submissionKey, id, TimeSpan.FromMinutes(30));
+                var d = await incidents.GetAsync(id, ct);
+                Toast(d!.IsDraft
+                    ? $"Draft {d.Reference} saved. It can be completed later with Edit Report."
+                    : form.IsEdit ? $"Report {d.Reference} saved." : $"Incident report {d.Reference} created.");
+                return LocalRedirect(Details(id));
+            }
+            AddErrors(result);
+        }
+        if (form.Id is { } existing)
+        {
+            var d = await incidents.GetAsync(existing, ct);
+            if (d is null) return NotFound();
+            (form.Reference, form.IsDraft) = (d.Reference, d.IsDraft);
+        }
+        await FillReportAsync(form, ct);
+        Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
+        return View("ReportForm", form);
+    }
+
+    private async Task FillReportAsync(IncidentReportForm form, CancellationToken ct)
+    {
+        form.SchoolName = (await settings.GetProfileAsync(ct)).SchoolName;
+        form.StudentList = await StudentsAsync(ct);
+        form.Staff = await duties.StaffOptionsAsync(ct);
+        form.Suggestions = await incidents.SuggestionsAsync(ct);
+        form.Reference ??= await incidents.PreviewReferenceAsync(form.Date ?? SchoolWeek.Today, ct);
+    }
+
+    // ------------------------------------------------------------------ A. edit header (dialog on the report page)
 
     [HttpGet("incidents/{id:int}/edit")]
     public async Task<IActionResult> Edit(int id, CancellationToken ct)
@@ -299,7 +366,7 @@ public class BehaviourController(IIncidentService incidents, ISettingsService se
         if (d is null) return NotFoundResult("This incident report no longer exists.");
         return PageOrPartial("SignOffForm", new SignOffForm
         {
-            IncidentId = id, Reference = d.Reference, PreparedById = d.PreparedById ?? currentUser.StaffId,
+            IncidentId = id, Reference = d.Reference, PreparedById = d.PreparedById,
             School = d.SignOffSchool ?? (await settings.GetProfileAsync(ct)).SchoolName, ReportDate = d.ReportDate ?? SchoolWeek.Today,
             ReviewedById = d.ReviewedById, Approval = d.Approval, ApprovalNotes = d.ApprovalNotes, Staff = await duties.StaffOptionsAsync(ct),
         });

@@ -1,0 +1,182 @@
+@model ActivityDetailsViewModel
+@*
+    One activity's management page: overview, staff, classes, weekly schedule (add / remove meetings), history,
+    activate / deactivate, and delete — only when nothing is attached (otherwise deactivate keeps everything).
+*@
+@{
+    var a = Model.Activity;
+    ViewData["Title"] = a.Name;
+    ViewData["Nav"] = "MorningDuty";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var m = Model.Meeting;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties">Duties</a></li><li><a href="/duties/activities">Activities</a></li><li><span aria-current="page" dir="auto">@a.Name</span></li></ol>
+        <div class="profile">
+            <span class="activity-mark hub-card--@a.Color" aria-hidden="true">@Ui.Icon(a.Icon)</span>
+            <div>
+                <h1 class="page-title" dir="auto">@a.Name @if (!a.IsActive) { <span class="badge badge--neutral">Inactive</span> }</h1>
+                <p class="page-sub" dir="auto">@a.Description</p>
+            </div>
+        </div>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--primary" href="/duties/activities/@a.Id/edit">@Ui.Icon("pencil")Edit</a>
+        <form action="/duties/activities/@a.Id/status" method="post"
+              data-confirm="@(a.IsActive ? $"{a.Name} will be hidden from the Activities page. Its staff, classes, schedule and history are kept, and it can be activated again." : $"{a.Name} will appear on the Activities page again.")"
+              data-confirm-title="@(a.IsActive ? "Deactivate this activity?" : "Activate this activity?")" data-confirm-button="@(a.IsActive ? "Deactivate" : "Activate")" data-confirm-tone="@(a.IsActive ? "warning" : "primary")">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="active" value="@(a.IsActive ? "false" : "true")" />
+            <button class="btn btn--secondary" type="submit">@Ui.Icon("power")@(a.IsActive ? "Deactivate" : "Activate")</button>
+        </form>
+        @if (a.CanDelete)
+        {
+            <form action="/duties/activities/@a.Id/delete" method="post" data-confirm="@a.Name and its history will be deleted permanently." data-confirm-title="Delete this activity?" data-confirm-button="Delete">
+                @Html.AntiForgeryToken()
+                <button class="btn btn--soft-danger" type="submit">@Ui.Icon("trash")Delete</button>
+            </form>
+        }
+        else
+        {
+            <button class="btn btn--soft-danger" type="button" disabled title="It has staff, classes or scheduled meetings — deactivate it instead.">@Ui.Icon("trash")Delete</button>
+        }
+    </div>
+</div>
+
+<div class="activity-layout">
+    <div class="activity-col">
+        <section class="card" aria-labelledby="overview-title">
+            <div class="card__head"><h2 class="card__title" id="overview-title">@Ui.Icon("info")Overview</h2></div>
+            <div class="card__body">
+                <dl class="dl activity-dl">
+                    <dt>Status</dt><dd>@if (a.IsActive) { <span class="badge badge--success badge--dot">Active</span> } else { <span class="badge badge--neutral badge--dot">Inactive</span> }</dd>
+                    <dt>Category</dt><dd dir="auto">@(a.Category ?? "—")</dd>
+                    <dt>Department</dt><dd>@if (a.DepartmentId is { } d) { <a href="/staff/departments/@d">@a.DepartmentName</a> } else { @:—
+                    }</dd>
+                    <dt>Location</dt><dd dir="auto">@(a.Location ?? "—")</dd>
+                    <dt>Created</dt><dd>@Ui.DateTime(a.CreatedAt)@(a.CreatedBy is null ? "" : " · " + a.CreatedBy)</dd>
+                    <dt>Last changed</dt><dd>@Ui.DateTime(a.UpdatedAt)@(a.UpdatedBy is null ? "" : " · " + a.UpdatedBy)</dd>
+                </dl>
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="staff-title">
+            <div class="card__head"><h2 class="card__title" id="staff-title">@Ui.Icon("users")Assigned staff</h2><a class="btn btn--ghost btn--sm" href="/duties/activities/@a.Id/edit">Change</a></div>
+            @if (a.Staff.Count == 0)
+            {
+                <p class="muted activity-empty">No staff assigned yet.</p>
+            }
+            else
+            {
+                <ul class="list">
+                    @foreach (var s in a.Staff)
+                    {
+                        <li class="list__item">
+                            <span class="avatar avatar--@Ui.Tone(s.Name)" aria-hidden="true">@Ui.Initials(s.Name)</span>
+                            <div class="list__main"><span class="list__title" dir="auto">@s.Name</span><span class="list__meta" dir="auto">@(s.JobTitle ?? "")</span></div>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="card" aria-labelledby="classes-title">
+            <div class="card__head"><h2 class="card__title" id="classes-title">@Ui.Icon("door")Classes</h2><a class="btn btn--ghost btn--sm" href="/duties/activities/@a.Id/edit">Change</a></div>
+            <div class="card__body">
+                @if (a.Classes.Count == 0) { <p class="muted" style="margin:0">No classes assigned yet.</p> }
+                else { <div class="activity-chips">@foreach (var cl in a.Classes) { <span class="badge badge--class">@cl.Name</span> }</div> }
+            </div>
+        </section>
+    </div>
+
+    <div class="activity-col">
+        <section class="card" aria-labelledby="schedule-title" id="schedule">
+            <div class="card__head"><h2 class="card__title" id="schedule-title">@Ui.Icon("calendar")Weekly schedule</h2></div>
+            @if (a.Schedule.Count == 0)
+            {
+                <p class="muted activity-empty">No meetings scheduled yet. Add the days and times the activity meets.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="table table--stack">
+                        <thead><tr><th scope="col">Day</th><th scope="col">Time</th><th scope="col">Location</th><th scope="col">Notes</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var s in a.Schedule)
+                            {
+                                <tr>
+                                    <td data-label="Day"><strong>@ScheduleRules.DayName(s.Day)</strong></td>
+                                    <td data-label="Time" class="num">@s.Times</td>
+                                    <td data-label="Location" dir="auto">@(s.Location ?? a.Location ?? "—")</td>
+                                    <td data-label="Notes" dir="auto">@(s.Notes ?? "")</td>
+                                    <td class="col-actions">
+                                        <form action="/duties/activities/@a.Id/schedule/@s.Id/remove" method="post" data-confirm="The @ScheduleRules.DayName(s.Day) @s.Times meeting will be removed from the schedule." data-confirm-title="Remove this meeting?" data-confirm-button="Remove">
+                                            @Html.AntiForgeryToken()
+                                            <button class="btn btn--ghost btn--sm" type="submit" aria-label="Remove @ScheduleRules.DayName(s.Day) @s.Times">@Ui.Icon("trash", "icon--sm")</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            <form action="/duties/activities/@a.Id/schedule" method="post" class="card__body activity-meeting" data-loading autocomplete="off">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+                <div class="activity-meeting__grid">
+                    <div class="field">
+                        <label class="label" for="Meeting_Day">Day</label>
+                        <select class="select" id="Meeting_Day" name="Meeting.Day">
+                            <option value="">Choose…</option>
+                            @foreach (var d in ScheduleRules.Days) { <option value="@d" selected="@(m.Day == d)">@ScheduleRules.DayName(d)</option> }
+                        </select>
+                        <span asp-validation-for="Meeting.Day" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="Meeting_Start">Start</label>
+                        <input class="input picker" type="time" id="Meeting_Start" name="Meeting.Start" value="@m.Start?.ToString("HH:mm", c)" />
+                        <span asp-validation-for="Meeting.Start" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="Meeting_End">End</label>
+                        <input class="input picker" type="time" id="Meeting_End" name="Meeting.End" value="@m.End?.ToString("HH:mm", c)" />
+                        <span asp-validation-for="Meeting.End" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="Meeting_Location">Location</label>
+                        <input class="input" id="Meeting_Location" name="Meeting.Location" value="@m.Location" maxlength="@SchoolActivity.LocationMaxLength" dir="auto" placeholder="@(a.Location ?? "Optional")" />
+                        <span asp-validation-for="Meeting.Location" class="field-validation-error"></span>
+                    </div>
+                </div>
+                <div class="activity-meeting__foot">
+                    <input class="input" name="Meeting.Notes" value="@m.Notes" maxlength="@SchoolActivitySchedule.NotesMaxLength" dir="auto" placeholder="Notes (optional)" aria-label="Notes" />
+                    <button class="btn btn--secondary" type="submit">@Ui.Icon("plus")Add meeting</button>
+                </div>
+                <p class="hint">School days only; times are school (Cairo) time. A meeting may not overlap another meeting of this activity.</p>
+            </form>
+        </section>
+
+        <section class="card" aria-labelledby="history-title">
+            <div class="card__head"><h2 class="card__title" id="history-title">@Ui.Icon("clipboard-check")History</h2></div>
+            @if (a.History.Count == 0)
+            {
+                <p class="muted activity-empty">No history yet.</p>
+            }
+            else
+            {
+                <ol class="activity-history">
+                    @foreach (var h in a.History)
+                    {
+                        <li>
+                            <span class="activity-history__what"><strong>@h.Action</strong>@if (h.Details is not null) { <span dir="auto"> · @h.Details</span> }</span>
+                            <span class="activity-history__when">@Ui.DateTime(h.At)@(h.By is null ? "" : " · " + h.By)</span>
+                        </li>
+                    }
+                </ol>
+            }
+        </section>
+    </div>
+</div>

@@ -62,6 +62,7 @@
             }
             @if (Model.Editable)
             {
+                <a class="btn btn--secondary" href="/timetable/sessions/@s.Id/move" data-modal>@Ui.Icon("arrow-right")Move</a>
                 <a class="btn btn--primary" href="/timetable/sessions/@s.Id/edit" data-modal>@Ui.Icon("pencil")Edit session</a>
             }
         </div>

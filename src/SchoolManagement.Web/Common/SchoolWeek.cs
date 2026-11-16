@@ -20,7 +20,8 @@ public static class SchoolWeek
 
     public static DateOnly Current => StartOf(Today);
 
-    public static DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+    /// <summary>Today in school time (Africa/Cairo), not the server's or the browser's date.</summary>
+    public static DateOnly Today => SchoolTime.Today;
 
     public static DateOnly LastSchoolDay(DateOnly weekStart) => weekStart.AddDays(SchoolDays - 1);
 

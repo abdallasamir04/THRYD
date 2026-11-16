@@ -175,7 +175,9 @@ public partial class BelongingsTests(DbFixture fx)
         var s = await fx.NewStudentAsync(await ClassIdAsync("G8B"));
         var client = fx.Factory.CreateClient();
 
-        Assert.Contains("aria-current=\"page\"", (await client.GetStringAsync("/belongings/calendar")).Split("</aside>")[0]);
+        // The calendar is its own sidebar item (Academics → Academic Calendar), no longer inside Belongings.
+        Assert.Contains("href=\"/academic-calendar\" aria-current=\"page\"", (await client.GetStringAsync("/academic-calendar")).Split("</aside>")[0]);
+        Assert.DoesNotContain("/belongings/calendar", await client.GetStringAsync("/belongings"));
         var query = $"?quarterId={quarter.Id}&yearId={quarter.YearId}&week=1&date=2033-01-04&grade=G8&studentId={s.Id}";
 
         // Landing page: exactly two cards, each opening its own section.

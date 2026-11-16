@@ -4,14 +4,19 @@
     var r = Model.Result;
     string? StatusLabel(string? s) => s switch
     {
-        "open" => "Open", "overdue" => "Overdue", "todo" => "To Do", "in-progress" => "In Progress",
-        "on-hold" => "On Hold", "completed" => "Completed", _ => null,
+        "open" => "Open", "overdue" => "Overdue", "todo" or "pending" => "Pending", "in-progress" => "In Progress",
+        "on-hold" => "On Hold", "completed" => "Completed", "cancelled" => "Cancelled", _ => null,
     };
     string? DueLabel(string? s) => s switch
     {
         "overdue" => "Overdue", "today" => "Due today", "week" => "Next 7 days", "later" => "Due later", "none" => "No due date", _ => null,
     };
-    var memberName = q.MemberId is { } mid && !Model.ForMember ? Model.Members.FirstOrDefault(m => m.Id == mid)?.FullName : null;
+    string? NameOf(int? id) => id is { } v ? Model.Staff.FirstOrDefault(s => s.Id == v)?.FullName : null;
+    var memberName = Model.ForMember ? null : NameOf(q.MemberId);
+    var reviewerName = NameOf(q.ReviewerId);
+    var department = q.Department == "management" ? "Management Team"
+        : int.TryParse(q.Department, out var deptId) ? Model.Departments.FirstOrDefault(d => d.Id == deptId)?.Name : null;
+    var mine = q.Mine switch { "assigned" => "Assigned to me", "created" => "Created by me", "review" => "Submitted to me", _ => null };
 }
 
 <div class="results-bar">
@@ -21,9 +26,22 @@
         {
             <span class="filter-chip">Search: “@q.Search.Trim()”<a href="@Context.Request.WithQuery(("search", null), ("page", null))" data-list-link aria-label="Clear search">@Ui.Icon("x", "icon--sm")</a></span>
         }
+        @* People / department chips reload the whole page, so the summary counts follow. *@
+        @if (mine is not null)
+        {
+            <span class="filter-chip">@mine<a href="@Context.Request.WithQuery(("mine", null), ("page", null))" aria-label="Clear “@mine”">@Ui.Icon("x", "icon--sm")</a></span>
+        }
         @if (memberName is not null)
         {
-            <span class="filter-chip" dir="auto">@memberName<a href="@Context.Request.WithQuery(("memberId", null), ("page", null))" data-list-link aria-label="Clear member filter">@Ui.Icon("x", "icon--sm")</a></span>
+            <span class="filter-chip" dir="auto">Assigned to: @memberName<a href="@Context.Request.WithQuery(("memberId", null), ("page", null))" aria-label="Clear assigned-to filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (reviewerName is not null)
+        {
+            <span class="filter-chip" dir="auto">Submitted to: @reviewerName<a href="@Context.Request.WithQuery(("reviewerId", null), ("page", null))" aria-label="Clear reviewer filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (department is not null)
+        {
+            <span class="filter-chip">Department: @department<a href="@Context.Request.WithQuery(("department", null), ("page", null))" aria-label="Clear department filter">@Ui.Icon("x", "icon--sm")</a></span>
         }
         @if (StatusLabel(q.Status) is { } sl)
         {
@@ -31,7 +49,7 @@
         }
         @if (!string.IsNullOrWhiteSpace(q.Priority))
         {
-            <span class="filter-chip">Priority: @q.Priority<a href="@Context.Request.WithQuery(("priority", null), ("page", null))" data-list-link aria-label="Clear priority filter">@Ui.Icon("x", "icon--sm")</a></span>
+            <span class="filter-chip">Priority: @(TaskLabels.ParsePriority(q.Priority) is { } pr ? TaskLabels.Priority(pr) : q.Priority)<a href="@Context.Request.WithQuery(("priority", null), ("page", null))" data-list-link aria-label="Clear priority filter">@Ui.Icon("x", "icon--sm")</a></span>
         }
         @if (DueLabel(q.Due) is { } dl)
         {
@@ -47,7 +65,7 @@
         <div class="empty">
             <span class="empty__icon">@Ui.Icon("clipboard-check")</span>
             <p class="empty__title">No tasks yet</p>
-            <p class="empty__text">Create a task, assign it to a Management Team member and set its priority and due date.</p>
+            <p class="empty__text">@(q.HasScope ? "No task matches these people or this department." : "Create a task, assign it to any staff member and set its priority, due date and files.")</p>
             <div class="empty__actions">
                 <a class="btn btn--primary" href="/management/tasks/create@(Model.ForMember ? $"?memberId={q.MemberId}" : "")" data-modal>@Ui.Icon("plus")New task</a>
             </div>

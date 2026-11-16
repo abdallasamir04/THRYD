@@ -1,0 +1,123 @@
+@model ActivityFormModel
+@*
+    Add / edit an activity. Required: name and short description. Optional: category, location, icon, colour,
+    department, staff, classes and status. The weekly schedule is set later on the activity's page.
+    The server validates everything (unique name, allowed icon and colour, existing department / staff / classes).
+*@
+@{
+    var heading = Model.IsEdit ? $"Edit {Model.Name}" : "Add Activity";
+    ViewData["Title"] = heading;
+    ViewData["Nav"] = "MorningDuty";
+    var action = Model.IsEdit ? $"/duties/activities/{Model.Id}/edit" : "/duties/activities/new";
+    var back = Model.IsEdit ? $"/duties/activities/{Model.Id}" : "/duties/activities";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs">
+            <li><a href="/">Dashboard</a></li><li><a href="/duties">Duties</a></li><li><a href="/duties/activities">Activities</a></li>
+            @if (Model.IsEdit) { <li><a href="@back" dir="auto">@Model.Name</a></li> }
+            <li><span aria-current="page">@(Model.IsEdit ? "Edit" : "Add Activity")</span></li>
+        </ol>
+        <h1 class="page-title" dir="auto">@heading</h1>
+        <p class="page-sub">@(Model.IsEdit ? "Change the activity's details, look, staff and classes. Its schedule is managed on the activity's page." : "Only the name and a short description are needed now; everything else can be set later.")</p>
+    </div>
+</div>
+
+<form action="@action" method="post" class="card activity-form" data-loading autocomplete="off">
+    @Html.AntiForgeryToken()
+    <div class="card__body form-grid">
+        <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+        <h2 class="activity-form__section">Details</h2>
+        <div class="form-grid form-grid--2">
+            <div class="field">
+                <label class="label" asp-for="Name">Activity name <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Name" maxlength="@SchoolActivity.NameMaxLength" dir="auto" placeholder="e.g. Art Club" data-autofocus />
+                <span asp-validation-for="Name" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Category">Category <span class="faint" style="font-weight:600">(optional)</span></label>
+                <input class="input" asp-for="Category" maxlength="@SchoolActivity.CategoryMaxLength" list="activity-categories" dir="auto" placeholder="e.g. Arts, Music, Events" />
+                <datalist id="activity-categories">@foreach (var c in Model.Categories) { <option value="@c"></option> }</datalist>
+                <span asp-validation-for="Category" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="field">
+            <label class="label" asp-for="Description">Short description <span class="req" aria-hidden="true">*</span></label>
+            <textarea class="input" asp-for="Description" rows="2" maxlength="@SchoolActivity.DescriptionMaxLength" dir="auto" placeholder="What the activity is about, in a sentence or two."></textarea>
+            <span asp-validation-for="Description" class="field-validation-error"></span>
+        </div>
+        <div class="form-grid form-grid--2">
+            <div class="field">
+                <label class="label" asp-for="Location">Location <span class="faint" style="font-weight:600">(optional)</span></label>
+                <input class="input" asp-for="Location" maxlength="@SchoolActivity.LocationMaxLength" dir="auto" placeholder="e.g. Art room, Main hall" />
+                <span asp-validation-for="Location" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="DepartmentId">Department <span class="faint" style="font-weight:600">(optional)</span></label>
+                <select class="select" asp-for="DepartmentId" data-searchable>
+                    <option value="">No department</option>
+                    @foreach (var d in Model.Departments) { <option value="@d.Id" selected="@(Model.DepartmentId == d.Id)">@d.Name</option> }
+                </select>
+                <span asp-validation-for="DepartmentId" class="field-validation-error"></span>
+            </div>
+        </div>
+
+        <h2 class="activity-form__section">Look</h2>
+        <fieldset class="field">
+            <legend class="label">Icon</legend>
+            <div class="icon-picks" role="radiogroup" aria-label="Icon">
+                @foreach (var i in ActivityStyles.Icons)
+                {
+                    <label class="icon-pick" title="@i"><input type="radio" name="Icon" value="@i" checked="@(Model.Icon == i)" /><span>@Ui.Icon(i)<span class="visually-hidden">@i</span></span></label>
+                }
+            </div>
+            <span asp-validation-for="Icon" class="field-validation-error"></span>
+        </fieldset>
+        <fieldset class="field">
+            <legend class="label">Colour</legend>
+            <div class="color-picks" role="radiogroup" aria-label="Colour">
+                @foreach (var c in ActivityStyles.Colors)
+                {
+                    <label class="color-pick color-pick--@c" title="@c"><input type="radio" name="Color" value="@c" checked="@(Model.Color == c)" /><span><span class="visually-hidden">@c</span></span></label>
+                }
+            </div>
+            <span asp-validation-for="Color" class="field-validation-error"></span>
+        </fieldset>
+
+        <h2 class="activity-form__section">People</h2>
+        <fieldset class="field">
+            <legend class="label">Assigned staff <span class="faint" style="font-weight:600">(optional · @Model.StaffIds.Count selected)</span></legend>
+            <div class="input-icon pick-search">@Ui.Icon("search")<input class="input input--sm" type="search" placeholder="Find staff…" aria-label="Find staff" data-filter-cards="#activity-staff" autocomplete="off" /></div>
+            <div class="pick-list" id="activity-staff">
+                @foreach (var s in Model.Staff)
+                {
+                    <label class="pick-row" data-card-text="@s.FullName @s.JobTitle"><input type="checkbox" name="StaffIds" value="@s.Id" checked="@Model.StaffIds.Contains(s.Id)" /><span dir="auto">@s.FullName</span>@if (s.JobTitle is not null) { <span class="faint" dir="auto">@s.JobTitle</span> }</label>
+                }
+            </div>
+            <span asp-validation-for="StaffIds" class="field-validation-error"></span>
+        </fieldset>
+        <fieldset class="field">
+            <legend class="label">Classes taking part <span class="faint" style="font-weight:600">(optional)</span></legend>
+            <div class="day-picks">
+                @foreach (var c in Model.Classes)
+                {
+                    <label class="day-pick"><input type="checkbox" name="ClassIds" value="@c.Id" checked="@Model.ClassIds.Contains(c.Id)" /><span>@c.Name</span></label>
+                }
+            </div>
+            <span asp-validation-for="ClassIds" class="field-validation-error"></span>
+        </fieldset>
+
+        <label class="switch">
+            <input type="checkbox" name="IsActive" value="true" checked="@Model.IsActive" />
+            <span class="switch__track" aria-hidden="true"></span>
+            <span>Active (inactive activities keep all their records and are hidden from the Activities page until shown)</span>
+        </label>
+        <input type="hidden" name="IsActive" value="false" />
+    </div>
+    <div class="card__foot activity-form__foot">
+        <a class="btn btn--secondary" href="@back">Cancel</a>
+        <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Create activity")</button>
+    </div>
+</form>

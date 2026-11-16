@@ -229,12 +229,12 @@ public class StaffStructureTests(DbFixture fx)
         var tasks = Tasks(db);
         var due = SchoolWeek.Today.AddDays(3);
 
-        var created = await tasks.CreateAsync(new TaskInput { MemberId = member, Title = "  Plan   open day ", Priority = TaskPriority.High, DueDate = due, DueTime = new TimeOnly(9, 30), Description = "Agenda" });
+        var created = await tasks.CreateAsync(new TaskInput { AssignedToId = member, Title = "  Plan   open day ", Priority = TaskPriority.High, DueDate = due, DueTime = new TimeOnly(9, 30), Description = "Agenda" });
         Assert.True(created.Succeeded, string.Join("; ", created.Errors.Select(e => e.Value)));
         var id = created.EntityId!.Value;
 
         var saved = await db.ManagementTasks.AsNoTracking().SingleAsync(t => t.Id == id);
-        Assert.Equal(("Plan open day", member, due, new TimeOnly(9, 30), ManagementTaskStatus.ToDo), (saved.Title, saved.ManagementMemberId, saved.DueDate!.Value, saved.DueTime!.Value, saved.Status));
+        Assert.Equal(("Plan open day", member, due, new TimeOnly(9, 30), ManagementTaskStatus.ToDo), (saved.Title, saved.AssignedToId, saved.DueDate!.Value, saved.DueTime!.Value, saved.Status));
 
         var mine = await tasks.ListAsync(new TaskListQuery { MemberId = member });
         Assert.Equal(id, Assert.Single(mine.Items).Id);
@@ -242,11 +242,17 @@ public class StaffStructureTests(DbFixture fx)
         Assert.Single((await tasks.ListAsync(new TaskListQuery { MemberId = member, Priority = "high", Due = "week", Status = "open" })).Items);
         Assert.Empty((await tasks.ListAsync(new TaskListQuery { MemberId = member, Priority = "low" })).Items);
 
-        // Teachers never receive Management Team tasks; a time needs a date; a new task cannot be due in the past.
-        Assert.Contains((await tasks.CreateAsync(new TaskInput { MemberId = teacher, Title = "X" })).Errors, e => e.Key == "MemberId" && e.Value.Contains("academic staff"));
-        Assert.Contains((await tasks.CreateAsync(new TaskInput { MemberId = member, Title = "X", DueTime = new TimeOnly(8, 0) })).Errors, e => e.Key == "DueTime");
-        Assert.Contains((await tasks.CreateAsync(new TaskInput { MemberId = member, Title = "X", DueDate = SchoolWeek.Today.AddDays(-1) })).Errors, e => e.Key == "DueDate");
-        Assert.Contains((await tasks.CreateAsync(new TaskInput { MemberId = member, Title = " " })).Errors, e => e.Key == "Title");
+        // Any staff member can carry out a task (a teacher too); the reviewer must be someone else; a time needs a
+        // date; a new task cannot be due in the past.
+        var forTeacher = await tasks.CreateAsync(new TaskInput { AssignedToId = teacher, ReviewerId = member, Title = "Mark the Arabic mock exam" });
+        Assert.True(forTeacher.Succeeded, string.Join("; ", forTeacher.Errors.Select(e => e.Value)));
+        Assert.True((await tasks.DeleteAsync(forTeacher.EntityId!.Value)).Succeeded);
+        Assert.Contains((await tasks.CreateAsync(new TaskInput { AssignedToId = member, ReviewerId = member, Title = "X" })).Errors, e => e.Key == "ReviewerId");
+        Assert.Contains((await tasks.CreateAsync(new TaskInput { AssignedToId = 987654, Title = "X" })).Errors, e => e.Key == "AssignedToId");
+        Assert.Contains((await tasks.CreateAsync(new TaskInput { Title = "X" })).Errors, e => e.Key == "AssignedToId");
+        Assert.Contains((await tasks.CreateAsync(new TaskInput { AssignedToId = member, Title = "X", DueTime = new TimeOnly(8, 0) })).Errors, e => e.Key == "DueTime");
+        Assert.Contains((await tasks.CreateAsync(new TaskInput { AssignedToId = member, Title = "X", DueDate = SchoolWeek.Today.AddDays(-1) })).Errors, e => e.Key == "DueDate");
+        Assert.Contains((await tasks.CreateAsync(new TaskInput { AssignedToId = member, Title = " " })).Errors, e => e.Key == "Title");
 
         Assert.True((await tasks.SetStatusAsync(id, ManagementTaskStatus.Completed)).Succeeded);
         var done = await db.ManagementTasks.AsNoTracking().SingleAsync(t => t.Id == id);
@@ -258,7 +264,7 @@ public class StaffStructureTests(DbFixture fx)
         Assert.Null((await db.ManagementTasks.AsNoTracking().SingleAsync(t => t.Id == id)).CompletedAt);
 
         // Reassigning moves the task and logs it on both members' histories.
-        Assert.True((await tasks.UpdateAsync(id, new TaskInput { MemberId = other, Title = "Plan open day", Priority = TaskPriority.Urgent, DueDate = due, Status = ManagementTaskStatus.InProgress })).Succeeded);
+        Assert.True((await tasks.UpdateAsync(id, new TaskInput { AssignedToId = other, Title = "Plan open day", Priority = TaskPriority.Critical, DueDate = due, Status = ManagementTaskStatus.InProgress })).Succeeded);
         Assert.Single((await tasks.ListAsync(new TaskListQuery { MemberId = other })).Items);
         Assert.Contains(await tasks.HistoryAsync(member, 50), h => h.Action == TaskHistoryAction.Reassigned);
         Assert.Contains(await tasks.HistoryAsync(other, 50), h => h.Action == TaskHistoryAction.Reassigned);
@@ -276,8 +282,8 @@ public class StaffStructureTests(DbFixture fx)
         var member = await NewManagerAsync();
         await using var db = fx.NewContext();
         // An old task, inserted directly (the form does not allow new past due dates).
-        db.ManagementTasks.Add(new ManagementTask { ManagementMemberId = member, Title = "Late report", DueDate = SchoolWeek.Today.AddDays(-2), Status = ManagementTaskStatus.InProgress, Priority = TaskPriority.Medium });
-        db.ManagementTasks.Add(new ManagementTask { ManagementMemberId = member, Title = "Old but done", DueDate = SchoolWeek.Today.AddDays(-2), Status = ManagementTaskStatus.Completed, Priority = TaskPriority.Low });
+        db.ManagementTasks.Add(new ManagementTask { AssignedToId = member, Title = "Late report", DueDate = SchoolWeek.Today.AddDays(-2), Status = ManagementTaskStatus.InProgress, Priority = TaskPriority.Medium });
+        db.ManagementTasks.Add(new ManagementTask { AssignedToId = member, Title = "Old but done", DueDate = SchoolWeek.Today.AddDays(-2), Status = ManagementTaskStatus.Completed, Priority = TaskPriority.Low });
         await db.SaveChangesAsync();
 
         var tasks = Tasks(db);
@@ -289,7 +295,7 @@ public class StaffStructureTests(DbFixture fx)
         Assert.Equal(1, (await Management(db).GetAsync(member))!.OverdueTasks);
 
         // Editing an overdue task without changing its date is allowed.
-        Assert.True((await tasks.UpdateAsync(row.Id, new TaskInput { MemberId = member, Title = "Late report", DueDate = row.DueDate, Notes = "Chased", Status = ManagementTaskStatus.InProgress })).Succeeded);
+        Assert.True((await tasks.UpdateAsync(row.Id, new TaskInput { AssignedToId = member, Title = "Late report", DueDate = row.DueDate, Notes = "Chased", Status = ManagementTaskStatus.InProgress })).Succeeded);
     }
 
     private sealed class TestUser : ICurrentUser

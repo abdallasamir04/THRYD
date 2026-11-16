@@ -11,14 +11,14 @@
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/members">Team Members</a></li><li dir="auto">@m.FullName</li></ol>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/leadership">School Leadership</a></li><li dir="auto">@m.FullName</li></ol>
         <div class="profile">
             <span class="avatar avatar--lg avatar--@Ui.Tone(m.FullName)" aria-hidden="true">@Ui.Initials(m.FullName)</span>
             <div>
                 <h1 class="page-title" dir="auto">@m.FullName</h1>
                 <p class="page-sub">
                     <span class="badge @(m.Position is null ? "badge--neutral" : "badge--primary")">@Ui.Icon(m.Position is { } p ? ManagementPositions.Icon(p) : "briefcase")@m.PositionName</span>
-                    <span>Management Team</span>
+                    <span>School Leadership</span>
                 </p>
             </div>
         </div>
@@ -62,7 +62,7 @@
             <div class="card__head"><h2 class="card__title" id="info-title">@Ui.Icon("user")Profile</h2></div>
             <div class="card__body">
                 <dl class="dl" style="font-size:0.875rem">
-                    <dt>Position</dt><dd>@m.PositionName</dd>
+                    <dt>Position</dt><dd>@if (m.Position is { } cp) { <a href="@ManagementPositions.Href(cp)">@m.PositionName</a> } else { <span class="faint">@m.PositionName</span> }</dd>
                     <dt>Contact</dt>
                     <dd>@if (!string.IsNullOrEmpty(m.ContactNumber)) { <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@m.ContactNumber</a> } else { <span class="faint">Not set</span> }</dd>
                     <dt>Email</dt>
@@ -72,13 +72,13 @@
                 </dl>
                 @if (Model.Positions.Count > 0)
                 {
-                    <p class="dept-card__label" style="margin:16px 0 8px">Position history</p>
+                    <p class="dept-card__label" style="margin:16px 0 8px">Appointment history</p>
                     <ol class="timeline">
                         @foreach (var ph in Model.Positions)
                         {
                             <li class="timeline__item @(ph.IsCurrent ? "timeline__item--accepted" : "timeline__item--withdrawn")">
                                 <span class="timeline__when">@ph.StartDate.ToString("d MMM yyyy", c) – @(ph.IsCurrent ? "now" : ph.EndDate?.ToString("d MMM yyyy", c))</span>
-                                <strong>@ManagementPositions.Name(ph.Position)</strong>
+                                <a href="@ManagementPositions.Href(ph.Position)"><strong>@ManagementPositions.Name(ph.Position)</strong></a>
                                 @if (ph.EndReason is not null) { <span class="timeline__note" dir="auto">@ph.EndReason</span> }
                             </li>
                         }

@@ -1,99 +1,75 @@
-@model ArrivalChecklistViewModel
+@model DailyAttendanceViewModel
+@*
+    School Attendance → Daily Attendance: today (school time, Africa/Cairo) by default; choose a class; click a student when
+    they arrive. The server records the moment of the click and works out Present / Late (late after the threshold).
+    Absent and corrections are separate actions. History and reports are on their own page (/arrivals/history).
+*@
 @{
     ViewData["Title"] = "School Attendance";
     ViewData["Nav"] = "Arrivals";
-    var c = Model.Checklist;
-    var date = SchoolWeek.Iso(c.Date);
+    var date = SchoolWeek.Iso(Model.Date);
+    var isToday = Model.Day.IsToday;
 }
+<span data-refresh-on-save hidden></span>
 
-@*
-    Layout: page head → date bar → session card (class + recording defaults, then the confirmation toggle and
-    the late-after deadline on their own row) → summary tiles → checklist card (toolbar, table, save bar).
-    Spacing rules live under "Student attendance" in operations.css.
-*@
-<div class="page-head arrival-head">
+<div class="page-head sa-head">
     <div class="page-head__text">
         <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/attendance?date=@date">Student Attendance</a></li><li>School Attendance</li></ol>
         <h1 class="page-title">School Attendance</h1>
-        <p class="page-sub">Record each student's arrival for the day. Students without a record are shown as “Not recorded” — never as absent. Three consecutive school-day absences raise an alert.</p>
     </div>
     <div class="page-head__actions">
         <a class="btn btn--secondary" href="/attendance/alerts?type=absences">@Ui.Icon("alert-triangle")Absence alerts</a>
-        <partial name="_Download" model='DownloadLink.Report("/arrivals/pdf")' />
     </div>
 </div>
 
-<div class="arrival-daynav">
-    <partial name="_DayNav" model="c.Date" />
-</div>
+<nav class="segmented sa-tabs" aria-label="School Attendance">
+    <a href="/arrivals" aria-current="true">@Ui.Icon("check-circle", "icon--sm")Daily Attendance</a>
+    <a href="/arrivals/history">@Ui.Icon("chart", "icon--sm")Attendance History &amp; Reports</a>
+</nav>
 
-<section class="card arrival-session" aria-label="Session settings">
-    @* arrivals.js reads #session-receiver, #session-location, #session-method and #session-confirmed inside [data-arrival-session]. *@
-    <div class="arrival-session__body" data-arrival-session>
-        <div class="arrival-session__fields">
-            @* The class picker reloads the page; display: contents lets its field sit in the same grid as the defaults. *@
-            <form class="arrival-session__filter" method="get" action="/arrivals">
-                <input type="hidden" name="date" value="@date" />
-                <div class="field">
-                    <label class="label" for="classId">Class</label>
-                    <select class="select" id="classId" name="classId" data-searchable data-autosubmit>
-                        <option value="">All classes</option>
-                        @foreach (var cls in Model.Classes)
-                        {
-                            <option value="@cls.Id" selected="@(c.ClassId == cls.Id)" data-note="@(cls.IsActive ? null : "Inactive")">@cls.Name</option>
-                        }
-                    </select>
-                </div>
-            </form>
-            <div class="field">
-                <label class="label" for="session-receiver">Received by</label>
-                <select class="select" id="session-receiver" data-searchable>
-                    <option value="">Not recorded</option>
-                    @foreach (var s in Model.Staff)
-                    {
-                        <option value="@s.Id" selected="@(Model.OperatorStaffId == s.Id)" data-note="@s.JobTitle">@s.FullName</option>
-                    }
-                </select>
-            </div>
-            <div class="field">
-                <label class="label" for="session-location">Arrival location</label>
-                <input class="input" id="session-location" maxlength="120" placeholder="e.g. Main gate" dir="auto" />
-            </div>
-            <div class="field">
-                <label class="label" for="session-method">Default method</label>
-                <select class="select" id="session-method">
-                    <option value="">None</option>
-                    @foreach (var m in Enum.GetValues<ArrivalMethod>())
-                    {
-                        <option value="@m">@Arrivals.Method(m)</option>
-                    }
-                </select>
-            </div>
+<section class="sa-today" aria-label="Day">
+    <div class="sa-today__date">
+        <span class="sa-today__icon">@Ui.Icon("calendar")</span>
+        <div>
+            <span class="sa-today__eyebrow">@(isToday ? "Today" : Model.Day.IsFuture ? "Upcoming day" : "Past day")</span>
+            <strong class="sa-today__day">@Model.Date.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</strong>
         </div>
-        <div class="arrival-session__foot">
-            <label class="switch">
-                <input type="checkbox" id="session-confirmed" />
-                <span class="switch__track" aria-hidden="true"></span>
-                <span>Receiving confirmed</span>
-            </label>
-            <div class="deadline-chip @(c.Deadline is null ? "is-missing" : "")">
-                @Ui.Icon("clock", "icon--sm")
-                @if (c.Deadline is { } dl)
-                {
-                    <span>Late after <strong>@dl.ToString("HH:mm")</strong></span>
-                }
-                else
-                {
-                    <span>No arrival deadline set — <a href="/settings#arrival">set it in Settings</a> to mark late arrivals.</span>
-                }
-            </div>
-        </div>
+    </div>
+    @if (isToday)
+    {
+        <div class="sa-today__clock" title="School time (Cairo)">@Ui.Icon("clock")<span data-att-clock>@Arrivals.Time(TimeOnly.FromDateTime(SchoolTime.Current.Now))</span><small>Cairo</small></div>
+    }
+    <span class="sa-rule">@Ui.Icon("info", "icon--sm")@(Model.Rules.Start is { } start ? $"Present until {Arrivals.Time(start)} · Late after · " : "")Registration closes @Arrivals.Time(Model.Rules.Cutoff)</span>
+    <div class="sa-today__nav">
+        <a class="icon-btn icon-btn--bordered" href="@Context.Request.WithQuery(("date", SchoolWeek.Iso(Model.Date.AddDays(-1))))" aria-label="Previous day" title="Previous day">@Ui.Icon("chevron-left")</a>
+        <form method="get" action="/arrivals" class="sa-today__picker">
+            @if (Model.ClassId is { } cid) { <input type="hidden" name="classId" value="@cid" /> } else if (Model.AllClasses) { <input type="hidden" name="classId" value="all" /> }
+            <label class="visually-hidden" for="sa-date">Go to date</label>
+            <input class="input picker" type="date" id="sa-date" name="date" value="@date" max="@SchoolWeek.Iso(SchoolWeek.Today)" data-datepicker data-autosubmit data-empty-text="Choose a date" />
+        </form>
+        @if (!isToday)
+        {
+            <a class="icon-btn icon-btn--bordered" href="@Context.Request.WithQuery(("date", SchoolWeek.Iso(Model.Date.AddDays(1))))" aria-label="Next day" title="Next day">@Ui.Icon("chevron-right")</a>
+            <a class="btn btn--primary btn--sm" href="@Context.Request.WithQuery(("date", null))">Back to today</a>
+        }
     </div>
 </section>
 
-@Html.AntiForgeryToken()
-<div id="arrival-list" class="arrival-list" data-ajax-list aria-live="polite">
-    <partial name="_Checklist" model="Model" />
+<form class="sa-class" method="get" action="/arrivals" data-list-filter="#sa-daily" aria-label="Class">
+    @if (!isToday) { <input type="hidden" name="date" value="@date" /> }
+    <label class="sa-class__label" for="sa-class">@Ui.Icon("door", "icon--sm")Class</label>
+    <select class="select" id="sa-class" name="classId" data-searchable>
+        <option value="">Choose a class…</option>
+        <option value="all" selected="@Model.AllClasses">All classes</option>
+        @foreach (var cls in Model.Classes)
+        {
+            <option value="@cls.Id" selected="@(Model.ClassId == cls.Id)" data-note="@(cls.IsActive ? $"{cls.StudentCount} students" : "Inactive")">@cls.Name</option>
+        }
+    </select>
+</form>
+
+<div id="sa-daily" data-ajax-list aria-live="polite">
+    <partial name="_Daily" model="Model" />
 </div>
 
 @section Scripts {

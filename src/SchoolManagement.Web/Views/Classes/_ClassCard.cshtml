@@ -7,7 +7,7 @@
 }
 <li class="class-card @(c.IsActive ? "" : "is-inactive")">
     <div class="class-card__top">
-        <a href="/students?classId=@c.Id" style="text-decoration:none"><span class="class-card__code">@c.Name</span></a>
+        <a href="/classes/@c.Id" style="text-decoration:none" title="Open @c.Name"><span class="class-card__code">@c.Name</span></a>
         <div style="display:flex;gap:4px;align-items:center">
             @if (isFull)
             {

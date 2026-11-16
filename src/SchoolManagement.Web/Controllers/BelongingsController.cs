@@ -32,7 +32,6 @@ public class BelongingsController(IBelongingsService belongings, ITimetableServi
                 new("/belongings/academic", "graduation-cap", "Academic Belongings",
                     "Book and Copy Book per subject, chosen by department and subject.", "Green · Red · N/A per subject", "blue"),
             ],
-            Extra = [("Academic calendar", "/belongings/calendar", "calendar")],
         });
     }
 
@@ -116,37 +115,20 @@ public class BelongingsController(IBelongingsService belongings, ITimetableServi
     public async Task<IActionResult> DeleteMaterial(int id, string? back, CancellationToken ct) =>
         Done(await belongings.DeleteMaterialAsync(id, ct), "Subject record removed.", back);
 
-    // ------------------------------------------------------------------ calendar (academic years and quarters)
+    // ------------------------------------------------------------------ former calendar addresses (now Academics → Academic Calendar)
 
     [HttpGet("calendar")]
-    public async Task<IActionResult> Calendar(CancellationToken ct) => View(await belongings.YearsAsync(ct));
-
-    [HttpPost("years"), ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateYear(string? name, CancellationToken ct) =>
-        Done(await belongings.CreateYearAsync(name, ct), $"Academic year {name?.Trim()} added with four quarters. Set each quarter's dates.", "/belongings/calendar");
+    public IActionResult Calendar() => RedirectPermanent(AcademicCalendarController.Href);
 
     [HttpGet("quarters/{id:int}/edit")]
-    public async Task<IActionResult> EditQuarter(int id, CancellationToken ct)
-    {
-        var q = await belongings.QuarterAsync(id, ct);
-        if (q is null) return NotFoundResult("This quarter no longer exists.");
-        return PageOrPartial("QuarterForm", new QuarterFormModel { Id = id, Name = q.Name, StartDate = q.StartDate, EndDate = q.EndDate, Quarter = q });
-    }
+    public IActionResult EditQuarter(int id) => RedirectPermanent($"{AcademicCalendarController.Href}/quarters/{id}/edit");
 
-    [HttpPost("quarters/{id:int}/edit"), ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditQuarter(int id, QuarterFormModel model, CancellationToken ct)
-    {
-        model.Id = id;
-        model.Quarter = await belongings.QuarterAsync(id, ct);
-        if (model.Quarter is null) return NotFoundResult("This quarter no longer exists.");
-        if (ModelState.IsValid)
-        {
-            var result = await belongings.UpdateQuarterAsync(id, model.Name, model.StartDate, model.EndDate, ct);
-            if (result.Succeeded) return Done(result, $"{model.Name.Trim()} saved: 8 school weeks.", "/belongings/calendar");
-            AddErrors(result);
-        }
-        return FormView("QuarterForm", model);
-    }
+    /// <summary>A form still open on an old page: forwarded with its method and fields (307/308).</summary>
+    [HttpPost("years")]
+    public IActionResult CreateYear() => RedirectPermanentPreserveMethod($"{AcademicCalendarController.Href}/years");
+
+    [HttpPost("quarters/{id:int}/edit")]
+    public IActionResult EditQuarterPost(int id) => RedirectPermanentPreserveMethod($"{AcademicCalendarController.Href}/quarters/{id}/edit");
 
     // ------------------------------------------------------------------ helpers
 

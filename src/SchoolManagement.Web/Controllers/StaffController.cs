@@ -9,7 +9,8 @@ namespace SchoolManagement.Web.Controllers;
 /// <summary>Staff & Departments management, duty history and supervisor evaluations.</summary>
 [Route("staff")]
 public class StaffController(IStaffDutyService staffDuty, IDutyService duties, IWorkloadService workload, ITeacherService teachers, ICurrentUser currentUser,
-    IDepartmentService departments, IManagementService management, IManagementTaskService tasks, ITimetableService timetable) : AppController
+    IDepartmentService departments, IManagementService management, IManagementTaskService tasks, ITimetableService timetable, IClassTeamService classTeams,
+    IStaffDirectoryService directory) : AppController
 {
     /// <summary>
     /// Staff landing page: choose Academic Staff or Management Team. ?view=duties (the old Staff Duty Records
@@ -43,8 +44,17 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
                     "Manage school management members, positions, and individual tasks.",
                     $"{Ui.Plural(await management.CountAsync(ct), "member", "members")} · {taskCounts.Open} open tasks", "blue"),
             ],
+            Extra = [("All School Staff — the whole workforce in one directory", "/staff/all", "users")],
         });
     }
+
+    /// <summary>
+    /// Staff → All School Staff: every staff record (academic, Management Team, administrative and support), each person
+    /// once, with search and filters. Cards open the person's existing profile.
+    /// </summary>
+    [HttpGet("all")]
+    public async Task<IActionResult> All([FromQuery] StaffDirectoryQuery query, CancellationToken ct) =>
+        View("All", new StaffDirectoryViewModel { Query = query, Directory = await directory.LoadAsync(query, ct) });
 
     /// <summary>Staff Duty Records → Download Report (same search as the page).</summary>
     [HttpGet("duty-records/pdf")]
@@ -103,7 +113,7 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
                     $"{classes.Count(c => c.Sessions > 0)} of {classes.Count} classes timetabled", "indigo"),
                 new("/timetable/teachers", "calendar", "Teacher Timetable", "Each teacher's week, built from the same class timetable sessions.", null, "cyan"),
             ],
-            Extra = [("Time slots", "/timetable/slots", "clock"), ($"{slots.Count(s => s.HasTimes)} of {slots.Count} slots have times", "/timetable/slots", "info")],
+            Extra = [("Periods", "/timetable/periods", "clock"), ($"{slots.Count(s => s.HasTimes)} of {slots.Count} school-wide periods have times", "/timetable/periods", "info")],
         });
     }
 
@@ -196,6 +206,7 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
             Workload = profile.Staff.StaffType == "Teacher" ? await workload.SummaryAsync(id, SchoolWeek.Current, ct) : null,
             WorkloadAssignments = await workload.AssignmentsAsync(id, SchoolWeek.Current, ct),
             WorkloadHistory = await workload.HistoryAsync(id, 50, ct),
+            ClassAssignments = await classTeams.ForStaffAsync(id, ct),
         });
     }
 

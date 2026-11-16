@@ -74,6 +74,12 @@ public static class ClassStages
         ]),
     ];
 
+    /// <summary>Slug of the KG Stage (Pre-K, KG1, KG2).</summary>
+    public const string KgStageSlug = "kg";
+
+    /// <summary>The class belongs to the KG Stage (Pre-K, KG1 or KG2 — any section), by the same rule the Classes pages use.</summary>
+    public static bool IsKgStage(string? className) => Locate(className)?.Stage.Slug == KgStageSlug;
+
     public static Stage? Find(string? slug) =>
         All.FirstOrDefault(s => string.Equals(s.Slug, slug, StringComparison.OrdinalIgnoreCase));
 

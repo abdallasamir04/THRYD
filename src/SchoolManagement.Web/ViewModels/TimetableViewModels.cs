@@ -35,16 +35,40 @@ public sealed class TeacherPickerViewModel
     public int? DepartmentId { get; init; }
 }
 
-public sealed class SlotsViewModel
+/// <summary>Period Management: every period of the school, or one class's period structure.</summary>
+public sealed class PeriodsPageViewModel
 {
-    public required IReadOnlyList<SlotView> Slots { get; init; }
-    public required IReadOnlyDictionary<int, int> InUse { get; init; }
+    public required PeriodMap Map { get; init; }
+    public int? ClassId { get; init; }
+    public string? ClassName { get; init; }
+
+    /// <summary>Current lessons per period (of the class when one is chosen).</summary>
+    public required IReadOnlyDictionary<int, int> Lessons { get; init; }
+
+    public bool IsClass => ClassId is not null;
+
+    /// <summary>The class's periods, or the school-wide periods.</summary>
+    public IReadOnlyList<SlotView> Periods => ClassId is { } c ? Map.ForClass(c) : Map.SchoolWide;
+
+    /// <summary>All classes' own periods (school view).</summary>
+    public IReadOnlyList<SlotView> ClassSpecific => PeriodMap.Order(Map.All.Where(s => s.ClassId is not null && !s.Archived));
+
+    /// <summary>School periods the class has replaced with its own version or removed.</summary>
+    public IReadOnlyList<SlotView> Replacements => ClassId is { } c ? Map.Replacements(c) : [];
 }
 
-public sealed class SlotFormModel
+/// <summary>Add / edit a period: name, times, display order, enabled, which days and which classes.</summary>
+public sealed class PeriodFormModel
 {
-    public int Id { get; set; }
-    public int Number { get; set; }
+    public int? Id { get; set; }
+
+    /// <summary>The class timetable the form was opened from (for the scope default and the way back).</summary>
+    public int? ContextClassId { get; set; }
+
+    public PeriodScope Scope { get; set; } = PeriodScope.AllClasses;
+
+    /// <summary>The class for "this class only".</summary>
+    public int? ClassId { get; set; }
 
     [Display(Name = "Name")]
     [StringLength(TimeSlot.NameMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
@@ -56,13 +80,70 @@ public sealed class SlotFormModel
     [Display(Name = "End time")]
     public TimeOnly? EndTime { get; set; }
 
-    [Display(Name = "Active")]
+    [Display(Name = "Display order")]
+    [Range(1, TimeSlot.MaxOrder, ErrorMessage = "Enter a display order from {1} to {2}.")]
+    public int? Order { get; set; }
+
     public bool IsActive { get; set; } = true;
+    public bool AllDays { get; set; } = true;
+    public List<DayOfWeek> Days { get; set; } = [];
 
-    /// <summary>Required when the times of a slot with assignments change.</summary>
-    public bool ConfirmAffected { get; set; }
+    /// <summary>The fingerprint of the plan the administrator confirmed (see <see cref="PeriodPlan.Fingerprint"/>).</summary>
+    public string? Confirmation { get; set; }
 
-    public int InUse { get; set; }
+    // Display
+    public SlotView? Period { get; set; }
+    public IReadOnlyList<(int Id, string Name)> Classes { get; set; } = [];
+    public int ClassesUsing { get; set; }
+    public string? ContextClassName { get; set; }
+    public PeriodPlan? Plan { get; set; }
+    public bool IsEdit => Id is not null;
+
+    /// <summary>A class's own period only ever affects that class.</summary>
+    public bool ScopeFixed => Period is { ClassId: not null };
+
+    public PeriodInput ToInput() => new(Name, StartTime, EndTime, Order, IsActive, AllDays, Days);
+}
+
+public sealed class PeriodDeleteModel
+{
+    public int Id { get; set; }
+    public int? ContextClassId { get; set; }
+    public PeriodScope Scope { get; set; } = PeriodScope.AllClasses;
+    public int? ClassId { get; set; }
+
+    /// <summary>The explicit choice to end the period's current lessons from this week (history kept).</summary>
+    public bool EndLessons { get; set; }
+    public string? Confirmation { get; set; }
+
+    public SlotView? Period { get; set; }
+    public IReadOnlyList<(int Id, string Name)> Classes { get; set; } = [];
+    public string? ContextClassName { get; set; }
+    public IReadOnlyList<LessonRef> Lessons { get; set; } = [];
+    public PeriodPlan? Plan { get; set; }
+}
+
+/// <summary>Move a lesson to another day / period of its class. <see cref="Target"/> = "Day:SlotId".</summary>
+public sealed class MoveSessionModel
+{
+    public int SessionId { get; set; }
+    public string? Target { get; set; }
+    public DayOfWeek? Day { get; set; }
+    public int? SlotId { get; set; }
+
+    /// <summary>Sent by drag and drop: a failure is a message, not the form again.</summary>
+    public bool DragDrop { get; set; }
+
+    public SessionView? Session { get; set; }
+    public SlotView? Slot { get; set; }
+    public IReadOnlyList<(DayOfWeek Day, SlotView Slot)> Targets { get; set; } = [];
+
+    public (DayOfWeek? Day, int? SlotId) Parse()
+    {
+        if (Day is not null && SlotId is not null) return (Day, SlotId);
+        var parts = (Target ?? "").Split(':');
+        return parts.Length == 2 && Enum.TryParse<DayOfWeek>(parts[0], out var d) && int.TryParse(parts[1], out var s) ? (d, s) : (null, null);
+    }
 }
 
 /// <summary>Assign / edit a teaching session. The class, day and slot come from the clicked cell.</summary>

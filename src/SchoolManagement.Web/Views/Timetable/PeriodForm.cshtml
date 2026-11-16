@@ -1,0 +1,194 @@
+@model PeriodFormModel
+@*
+    Add / edit a period. Two independent choices: WHICH CLASSES (this class only / all classes) and WHICH DAYS
+    (all school days / selected days). The server validates every affected class and day; a change to all classes
+    (or one that moves lessons to new times) is shown as a plan first and applied only after "Confirm and apply".
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var p = Model.Period;
+    var heading = Model.IsEdit ? $"Edit {p!.Label}" : "Add period";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Timetable"; }
+    var action = Model.IsEdit ? $"/timetable/periods/{Model.Id}/edit" : "/timetable/periods/add";
+    var back = Model.ContextClassId is { } cc ? $"/timetable/periods?classId={cc}" : "/timetable/periods";
+    var confirming = Model.Plan is not null && Model.Confirmation is not null;
+    var thisClassName = Model.ClassId is { } cid ? Model.Classes.FirstOrDefault(c => c.Id == cid).Name : null;
+    var allLabel = Model.IsEdit ? $"All classes using this period ({Model.ClassesUsing})" : $"All classes ({Model.ClassesUsing})";
+    var scopeErrors = ViewData.ModelState.TryGetValue("ClassId", out var ce) && ce.Errors.Count > 0;
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="@back">Periods</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents" data-period-form>
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="ContextClassId" value="@Model.ContextClassId" />
+        @if (confirming)
+        {
+            <input type="hidden" name="Confirmation" value="@Model.Confirmation" />
+            <span data-form-notice="Review the changes, then confirm to apply them. Nothing was saved yet." hidden></span>
+        }
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("clock", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">@heading</h2>
+                <p class="modal__sub">
+                    @if (p is not null) { @:@p.Times · @p.DaysLabel · @p.ScopeLabel
+                    }
+                    else if (Model.ContextClassName is not null) { @:From @Model.ContextClassName's timetable.
+                    }
+                    else { @:A new period of the school day.
+                    }
+                </p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+            @if (Model.Plan is { } plan)
+            {
+                <section class="period-plan @(plan.Conflicts.Count > 0 ? "period-plan--blocked" : "")" aria-label="What this change does">
+                    <p class="period-plan__summary">@Ui.Icon(plan.Conflicts.Count > 0 ? "alert-triangle" : "info", "icon--sm")<strong dir="auto">@plan.Summary</strong></p>
+                    @if (plan.Classes.Count > 1)
+                    {
+                        <p class="period-plan__label">@Ui.Plural(plan.Classes.Count, "affected class", "affected classes")</p>
+                        <ul class="period-plan__chips">@foreach (var c in plan.Classes) { <li>@c</li> }</ul>
+                    }
+                    @if (plan.Lessons.Count > 0)
+                    {
+                        <p class="period-plan__label">@plan.LessonsNote</p>
+                        <ul class="period-plan__lessons">
+                            @foreach (var l in plan.Lessons.Take(12)) { <li dir="auto">@l.Text</li> }
+                            @if (plan.Lessons.Count > 12) { <li class="muted">…and @(plan.Lessons.Count - 12) more</li> }
+                        </ul>
+                    }
+                    @if (confirming)
+                    {
+                        <p class="period-plan__confirm">@Ui.Icon("check-circle", "icon--sm")No conflicts found. Existing lessons and attendance are kept. Press <strong>Confirm and apply</strong> to save — or change a field to see a new plan.</p>
+                    }
+                </section>
+            }
+
+            <fieldset class="field @(scopeErrors ? "is-invalid" : "")">
+                <legend class="label">1 · Which classes?</legend>
+                @if (Model.ScopeFixed)
+                {
+                    <input type="hidden" name="Scope" value="ThisClass" />
+                    <input type="hidden" name="ClassId" value="@p!.ClassId" />
+                    <p class="notice">@Ui.Icon("info")<span class="notice__body">This is <strong>@p.ClassName</strong>'s own period@(p.ReplacesId is null ? "" : " (its version of a school period)"). Changes apply to @p.ClassName only.</span></p>
+                }
+                else
+                {
+                    <div class="choice-cards" role="radiogroup">
+                        <label class="choice-card">
+                            <input type="radio" name="Scope" value="ThisClass" checked="@(Model.Scope == PeriodScope.ThisClass)" data-scope />
+                            <span class="choice-card__body">
+                                <span class="choice-card__title">This class only@(thisClassName is null ? "" : $" ({thisClassName})")</span>
+                                <span class="choice-card__text">@(Model.IsEdit ? "The class gets its own version of this period; other classes keep it unchanged." : "Only this class's timetable gets the new period.")</span>
+                            </span>
+                        </label>
+                        <label class="choice-card">
+                            <input type="radio" name="Scope" value="AllClasses" checked="@(Model.Scope == PeriodScope.AllClasses)" data-scope />
+                            <span class="choice-card__body">
+                                <span class="choice-card__title">@allLabel</span>
+                                <span class="choice-card__text">@(Model.IsEdit ? "Every class that uses this school-wide period. You will see the affected classes before anything is saved." : "A school-wide period. You will see the affected classes before anything is saved.")</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="field" data-show-if="Scope=ThisClass">
+                        <label class="label" for="ClassId">Class</label>
+                        <select class="select" id="ClassId" name="ClassId" data-searchable>
+                            <option value="">Choose a class…</option>
+                            @foreach (var c in Model.Classes)
+                            {
+                                <option value="@c.Id" selected="@(Model.ClassId == c.Id)">@c.Name</option>
+                            }
+                        </select>
+                        <span asp-validation-for="ClassId" class="field-validation-error"></span>
+                    </div>
+                }
+            </fieldset>
+
+            <fieldset class="field">
+                <legend class="label">2 · Which days?</legend>
+                <div class="choice-cards" role="radiogroup">
+                    <label class="choice-card">
+                        <input type="radio" name="AllDays" value="true" checked="@Model.AllDays" />
+                        <span class="choice-card__body">
+                            <span class="choice-card__title">All school days</span>
+                            <span class="choice-card__text">@string.Join(", ", ScheduleRules.Days.Select(ScheduleRules.DayShort)) — and any school day added later.</span>
+                        </span>
+                    </label>
+                    <label class="choice-card">
+                        <input type="radio" name="AllDays" value="false" checked="@(!Model.AllDays)" />
+                        <span class="choice-card__body">
+                            <span class="choice-card__title">Selected days</span>
+                            <span class="choice-card__text">Only on the days ticked below.</span>
+                        </span>
+                    </label>
+                </div>
+                <div class="day-picks" data-show-if="AllDays=false" role="group" aria-label="Days">
+                    @foreach (var d in ScheduleRules.Days)
+                    {
+                        <label class="day-pick"><input type="checkbox" name="Days" value="@d" checked="@Model.Days.Contains(d)" /><span>@ScheduleRules.DayName(d)</span></label>
+                    }
+                </div>
+                <span asp-validation-for="Days" class="field-validation-error"></span>
+            </fieldset>
+
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" asp-for="Name">3 · Name <span class="faint" style="font-weight:600">(optional)</span></label>
+                    <input class="input" asp-for="Name" maxlength="50" dir="auto" placeholder="e.g. Period 11, Break, Assembly" data-autofocus />
+                    <span asp-validation-for="Name" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" asp-for="Order">Display order <span class="faint" style="font-weight:600">(optional)</span></label>
+                    <input class="input" asp-for="Order" type="number" min="1" max="@TimeSlot.MaxOrder" inputmode="numeric" placeholder="Automatic" />
+                    <span asp-validation-for="Order" class="field-validation-error"></span>
+                </div>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="StartTime">Start time @if (!Model.IsEdit || p!.HasTimes) { <span class="req" aria-hidden="true">*</span> }</label>
+                    <input class="input picker" type="time" id="StartTime" name="StartTime" value="@Model.StartTime?.ToString("HH:mm")" />
+                    <span asp-validation-for="StartTime" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="EndTime">End time @if (!Model.IsEdit || p!.HasTimes) { <span class="req" aria-hidden="true">*</span> }</label>
+                    <input class="input picker" type="time" id="EndTime" name="EndTime" value="@Model.EndTime?.ToString("HH:mm")" />
+                    <span asp-validation-for="EndTime" class="field-validation-error"></span>
+                </div>
+            </div>
+            <p class="hint">The end must be after the start. On each day it runs, a period may not overlap the class's other periods, and the display order must follow the start times (equal numbers are fine, e.g. a break after period 3). Leave the order empty to place the period by its start time; leave the name empty to call it “Period” + its order.</p>
+
+            <label class="switch">
+                <input type="checkbox" name="IsActive" value="true" checked="@Model.IsActive" />
+                <span class="switch__track" aria-hidden="true"></span>
+                <span>Enabled (disabled periods stay in the timetable, greyed out, and take no lessons)</span>
+            </label>
+            <input type="hidden" name="IsActive" value="false" />
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="@back">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(confirming ? "Confirm and apply" : Model.IsEdit ? "Save period" : "Add period")</button>
+        </div>
+    </form>
+</div>

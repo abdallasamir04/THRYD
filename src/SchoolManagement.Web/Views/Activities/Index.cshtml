@@ -1,0 +1,131 @@
+@model ActivitiesPageViewModel
+@*
+    Duties → Activities. Cards: P.E. (the existing P.E. module at /pe — not a copy), Add Activity (always shown) and
+    one card per activity loaded from the database. Uses the same hub cards as the Duties page.
+*@
+@{
+    ViewData["Title"] = "Activities";
+    ViewData["Nav"] = "MorningDuty";
+    var date = SchoolWeek.Iso(Model.Date);
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties?date=@date">Duties</a></li><li><span aria-current="page">Activities</span></li></ol>
+        <h1 class="page-title">Activities</h1>
+        <p class="page-sub">P.E. and the school's other activities. Open an activity to manage its staff, classes, schedule and history, or add a new one.</p>
+    </div>
+    @if (Model.InactiveCount > 0)
+    {
+        <div class="page-head__actions">
+            <a class="btn btn--secondary" href="/duties/activities@(Model.ShowInactive ? "" : "?show=all")">@Ui.Icon("filter")@(Model.ShowInactive ? "Hide inactive" : $"Show inactive ({Model.InactiveCount})")</a>
+        </div>
+    }
+</div>
+
+<nav class="hub activities" aria-label="Activities">
+    <a class="hub-card hub-card--green" href="/pe?date=@date">
+        <span class="hub-card__icon" aria-hidden="true">@Ui.Icon("activity")</span>
+        <span class="hub-card__body">
+            <span class="hub-card__title">P.E.</span>
+            <span class="hub-card__text">Physical Education: weekly sessions, teachers and co-teachers, facilities, equipment and timetable.</span>
+            <span class="hub-card__meta">@Ui.Plural(Model.PeSessionsThisWeek, "session", "sessions") this week@(Model.PeSessionsToday > 0 ? $" · {Model.PeSessionsToday} today" : "")</span>
+        </span>
+        <span class="hub-card__go" aria-hidden="true">@Ui.Icon("arrow-right")</span>
+    </a>
+
+    <a class="hub-card hub-card--add" href="/duties/activities/new">
+        <span class="hub-card__icon" aria-hidden="true">@Ui.Icon("plus")</span>
+        <span class="hub-card__body">
+            <span class="hub-card__title">Add Activity</span>
+            <span class="hub-card__text">Create and manage a new school activity.</span>
+        </span>
+        <span class="hub-card__go" aria-hidden="true">@Ui.Icon("arrow-right")</span>
+    </a>
+
+    @foreach (var a in Model.Activities)
+    {
+        var meta = new List<string>();
+        if (a.Category is not null) meta.Add(a.Category);
+        if (a.Meetings > 0) meta.Add(Ui.Plural(a.Meetings, "meeting", "meetings") + " a week");
+        if (a.Staff > 0) meta.Add(Ui.Plural(a.Staff, "staff", "staff"));
+        <a class="hub-card hub-card--@a.Color @(a.IsActive ? "" : "is-inactive")" href="/duties/activities/@a.Id">
+            <span class="hub-card__icon" aria-hidden="true">@Ui.Icon(a.Icon)</span>
+            <span class="hub-card__body">
+                <span class="hub-card__title" dir="auto">@a.Name@if (!a.IsActive) { <span class="badge badge--neutral activity-badge">Inactive</span> }</span>
+                <span class="hub-card__text activity-text" dir="auto">@a.Description</span>
+                @if (meta.Count > 0) { <span class="hub-card__meta" dir="auto">@string.Join(" · ", meta)</span> }
+            </span>
+            <span class="hub-card__go" aria-hidden="true">@Ui.Icon("arrow-right")</span>
+        </a>
+    }
+</nav>
+
+@if (Model.Activities.Count == 0)
+{
+    <p class="muted activities-hint">Activities you add appear here next to P.E., each with its own page. @(Model.InactiveCount > 0 && !Model.ShowInactive ? $"{Ui.Plural(Model.InactiveCount, "inactive activity is", "inactive activities are")} hidden." : "")</p>
+}
+
+@{
+    var sessions = Model.Sessions;
+    var counts = sessions;
+    var dateLabel = Model.Date.ToString("dddd d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+}
+<section class="card activity-sessions" aria-labelledby="sessions-title" id="sessions">
+    <div class="card__head">
+        <h2 class="card__title" id="sessions-title">@Ui.Icon("clipboard-check")Sessions on @dateLabel</h2>
+        <span class="muted">@counts.Covered / @counts.Total covered@(counts.Pending > 0 ? $" · {counts.Pending} pending" : "")@(counts.NotCovered > 0 ? $" · {counts.NotCovered} not covered" : "")</span>
+    </div>
+    @if (sessions.Sessions.Count == 0)
+    {
+        <p class="muted activity-empty">No P.E. lessons or activity meetings are scheduled on this date.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Time</th><th scope="col">Session</th><th scope="col">Details</th><th scope="col">Status</th><th scope="col" class="col-actions">Coverage</th></tr></thead>
+                <tbody>
+                    @foreach (var s in sessions.Sessions)
+                    {
+                        <tr>
+                            <td data-label="Time" class="num">@s.Times</td>
+                            <td data-label="Session" dir="auto">
+                                @if (s.ActivityId is { } activityId) { <a href="/duties/activities/@activityId"><strong>@s.Title</strong></a> }
+                                else { <strong>@s.Title</strong> }
+                            </td>
+                            <td data-label="Details" dir="auto">@s.Detail@(s.Location is null ? "" : " · " + s.Location)</td>
+                            <td data-label="Status">
+                                <span class="badge @ActivitySessionStatuses.Badge(s.Status)">@ActivitySessionStatuses.Label(s.Status)</span>
+                                @if (s.UpdatedBy is not null) { <small class="muted">by @s.UpdatedBy</small> }
+                            </td>
+                            <td class="col-actions" data-label="Coverage">
+                                @if (s.Started)
+                                {
+                                    <form action="/duties/activities/sessions/status" method="post" class="activity-session-form">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="kind" value="@((int)s.Kind)" />
+                                        <input type="hidden" name="refId" value="@s.RefId" />
+                                        <input type="hidden" name="date" value="@SchoolWeek.Iso(Model.Date)" />
+                                        <label class="visually-hidden" for="status-@((int)s.Kind)-@s.RefId">Coverage of @s.Title @s.Times</label>
+                                        <select class="select" id="status-@((int)s.Kind)-@s.RefId" name="status">
+                                            @foreach (var option in ActivitySessionStatuses.All)
+                                            {
+                                                <option value="@((int)option)" selected="@(option == s.Status)">@ActivitySessionStatuses.Label(option)</option>
+                                            }
+                                        </select>
+                                        <button class="btn btn--secondary btn--sm" type="submit">Save</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="muted">Not started</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

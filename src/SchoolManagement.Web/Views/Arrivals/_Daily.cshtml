@@ -1,0 +1,167 @@
+@model DailyAttendanceViewModel
+@*
+    The day's register for the chosen class (or all classes). arrivals.js:
+      [data-att-arrive]  one click = arrived now (POST /arrivals/register; the server's time decides Present / Late) — only
+                         while registration is open: at the cutoff (09:30, school time) the server refuses and the rows lock as Absent
+      [data-att-absent]  explicit absence after a light confirmation (POST /arrivals/absent)
+      [data-att-count]   summary tiles, updated from each response (counts from the database)
+      [data-att-search] / [data-att-filter]  client-side search and status filter
+    A student with a record is never recorded again: changes go through Correct (reason + before / after kept).
+*@
+@{
+    var c = Model.Checklist;
+    var day = Model.Day;
+    var date = SchoolWeek.Iso(Model.Date);
+    var canRecord = day.IsSchoolDay && !day.IsFuture;
+    var rules = Model.Rules;
+    var cutoff = Arrivals.Time(rules.Cutoff);
+    static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : parts.Length == 1 ? parts[0][..1].ToUpperInvariant() : $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+}
+
+@if (!day.IsSchoolDay)
+{
+    <div class="notice sa-notice">@Ui.Icon("info")<div class="notice__body"><strong>@(day.Holiday is null ? "Not a school day (weekend)." : $"School holiday: {day.Holiday}.")</strong>No attendance is taken on this day, and it never counts in attendance reports.</div></div>
+}
+else if (day.IsFuture)
+{
+    <div class="notice sa-notice">@Ui.Icon("calendar")<div class="notice__body"><strong>This day has not come yet.</strong>Arrivals are recorded on the day itself.</div></div>
+}
+else if (day.ClosedToday)
+{
+    <div class="notice notice--warning sa-notice" role="status" data-att-closed>@Ui.Icon("lock")<div class="notice__body"><strong>Arrival registration closed at @cutoff.</strong>Students with no arrival by @cutoff are Absent for today. A record can still be changed with Correct (a reason is required and the change is kept in the history).</div></div>
+}
+
+@if (c is null)
+{
+    <section class="card sa-pick" aria-label="Choose a class">
+        <div class="sa-pick__head">
+            <span class="sa-pick__icon">@Ui.Icon("door")</span>
+            <div>
+                <h2 class="sa-pick__title">Choose a class to start</h2>
+                <p class="sa-pick__sub">Pick the class at the door — then click each student as they arrive. The time is taken automatically.</p>
+            </div>
+        </div>
+        <div class="sa-pick__grid">
+            @foreach (var cls in Model.Classes.Where(x => x.IsActive))
+            {
+                <a class="sa-pick__class" href="/arrivals?@(day.IsToday ? "" : $"date={date}&")classId=@cls.Id" data-list-link>
+                    <strong>@cls.Name</strong><span>@Ui.Plural(cls.StudentCount, "student", "students")</span>
+                </a>
+            }
+            <a class="sa-pick__class sa-pick__class--all" href="/arrivals?@(day.IsToday ? "" : $"date={date}&")classId=all" data-list-link>
+                <strong>All classes</strong><span>Whole school</span>
+            </a>
+        </div>
+    </section>
+    return;
+}
+
+@{
+    var s = c.Summary;
+}
+<div class="sa-board" data-att-board data-date="@date" data-class="@Model.ClassId" data-today="@(day.IsToday ? "true" : "false")"
+     data-can-record="@(canRecord ? "true" : "false")" data-closes-at="@(day.RegistrationOpen ? rules.Cutoff.ToString("HH:mm:ss") : null)">
+    @Html.AntiForgeryToken()
+    <ul class="sa-tiles" aria-label="Attendance summary — @(Model.ClassName)">
+        <li class="sa-tile"><span class="sa-tile__value num" data-att-count="total">@s.Students</span><span class="sa-tile__label">Total</span></li>
+        <li class="sa-tile sa-tile--present"><span class="sa-tile__value num" data-att-count="present">@s.Present</span><span class="sa-tile__label">Present</span></li>
+        <li class="sa-tile sa-tile--late"><span class="sa-tile__value num" data-att-count="late">@s.Late</span><span class="sa-tile__label">Late</span></li>
+        <li class="sa-tile sa-tile--absent"><span class="sa-tile__value num" data-att-count="absent">@s.Absent</span><span class="sa-tile__label">Absent</span></li>
+        <li class="sa-tile sa-tile--none"><span class="sa-tile__value num" data-att-count="notRecorded">@s.NotRecorded</span><span class="sa-tile__label">Not Recorded</span></li>
+    </ul>
+
+    <section class="card sa-register" aria-label="Register — @Model.ClassName">
+        <div class="sa-toolbar">
+            <div class="sa-search">
+                @Ui.Icon("search")
+                <label class="visually-hidden" for="sa-search">Search students</label>
+                <input class="input" type="search" id="sa-search" placeholder="Search by name or ID…" autocomplete="off" data-att-search />
+            </div>
+            <div class="segmented sa-filter" role="group" aria-label="Show">
+                <button type="button" data-att-filter="all" aria-pressed="true">All</button>
+                <button type="button" data-att-filter="notrecorded" aria-pressed="false">Not Recorded <span class="count" data-att-count="notRecorded">@s.NotRecorded</span></button>
+                <button type="button" data-att-filter="present" aria-pressed="false">Present <span class="count" data-att-count="present">@s.Present</span></button>
+                <button type="button" data-att-filter="late" aria-pressed="false">Late <span class="count" data-att-count="late">@s.Late</span></button>
+                <button type="button" data-att-filter="absent" aria-pressed="false">Absent <span class="count" data-att-count="absent">@s.Absent</span></button>
+            </div>
+            <div class="sa-toolbar__end">
+                <partial name="_Download" model='DownloadLink.Report("/arrivals/pdf")' />
+            </div>
+        </div>
+        @if (day.RegistrationOpen)
+        {
+            <p class="sa-hint">@Ui.Icon("info", "icon--sm")<span>Click a student (or <strong>Arrived</strong>) when they come in — saved at once with the time@(rules.Start is { } st ? $" (Present until {Arrivals.Time(st)}, Late after)" : ""). Registration closes at <strong>@cutoff</strong>; students not recorded by then are Absent.</span></p>
+        }
+        else if (canRecord && !day.IsToday && !day.AutoAbsent)
+        {
+            <p class="sa-hint">@Ui.Icon("info", "icon--sm")<span>A past day: add a missed arrival with its time, record an absence, or correct a record. Every change keeps its history.</span></p>
+        }
+
+        <ol class="sa-list" data-att-list>
+            @foreach (var r in c.Rows)
+            {
+                var slug = SchoolManagement.Web.Controllers.ArrivalsController.Slug(r.Outcome);
+                var oneClick = day.RegistrationOpen && r.Status is null;
+                var automatic = r.Outcome == ArrivalOutcome.Absent && r.RecordedBy == Arrivals.AutomaticRecorder;
+                <li class="sa-row sa-row--@slug" data-att-row data-student="@r.StudentId" data-status="@slug" data-search="@($"{r.StudentName} {r.StudentId} {r.ClassName}".ToLowerInvariant())">
+                    @if (oneClick)
+                    {
+                        <button type="button" class="sa-row__main" data-att-arrive title="Record @r.StudentName's arrival now">
+                            <span class="sa-avatar" aria-hidden="true">@Initials(r.StudentName)</span>
+                            <span class="sa-row__who"><strong dir="auto">@r.StudentName</strong><span class="sa-row__meta">ID @r.StudentId · @r.ClassName</span></span>
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="sa-row__main">
+                            <span class="sa-avatar" aria-hidden="true">@Initials(r.StudentName)</span>
+                            <span class="sa-row__who"><a href="/students/profile/@r.StudentId" dir="auto"><strong>@r.StudentName</strong></a><span class="sa-row__meta">ID @r.StudentId · @r.ClassName</span></span>
+                        </div>
+                    }
+                    <span class="sa-row__time num" data-att-time>@(r.Time is { } t ? Arrivals.Time(t) : "—")</span>
+                    <span class="sa-row__status">
+                        <span class="badge badge--dot @(r.Outcome is { } o ? Arrivals.Badge(o) : "badge--neutral")" data-att-status>@Arrivals.Label(r.Outcome)</span>
+                        @if (r.Corrections > 0)
+                        {
+                            <span class="sa-row__note" title="Corrected @r.Corrections× — history kept">@Ui.Icon("pencil", "icon--sm")Corrected</span>
+                        }
+                        else if (automatic)
+                        {
+                            <span class="sa-row__note" title="@r.Notes">@Ui.Icon("lock", "icon--sm")No arrival by @Arrivals.Time(r.CutoffUsed ?? rules.Cutoff)</span>
+                        }
+                    </span>
+                    <span class="sa-row__actions" data-att-actions>
+                        @if (automatic || (r.Status is null && day.ClosedToday))
+                        {
+                            @* Registration closed: a locked status instead of Arrived. *@
+                            <span class="sa-locked" aria-disabled="true" title="Arrival registration closed at @cutoff">@Ui.Icon("lock", "icon--sm")@(r.Status is null ? "Closed" : "Absent")</span>
+                        }
+                        @if (r.IsRecorded)
+                        {
+                            <a class="btn btn--ghost btn--sm" href="/arrivals/@r.RecordId/correct" data-modal>@Ui.Icon("pencil")Correct</a>
+                        }
+                        else if (r.Status is null && day.RegistrationOpen)
+                        {
+                            <button type="button" class="btn btn--primary btn--sm" data-att-arrive>@Ui.Icon("check")Arrived</button>
+                            <button type="button" class="btn btn--ghost btn--sm sa-absent-btn" data-att-absent data-name="@r.StudentName">@Ui.Icon("x-circle")Absent</button>
+                        }
+                        else if (r.Status is null && canRecord && !day.IsToday)
+                        {
+                            <a class="btn btn--secondary btn--sm" href="/arrivals/add?studentId=@r.StudentId&date=@date" data-modal>@Ui.Icon("clock")Add arrival</a>
+                            <button type="button" class="btn btn--ghost btn--sm sa-absent-btn" data-att-absent data-name="@r.StudentName">@Ui.Icon("x-circle")Absent</button>
+                        }
+                    </span>
+                </li>
+            }
+        </ol>
+        <div class="empty sa-empty" data-att-empty @(c.Rows.Count == 0 ? "" : "hidden")>
+            @Ui.Icon("users")
+            <p>@(c.Rows.Count == 0 ? "No students in this class on this date." : "No students match.")</p>
+        </div>
+    </section>
+</div>
+

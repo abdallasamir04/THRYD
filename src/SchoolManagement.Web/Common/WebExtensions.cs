@@ -53,13 +53,14 @@ public static class Ui
         return Tones[Math.Abs(hash % Tones.Length)];
     }
 
-    public static string Date(DateTime utc) => utc.ToLocalTime().ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+    /// <summary>A stored UTC instant shown in school time (Africa/Cairo), whatever the server's time zone.</summary>
+    public static string Date(DateTime utc) => SchoolTime.Current.ToLocal(utc).ToString("d MMM yyyy", CultureInfo.InvariantCulture);
 
-    public static string DateTime(DateTime utc) => utc.ToLocalTime().ToString("d MMM yyyy, HH:mm", CultureInfo.InvariantCulture);
+    public static string DateTime(DateTime utc) => SchoolTime.Current.ToLocal(utc).ToString("d MMM yyyy, HH:mm", CultureInfo.InvariantCulture);
 
     public static string Ago(DateTime utc)
     {
-        var span = System.DateTime.UtcNow - utc;
+        var span = SchoolTime.Current.UtcNow - System.DateTime.SpecifyKind(utc, DateTimeKind.Utc);
         if (span.TotalMinutes < 1) return "just now";
         if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} min ago";
         if (span.TotalHours < 24) return $"{(int)span.TotalHours} h ago";

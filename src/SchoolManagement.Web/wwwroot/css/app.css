@@ -328,6 +328,27 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .chip .icon { width: 15px; height: 15px; }
 .chip--brand { border-color: transparent; background: var(--tint-primary); color: var(--color-primary-ink); }
+/* Global school clock (Africa/Cairo): two quiet items — date | live time — no box; location and offset in a tooltip. */
+.school-clock { position: relative; flex: none; display: inline-flex; align-items: center; gap: 12px; height: 36px; padding: 0 4px; border-radius: 10px;
+    color: var(--color-text-muted); white-space: nowrap; min-width: 0; outline: none; cursor: default; }
+.school-clock:focus-visible { box-shadow: 0 0 0 3px var(--color-focus); }
+.school-clock .icon { width: 14px; height: 14px; flex: none; color: var(--color-text-faint); }
+.school-clock__date, .school-clock__time { display: inline-flex; align-items: center; gap: 7px; line-height: 1; }
+.school-clock__date { font-size: 0.8rem; font-weight: 600; }
+.school-clock__sep { width: 1px; height: 16px; background: var(--color-border); }
+.school-clock__time time { display: inline-flex; align-items: baseline; color: var(--color-text-strong);
+    font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.school-clock__ampm { margin-inline-start: 3px; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em; color: var(--color-text-muted); }
+.school-clock__tip { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 30; padding: 6px 10px; border-radius: 8px;
+    border: 1px solid var(--color-border); background: var(--color-surface-raised); box-shadow: var(--shadow-card);
+    font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted); white-space: nowrap;
+    opacity: 0; transform: translateY(-2px); pointer-events: none; transition: opacity 0.15s, transform 0.15s; }
+.school-clock:hover .school-clock__tip, .school-clock:focus-visible .school-clock__tip { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .school-clock__tip { transition: none; } }
+@media (max-width: 1280px) { .school-clock__date, .school-clock__sep { display: none; } }
+@media (max-width: 720px) { .school-clock { gap: 0; padding: 0; } .school-clock__time .icon { display: none; } .school-clock__time time { font-size: 0.86rem; } }
+/* Narrow phones: HH:MM AM/PM (still live) so the bar's other controls keep their place. */
+@media (max-width: 480px) { .school-clock__sec { display: none; } }
 .topbar__divider { width: 1px; height: 28px; background: var(--color-border); }
 .account { display: flex; align-items: center; gap: 10px; }
 .account__text { display: flex; flex-direction: column; line-height: 1.2; }
@@ -351,27 +372,71 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .crumbs a { color: var(--color-text-muted); }
 
 /* ---------- Hero (dashboard) ---------- */
+/* Two balanced columns: greeting, live time and actions on the left; a compact glass "today" panel on the right. */
 .hero {
     position: relative; overflow: hidden;
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px;
-    padding: 28px 30px; border-radius: 22px;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 600px); align-items: center; gap: 28px;
+    padding: 26px 28px; border-radius: 22px;
     background: var(--gradient-hero); color: #fff;
     box-shadow: 0 18px 40px rgb(43 20 112 / 0.25);
 }
 .hero::after {
-    content: ""; position: absolute; inset-inline-end: -60px; top: -80px; width: 280px; height: 280px; border-radius: 50%;
+    content: ""; position: absolute; inset-inline-end: -70px; top: -90px; width: 280px; height: 280px; border-radius: 50%;
     border: 40px solid rgb(255 255 255 / 0.05); pointer-events: none;
 }
-.hero h1 { color: #fff; font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); font-weight: 800; letter-spacing: -0.02em; }
+.hero__main { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.hero h1 { margin: 0; color: #fff; font-size: clamp(1.6rem, 1.25rem + 1vw, 2.15rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
 .hero p { color: rgb(255 255 255 / 0.8); }
-.hero__eyebrow { color: #a5f3fc !important; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
-.hero__actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; }
+.hero__eyebrow { margin: 0 0 8px; color: #a5f3fc !important; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.hero__lead { margin: 6px 0 0; font-size: 0.95rem; }
+.hero__actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .hero .btn--glass { background: rgb(255 255 255 / 0.12); border-color: rgb(255 255 255 / 0.22); color: #fff; }
 .hero .btn--glass:hover { background: rgb(255 255 255 / 0.2); }
 .hero .btn--light { background: #fff; color: #3b1a91; border-color: #fff; }
 .hero .btn--light:hover { background: #f1ecff; }
-.live { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.8rem; color: rgb(255 255 255 / 0.75); }
+.live { display: inline-flex; align-items: center; gap: 8px; margin: 12px 0 0; padding: 5px 12px 5px 10px; border-radius: var(--radius-pill);
+    background: rgb(255 255 255 / 0.08); border: 1px solid rgb(255 255 255 / 0.12); font-size: 0.78rem; font-weight: 600; color: rgb(255 255 255 / 0.85); }
+.live time { font-variant-numeric: tabular-nums; color: #fff; font-weight: 700; }
+.live__sep { width: 3px; height: 3px; border-radius: 50%; background: rgb(255 255 255 / 0.5); }
 .live__dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 4px rgb(52 211 153 / 0.25); }
+.hero__stats { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.hero-stat { display: flex; align-items: center; gap: 12px; height: 100%; padding: 12px 14px; border-radius: 14px; min-width: 0;
+    background: rgb(255 255 255 / 0.08); border: 1px solid rgb(255 255 255 / 0.14); color: #fff; text-decoration: none;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: background 0.15s, border-color 0.15s; }
+.hero-stat:hover { text-decoration: none; background: rgb(255 255 255 / 0.14); border-color: rgb(255 255 255 / 0.24); }
+.hero-stat:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.hero-stat__icon { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 10px; background: rgb(255 255 255 / 0.14); color: #fff; }
+.hero-stat__icon .icon { width: 18px; height: 18px; }
+.hero-stat__body { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.hero-stat__label { font-size: 0.72rem; font-weight: 700; color: rgb(255 255 255 / 0.75); }
+.hero-stat__value { margin-top: 2px; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: #fff; }
+.hero-stat__value small { font-size: 0.78rem; font-weight: 700; color: rgb(255 255 255 / 0.7); }
+.hero-stat__meta { margin-top: 2px; font-size: 0.7rem; color: rgb(255 255 255 / 0.7); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Duty coverage: one wide glass card, a segment per section (Morning, Midday, Dismissal, Activities). */
+.hero-cover { grid-column: 1 / -1; padding: 10px 12px 12px; border-radius: 14px; background: rgb(255 255 255 / 0.08); border: 1px solid rgb(255 255 255 / 0.14); }
+.hero-cover__head { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; font-size: 0.72rem; font-weight: 700; color: rgb(255 255 255 / 0.75); }
+.hero-cover__head .icon { width: 15px; height: 15px; }
+.hero-cover__list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.hero-cover__item { display: flex; flex-direction: column; gap: 3px; padding: 7px 10px; border-radius: 10px; background: rgb(255 255 255 / 0.06); color: #fff; text-decoration: none; transition: background 0.15s; }
+.hero-cover__item:hover { text-decoration: none; background: rgb(255 255 255 / 0.14); }
+.hero-cover__item:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.hero-cover__name { font-size: 0.7rem; font-weight: 700; color: rgb(255 255 255 / 0.75); }
+.hero-cover__value { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.hero-cover__value small { font-size: 0.74rem; font-weight: 700; color: rgb(255 255 255 / 0.7); }
+.hero-cover__bar { display: block; height: 3px; border-radius: 3px; background: rgb(255 255 255 / 0.16); overflow: hidden; }
+.hero-cover__bar span { display: block; height: 100%; border-radius: inherit; background: #34d399; }
+@media (max-width: 1180px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 860px) { .hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero__stats > li:nth-child(3):not(.hero-cover) { grid-column: 1 / -1; } }
+/* Phones: no stat icons (room for the figures), details may wrap, both actions full width. */
+@media (max-width: 520px) {
+    .hero-stat { padding: 11px 12px; }
+    .hero-stat__icon { display: none; }
+    .hero-stat__meta { white-space: normal; }
+    .hero-cover__list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hero__actions { width: 100%; }
+    .hero__actions .btn { flex: 1 1 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .hero-stat { transition: none; } }
 
 /* ---------- Cards ---------- */
 .card {
@@ -993,4 +1058,13 @@ a.summary-tile:hover { border-color: var(--color-border-strong); text-decoration
     .sidebar, .topbar, .toolbar, .col-actions, .table-foot, .page-head__actions, .toasts { display: none !important; }
     .shell { display: block; }
     .card { box-shadow: none; }
+}
+
+/* Phones: the clock, theme toggle and account must fit the top bar; the academic year is shown on the dashboard. */
+@media (max-width: 480px) {
+    .topbar { gap: 10px; }
+    .topbar__start { flex: 1 1 auto; gap: 10px; }
+    .topbar__actions { flex: none; gap: 8px; }
+    .topbar__actions .chip--brand { display: none; }
+    .trail__group, .trail__sep { display: none; }
 }

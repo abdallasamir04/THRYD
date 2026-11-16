@@ -110,7 +110,9 @@ public enum ManagementTaskStatus
     ToDo = 1,
     InProgress = 2,
     Completed = 3,
+    /// <summary>Kept for tasks put on hold before Cancelled existed; new tasks use the other four.</summary>
     OnHold = 4,
+    Cancelled = 5,
 }
 
 public enum TaskPriority
@@ -118,10 +120,14 @@ public enum TaskPriority
     Low = 1,
     Medium = 2,
     High = 3,
-    Urgent = 4,
+    /// <summary>Shown as "Critical" (stored value 4, formerly "Urgent").</summary>
+    Critical = 4,
 }
 
-/// <summary>A task assigned to one Management Team member. Separate from teacher workload.</summary>
+/// <summary>
+/// A Management Team task. The Management Team creates and manages tasks, but any staff member can carry one out
+/// (<see cref="AssignedTo"/>) or review it (<see cref="Reviewer"/>). Never part of teacher workload or the timetable.
+/// </summary>
 public class ManagementTask : IAuditable
 {
     public const int TitleMaxLength = 200;
@@ -132,8 +138,22 @@ public class ManagementTask : IAuditable
     public string? Description { get; set; }
     public string? Notes { get; set; }
 
-    public int ManagementMemberId { get; set; }
-    public ManagementMember Member { get; set; } = null!;
+    /// <summary>The executor: the staff member responsible for doing the task (any staff member).</summary>
+    public int AssignedToId { get; set; }
+    public StaffMember AssignedTo { get; set; } = null!;
+
+    /// <summary>Optional: the staff member who receives, reviews or approves the finished task.</summary>
+    public int? ReviewerId { get; set; }
+    public StaffMember? Reviewer { get; set; }
+
+    /// <summary>
+    /// Who created and assigned the task: the "Working as" staff member at creation. Set once, never changed by an edit.
+    /// Null for tasks created without a "Working as" choice; <see cref="CreatedBy"/> keeps the name shown then.
+    /// </summary>
+    public int? CreatedById { get; set; }
+    public StaffMember? Creator { get; set; }
+
+    public ICollection<TaskAttachment> Attachments { get; set; } = new List<TaskAttachment>();
 
     public ManagementTaskStatus Status { get; set; } = ManagementTaskStatus.ToDo;
     public TaskPriority Priority { get; set; } = TaskPriority.Medium;
@@ -160,7 +180,7 @@ public enum TaskHistoryAction
 }
 
 /// <summary>
-/// Append-only log of task changes, kept per member. No foreign key to the task, so the entry
+/// Append-only log of task changes, kept per assignee (any staff member). No foreign key to the task, so the entry
 /// (with its title snapshot) survives when the task is deleted.
 /// </summary>
 public class ManagementTaskHistory
@@ -169,12 +189,53 @@ public class ManagementTaskHistory
 
     public long Id { get; set; }
     public int TaskId { get; set; }
-    public int ManagementMemberId { get; set; }
-    public ManagementMember Member { get; set; } = null!;
+    public int StaffMemberId { get; set; }
+    public StaffMember StaffMember { get; set; } = null!;
     public string TaskTitle { get; set; } = "";
     public TaskHistoryAction Action { get; set; }
     public ManagementTaskStatus StatusAfter { get; set; }
     public string Summary { get; set; } = "";
     public DateTime ChangedAt { get; set; }
     public string? ChangedBy { get; set; }
+}
+
+/// <summary>
+/// What an attachment is for. Only instruction / reference files exist today; a future "work submitted for review"
+/// upload gets its own value so the two are never mixed.
+/// </summary>
+public enum TaskAttachmentPurpose
+{
+    Instructions = 1,
+}
+
+/// <summary>
+/// A file attached to a task. The bytes live in the task file store (outside wwwroot, under a random name); this row
+/// keeps the metadata. A row without a task is an upload waiting for its form to be saved (<see cref="StagingKey"/>),
+/// removed after a day if the form never is.
+/// </summary>
+public class TaskAttachment
+{
+    public const int FileNameMaxLength = 200;
+
+    public int Id { get; set; }
+    public int? TaskId { get; set; }
+    public ManagementTask? Task { get; set; }
+    public TaskAttachmentPurpose Purpose { get; set; } = TaskAttachmentPurpose.Instructions;
+
+    /// <summary>Random key the browser holds between uploading the file and saving the task form.</summary>
+    public Guid StagingKey { get; set; }
+
+    /// <summary>The uploaded file's name, cleaned (display and download name only, never a path).</summary>
+    public string FileName { get; set; } = "";
+
+    /// <summary>Lower-case extension without the dot (pdf, docx…); decides the content type served.</summary>
+    public string Extension { get; set; } = "";
+    public long SizeBytes { get; set; }
+
+    /// <summary>Name in the file store: a GUID, never derived from the uploaded name.</summary>
+    public string StoredName { get; set; } = "";
+    public string Sha256 { get; set; } = "";
+
+    public DateTime UploadedAt { get; set; }
+    public string? UploadedBy { get; set; }
 }

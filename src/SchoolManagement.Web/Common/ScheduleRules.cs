@@ -47,7 +47,7 @@ public static class ScheduleRules
         var slots = await db.TimeSlots.AsNoTracking().ToDictionaryAsync(s => s.Id, ct);
         var current = SchoolWeek.Current;
         bool Clash(int otherSlot) => slots.TryGetValue(otherSlot, out var o) && Overlaps(slot.Id, slot.StartTime, slot.EndTime, o.Id, o.StartTime, o.EndTime);
-        string Where(int otherSlot) => slots.TryGetValue(otherSlot, out var o) ? $"period {o.Number} ({Times(o.StartTime, o.EndTime)})" : "another period";
+        string Where(int otherSlot) => slots.TryGetValue(otherSlot, out var o) ? $"{PeriodName(o)} ({Times(o.StartTime, o.EndTime)})" : "another period";
 
         // 1. Weekly teaching sessions.
         var sessions = db.TimetableAssignments.AsNoTracking().Where(t => t.TeacherId == teacherId && t.Day == day && t.Id != (excludeSessionId ?? 0));
@@ -74,10 +74,23 @@ public static class ScheduleRules
                 .Select(d => new { d.DutyDate, d.Component, d.StartTime, d.EndTime }).ToListAsync(ct);
             var clash = duties.FirstOrDefault(d => d.DutyDate.DayOfWeek == day && d.StartTime < end && start < d.EndTime);
             if (clash is not null)
-                return $"{teacherName} has {DutyComponents.Name(clash.Component)} duty on {clash.DutyDate.ToString("ddd d MMM", CultureInfo.InvariantCulture)}, {Times(clash.StartTime, clash.EndTime)}, which overlaps period {slot.Number} ({Times(start, end)}).";
+                return $"{teacherName} has {DutyComponents.Name(clash.Component)} duty on {clash.DutyDate.ToString("ddd d MMM", CultureInfo.InvariantCulture)}, {Times(clash.StartTime, clash.EndTime)}, which overlaps {PeriodName(slot)} ({Times(start, end)}).";
         }
         return null;
     }
+
+    /// <summary>"Period 3", or the period's own name ("Break", "Assembly").</summary>
+    public static string PeriodName(TimeSlot s) => string.IsNullOrWhiteSpace(s.Name) ? $"Period {s.Number}" : s.Name!;
+
+    /// <summary>
+    /// SQL Server application lock on the period structure, held until the transaction ends. Period changes
+    /// take it exclusively, lesson saves take it shared, so a lesson cannot land in a period being deleted or
+    /// moved. Always taken before any teacher lock (same order everywhere: no deadlocks).
+    /// </summary>
+    public static Task LockPeriodsAsync(SchoolDbContext db, bool exclusive, CancellationToken ct) =>
+        db.Database.ExecuteSqlRawAsync(
+            "DECLARE @r int; EXEC @r = sp_getapplock @Resource = {0}, @LockMode = {1}, @LockOwner = 'Transaction', @LockTimeout = 15000; " +
+            "IF @r < 0 THROW 51001, 'Timetable lock timeout', 1;", ["timetable:periods", exclusive ? "Exclusive" : "Shared"], ct);
 
     /// <summary>
     /// Exclusive SQL Server application lock for one teacher's workload, held until the transaction ends.

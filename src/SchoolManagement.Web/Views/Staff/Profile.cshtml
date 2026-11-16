@@ -105,6 +105,42 @@
     }
 </div>
 
+@if (Model.ClassAssignments.Count > 0)
+{
+    var fmt = System.Globalization.CultureInfo.InvariantCulture;
+    <section class="card" aria-labelledby="kg-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="kg-title">@Ui.Icon("door")KG Class Assignments</h2>
+                <p class="card__sub">Class teaching team roles in Pre-K, KG1 and KG2, by academic year. Class-level responsibilities: not teaching periods, timetable sessions or workload.</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Class</th><th scope="col">Academic Year</th><th scope="col">Role</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                    @foreach (var group in Model.ClassAssignments.GroupBy(a => a.Year))
+                    {
+                        <tr class="table__group"><th scope="rowgroup" colspan="4">@group.Key</th></tr>
+                        @foreach (var a in group)
+                        {
+                            <tr>
+                                <td data-label="Class"><a href="/classes/@a.ClassId?panel=team&year=@a.YearId"><strong>@a.ClassName</strong></a></td>
+                                <td data-label="Academic Year">@a.Year</td>
+                                <td data-label="Role">@ClassTeachingRoles.Label(a.Role)</td>
+                                <td data-label="Status">
+                                    @if (a.IsActive) { <span class="badge badge--success badge--dot">Active</span> }
+                                    else { <span class="badge badge--neutral">Ended @(a.EndedAt is { } e ? SchoolTime.Current.ToLocal(e).ToString("d MMM yyyy", fmt) : "")</span> }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
 <section class="card" aria-labelledby="history-title">
     <div class="card__head">
         <div>

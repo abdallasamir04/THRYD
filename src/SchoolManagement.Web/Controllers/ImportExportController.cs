@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Common;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.Services.Excel;
@@ -141,7 +142,7 @@ public class ImportExportController(
         var rows = session.Result?.NotImported
             ?? (await imports.PreviewAsync(session, ct)).Rows.Where(r => r.Status != RowStatus.Ready).ToList();
         var bytes = excel.ImportReport(session.Kind, session.FileName, rows);
-        return File(bytes, StudentsController.ExcelContentType, $"{session.Kind.ToString().ToLowerInvariant()}-import-report-{DateTime.Now:yyyy-MM-dd-HHmm}.xlsx");
+        return File(bytes, StudentsController.ExcelContentType, $"{session.Kind.ToString().ToLowerInvariant()}-import-report-{SchoolTime.Now:yyyy-MM-dd-HHmm}.xlsx");
     }
 
     private ImportMapViewModel BuildMap(ImportSession session)

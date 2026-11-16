@@ -6,7 +6,7 @@
     var s = Model.Suggestions!;
     if (modal) { Layout = null; }
     else { ViewData["Title"] = isEdit ? "Edit incident information" : "New incident report"; ViewData["Nav"] = "Behaviour"; }
-    var action = isEdit ? $"/students/behaviour/incidents/{Model.Id}/edit" : "/students/behaviour/incidents/new";
+    var action = $"/students/behaviour/incidents/{Model.Id}/edit";
     var back = isEdit ? $"/students/behaviour/incidents/{Model.Id}" : "/students/behaviour/incidents";
 }
 

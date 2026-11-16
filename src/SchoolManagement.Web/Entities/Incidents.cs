@@ -70,9 +70,18 @@ public class Incident : IAuditable
     public IncidentSeverity Severity { get; set; } = IncidentSeverity.Level1;
     public IncidentStatus Status { get; set; } = IncidentStatus.Reported;
 
+    /// <summary>
+    /// A draft was saved with Save Draft: it may be incomplete. Save Report checks every section and clears it;
+    /// a draft cannot be closed.
+    /// </summary>
+    public bool IsDraft { get; set; }
+
     // ---- E. administrative sign-off & record closure
     public int? PreparedByStaffId { get; set; }
     public StaffMember? PreparedBy { get; set; }
+
+    /// <summary>Prepared By as written, when it is a department or a person who is not a staff record ("Discipline Department").</summary>
+    public string? PreparedByText { get; set; }
 
     /// <summary>The school as written on the report (defaults to the school name in Settings).</summary>
     public string? SignOffSchool { get; set; }

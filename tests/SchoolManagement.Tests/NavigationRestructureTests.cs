@@ -52,19 +52,17 @@ public partial class HttpTests
         Assert.Contains("href=\"/students/hub\" aria-current=\"page\"", Sidebar(hub));
 
         // Each card opens its module, with Students highlighted in the sidebar.
-        foreach (var url in new[] { "/belongings", "/belongings/personal", "/belongings/academic", "/belongings/calendar", "/attendance", "/arrivals", "/attendance/sessions", "/attendance/alerts", "/attendance/holidays", "/students/behaviour", "/students" })
+        foreach (var url in new[] { "/belongings", "/belongings/personal", "/belongings/academic", "/attendance", "/arrivals", "/attendance/sessions", "/attendance/alerts", "/attendance/holidays", "/students/behaviour", "/students" })
         {
             var response = await client.GetAsync(url);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Contains("href=\"/students/hub\" aria-current=\"page\"", Sidebar(await response.Content.ReadAsStringAsync()));
         }
-        // Same checklist as before; the session card keeps every field, grouped into the fields grid and the toggle row.
+        // School Attendance: Daily Attendance + History & Reports; no recording-session fields (method, location, receiver).
         var arrivals = await client.GetStringAsync("/arrivals");
-        Assert.Contains("data-arrival-table", arrivals);
-        var session = arrivals[arrivals.IndexOf("data-arrival-session", StringComparison.Ordinal)..arrivals.IndexOf("id=\"arrival-list\"", StringComparison.Ordinal)];
-        foreach (var id in new[] { "id=\"classId\"", "id=\"session-receiver\"", "id=\"session-location\"", "id=\"session-method\"", "id=\"session-confirmed\"", "deadline-chip" })
-            Assert.Contains(id, session);
-        Assert.True(session.IndexOf("arrival-session__foot", StringComparison.Ordinal) > session.IndexOf("id=\"session-method\"", StringComparison.Ordinal));
+        foreach (var part in new[] { "Daily Attendance", "Attendance History &amp; Reports", "id=\"sa-class\"" }) Assert.Contains(part, arrivals);
+        foreach (var gone in new[] { "session-receiver", "session-location", "session-method", "session-confirmed", "Save entries", "Received by", "Arrival location" })
+            Assert.DoesNotContain(gone, arrivals);
         // Behavioural / Discipline: exactly two section cards (Incident, Discipline).
         var behaviour = await client.GetStringAsync("/students/behaviour");
         Assert.Equal(2, Regex.Matches(behaviour, "class=\"hub-card ").Count);

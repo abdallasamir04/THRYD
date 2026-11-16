@@ -1,0 +1,191 @@
+@model PeriodsPageViewModel
+@*
+    Period Management. School view: the school-wide periods (every class has them unless it replaced one) and every
+    class's own periods. Class view: that class's period structure, day by day, with the school periods it changed
+    or removed. Every change opens a form that asks which classes and which days it applies to; the server checks
+    all affected timetables before anything is saved.
+*@
+@{
+    ViewData["Title"] = Model.IsClass ? $"Periods · {Model.ClassName}" : "Periods";
+    ViewData["Nav"] = "Timetable";
+    var cls = Model.ClassId;
+    var q = cls is { } id ? $"?classId={id}" : "";
+    var amp = cls is { } id2 ? $"&classId={id2}" : "";
+    var periods = Model.Periods;
+    string Status(SlotView s) => !s.IsActive ? "Disabled" : !s.HasTimes ? "Times not set" : "Enabled";
+    string Tone(SlotView s) => !s.IsActive ? "badge--neutral" : !s.HasTimes ? "badge--warning" : "badge--success";
+
+    void Row(SlotView s, bool showClass)
+    {
+        var lessons = Model.Lessons.GetValueOrDefault(s.Id);
+        var ctx = s.ClassId is { } own ? $"?classId={own}" : q;
+        var ctxAmp = s.ClassId is { } own2 ? $"&classId={own2}" : amp;
+        <tr class="@(s.IsActive ? "" : "is-ended")">
+            <td class="col-num" data-label="Order">@s.Number</td>
+            @if (showClass) { <td data-label="Class"><a href="/timetable/periods?classId=@s.ClassId"><strong>@s.ClassName</strong></a></td> }
+            <td data-label="Period"><strong dir="auto">@s.Label</strong></td>
+            <td data-label="Start" class="num">@(s.Start?.ToString("HH:mm") ?? "—")</td>
+            <td data-label="End" class="num">@(s.End?.ToString("HH:mm") ?? "—")</td>
+            <td data-label="Duration" class="num">@(s.Minutes is { } m ? $"{m} min" : "—")</td>
+            <td data-label="Days">@s.DaysLabel</td>
+            <td data-label="Applies to">
+                @if (s.IsSchoolWide) { <span class="badge badge--primary">All classes</span> }
+                else if (s.ReplacesId is { } r) { <span class="badge badge--accent" title="Replaces the school's @(Model.Map.Get(r)?.Label) for this class">Own version</span> }
+                else { <span class="badge badge--accent">This class only</span> }
+            </td>
+            <td data-label="Status"><span class="badge @Tone(s)">@Status(s)</span></td>
+            <td data-label="Lessons" class="num">@lessons</td>
+            <td class="col-actions">
+                <div class="row-actions">
+                    <a class="btn btn--secondary btn--sm" href="/timetable/periods/@s.Id/edit@(ctx)" data-modal>@Ui.Icon("pencil", "icon--sm")Edit</a>
+                    <a class="btn btn--ghost btn--sm" href="/timetable/periods/@s.Id/edit?active=@(s.IsActive ? "false" : "true")@(ctxAmp)" data-modal>@(s.IsActive ? "Disable" : "Enable")</a>
+                    <a class="btn btn--ghost btn--sm btn--danger-text" href="/timetable/periods/@s.Id/delete@(ctx)" data-modal aria-label="Delete @s.Label">@Ui.Icon("trash", "icon--sm")</a>
+                </div>
+            </td>
+        </tr>
+    }
+
+    void Table(IReadOnlyList<SlotView> list, bool showClass, string label)
+    {
+        <div class="table-wrap">
+            <table class="table table--stack" aria-label="@label">
+                <thead>
+                    <tr>
+                        <th scope="col" class="col-num">Order</th>
+                        @if (showClass) { <th scope="col">Class</th> }
+                        <th scope="col">Period</th><th scope="col">Start</th><th scope="col">End</th><th scope="col">Duration</th>
+                        <th scope="col">Days</th><th scope="col">Applies to</th><th scope="col">Status</th><th scope="col" class="num">Lessons</th>
+                        <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in list) { Row(s, showClass); }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs">
+            <li><a href="/">Dashboard</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/timetable/classes">Class Timetable</a></li>
+            @if (Model.IsClass) { <li><a href="/timetable/periods">Periods</a></li><li>@Model.ClassName</li> } else { <li>Periods</li> }
+        </ol>
+        <h1 class="page-title">@(Model.IsClass ? $"Periods · {Model.ClassName}" : "Periods")</h1>
+        <p class="page-sub">
+            @if (Model.IsClass)
+            {
+                @:@Model.ClassName's timetable uses these periods: the school-wide ones it has not changed, plus its own. Each period runs on its selected days.
+            }
+            else
+            {
+                @:Define the school day: as many periods as needed, each with its own times and days. School-wide periods apply to every class; a class can also have its own periods or its own version of a school period.
+            }
+        </p>
+    </div>
+    <div class="page-head__actions">
+        <div class="tt-switch">
+            <label class="visually-hidden" for="period-class">Show periods of</label>
+            <select class="select" id="period-class" data-searchable data-navigate-query="/timetable/periods?classId=" data-navigate-empty="/timetable/periods">
+                <option value="" selected="@(cls is null)">All classes (school-wide)</option>
+                @foreach (var c in Model.Map.Classes)
+                {
+                    <option value="@c.Id" selected="@(c.Id == cls)">@c.Name@(c.IsActive ? "" : " (inactive)")</option>
+                }
+            </select>
+        </div>
+        @if (Model.IsClass)
+        {
+            <a class="btn btn--secondary" href="/timetable/classes/@cls">@Ui.Icon("grid")Class timetable</a>
+        }
+        <a class="btn btn--primary" href="/timetable/periods/add@(q)" data-modal>@Ui.Icon("plus")Add period</a>
+    </div>
+</div>
+
+@if (Model.IsClass)
+{
+    var classId = cls!.Value;
+    <section class="card period-days" aria-label="Periods per day">
+        @foreach (var day in ScheduleRules.Days)
+        {
+            var list = Model.Map.ForClassDay(classId, day);
+            <div class="period-days__day">
+                <span class="period-days__name">@ScheduleRules.DayName(day)</span>
+                <strong class="period-days__count">@list.Count</strong>
+                <span class="period-days__label">@(list.Count == 1 ? "period" : "periods")@(list.Count > 0 && list.All(s => s.HasTimes) ? $" · {list.Min(s => s.Start)!.Value.ToString("HH:mm")}–{list.Max(s => s.End)!.Value.ToString("HH:mm")}" : "")</span>
+            </div>
+        }
+    </section>
+}
+
+@if (periods.Count == 0)
+{
+    <section class="card">
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("clock")</span>
+            <p class="empty__title">No periods yet</p>
+            <p class="empty__text">Add the first period of the school day.</p>
+            <div class="empty__actions"><a class="btn btn--primary" href="/timetable/periods/add@(q)" data-modal>@Ui.Icon("plus")Add period</a></div>
+        </div>
+    </section>
+}
+else
+{
+    <section class="card table-card" aria-label="@(Model.IsClass ? "Periods of " + Model.ClassName : "School-wide periods")">
+        <div class="card__head"><h2 class="card__title">@(Model.IsClass ? $"{Model.ClassName}'s periods" : "School-wide periods")</h2>
+            <span class="muted" style="font-size:0.84rem">@Ui.Plural(periods.Count(p => p.IsActive), "enabled period", "enabled periods")@(Model.IsClass ? "" : $" · used by {Ui.Plural(Model.Map.Classes.Count, "class", "classes")} unless a class changed them")</span></div>
+        @{ Table(periods, false, "Periods"); }
+    </section>
+}
+
+@if (Model.IsClass && Model.Replacements.Count > 0)
+{
+    <section class="card table-card" aria-label="School periods changed for this class">
+        <div class="card__head"><h2 class="card__title">School periods changed or removed for @Model.ClassName</h2></div>
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">School period</th><th scope="col">For @Model.ClassName</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var r in Model.Replacements)
+                    {
+                        var school = Model.Map.Get(r.ReplacesId!.Value);
+                        <tr>
+                            <td data-label="School period"><strong dir="auto">@school?.Label</strong> <span class="muted">@school?.Times · @school?.DaysLabel@(school?.Archived == true ? " · deleted" : "")</span></td>
+                            <td data-label="For this class">@(r.Archived ? "Removed from this class" : $"Own version: {r.Label} ({r.Times}, {r.DaysLabel})")</td>
+                            <td class="col-actions">
+                                @if (school is { Archived: false })
+                                {
+                                    <form action="/timetable/periods/@r.Id/restore?classId=@cls" method="post" data-ajax-form
+                                          data-confirm="@Model.ClassName will use the school's @school.Label (@school.Times, @school.DaysLabel) again. Its own version can only be dropped when it has no lessons."
+                                          data-confirm-title="Use the school period again?" data-confirm-button="Use school period" data-confirm-tone="primary">
+                                        @Html.AntiForgeryToken()
+                                        <button class="btn btn--secondary btn--sm" type="submit">@Ui.Icon("refresh", "icon--sm")Use school period</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@if (!Model.IsClass)
+{
+    var own = Model.ClassSpecific;
+    <section class="card table-card" aria-label="Class-specific periods">
+        <div class="card__head"><h2 class="card__title">Class-specific periods</h2>
+            <span class="muted" style="font-size:0.84rem">Periods of one class only, and classes' own versions of school periods.</span></div>
+        @if (own.Count == 0)
+        {
+            <p class="muted" style="padding:14px 18px;margin:0">No class has its own periods. Open a class (selector above) and choose “Add period” → “This class only”.</p>
+        }
+        else
+        {
+            Table(own, true, "Class-specific periods");
+        }
+    </section>
+}

@@ -1,0 +1,58 @@
+@model ReportEntry<ReportActionEntry>
+@* One entry of section 4 (Investigation Findings & Administrative Actions). *@
+@{
+    var e = Model.Entry;
+    var k = Model.Key;
+    var s = Model.Form.Suggestions!;
+    var hasErrors = !Model.IsTemplate && ViewContext.ViewData.ModelState.Keys.Any(x => x.StartsWith($"Actions[{k}]", StringComparison.Ordinal) && ViewContext.ViewData.ModelState[x]!.Errors.Count > 0);
+    var open = Model.IsTemplate || hasErrors || string.IsNullOrWhiteSpace(e.Finding);
+    var status = e.Status ?? IncidentActionStatus.Pending;
+}
+<article class="inc-entry inc-entry--action @(open ? "is-open" : "")" data-entry data-entry-kind="action">
+    <input type="hidden" name="Actions[@k].ActionId" value="@e.ActionId" data-field="ActionId" />
+    <header class="inc-entry__head">
+        <span class="inc-entry__num" data-entry-num></span>
+        <div class="inc-entry__summary">
+            <strong class="inc-entry__title" data-summary-title dir="auto">@(string.IsNullOrWhiteSpace(e.ActionItem) ? "New action" : e.ActionItem)</strong>
+            <span class="inc-entry__meta" data-summary-meta dir="auto">@(string.IsNullOrWhiteSpace(e.Finding) ? "Finding not written yet" : e.Finding)</span>
+        </div>
+        <span class="badge @IncidentLabels.ActionBadge(status)" data-summary-status>@IncidentLabels.ActionStatus(status)</span>
+        <div class="inc-entry__tools">
+            <button class="btn btn--ghost btn--sm" type="button" data-entry-toggle aria-expanded="@(open ? "true" : "false")">@Ui.Icon("pencil", "icon--sm")<span>@(open ? "Done" : "Edit")</span></button>
+            <button class="icon-btn icon-btn--danger" type="button" data-entry-remove aria-label="Remove this action" title="Remove">@Ui.Icon("trash")</button>
+        </div>
+    </header>
+    <div class="inc-entry__body">
+        <div class="inc-fields inc-fields--action">
+            <div class="field">
+                <label class="label" for="ac-@k-item">Action item <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" id="ac-@k-item" name="Actions[@k].ActionItem" value="@e.ActionItem" data-field="ActionItem" maxlength="@IncidentAction.ItemMaxLength"
+                       data-suggest='@System.Text.Json.JsonSerializer.Serialize(s.ActionItems)' placeholder="Individual Accounts Inquiry, Formal Verbal Warning…" autocomplete="off" dir="auto" required />
+                @Html.ValidationMessage($"Actions[{k}].ActionItem", new { @class = "field-validation-error" })
+            </div>
+            <div class="field">
+                <label class="label" for="ac-@k-status">Status</label>
+                <select class="select" id="ac-@k-status" name="Actions[@k].Status" data-field="Status" data-status-select>
+                    @foreach (var st in IncidentLabels.ActionStatuses)
+                    {
+                        <option value="@st" selected="@(status == st)" data-badge="@IncidentLabels.ActionBadge(st)">@IncidentLabels.ActionStatus(st)</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="inc-fields inc-fields--2">
+            <div class="field">
+                <label class="label" for="ac-@k-finding">Investigation finding &amp; action <span class="req" aria-hidden="true">*</span></label>
+                <textarea class="input textarea" id="ac-@k-finding" name="Actions[@k].Finding" data-field="Finding" rows="4" maxlength="@IncidentAction.TextMaxLength" dir="auto" required
+                          placeholder="What the investigation found and what was done.">@e.Finding</textarea>
+                @Html.ValidationMessage($"Actions[{k}].Finding", new { @class = "field-validation-error" })
+            </div>
+            <div class="field">
+                <label class="label" for="ac-@k-details">Restorative &amp; disciplinary details</label>
+                <textarea class="input textarea" id="ac-@k-details" name="Actions[@k].Details" data-field="Details" rows="4" maxlength="@IncidentAction.TextMaxLength" dir="auto"
+                          placeholder="Apologies, agreements, warnings issued, parent contact…">@e.Details</textarea>
+                @Html.ValidationMessage($"Actions[{k}].Details", new { @class = "field-validation-error" })
+            </div>
+        </div>
+    </div>
+</article>

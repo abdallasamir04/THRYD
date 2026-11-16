@@ -22,11 +22,13 @@ public sealed class PePageViewModel
     {
         var week = Common.SchoolWeek.StartOf(date);
         var dept = await pe.DepartmentIdAsync(ct);
+        var sessions = await pe.WeekAsync(week, ct);
         return new PePageViewModel
         {
             Date = date, Week = week, DepartmentId = dept,
-            Slots = (await timetable.SlotsAsync(ct)).Where(s => s.IsActive).ToList(),
-            Sessions = await pe.WeekAsync(week, ct),
+            // The school-wide periods, plus any class's own period a P.E. lesson sits in.
+            Slots = await timetable.SlotsForAsync(sessions.Select(s => s.SlotId), ct),
+            Sessions = sessions,
             PeTeachers = dept is null ? 0 : (await teachers.ListAllAsync(new TeacherListQuery { DepartmentId = dept }, ct)).Count,
         };
     }

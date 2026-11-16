@@ -173,12 +173,14 @@ public sealed partial class TestDataSeeder(IServiceProvider root, TestDataTracke
             .Select(c => (c.Id, c.Name, Stage: StageOf(c.Name))).Where(c => c.Stage != "").ToList();
         if (_classes.Count == 0) throw new InvalidOperationException("No active classes (PreK, KG1A … G10B) found.");
 
-        var slots = await Db.TimeSlots.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Number).ToListAsync();
+        // School-wide periods only (class-specific periods are the administrator's own additions).
+        var slots = (await Db.TimeSlots.AsNoTracking().Where(s => s.IsActive && s.SchoolClassId == null && s.ArchivedAt == null).OrderBy(s => s.Number).ThenBy(s => s.Id).ToListAsync())
+            .GroupBy(s => s.Number).Select(g => g.First()).ToList();
         _slotIds = slots.ToDictionary(s => s.Number, s => s.Id);
         // The school's own period times when set; otherwise a typical day (used only to keep duties out of lessons).
         var start = new TimeOnly(7, 45);
         var planned = new Dictionary<int, (TimeOnly, TimeOnly)>();
-        for (var n = 1; n <= TimeSlot.Count; n++)
+        for (var n = 1; n <= Math.Max(TimeSlot.SeededCount, slots.Select(s => s.Number).DefaultIfEmpty(0).Max()); n++)
         {
             if (n is 4 or 7) start = start.AddMinutes(20);
             planned[n] = (start, start.AddMinutes(45));
@@ -917,7 +919,7 @@ public sealed partial class TestDataSeeder(IServiceProvider root, TestDataTracke
             .OrderBy(r => r.Id).Take(4).Select(r => new { r.Id, r.StudentId }).ToListAsync();
         user.Name = Mgmt(ManagementPosition.SchoolDirector).Name;
         foreach (var r in records)
-            await Must(() => S<IArrivalService>().CorrectAsync(r.Id, new ArrivalEntry(r.StudentId, ArrivalStatus.Present, new TimeOnly(7, 52), ArrivalMethod.ParentDropOff, "Main Gate", null, false, "Arrived with a parent after the register was taken."),
+            await Must(() => S<IArrivalService>().CorrectAsync(r.Id, ArrivalOutcome.Present, new TimeOnly(7, 52), "Arrived with a parent after the register was taken.",
                 "Marked absent at the gate; the student arrived late with a parent and signed in at reception."), "Arrival correction");
         if (failed > 0) Skipped.Add($"{failed} arrival entries were not saved");
         Step($"{saved} student arrival records over {days.Count} school days (today partly recorded), {records.Count} corrections");
@@ -940,7 +942,7 @@ public sealed partial class TestDataSeeder(IServiceProvider root, TestDataTracke
     {
         user.Name = Mgmt(ManagementPosition.SchoolDirector).Name;
         var pattern = new[] { ManagementTaskStatus.InProgress, ManagementTaskStatus.ToDo, ManagementTaskStatus.Completed, ManagementTaskStatus.InProgress, ManagementTaskStatus.OnHold, ManagementTaskStatus.ToDo, ManagementTaskStatus.Completed };
-        var priorities = new[] { TaskPriority.High, TaskPriority.Medium, TaskPriority.Urgent, TaskPriority.Low, TaskPriority.Medium, TaskPriority.High };
+        var priorities = new[] { TaskPriority.High, TaskPriority.Medium, TaskPriority.Critical, TaskPriority.Low, TaskPriority.Medium, TaskPriority.High };
         var created = new List<(int Id, ManagementTaskStatus Status, bool Overdue)>();
         var i = 0;
         // Tasks go to the generated Management Team members (by the position they hold, or held).
@@ -954,7 +956,7 @@ public sealed partial class TestDataSeeder(IServiceProvider root, TestDataTracke
                 var overdue = status is ManagementTaskStatus.ToDo or ManagementTaskStatus.InProgress && i % 4 == 1;
                 var input = new TaskInput
                 {
-                    MemberId = member.Id, Title = title, Priority = priorities[i % priorities.Length],
+                    AssignedToId = member.Id, Title = title, Priority = priorities[i % priorities.Length],
                     Description = $"Owner: {member.Name}. Agreed in the weekly management meeting.",
                     Notes = i % 3 == 0 ? "Share the outcome with the School Director." : null,
                     DueDate = i % 9 == 8 ? null : _today.AddDays(3 + _rng.Next(0, 35)),
@@ -973,7 +975,7 @@ public sealed partial class TestDataSeeder(IServiceProvider root, TestDataTracke
         var former = _management.FirstOrDefault(m => m.Position is null);
         if (former is not null)
         {
-            var handover = await Must(() => S<IManagementTaskService>().CreateAsync(new TaskInput { MemberId = former.Id, Title = "Hand over High School files to the new coordinator", Priority = TaskPriority.High, DueDate = _today.AddDays(5) }), "Handover task");
+            var handover = await Must(() => S<IManagementTaskService>().CreateAsync(new TaskInput { AssignedToId = former.Id, Title = "Hand over High School files to the new coordinator", Priority = TaskPriority.High, DueDate = _today.AddDays(5) }), "Handover task");
             await Must(() => S<IManagementTaskService>().SetStatusAsync(handover, ManagementTaskStatus.Completed), "Handover completed");
             created.Add((handover, ManagementTaskStatus.Completed, false));
         }

@@ -34,6 +34,7 @@
         {
             ("Classes", "/classes", "Classes", "door", counts.Classes),
             ("Timetables", "/timetables", "Timetables", "calendar", null),
+            ("AcademicCalendar", "/academic-calendar", "Academic Calendar", "calendar-days", null),
         }),
         ("Daily Operations", new (string, string?, string, string, int?)[]
         {
@@ -151,7 +152,7 @@
                     </p>
                 </div>
                 <div class="topbar__actions">
-                    <span class="chip topbar__date">@Ui.Icon("calendar")@DateTime.Now.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
+                    <partial name="_SchoolClock" />
                     @if (!string.IsNullOrEmpty(profile.AcademicYear))
                     {
                         <span class="chip chip--brand">@profile.AcademicYear</span>
@@ -175,7 +176,7 @@
             </main>
 
             <footer class="footer">
-                @profile.SchoolName · School Management · © @DateTime.Now.Year
+                @profile.SchoolName · School Management · © @SchoolTime.Now.Year
             </footer>
         </div>
     </div>
@@ -208,8 +209,10 @@
     <script src="~/lib/jquery/dist/jquery.min.js" asp-append-version="true"></script>
     <script src="~/lib/jquery-validation/dist/jquery.validate.min.js" asp-append-version="true"></script>
     <script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js" asp-append-version="true"></script>
+    <script src="~/js/school-clock.js" asp-append-version="true"></script>
     <script src="~/js/operations.js" asp-append-version="true"></script>
     <script src="~/js/staff.js" asp-append-version="true"></script>
+    <script src="~/js/tasks.js" asp-append-version="true"></script>
     <script src="~/js/app.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

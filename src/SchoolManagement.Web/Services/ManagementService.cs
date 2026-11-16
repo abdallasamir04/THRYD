@@ -211,9 +211,11 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
     public async Task<ServiceResult> DeleteAsync(int id, CancellationToken ct = default)
     {
         if (!await db.ManagementMembers.AnyAsync(m => m.Id == id, ct)) return ServiceResult.Fail("", "This Management Team member no longer exists.");
-        var tasks = await db.ManagementTasks.CountAsync(t => t.ManagementMemberId == id, ct);
+        var tasks = await db.ManagementTasks.CountAsync(t => t.AssignedToId == id, ct);
         if (tasks > 0)
             return ServiceResult.Fail("", $"This member has {tasks} task(s). Reassign or delete them on the Tasks page before deleting the member.");
+        if (await db.ManagementTasks.AnyAsync(t => t.ReviewerId == id || t.CreatedById == id, ct))
+            return ServiceResult.Fail("", "This member created or reviews tasks, so the record is kept for the task history.");
         var history = await db.DutyAssignments.CountAsync(d => d.PrimaryStaffId == id || d.BackupStaffId == id, ct)
             + await db.DutyBackupResponses.CountAsync(r => r.StaffMemberId == id, ct)
             + await db.DutyStaffAssignments.CountAsync(a => a.StaffMemberId == id, ct)
@@ -222,7 +224,7 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
         if (history > 0) return ServiceResult.Fail("", "This member appears in duty, evaluation or student arrival records, so the record is kept for history.");
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        await db.ManagementTaskHistory.Where(h => h.ManagementMemberId == id).ExecuteDeleteAsync(ct);
+        await db.ManagementTaskHistory.Where(h => h.StaffMemberId == id).ExecuteDeleteAsync(ct);
         await db.ManagementMembers.Where(m => m.Id == id).ExecuteDeleteAsync(ct);
         await tx.CommitAsync(ct);
         return ServiceResult.Ok(id);
@@ -297,14 +299,14 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
 
     private IQueryable<ManagementMemberRow> Project(IQueryable<ManagementMember> query)
     {
-        var now = DateTime.Now;
+        var now = SchoolTime.Now; // due dates / times are school-local
         var today = DateOnly.FromDateTime(now);
         var time = TimeOnly.FromDateTime(now);
         return query.Select(m => new ManagementMemberRow(m.Id, m.FullName, m.Position, m.ContactNumber, m.Email, m.AppointedOn, m.CreatedAt,
-            db.ManagementTasks.Count(t => t.ManagementMemberId == m.Id && t.Status != ManagementTaskStatus.Completed),
-            db.ManagementTasks.Count(t => t.ManagementMemberId == m.Id && t.Status != ManagementTaskStatus.Completed && t.DueDate != null
+            db.ManagementTasks.Count(t => t.AssignedToId == m.Id && t.Status != ManagementTaskStatus.Completed && t.Status != ManagementTaskStatus.Cancelled),
+            db.ManagementTasks.Count(t => t.AssignedToId == m.Id && t.Status != ManagementTaskStatus.Completed && t.Status != ManagementTaskStatus.Cancelled && t.DueDate != null
                 && (t.DueDate < today || (t.DueDate == today && t.DueTime != null && t.DueTime < time))),
-            db.ManagementTasks.Count(t => t.ManagementMemberId == m.Id && t.Status == ManagementTaskStatus.Completed)));
+            db.ManagementTasks.Count(t => t.AssignedToId == m.Id && t.Status == ManagementTaskStatus.Completed)));
     }
 
     /// <summary>Saves; a unique-index clash (two people saving the same position or name at once) becomes a form error.</summary>

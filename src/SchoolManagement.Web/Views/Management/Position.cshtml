@@ -1,0 +1,133 @@
+@model LeadershipPositionViewModel
+@*
+    School Leadership → one position: what it covers, the current holder, the holder's tasks (managed here as on the
+    member's profile) and every appointment to the position.
+*@
+@{
+    ViewData["Title"] = Model.Name;
+    ViewData["Nav"] = "Management";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var holder = Model.Slot.Holder;
+    var assignHref = $"/management/positions/{Model.Position}/assign";
+    var previous = Model.History.Where(h => !h.IsCurrent).ToList();
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/leadership#positions">School Leadership</a></li><li><span aria-current="page">@Model.Name</span></li></ol>
+        <div class="profile">
+            <span class="position-card__icon position-card__icon--lg" aria-hidden="true">@Ui.Icon(ManagementPositions.Icon(Model.Position), "icon--lg")</span>
+            <div>
+                <h1 class="page-title">@Model.Name</h1>
+                <p class="page-sub">
+                    @if (holder is null) { <span class="badge badge--warning">@Ui.Icon("alert-circle", "icon--sm")Vacant</span> }
+                    else { <span class="badge badge--success">@Ui.Icon("check-circle", "icon--sm")Filled</span> }
+                    <span>@ManagementPositions.Description(Model.Position)</span>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="page-head__actions">
+        @if (holder is null)
+        {
+            <a class="btn btn--secondary" href="/management/members/create?position=@Model.Position" data-modal>@Ui.Icon("user-plus")New member</a>
+            <a class="btn btn--primary" href="@assignHref" data-modal>@Ui.Icon("users")Assign member</a>
+        }
+        else
+        {
+            <a class="btn btn--secondary" href="@assignHref" data-modal>@Ui.Icon("swap")Replace holder</a>
+            <a class="btn btn--primary" href="/management/tasks/create?memberId=@holder.Id" data-modal>@Ui.Icon("plus")New task</a>
+        }
+    </div>
+</div>
+
+<div class="grid-3-1">
+    <section class="card table-card" aria-labelledby="tasks-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="tasks-title">@Ui.Icon("clipboard-check")Responsibilities and tasks</h2>
+                <p class="card__sub">@(holder is null ? "Tasks belong to the position's holder." : $"Tasks assigned to {holder.FullName}, the current holder. Change a status directly on a card.")</p>
+            </div>
+        </div>
+        @if (Model.Tasks is { } list)
+        {
+            <partial name="~/Views/ManagementTasks/_Toolbar.cshtml" model="list" />
+            <div id="task-list" data-ajax-list data-refresh-page aria-live="polite">
+                <partial name="~/Views/ManagementTasks/_TaskList.cshtml" model="list" />
+            </div>
+        }
+        else
+        {
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon("user-plus")</span>
+                <p class="empty__title">This position is vacant</p>
+                <p class="empty__text">Assign a member to give the position a holder; tasks are then assigned to them.</p>
+                <div class="empty__actions">
+                    <a class="btn btn--primary" href="@assignHref" data-modal>@Ui.Icon("users")Assign existing member</a>
+                    <a class="btn btn--secondary" href="/management/members/create?position=@Model.Position" data-modal>@Ui.Icon("user-plus")New member</a>
+                </div>
+            </div>
+        }
+    </section>
+
+    <div class="stack">
+        <section class="card" aria-labelledby="holder-title">
+            <div class="card__head"><h2 class="card__title" id="holder-title">@Ui.Icon("user")Current holder</h2></div>
+            <div class="card__body">
+                @if (holder is { } m)
+                {
+                    <div class="person" style="margin-bottom:14px">
+                        <span class="avatar avatar--lg avatar--@Ui.Tone(m.FullName)" aria-hidden="true">@Ui.Initials(m.FullName)</span>
+                        <div style="min-width:0">
+                            <div class="person__name" dir="auto"><a href="/management/members/@m.Id">@m.FullName</a></div>
+                            <div class="person__meta">@(Model.Slot.Since is { } s ? "In this position since " + s.ToString("d MMM yyyy", c) : "Start date not recorded")</div>
+                        </div>
+                    </div>
+                    <dl class="dl" style="font-size:0.875rem">
+                        <dt>Contact</dt>
+                        <dd>@if (!string.IsNullOrEmpty(m.ContactNumber)) { <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@m.ContactNumber</a> } else { <span class="faint">Not set</span> }</dd>
+                        <dt>Email</dt>
+                        <dd>@if (!string.IsNullOrEmpty(m.Email)) { <a href="mailto:@m.Email" dir="ltr" style="overflow-wrap:anywhere">@m.Email</a> } else { <span class="faint">Not set</span> }</dd>
+                        <dt>Tasks</dt>
+                        <dd>@m.OpenTasks open@(m.OverdueTasks > 0 ? $" · {m.OverdueTasks} overdue" : "") · @m.CompletedTasks done</dd>
+                    </dl>
+                    <div class="row-actions" style="margin-top:14px">
+                        <a class="btn btn--secondary btn--sm" href="/management/members/@m.Id">@Ui.Icon("user", "icon--sm")View profile</a>
+                        <a class="btn btn--ghost btn--sm" href="/management/members/@m.Id/edit" data-modal>@Ui.Icon("pencil", "icon--sm")Edit</a>
+                    </div>
+                }
+                else
+                {
+                    <p class="position-card__vacant" style="margin:0">Nobody holds this position.</p>
+                    @if (previous.Count > 0)
+                    {
+                        <p class="hint" style="margin:8px 0 0">Last held by <a href="/management/members/@previous[0].MemberId" dir="auto">@previous[0].MemberName</a>@(previous[0].EndDate is { } e ? " until " + e.ToString("d MMM yyyy", c) : "").</p>
+                    }
+                }
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="poshist-title">
+            <div class="card__head">
+                <div>
+                    <h2 class="card__title" id="poshist-title">@Ui.Icon("clock")Appointment history</h2>
+                    <p class="card__sub">@(Model.History.Count == 0 ? "No appointments recorded yet." : $"{Ui.Plural(Model.History.Count, "appointment", "appointments")}, current first. {Ui.Plural(previous.Count, "previous holder", "previous holders")}.")</p>
+                </div>
+            </div>
+            @if (Model.History.Count > 0)
+            {
+                <ol class="timeline" style="margin:16px 22px">
+                    @foreach (var h in Model.History)
+                    {
+                        <li class="timeline__item @(h.IsCurrent ? "timeline__item--accepted" : "timeline__item--withdrawn")">
+                            <span class="timeline__when">@h.StartDate.ToString("d MMM yyyy", c) – @(h.IsCurrent ? "now" : h.EndDate?.ToString("d MMM yyyy", c))@(h.AssignedBy is null ? "" : " · " + h.AssignedBy)</span>
+                            <a href="/management/members/@h.MemberId" dir="auto"><strong>@h.MemberName</strong></a>
+                            @if (h.EndReason is not null) { <span class="timeline__note" dir="auto">@h.EndReason</span> }
+                        </li>
+                    }
+                </ol>
+            }
+        </section>
+    </div>
+</div>

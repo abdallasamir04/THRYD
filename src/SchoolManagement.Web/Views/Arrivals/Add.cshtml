@@ -1,0 +1,52 @@
+@model ArrivalAddModel
+@*
+    A past school day: a missed arrival entered with its time. The outcome still follows the time (Present until the
+    late threshold, Late after). Today's arrivals are one click on the register, never entered by hand.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var r = Model.Row;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Add arrival"; ViewData["Nav"] = "Arrivals"; }
+    var date = DateOnly.TryParse(Model.Date, out var d) ? d : SchoolWeek.Today;
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/arrivals/add" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="StudentId" value="@Model.StudentId" />
+        <input type="hidden" name="Date" value="@Model.Date" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("clock", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">Add arrival — @(r?.StudentName ?? "Student")</h2>
+                <p class="modal__sub">@(r?.ClassName) · @date.ToString("dddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="Time">Arrival time <span class="req" aria-hidden="true">*</span></label>
+                <input class="input picker" type="time" id="Time" name="Time" value="@Model.Time" data-timepicker data-empty-text="Choose the time" />
+                <span class="hint">@(Model.Rules?.Start is { } st ? $"Present until {Arrivals.Time(st)}, Late after" : "Present") — worked out from the time. Arrivals at or after @Arrivals.Time(Model.Rules?.Cutoff) are not accepted.</span>
+                <span asp-validation-for="Time" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Notes">Notes</label>
+                <input class="input" asp-for="Notes" maxlength="500" dir="auto" placeholder="Optional" />
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/arrivals?date=@Model.Date">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save arrival</button>
+        </div>
+    </form>
+</div>

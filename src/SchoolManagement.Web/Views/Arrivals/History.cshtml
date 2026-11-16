@@ -1,0 +1,301 @@
+@model AttendanceHistoryViewModel
+@*
+    School Attendance → Attendance History & Reports (read-only). One student, a class, a grade or the whole school, for a
+    date or a period, with PDF / Excel of exactly what is shown. School days only (weekends and school holidays never count);
+    a day without a record is Not Recorded, never an absence.
+*@
+@{
+    ViewData["Title"] = "Attendance History & Reports";
+    ViewData["Nav"] = "Arrivals";
+    var q = Model.Query;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var qs = Context.Request.QueryString.Value ?? "";
+    var period = Model.From == Model.To ? Model.From.ToString("dddd d MMMM yyyy", inv) : $"{Model.From.ToString("d MMM yyyy", inv)} – {Model.To.ToString("d MMM yyyy", inv)}";
+    var today = SchoolWeek.Iso(SchoolWeek.Today);
+    string StudentLink(int id) => $"/arrivals/history?mode=student&studentId={id}&period={q.Period}&date={q.Date}&from={q.From}&to={q.To}";
+    string Pct(AttendanceCounts k) => k.PercentText;
+    static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : parts.Length == 1 ? parts[0][..1].ToUpperInvariant() : $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+    var hasResult = Model.Student is not null || Model.Group is not null;
+}
+
+<div class="page-head sa-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/attendance">Student Attendance</a></li><li><a href="/arrivals">School Attendance</a></li><li><span aria-current="page">History &amp; Reports</span></li></ol>
+        <h1 class="page-title">School Attendance</h1>
+    </div>
+    @if (hasResult)
+    {
+        <div class="page-head__actions">
+            <a class="btn btn--secondary" href="/arrivals/history/excel@(qs)" download>@Ui.Icon("sheet")Excel</a>
+            <a class="btn btn--primary" href="/arrivals/history/pdf@(qs)" download>@Ui.Icon("file-pdf")PDF</a>
+        </div>
+    }
+</div>
+
+<nav class="segmented sa-tabs" aria-label="School Attendance">
+    <a href="/arrivals">@Ui.Icon("check-circle", "icon--sm")Daily Attendance</a>
+    <a href="/arrivals/history" aria-current="true">@Ui.Icon("chart", "icon--sm")Attendance History &amp; Reports</a>
+</nav>
+
+<form class="card sa-hist-form" method="get" action="/arrivals/history" data-hist-form aria-label="Report">
+    <fieldset class="sa-hist-form__mode">
+        <legend class="visually-hidden">Report on</legend>
+        <div class="seg-toggle">
+            <label><input type="radio" name="mode" value="student" checked="@(q.Mode == "student")" /><span>@Ui.Icon("user", "icon--sm")Student</span></label>
+            <label><input type="radio" name="mode" value="class" checked="@(q.Mode == "class")" /><span>@Ui.Icon("door", "icon--sm")Class</span></label>
+            <label><input type="radio" name="mode" value="grade" checked="@(q.Mode == "grade")" /><span>@Ui.Icon("layers", "icon--sm")Grade / stage</span></label>
+            <label><input type="radio" name="mode" value="school" checked="@(q.Mode is not ("student" or "class" or "grade"))" /><span>@Ui.Icon("school", "icon--sm")Whole school</span></label>
+        </div>
+    </fieldset>
+    <div class="sa-hist-form__fields">
+        <div class="field" data-hist-for="student">
+            <label class="label" for="h-student">Student</label>
+            <select class="select" id="h-student" name="studentId" data-searchable data-search-notes>
+                <option value="">Search by name or ID…</option>
+                @foreach (var s in Model.Students)
+                {
+                    <option value="@s.Id" selected="@(q.StudentId == s.Id)" data-note="ID @s.Id · @s.ClassName">@s.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field" data-hist-for="class">
+            <label class="label" for="h-class">Class</label>
+            <select class="select" id="h-class" name="classId" data-searchable>
+                <option value="">Choose a class…</option>
+                @foreach (var c in Model.Classes)
+                {
+                    <option value="@c.Id" selected="@(q.ClassId == c.Id)" data-note="@(c.IsActive ? $"{c.StudentCount} students" : "Inactive")">@c.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field" data-hist-for="grade">
+            <label class="label" for="h-grade">Grade / stage</label>
+            <select class="select" id="h-grade" name="grade">
+                <option value="">Choose a grade…</option>
+                @foreach (var g in GradeCatalog.All)
+                {
+                    <option value="@g.Key" selected="@(q.Grade == g.Key)">@g.Label</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <span class="label" id="h-period-label">Period</span>
+            <div class="seg-toggle seg-toggle--sm" role="radiogroup" aria-labelledby="h-period-label">
+                <label><input type="radio" name="period" value="day" checked="@(q.Period != "range")" /><span>One date</span></label>
+                <label><input type="radio" name="period" value="range" checked="@(q.Period == "range")" /><span>Date range</span></label>
+            </div>
+        </div>
+        <div class="field" data-hist-period="day">
+            <label class="label" for="h-date">Date</label>
+            <input class="input picker" type="date" id="h-date" name="date" value="@(q.Period == "range" ? q.Date : SchoolWeek.Iso(Model.From))" max="@today" data-datepicker data-empty-text="Today" />
+        </div>
+        <div class="field" data-hist-period="range">
+            <label class="label" for="h-from">From</label>
+            <input class="input picker" type="date" id="h-from" name="from" value="@(q.Period == "range" ? SchoolWeek.Iso(Model.From) : q.From)" max="@today" data-datepicker data-empty-text="30 days ago" />
+        </div>
+        <div class="field" data-hist-period="range">
+            <label class="label" for="h-to">To</label>
+            <input class="input picker" type="date" id="h-to" name="to" value="@(q.Period == "range" ? SchoolWeek.Iso(Model.To) : q.To)" max="@today" data-datepicker data-empty-text="Today" />
+        </div>
+        <div class="field" data-hist-for="class grade school">
+            <label class="label" for="h-status">Status</label>
+            <select class="select" id="h-status" name="status">
+                <option value="">All students</option>
+                <option value="present" selected="@(q.Status == "present")">Present</option>
+                <option value="late" selected="@(q.Status == "late")">Late</option>
+                <option value="absent" selected="@(q.Status == "absent")">Absent</option>
+                <option value="notrecorded" selected="@(q.Status == "notrecorded")">Not Recorded</option>
+            </select>
+        </div>
+        <div class="sa-hist-form__go">
+            <button class="btn btn--primary" type="submit">@Ui.Icon("search")Show report</button>
+        </div>
+    </div>
+</form>
+
+@if (q.Mode == "student" && Model.Student is null)
+{
+    <div class="card empty sa-hist-empty">
+        @Ui.Icon("user")
+        <p>@(q.StudentId is null ? "Choose a student to see their attendance history." : "This student no longer exists.")</p>
+    </div>
+}
+
+@if (Model.Student is { } st)
+{
+    var k = st.Counts;
+    <section class="card sa-profile" aria-label="Student">
+        <span class="sa-avatar sa-avatar--lg" aria-hidden="true">@Initials(st.Name)</span>
+        <div class="sa-profile__who">
+            <h2 class="sa-profile__name" dir="auto">@st.Name</h2>
+            <p class="sa-profile__meta">ID @st.StudentId · @st.ClassName · @period</p>
+        </div>
+        <a class="btn btn--ghost btn--sm" href="/students/profile/@st.StudentId">@Ui.Icon("user")Student profile</a>
+    </section>
+    <ul class="sa-tiles sa-tiles--6" aria-label="Summary">
+        <li class="sa-tile"><span class="sa-tile__value num">@k.Days</span><span class="sa-tile__label">School days</span></li>
+        <li class="sa-tile sa-tile--present"><span class="sa-tile__value num">@k.Present</span><span class="sa-tile__label">Present</span></li>
+        <li class="sa-tile sa-tile--late"><span class="sa-tile__value num">@k.Late</span><span class="sa-tile__label">Late</span></li>
+        <li class="sa-tile sa-tile--absent"><span class="sa-tile__value num">@k.Absent</span><span class="sa-tile__label">Absent</span></li>
+        <li class="sa-tile sa-tile--none"><span class="sa-tile__value num">@k.NotRecorded</span><span class="sa-tile__label">Not Recorded</span></li>
+        <li class="sa-tile sa-tile--pct"><span class="sa-tile__value num">@Pct(k)</span><span class="sa-tile__label">Attendance</span></li>
+    </ul>
+    <section class="card table-card" aria-label="Daily attendance">
+        <div class="sa-section-head"><h2>Daily attendance</h2><span class="sa-section-head__sub">@Ui.Plural(st.Days.Count, "school day", "school days") · in date order</span></div>
+        <div class="table-wrap">
+            <table class="table sa-table">
+                <thead><tr><th>Date</th><th>Day</th><th>Status</th><th>Arrival time</th><th>Notes</th><th>Correction</th></tr></thead>
+                <tbody>
+                    @foreach (var d in st.Days)
+                    {
+                        <tr>
+                            <td data-label="Date" class="num">@d.Date.ToString("d MMM yyyy", inv)</td>
+                            <td data-label="Day">@d.Date.ToString("dddd", inv)</td>
+                            <td data-label="Status"><span class="badge badge--dot @(d.Outcome is { } o ? Arrivals.Badge(o) : "badge--neutral")">@Arrivals.Label(d.Outcome)</span></td>
+                            <td data-label="Arrival time" class="num">@(d.Time is { } t ? Arrivals.Time(t) : "—")</td>
+                            <td data-label="Notes" dir="auto">@(d.Notes ?? "—")</td>
+                            <td data-label="Correction">@if (d.Corrections > 0) { <span class="sa-corr" title="@d.LastCorrection">@Ui.Icon("pencil", "icon--sm")Corrected @(d.Corrections)×<small dir="auto">@d.LastCorrection</small></span> } else { <span class="muted">—</span> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (st.Days.Count == 0) { <div class="empty">@Ui.Icon("calendar")<p>No school days in this period.</p></div> }
+    </section>
+    @if (st.Corrections.Count > 0)
+    {
+        <section class="card table-card" aria-label="Correction history">
+            <div class="sa-section-head"><h2>Correction history</h2><span class="sa-section-head__sub">Before and after, kept for every change</span></div>
+            <div class="table-wrap">
+                <table class="table sa-table">
+                    <thead><tr><th>Date</th><th>Before</th><th>After</th><th>Reason</th><th>Corrected</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in st.Corrections)
+                        {
+                            <tr>
+                                <td data-label="Date" class="num">@c.Date.ToString("d MMM yyyy", inv)</td>
+                                <td data-label="Before" dir="auto">@c.Before</td>
+                                <td data-label="After" dir="auto">@c.After</td>
+                                <td data-label="Reason" dir="auto">@c.Reason</td>
+                                <td data-label="Corrected">@SchoolTime.Current.ToLocal(c.CorrectedAt).ToString("d MMM yyyy, h:mm tt", inv)<br /><small class="muted">@(c.CorrectedBy ?? "—")</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@if (Model.Group is { } g)
+{
+    var k = g.Counts;
+    <section class="sa-report-head">
+        <div>
+            <span class="sa-report-head__eyebrow">@(g.Scope switch { "class" => "Class report", "grade" => "Grade report", _ => "Whole-school report" })</span>
+            <h2 class="sa-report-head__title">@g.Title</h2>
+            <p class="sa-report-head__meta">@period · @Ui.Plural(g.SchoolDays, "school day", "school days") · @Ui.Plural(g.Students, "student", "students")</p>
+        </div>
+    </section>
+    @if (g.SchoolDays == 0)
+    {
+        <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>No school days in this period.</strong>Weekends and school holidays are not counted.</div></div>
+    }
+    <ul class="sa-tiles sa-tiles--6" aria-label="Summary">
+        <li class="sa-tile"><span class="sa-tile__value num">@g.Students</span><span class="sa-tile__label">Students</span></li>
+        <li class="sa-tile sa-tile--present"><span class="sa-tile__value num">@k.Present</span><span class="sa-tile__label">Present</span></li>
+        <li class="sa-tile sa-tile--late"><span class="sa-tile__value num">@k.Late</span><span class="sa-tile__label">Late</span></li>
+        <li class="sa-tile sa-tile--absent"><span class="sa-tile__value num">@k.Absent</span><span class="sa-tile__label">Absent</span></li>
+        <li class="sa-tile sa-tile--none"><span class="sa-tile__value num">@k.NotRecorded</span><span class="sa-tile__label">Not Recorded</span></li>
+        <li class="sa-tile sa-tile--pct"><span class="sa-tile__value num">@Pct(k)</span><span class="sa-tile__label">Attendance</span></li>
+    </ul>
+
+    @if (g.Scope != "class")
+    {
+        <div class="sa-breakdowns">
+            @foreach (var (title, rows) in new[] { ("By grade", g.ByGrade), ("By class", g.ByClass) })
+            {
+                <section class="card table-card" aria-label="@title">
+                    <div class="sa-section-head"><h2>@title</h2></div>
+                    <div class="table-wrap">
+                        <table class="table sa-table sa-table--compact">
+                            <thead><tr><th>@(title == "By grade" ? "Grade" : "Class")</th><th class="num">Students</th><th class="num">Present</th><th class="num">Late</th><th class="num">Absent</th><th class="num">Not Rec.</th><th class="num">%</th></tr></thead>
+                            <tbody>
+                                @foreach (var x in rows)
+                                {
+                                    <tr>
+                                        <td data-label="@(title == "By grade" ? "Grade" : "Class")"><strong>@x.Label</strong></td>
+                                        <td data-label="Students" class="num">@x.Students</td>
+                                        <td data-label="Present" class="num sa-n--present">@x.Counts.Present</td>
+                                        <td data-label="Late" class="num sa-n--late">@x.Counts.Late</td>
+                                        <td data-label="Absent" class="num sa-n--absent">@x.Counts.Absent</td>
+                                        <td data-label="Not Recorded" class="num muted">@x.Counts.NotRecorded</td>
+                                        <td data-label="Attendance" class="num"><strong>@Pct(x.Counts)</strong></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            }
+        </div>
+    }
+
+    <section class="card table-card" aria-label="Students">
+        <div class="sa-section-head">
+            <h2>Students</h2>
+            <span class="sa-section-head__sub">@Ui.Plural(g.StudentRows.Count, "student", "students")@(q.Status is { Length: > 0 } st2 ? $" · {st2 switch { "notrecorded" => "Not Recorded", _ => char.ToUpperInvariant(st2[0]) + st2[1..] }}" : "")</span>
+        </div>
+        <div class="table-wrap">
+            <table class="table sa-table">
+                @if (g.SingleDay)
+                {
+                    <thead><tr><th>Student</th><th>ID</th><th>Class</th><th>Status</th><th>Arrival time</th></tr></thead>
+                    <tbody>
+                        @foreach (var x in g.StudentRows)
+                        {
+                            <tr>
+                                <td data-label="Student"><a href="@StudentLink(x.StudentId)" dir="auto"><strong>@x.Name</strong></a></td>
+                                <td data-label="ID" class="num">@x.StudentId</td>
+                                <td data-label="Class">@x.ClassName</td>
+                                <td data-label="Status"><span class="badge badge--dot @(x.DayOutcome is { } o ? Arrivals.Badge(o) : "badge--neutral")">@Arrivals.Label(x.DayOutcome)</span></td>
+                                <td data-label="Arrival time" class="num">@(x.DayTime is { } t ? Arrivals.Time(t) : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                }
+                else
+                {
+                    <thead><tr><th>Student</th><th>ID</th><th>Class</th><th class="num">Days</th><th class="num">Present</th><th class="num">Late</th><th class="num">Absent</th><th class="num">Not Rec.</th><th class="num">Attendance</th></tr></thead>
+                    <tbody>
+                        @foreach (var x in g.StudentRows)
+                        {
+                            <tr>
+                                <td data-label="Student"><a href="@StudentLink(x.StudentId)" dir="auto"><strong>@x.Name</strong></a></td>
+                                <td data-label="ID" class="num">@x.StudentId</td>
+                                <td data-label="Class">@x.ClassName</td>
+                                <td data-label="Days" class="num">@x.Counts.Days</td>
+                                <td data-label="Present" class="num sa-n--present">@x.Counts.Present</td>
+                                <td data-label="Late" class="num sa-n--late">@x.Counts.Late</td>
+                                <td data-label="Absent" class="num sa-n--absent">@x.Counts.Absent</td>
+                                <td data-label="Not Recorded" class="num muted">@x.Counts.NotRecorded</td>
+                                <td data-label="Attendance" class="num"><strong>@Pct(x.Counts)</strong></td>
+                            </tr>
+                        }
+                    </tbody>
+                }
+            </table>
+        </div>
+        @if (g.StudentRows.Count == 0) { <div class="empty">@Ui.Icon("users")<p>No students match.</p></div> }
+    </section>
+}
+
+<p class="sa-rules">@Ui.Icon("info", "icon--sm")Only school days count (weekends and school holidays never do). Not Recorded means no record was made — it is never counted as an absence. Attendance % = (Present + Late) ÷ days with a record.</p>
+
+@section Scripts {
+    <script src="~/js/arrivals.js" asp-append-version="true"></script>
+}

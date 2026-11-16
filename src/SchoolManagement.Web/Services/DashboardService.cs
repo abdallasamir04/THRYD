@@ -40,7 +40,7 @@ public sealed class DashboardService(SchoolDbContext db) : IDashboardService
     public async Task<NavCounts> NavCountsAsync(CancellationToken ct = default) =>
         new(await db.Students.CountAsync(ct), await db.Teachers.CountAsync(ct), await db.Classes.CountAsync(ct),
             await db.Departments.CountAsync(ct), await db.ManagementMembers.CountAsync(ct),
-            await db.ManagementTasks.CountAsync(t => t.Status != ManagementTaskStatus.Completed, ct));
+            await db.ManagementTasks.CountAsync(t => t.Status != ManagementTaskStatus.Completed && t.Status != ManagementTaskStatus.Cancelled, ct));
 
     public async Task<DashboardData> GetAsync(CancellationToken ct = default)
     {

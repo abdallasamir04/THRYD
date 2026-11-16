@@ -1,0 +1,74 @@
+@model ReportEntry<ReportStudentEntry>
+@*
+    One student of section 2 (Students Involved). The student comes from the Student Directory; grade & section are
+    taken from their registered class (never typed). Field names are re-numbered by incidents.js before saving.
+*@
+@{
+    var e = Model.Entry;
+    var k = Model.Key;
+    var f = Model.Form;
+    var pick = e.StudentId is { } sid ? f.StudentList.FirstOrDefault(x => x.Id == sid) : null;
+    var className = e.RecordedClass ?? pick?.ClassName;
+    var grade = className is null ? null : IncidentLabels.GradeSection(className);
+    var hasErrors = !Model.IsTemplate && ViewContext.ViewData.ModelState.Keys.Any(x => x.StartsWith($"Students[{k}]", StringComparison.Ordinal) && ViewContext.ViewData.ModelState[x]!.Errors.Count > 0);
+    var open = Model.IsTemplate || hasErrors || e.StudentId is null || string.IsNullOrWhiteSpace(e.Involvement);
+}
+<article class="inc-entry inc-entry--student @(open ? "is-open" : "")" data-entry data-entry-kind="student">
+    <input type="hidden" name="Students[@k].RowId" value="@e.RowId" data-field="RowId" />
+    <header class="inc-entry__head">
+        <span class="inc-entry__num" data-entry-num></span>
+        <div class="inc-entry__summary">
+            <strong class="inc-entry__title" data-summary-title dir="auto">@(pick?.Name ?? "New student")</strong>
+            <span class="inc-entry__meta" data-summary-meta>@(grade ?? "Choose a student")</span>
+        </div>
+        <span class="inc-rolebadge inc-rolebadge--@((int)(e.Role ?? IncidentRole.ReportedConduct))" data-summary-role>@IncidentLabels.Role(e.Role ?? IncidentRole.ReportedConduct, e.RoleOther)</span>
+        <div class="inc-entry__tools">
+            <button class="btn btn--ghost btn--sm" type="button" data-entry-toggle aria-expanded="@(open ? "true" : "false")">@Ui.Icon("pencil", "icon--sm")<span>@(open ? "Done" : "Edit")</span></button>
+            <button class="icon-btn icon-btn--danger" type="button" data-entry-remove aria-label="Remove this student" title="Remove">@Ui.Icon("trash")</button>
+        </div>
+    </header>
+    <div class="inc-entry__body">
+        <div class="inc-fields inc-fields--student">
+            <div class="field">
+                <label class="label" for="st-@k-student">Student name <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" id="st-@k-student" name="Students[@k].StudentId" data-field="StudentId" data-searchable data-search-notes data-student-select required>
+                    <option value="">Search the Student Directory…</option>
+                    @foreach (var s in f.StudentList)
+                    {
+                        <option value="@s.Id" selected="@(e.StudentId == s.Id)" data-note="@s.ClassName" data-grade="@IncidentLabels.GradeSection(s.ClassName)" data-class="@s.ClassName">@s.Name</option>
+                    }
+                </select>
+                @Html.ValidationMessage($"Students[{k}].StudentId", new { @class = "field-validation-error" })
+            </div>
+            <div class="field">
+                <span class="label">Grade &amp; section</span>
+                <div class="inc-readonly" data-grade-display>
+                    @Ui.Icon("graduation-cap", "icon--sm")
+                    <span>@(grade ?? "Filled in from the student's class")</span>
+                    @if (className is not null) { <span class="inc-readonly__tag" data-class-display>@className</span> }
+                </div>
+            </div>
+            <div class="field">
+                <label class="label" for="st-@k-role">Role classification <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" id="st-@k-role" name="Students[@k].Role" data-field="Role" data-role-select>
+                    @foreach (var r in IncidentLabels.Roles)
+                    {
+                        <option value="@r" selected="@((e.Role ?? IncidentRole.ReportedConduct) == r)">@IncidentLabels.Role(r)</option>
+                    }
+                </select>
+                @Html.ValidationMessage($"Students[{k}].Role", new { @class = "field-validation-error" })
+            </div>
+            <div class="field" data-role-other hidden="@(e.Role != IncidentRole.Other)">
+                <label class="label" for="st-@k-other">Describe the role</label>
+                <input class="input" id="st-@k-other" name="Students[@k].RoleOther" value="@e.RoleOther" data-field="RoleOther" maxlength="@IncidentStudent.RoleOtherMaxLength" dir="auto" placeholder="e.g. Called the duty teacher" />
+                @Html.ValidationMessage($"Students[{k}].RoleOther", new { @class = "field-validation-error" })
+            </div>
+        </div>
+        <div class="field">
+            <label class="label" for="st-@k-inv">Reported conduct &amp; involvement <span class="req" aria-hidden="true">*</span></label>
+            <textarea class="input textarea" id="st-@k-inv" name="Students[@k].Involvement" data-field="Involvement" rows="3" maxlength="@IncidentStudent.InvolvementMaxLength" dir="auto" required
+                      placeholder="What this student did or experienced, in factual terms.">@e.Involvement</textarea>
+            @Html.ValidationMessage($"Students[{k}].Involvement", new { @class = "field-validation-error" })
+        </div>
+    </div>
+</article>

@@ -13,12 +13,12 @@
         {
             <span class="filter-chip">Name: “@q.Search.Trim()”<a href="@Context.Request.WithQuery(("search", null), ("page", null))" data-list-link aria-label="Clear name search">@Ui.Icon("x", "icon--sm")</a></span>
         }
-        @if (classFilter is not null)
+        @if (classFilter is not null && !Model.FixedClass)
         {
             <span class="filter-chip">Class: @classFilter.Name<a href="@Context.Request.WithQuery(("classId", null), ("page", null))" data-list-link aria-label="Clear class filter">@Ui.Icon("x", "icon--sm")</a></span>
         }
     </div>
-    @if (r.TotalCount > 0)
+    @if (r.TotalCount > 0 && !Model.FixedClass)
     {
         <div class="results-bar__actions">
             <a class="btn btn--ghost btn--sm" href="@exportUrl">@Ui.Icon("sheet", "icon--sm")Export @(q.HasFilters ? "these" : "all") to Excel</a>

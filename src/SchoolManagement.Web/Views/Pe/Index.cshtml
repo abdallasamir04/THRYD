@@ -1,6 +1,6 @@
 @model PePageViewModel
 @*
-    P.E. module page, opened from the Duties landing page (P.E. card); no sidebar item of its own. The timetable
+    P.E. module page, opened from Duties → Activities (P.E. card); no sidebar item of its own. The timetable
     itself is the shared _Timetable partial, which the PE department page also renders under Department Staff.
 *@
 @{
@@ -11,7 +11,7 @@
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties?date=@SchoolWeek.Iso(Model.Date)">Duties</a></li><li>P.E.</li></ol>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties?date=@SchoolWeek.Iso(Model.Date)">Duties</a></li><li><a href="/duties/activities?date=@SchoolWeek.Iso(Model.Date)">Activities</a></li><li>P.E.</li></ol>
         <h1 class="page-title">P.E. Timetable</h1>
         <p class="page-sub">Physical Education sessions for the week of @SchoolWeek.Label(Model.Week). Click a class for its teacher, co-teacher, facility, activity, equipment and notes.</p>
     </div>
@@ -20,7 +20,7 @@
         {
             <a class="btn btn--secondary" href="/staff/departments/@did">@Ui.Icon("users")P.E. department</a>
         }
-        <a class="btn btn--secondary" href="/timetable/slots">@Ui.Icon("clock")Time slots</a>
+        <a class="btn btn--secondary" href="/timetable/periods">@Ui.Icon("clock")Periods</a>
         <partial name="_Download" model='DownloadLink.Timetable("/pe/pdf")' />
     </div>
 </div>

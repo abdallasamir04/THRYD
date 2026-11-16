@@ -19,11 +19,18 @@ public sealed class DbFixture : IAsyncLifetime
 
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
 
+    /// <summary>Where this test run stores task attachment files.</summary>
+    public static readonly string AttachmentRoot = Path.Combine(Path.GetTempPath(), "thryd-tests", "task-attachments");
+
     public async Task InitializeAsync()
     {
         Environment.SetEnvironmentVariable("ConnectionStrings__SchoolDb", ConnectionString);
         // The background alert sweep would add alerts to other tests' data while they run.
         Environment.SetEnvironmentVariable("Attendance__AlertSweep", "false");
+        // Automatic finalization would record other tests' unrecorded students as absent.
+        Environment.SetEnvironmentVariable("Attendance__AutoFinalize", "false");
+        // Task attachments of the test run go to a temporary folder, never the development App_Data.
+        Environment.SetEnvironmentVariable("Storage__TaskAttachments", AttachmentRoot);
         await using (var db = NewContext()) await db.Database.EnsureDeletedAsync();
         Factory = new WebApplicationFactory<Program>();
         _ = Factory.Server; // starts the app: applies both migrations to the empty test database
@@ -44,10 +51,17 @@ public sealed class DbFixture : IAsyncLifetime
     public static StaffDutyService StaffDuty(SchoolDbContext db) => new(db, new NoUser());
     public static ArrivalService Arrivals(SchoolDbContext db) => new(db, Settings(db), new NoUser());
     public static TimetableService Timetable(SchoolDbContext db) => new(db, Workload(db), new NoUser());
+    public static PeriodService Periods(SchoolDbContext db) => new(db, new NoUser());
     public static DepartmentService Departments(SchoolDbContext db) => new(db, new NoUser());
     public static ManagementService Management(SchoolDbContext db) => new(db, new NoUser());
     public static AttendanceAlertService Alerts(SchoolDbContext db) => new(db, new NoUser());
     public static ArrivalService SchoolAttendance(SchoolDbContext db) => new(db, Settings(db), new NoUser(), Alerts(db));
+
+    /// <summary>School attendance on a given school clock (e.g. a fixed instant, to test the cutoff in Cairo time).</summary>
+    public static ArrivalService SchoolAttendanceAt(SchoolDbContext db, SchoolManagement.Web.Common.ISchoolTimeService time) => new(db, Settings(db), new NoUser(), Alerts(db), time);
+    /// <summary>School attendance on a given school clock with automatic absences after the cutoff (from <see cref="AttendanceOptions.From"/>).</summary>
+    public static ArrivalService SchoolAttendanceWith(SchoolDbContext db, SchoolManagement.Web.Common.ISchoolTimeService time, AttendanceOptions options) =>
+        new(db, Settings(db), new NoUser(), Alerts(db), time, options);
     public static SessionAttendanceService Sessions(SchoolDbContext db) => new(db, new NoUser(), Alerts(db));
     public static AttendanceCalendarService Calendar(SchoolDbContext db) => new(db, new NoUser(), Alerts(db));
 

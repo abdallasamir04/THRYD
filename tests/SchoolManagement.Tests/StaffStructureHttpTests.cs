@@ -37,15 +37,25 @@ public partial class HttpTests
     [InlineData("/staff/departments/heads?filter=missing")]
     [InlineData("/staff/departments/13/subcategories")]
     [InlineData("/staff/departments/13/subcategories/create")]
-    [InlineData("/management/members")]
-    [InlineData("/management/members?position=none")]
-    [InlineData("/management/positions")]
+    [InlineData("/management/leadership")]
+    [InlineData("/management/leadership?position=none")]
+    [InlineData("/management/leadership?search=a&position=SchoolDirector")]
+    [InlineData("/management/leadership?status=vacant")]
+    [InlineData("/management/leadership?status=filled&search=a")]
+    [InlineData("/management/leadership/positions/SchoolDirector")]
+    [InlineData("/management/leadership/positions/HighSchoolCoordinator?status=open")]
     [InlineData("/management/positions/Sqam/assign")]
     [InlineData("/timetable/classes")]
     [InlineData("/timetable/teachers")]
     [InlineData("/timetable/teachers?departmentId=1&search=t")]
     [InlineData("/timetable/slots")]
-    [InlineData("/timetable/slots/1/edit")]
+    [InlineData("/timetable/periods")]
+    [InlineData("/timetable/periods?classId=1")]
+    [InlineData("/timetable/periods/add")]
+    [InlineData("/timetable/periods/add?classId=1")]
+    [InlineData("/timetable/periods/1/edit")]
+    [InlineData("/timetable/periods/1/edit?classId=1")]
+    [InlineData("/timetable/periods/1/delete?classId=1")]
     [InlineData("/timetable/classes/1")]
     [InlineData("/timetable/classes/1?week=2020-01-05")]
     [InlineData("/timetable/assign?classId=1&day=Sunday&slotId=1")]
@@ -94,9 +104,12 @@ public partial class HttpTests
         Assert.Contains("<a href=\"/staff/academic\">Academic Staff</a>", deptManagement); // breadcrumb back
 
         var management = await client.GetStringAsync("/management");
-        Assert.Equal(3, Regex.Matches(management, "class=\"hub-card ").Count);
-        foreach (var href in new[] { "/management/members", "/management/positions", "/management/tasks" })
+        // School Leadership (members + positions in one card) and Tasks.
+        Assert.Equal(2, Regex.Matches(management, "class=\"hub-card ").Count);
+        foreach (var href in new[] { "/management/leadership", "/management/tasks" })
             Assert.Contains($"href=\"{href}\"", management);
+        Assert.DoesNotContain("href=\"/management/members\"", management);
+        Assert.DoesNotContain("href=\"/management/positions\"", management);
 
         // Breadcrumbs lead back to the parents; all fifteen departments open their own page.
         var depts = await client.GetStringAsync("/staff/departments");
@@ -208,11 +221,11 @@ public partial class HttpTests
 
         // Tasks: create with a due date and time, refuse a time without a date, edit, change status, delete.
         var due = SchoolWeek.Iso(SchoolWeek.Today.AddDays(5));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/management/tasks/create", token, new() { ["MemberId"] = memberId.ToString(), ["Title"] = "T", ["DueTime"] = "10:00" })).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/management/tasks/create", token, new() { ["MemberId"] = memberId.ToString(), ["Title"] = "T", ["DueDate"] = "not-a-date" })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/management/tasks/create", token, new() { ["AssignedToId"] = memberId.ToString(), ["Title"] = "T", ["DueTime"] = "10:00" })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/management/tasks/create", token, new() { ["AssignedToId"] = memberId.ToString(), ["Title"] = "T", ["DueDate"] = "not-a-date" })).StatusCode);
         var task = await PostAsync(client, "/management/tasks/create", token, new()
         {
-            ["MemberId"] = memberId.ToString(), ["Title"] = "Middle school timetable", ["Priority"] = "High", ["Status"] = "ToDo",
+            ["AssignedToId"] = memberId.ToString(), ["Title"] = "Middle school timetable", ["Priority"] = "High", ["Status"] = "ToDo",
             ["DueDate"] = due, ["DueTime"] = "13:45", ["Description"] = "Draft and circulate", ["Notes"] = "Ask HODs",
         });
         Assert.Equal(HttpStatusCode.OK, task.StatusCode);
@@ -220,7 +233,7 @@ public partial class HttpTests
         int taskId;
         await using (var db = fx.NewContext())
         {
-            var t = await db.ManagementTasks.SingleAsync(x => x.ManagementMemberId == memberId);
+            var t = await db.ManagementTasks.SingleAsync(x => x.AssignedToId == memberId);
             taskId = t.Id;
             Assert.Equal((TaskPriority.High, SchoolWeek.Today.AddDays(5), new TimeOnly(13, 45), "Ask HODs"), (t.Priority, t.DueDate!.Value, t.DueTime!.Value, t.Notes));
         }
@@ -234,7 +247,7 @@ public partial class HttpTests
 
         Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, $"/management/tasks/{taskId}/edit", token, new()
         {
-            ["MemberId"] = memberId.ToString(), ["Title"] = "Middle school timetable v2", ["Priority"] = "Urgent", ["Status"] = "InProgress", ["DueDate"] = due, ["DueTime"] = "",
+            ["AssignedToId"] = memberId.ToString(), ["Title"] = "Middle school timetable v2", ["Priority"] = "Critical", ["Status"] = "InProgress", ["DueDate"] = due, ["DueTime"] = "",
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, $"/management/tasks/{taskId}/status", token, new() { ["status"] = "Completed" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync(client, $"/management/tasks/{taskId}/status", token, new() { ["status"] = "Nonsense" })).StatusCode);
@@ -242,7 +255,7 @@ public partial class HttpTests
         await using (var db = fx.NewContext())
         {
             var t = await db.ManagementTasks.SingleAsync(x => x.Id == taskId);
-            Assert.Equal(("Middle school timetable v2", TaskPriority.Urgent, ManagementTaskStatus.Completed, (TimeOnly?)null), (t.Title, t.Priority, t.Status, t.DueTime));
+            Assert.Equal(("Middle school timetable v2", TaskPriority.Critical, ManagementTaskStatus.Completed, (TimeOnly?)null), (t.Title, t.Priority, t.Status, t.DueTime));
             Assert.NotNull(t.CompletedAt);
             Assert.True(await db.ManagementTaskHistory.CountAsync(h => h.TaskId == taskId) >= 3);
         }
@@ -274,12 +287,13 @@ public partial class HttpTests
     public async Task Duties_page_has_three_tabs_and_new_duties_save_under_their_type()
     {
         var client = fx.Factory.CreateClient();
-        // The Duties page is four cards: each duty, then P.E. (opens the P.E. module).
+        // The Duties page is four cards: each duty, then Activities (P.E. and the other activities open from there).
         var landing = await client.GetStringAsync("/duties");
         Assert.Equal(4, Regex.Matches(landing, "class=\"hub-card ").Count);
         foreach (var t in new[] { "morning", "midday", "dismissal" }) Assert.Contains($"href=\"/duties?type={t}&amp;date=", landing);
-        Assert.Matches("<a class=\"hub-card hub-card--\\w+\" href=\"/pe\\?date=[0-9-]+\">", landing);
-        Assert.Contains("Physical Education", landing);
+        Assert.Matches("<a class=\"hub-card hub-card--\\w+\" href=\"/duties/activities\\?date=[0-9-]+\">", landing);
+        Assert.DoesNotContain("href=\"/pe?", landing); // no standalone P.E. card
+        Assert.DoesNotContain("/duties/activities/new", landing); // Add Activity lives inside Activities only
 
         // Midday: youngest first, each with its grade line.
         var midday = WebUtility.HtmlDecode(await client.GetStringAsync("/duties?type=midday"));
@@ -406,7 +420,7 @@ public partial class HttpTests
     public async Task Student_Arrivals_is_shown_as_Student_Attendance()
     {
         var client = fx.Factory.CreateClient();
-        var page = await client.GetStringAsync("/arrivals"); // same route and checklist as before
+        var page = await client.GetStringAsync("/arrivals"); // same route; now Daily Attendance
         // Student Attendance now has two sections; this page is its School Attendance section.
         Assert.Contains("<h1 class=\"page-title\">School Attendance</h1>", page);
         Assert.Contains("Student Attendance</a></li><li>School Attendance</li></ol>", page);
@@ -414,7 +428,7 @@ public partial class HttpTests
         var sidebar = page[..page.IndexOf("</aside>", StringComparison.Ordinal)];
         Assert.Contains("href=\"/students/hub\" aria-current=\"page\"", sidebar);
         Assert.DoesNotContain("href=\"/arrivals\"", sidebar);
-        Assert.Contains("data-arrival-table", page);
+        Assert.Contains("Daily Attendance", page);
         foreach (var url in new[] { "/arrivals", "/", "/staff/departments" })
             Assert.DoesNotContain("Student Arrivals", await client.GetStringAsync(url));
     }

@@ -192,6 +192,13 @@ public sealed class TeacherService(SchoolDbContext db) : ITeacherService
             return ServiceResult.Fail("", workload > 0
                 ? $"This teacher has {workload} workload assignment(s). Remove them on the Teacher Workload page before deleting."
                 : "This teacher appears in duty, evaluation or student arrival records, so the record is kept for history.");
+        if (await db.ClassTeachingAssignments.AnyAsync(a => a.StaffMemberId == id, ct) || await db.ClassTeachingHistory.AnyAsync(h => h.StaffMemberId == id, ct))
+            return ServiceResult.Fail("", "This teacher has KG class teaching team assignments (current or past), so the record is kept for history.");
+        var tasks = await db.ManagementTasks.CountAsync(t => t.AssignedToId == id, ct);
+        if (tasks > 0)
+            return ServiceResult.Fail("", $"This staff member has {tasks} Management Team task(s). Reassign or delete them on the Tasks page before deleting.");
+        if (await db.ManagementTasks.AnyAsync(t => t.ReviewerId == id || t.CreatedById == id, ct) || await db.ManagementTaskHistory.AnyAsync(h => h.StaffMemberId == id, ct))
+            return ServiceResult.Fail("", "This staff member appears in Management Team task records (as creator, reviewer or in the task history), so the record is kept for history.");
 
         var deleted = await db.Teachers.Where(t => t.Id == id).ExecuteDeleteAsync(ct);
         return deleted == 0 ? ServiceResult.Fail("", "This teacher no longer exists.") : ServiceResult.Ok(id);

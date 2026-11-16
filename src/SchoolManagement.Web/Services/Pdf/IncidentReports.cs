@@ -1,18 +1,23 @@
+using SchoolManagement.Web.Common;
 using System.Globalization;
 using SchoolManagement.Web.Entities;
 
 namespace SchoolManagement.Web.Services.Pdf;
 
 /// <summary>
-/// The official incident report PDF: school name and title at the top, then the five parts of the report
-/// with every saved value (full texts, all rows), and a confidentiality line on every page.
+/// The official Student Incident Report PDF, in the structure and wording of the school's official form: the school name
+/// and "OFFICIAL STUDENT INCIDENT REPORT" at the top; Incident Information; 1. Students Involved; 2. Chronological Timeline
+/// of Events; 3. Investigation Findings &amp; Administrative Actions; 5. Administrative Sign-off &amp; Record Closure (the
+/// numbering of the official form); the confidentiality footer on every page. Landscape, every saved value in full,
+/// table headers repeated on each page and rows never split.
 /// </summary>
 public static class IncidentReports
 {
     private static readonly CultureInfo C = CultureInfo.InvariantCulture;
 
-    public const string Confidential =
-        "CONFIDENTIAL — This report contains personal information about students and is intended for official administrative use only. Do not copy or share it outside authorised school staff.";
+    /// <summary>The footer line of the official form.</summary>
+    public static string Confidential(string schoolName) =>
+        $"Confidential Student Incident Record • {schoolName} • For Official Administrative & Pastoral Use Only";
 
     public static PdfReport Official(IncidentDetails d, string schoolName)
     {
@@ -25,17 +30,20 @@ public static class IncidentReports
         {
             IncidentActionStatus.Pending => PdfTone.Muted, IncidentActionStatus.InProgress => PdfTone.Warning, _ => PdfTone.Success,
         };
-        var closure = d.IsClosed
-            ? new PdfCell("Closed", $"{d.ClosedAt?.ToLocalTime().ToString("d MMM yyyy, HH:mm", C)}{(d.ClosedBy is null ? "" : " · " + d.ClosedBy)}", PdfTone.Success, Badge: true)
-            : new PdfCell("Open", d.ClosureBlockers.Count == 0 ? "Ready to close" : "Investigation / administrative steps in progress", PdfTone.Warning, Badge: true);
+        static PdfTone ApprovalTone(IncidentApproval a) => a switch
+        {
+            IncidentApproval.Approved or IncidentApproval.ApprovedWithConditions => PdfTone.Success, IncidentApproval.NotApproved => PdfTone.Error, _ => PdfTone.Muted,
+        };
+        var school = string.IsNullOrWhiteSpace(d.SignOffSchool) ? schoolName : d.SignOffSchool!;
+        var record = d.IsDraft ? "Draft" : d.IsClosed ? "Closed" : "Open";
 
         return new PdfReport
         {
-            Eyebrow = schoolName,
+            Eyebrow = schoolName.ToUpperInvariant(),
             Title = "OFFICIAL STUDENT INCIDENT REPORT",
             Subtitle = $"Reference ID: {d.Reference}",
-            Meta = [new("Incident date", d.Date.ToString("d MMM yyyy", C)), new("Record", d.IsClosed ? "Closed" : "Open")],
-            FooterNote = Confidential,
+            Meta = [new("Date of Incident", d.Date.ToString("d MMM yyyy", C)), new("Record", record)],
+            FooterNote = Confidential(schoolName),
             Sections =
             [
                 new PdfFields
@@ -43,11 +51,9 @@ public static class IncidentReports
                     Title = "Incident Information",
                     Items =
                     [
-                        new("School Name", new PdfCell(schoolName, Strong: true)),
-                        new("Report Title", "Official Student Incident Report"),
                         new("Incident Category", new PdfCell(d.Category, Strong: true)),
                         new("Date of Incident", d.Date.ToString("dddd d MMMM yyyy", C)),
-                        new("Reporting Department", d.Department),
+                        new("Reporting Dept.", d.Department),
                         new("Severity Level", new PdfCell(IncidentLabels.Severity(d.Severity), Tone: SeverityTone(d.Severity), Badge: true)),
                         new("Reference ID", new PdfCell(d.Reference, Strong: true)),
                         new("Incident Status", new PdfCell(IncidentLabels.Status(d.Status), Tone: StatusTone(d.Status), Badge: true)),
@@ -55,7 +61,7 @@ public static class IncidentReports
                 },
                 new PdfTable
                 {
-                    Title = "Students Involved",
+                    Title = "1. STUDENTS INVOLVED",
                     RowNumbers = true,
                     Columns = [new("Student Name", 1.5f), new("Grade & Section", 1.2f), new("Role Classification", 1.2f), new("Reported Conduct & Involvement", 4.6f)],
                     Rows = d.Students.Select(s => (IReadOnlyList<PdfCell>)
@@ -64,16 +70,16 @@ public static class IncidentReports
                 },
                 new PdfTable
                 {
-                    Title = "Chronological Timeline of Events",
+                    Title = "2. CHRONOLOGICAL TIMELINE OF EVENTS",
                     RowNumbers = true,
                     Columns = [new("Time / Period", 1.2f), new("Location", 1.3f), new("Students Present", 1.8f), new("Factual Account of Incident", 4.2f)],
                     Rows = d.Timeline.Select(t => (IReadOnlyList<PdfCell>)
-                        [new PdfCell(t.TimePeriod, t.Time?.ToString("HH:mm", C), Strong: true), t.Location, t.PresentText, t.Account]).ToList(),
+                        [new PdfCell(t.TimePeriod, t.Time is { } tm ? TaskLabels.Time(tm) : null, Strong: true), t.Location, t.PresentText, t.Account]).ToList(),
                     EmptyText = "No timeline events recorded.",
                 },
                 new PdfTable
                 {
-                    Title = "Investigation Findings & Administrative Actions",
+                    Title = "3. INVESTIGATION FINDINGS & ADMINISTRATIVE ACTIONS",
                     RowNumbers = true,
                     Columns = [new("Action Item", 1.5f), new("Investigation Finding & Action", 3.2f), new("Restorative & Disciplinary Details", 3), new("Status", 1.1f, PdfAlign.Center)],
                     Rows = d.Actions.Select(a => (IReadOnlyList<PdfCell>)
@@ -82,16 +88,15 @@ public static class IncidentReports
                 },
                 new PdfFields
                 {
-                    Title = "Administrative Sign-off & Record Closure",
+                    Title = "5. ADMINISTRATIVE SIGN-OFF & RECORD CLOSURE",
+                    Subtitle = "ADMINISTRATIVE APPROVAL & ENDORSEMENT",
                     Items =
                     [
-                        new("Prepared By", d.PreparedByName),
-                        new("School", d.SignOffSchool ?? schoolName),
+                        new("Prepared By", d.PreparedByDisplay),
+                        new("School", school),
                         new("Date of Report", d.ReportDate?.ToString("d MMMM yyyy", C)),
-                        new("Reviewed By", d.ReviewedByName),
-                        new("Administrative Approval / Endorsement", new PdfCell(IncidentLabels.Approval(d.Approval), d.ApprovalNotes,
-                            d.Approval switch { IncidentApproval.Approved or IncidentApproval.ApprovedWithConditions => PdfTone.Success, IncidentApproval.NotApproved => PdfTone.Error, _ => PdfTone.Muted }, Badge: true), Wide: true),
-                        new("Record Closure Status", closure, Wide: true),
+                        new("Reviewed By", new PdfCell(d.ReviewedByName ?? "—", IncidentLabels.Approval(d.Approval) + (d.ApprovalNotes is null ? "" : " · " + d.ApprovalNotes),
+                            d.ReviewedByName is null ? PdfTone.Muted : ApprovalTone(d.Approval))),
                     ],
                 },
             ],

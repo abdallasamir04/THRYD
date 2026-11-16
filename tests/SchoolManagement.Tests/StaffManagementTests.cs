@@ -134,11 +134,19 @@ public partial class StaffManagementTests(DbFixture fx)
         Assert.Equal(HttpStatusCode.OK, (await Post($"/timetable/sessions/{sessionId}/remove", [])).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post($"/timetable/sessions/{sessionId}/remove", [])).StatusCode);
 
-        // Time slot form: invalid times are refused, valid ones saved (then cleared again).
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await Post("/timetable/slots/10/edit", new() { ["StartTime"] = "14:00", ["EndTime"] = "13:00", ["IsActive"] = "true" })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Post("/timetable/slots/10/edit", new() { ["Name"] = "Last period", ["StartTime"] = "14:00", ["EndTime"] = "14:40", ["IsActive"] = "true" })).StatusCode);
-        Assert.Contains("value=\"14:00\"", await client.GetStringAsync("/timetable/slots/10/edit"));
-        Assert.Equal(HttpStatusCode.OK, (await Post("/timetable/slots/10/edit", new() { ["StartTime"] = "", ["EndTime"] = "", ["IsActive"] = "true" })).StatusCode);
+        // Period form: invalid times are refused; a school-wide change is shown for confirmation, then saved (and restored).
+        Dictionary<string, string> Period(string start, string end, string? name = null) =>
+            new() { ["Name"] = name ?? "", ["StartTime"] = start, ["EndTime"] = end, ["IsActive"] = "true", ["Scope"] = "AllClasses", ["AllDays"] = "true" };
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await Post("/timetable/periods/10/edit", Period("14:00", "13:00"))).StatusCode);
+        var plan = await Post("/timetable/periods/10/edit", Period("14:00", "14:40", "Last period"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, plan.StatusCode); // the plan, with "Confirm and apply"
+        var planHtml = await plan.Content.ReadAsStringAsync();
+        Assert.Contains("Confirm and apply", planHtml);
+        var fingerprint = System.Text.RegularExpressions.Regex.Match(planHtml, "name=\"Confirmation\" value=\"([^\"]+)\"").Groups[1].Value;
+        Assert.Equal(HttpStatusCode.OK, (await Post("/timetable/periods/10/edit", Period("14:00", "14:40", "Last period").Append(new("Confirmation", fingerprint)).ToDictionary())).StatusCode);
+        Assert.Contains("value=\"14:00\"", await client.GetStringAsync("/timetable/periods/10/edit"));
+        await using (var db = fx.NewContext())
+            await db.TimeSlots.Where(s => s.Id == 10).ExecuteUpdateAsync(u => u.SetProperty(s => s.StartTime, (TimeOnly?)null).SetProperty(s => s.EndTime, (TimeOnly?)null).SetProperty(s => s.Name, (string?)null));
 
         // Language form and position form.
         var lang = "Lang" + DbFixture.Unique()[..5];

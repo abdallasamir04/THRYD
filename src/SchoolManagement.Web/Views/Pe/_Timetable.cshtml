@@ -36,7 +36,7 @@ else if (Model.PeTeachers == 0)
 }
 @if (noTimes)
 {
-    <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>The time slots have no times yet.</strong>Periods show as 1–10 until times are set in <a href="/timetable/slots">Time Slots</a>.</div></div>
+    <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>The periods have no times yet.</strong>Periods show their names until times are set in <a href="/timetable/periods">Periods</a>.</div></div>
 }
 @if (!Model.Editable)
 {
@@ -46,7 +46,7 @@ else if (Model.PeTeachers == 0)
 <section class="card tt-card" aria-label="P.E. weekly timetable">
     @if (Model.Slots.Count == 0)
     {
-        <div class="empty"><span class="empty__icon">@Ui.Icon("clock")</span><p class="empty__title">No active time slots</p><div class="empty__actions"><a class="btn btn--primary" href="/timetable/slots">Time slots</a></div></div>
+        <div class="empty"><span class="empty__icon">@Ui.Icon("clock")</span><p class="empty__title">No active periods</p><div class="empty__actions"><a class="btn btn--primary" href="/timetable/periods">Periods</a></div></div>
     }
     else
     {

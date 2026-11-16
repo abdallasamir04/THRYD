@@ -1,0 +1,28 @@
+@inject ISchoolTimeService SchoolClock
+@*
+    Global school clock (top bar). The server renders the current Egyptian time (Africa/Cairo, DST from the OS time zone
+    database) and the exact UTC instant; school-clock.js then ticks every second from that instant, displayed in the
+    school's time zone — never the browser's own zone — with no requests to the server.
+    Layout: [calendar] Sun, 15 Nov 2026 | [clock] 07:43:20 PM — the location and UTC offset sit in a small tooltip
+    (hover or keyboard focus) and in the accessible name.
+*@
+@{
+    var utc = SchoolClock.UtcNow;
+    var local = SchoolClock.ToLocal(utc);
+    var offset = SchoolClock.OffsetAt(utc);
+    var epoch = new DateTimeOffset(utc).ToUnixTimeMilliseconds();
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var iso = new DateTimeOffset(local, offset).ToString("yyyy-MM-dd'T'HH:mm:sszzz", c);
+    var zone = $"{SchoolClock.Location} · {SchoolClock.OffsetLabel(utc)}";
+}
+<div class="school-clock" data-school-clock data-tz="@SchoolClock.TimeZoneId" data-utc="@epoch" data-offset="@((int)offset.TotalMinutes)"
+     data-location="@SchoolClock.Location" role="group" tabindex="0" aria-label="School time, @SchoolClock.Location" aria-describedby="school-clock-zone">
+    <span class="school-clock__date" title="@SchoolTime.LongDate(local)">
+        @Ui.Icon("calendar", "icon--sm")<time data-clock-date datetime="@local.ToString("yyyy-MM-dd", c)">@local.ToString("ddd, d MMM yyyy", c)</time>
+    </span>
+    <span class="school-clock__sep" aria-hidden="true"></span>
+    <span class="school-clock__time">
+        @Ui.Icon("clock", "icon--sm")<time data-clock-time datetime="@iso"><span data-clock-hms>@local.ToString("hh:mm", c)</span><span class="school-clock__sec" data-clock-sec>@local.ToString(":ss", c)</span><span class="school-clock__ampm" data-clock-ampm>@local.ToString("tt", c)</span></time>
+    </span>
+    <span class="school-clock__tip" id="school-clock-zone" role="tooltip" data-clock-zone>@zone@(SchoolClock.IsFallback ? " · server time zone (Cairo data missing)" : "")</span>
+</div>

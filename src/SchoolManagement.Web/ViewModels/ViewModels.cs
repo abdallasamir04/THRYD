@@ -24,6 +24,9 @@ public sealed class StudentIndexViewModel
     public required PagedResult<StudentRow> Result { get; init; }
     public required IReadOnlyList<ClassOption> Classes { get; init; }
     public required int TotalStudents { get; init; }
+
+    /// <summary>The list is embedded in one class's page (/classes/{id}): no class filter chip and no export of "all".</summary>
+    public bool FixedClass { get; init; }
 }
 
 public sealed class StudentFormModel
@@ -179,6 +182,42 @@ public sealed class ClassFormModel
 public sealed record ClassBlock(string Title, string? Subtitle, string? AddHref, string? OpenHref, IReadOnlyList<ClassRow> Classes);
 
 /// <summary>Classes → stage (KG Stages) or stage → group (Lower Elementary): blocks of class cards.</summary>
+/// <summary>What the class page shows below its header.</summary>
+public enum ClassPanel
+{
+    /// <summary>The class's students (default, every class).</summary>
+    Students,
+
+    /// <summary>KG only: the teaching team (current members, year, history) without the edit form.</summary>
+    Team,
+
+    /// <summary>KG only: the teaching team with the Homeroom dropdown and Co-Teacher checklist revealed.</summary>
+    TeamEdit,
+}
+
+/// <summary>
+/// Class page (/classes/{id}). <see cref="Team"/> is set only for KG Stage classes (Pre-K, KG1, KG2): other stages have
+/// no Class Teaching Team. <see cref="Students"/> is set when the students panel is shown.
+/// </summary>
+public sealed class ClassDetailsViewModel
+{
+    public ClassPanel Panel { get; init; }
+    public StudentIndexViewModel? Students { get; set; }
+    public required ClassRow Class { get; init; }
+    public string? StageTitle { get; init; }
+    public string? StageHref { get; init; }
+    public string? GroupTitle { get; init; }
+    public bool IsKg { get; init; }
+
+    public ClassTeamView? Team { get; init; }
+    public IReadOnlyList<AcademicYearOption> Years { get; init; } = [];
+    public IReadOnlyList<StaffOption> Staff { get; init; } = [];
+
+    /// <summary>The form's values (the saved team, or what was posted when validation failed).</summary>
+    public int? HomeroomId { get; set; }
+    public List<int> CoTeacherIds { get; set; } = [];
+}
+
 public sealed class ClassStagePageViewModel
 {
     public required string Title { get; init; }
@@ -253,6 +292,7 @@ public sealed class SettingsViewModel
     public required SchoolProfileForm Profile { get; init; }
     public required SystemInfo System { get; init; }
     public TimeOnly? ArrivalDeadline { get; init; }
+    public TimeOnly LateCutoff { get; init; } = SettingsService.DefaultLateCutoff;
     public int MaxWeeklyPeriods { get; init; } = 24;
     public IReadOnlyList<StaffOption> Staff { get; init; } = [];
     public int? OperatorStaffId { get; init; }

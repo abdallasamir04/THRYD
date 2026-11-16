@@ -61,24 +61,26 @@
     </section>
 
     <section class="card" aria-labelledby="arrival-title" id="arrival">
-        <div class="card__head"><h2 class="card__title" id="arrival-title">@Ui.Icon("clock")Student arrival deadline</h2></div>
+        <div class="card__head"><h2 class="card__title" id="arrival-title">@Ui.Icon("clock")School Attendance — arrival times</h2></div>
         <form method="post" action="/settings/arrivaldeadline" data-loading class="card__body form-grid">
             @Html.AntiForgeryToken()
-            <div class="field">
-                <label class="label" for="deadline">Students arriving after this time are marked Late</label>
-                <input class="input" type="time" id="deadline" name="deadline" value="@Model.ArrivalDeadline?.ToString("HH:mm")" required style="max-width:200px" />
-                <span class="hint">
-                    @if (Model.ArrivalDeadline is null)
-                    {
-                        <strong>Not set yet.</strong> <span>Until it is set, arrivals are recorded without On Time / Late.</span>
-                    }
-                    else
-                    {
-                        <span>Arriving exactly at the deadline is on time. Each record keeps the deadline it was recorded with.</span>
-                    }
-                </span>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="deadline">School start time</label>
+                    <input class="input picker" type="time" id="deadline" name="deadline" value="@Model.ArrivalDeadline?.ToString("HH:mm")" required style="max-width:220px" data-timepicker />
+                    <span class="hint">An arrival at or before it is <strong>Present</strong>; after it, <strong>Late</strong>.</span>
+                </div>
+                <div class="field">
+                    <label class="label" for="cutoff">Arrival registration closes (default 9:30 AM)</label>
+                    <input class="input picker" type="time" id="cutoff" name="cutoff" value="@Model.LateCutoff.ToString("HH:mm")" required style="max-width:220px" data-timepicker />
+                    <span class="hint">From this time arrivals are no longer accepted, and students with no arrival are <strong>Absent</strong> for the day.</span>
+                </div>
             </div>
-            <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save deadline</button></div>
+            <p class="hint">
+                Times are the school's (Cairo) and are taken from the server when a student is clicked. Each record keeps the status it was saved
+                with; changing these times never rewrites earlier records. Corrections (with a reason) stay available after the cutoff.
+            </p>
+            <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button></div>
         </form>
     </section>
 
@@ -120,6 +122,9 @@
             <dt>Server</dt><dd class="mono">@(s.Server ?? "—")</dd>
             <dt>Database</dt><dd class="mono">@(s.Database ?? "—")</dd>
             <dt>Records</dt><dd>@Ui.Plural(s.Students, "student", "students") · @Ui.Plural(s.Teachers, "teacher", "teachers") · @Ui.Plural(s.Classes, "class", "classes")</dd>
+            <dt>Data checks</dt><dd>@if (s.StudentsInInactiveClasses == 0) { @:Every student is in an active class.
+                } else { <a href="/classes/all?status=inactive">@Ui.Plural(s.StudentsInInactiveClasses, "student is", "students are") in an inactive class</a> @:— move them to an active class (their records are kept).
+                }</dd>
             <dt>Migrations applied</dt><dd>@(s.AppliedMigrations.Count == 0 ? "None" : string.Join(", ", s.AppliedMigrations))</dd>
             <dt>Pending migrations</dt><dd>@(s.PendingMigrations.Count == 0 ? "None — the database is up to date" : string.Join(", ", s.PendingMigrations))</dd>
         </dl>

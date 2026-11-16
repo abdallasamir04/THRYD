@@ -69,7 +69,10 @@ public class IncidentTests(DbFixture fx)
         await using (var db = fx.NewContext())
         {
             var svc = Service(db);
-            Assert.Contains((await Service(db, user: null).CreateAsync(Header())).Errors, e => e.Value.Contains("working as")); // an author is required
+            // Nobody needs to be identified ("Working as" is not required); no author is invented either.
+            var anonymous = await Service(db, user: null).CreateAsync(Header());
+            Ok(anonymous);
+            Assert.Null(await db.Incidents.Where(i => i.Id == anonymous.EntityId).Select(i => i.CreatedBy).SingleAsync());
             Assert.Contains((await svc.CreateAsync(Header() with { Date = SchoolWeek.Today.AddDays(1) })).Errors, e => e.Key == "Date"); // not in the future
             var created = await svc.CreateAsync(Header());
             Ok(created);
@@ -139,7 +142,8 @@ public class IncidentTests(DbFixture fx)
             Assert.Equal(("Test School", IncidentApproval.Approved), (final.SignOffSchool, final.Approval));
             foreach (var action in new[] { "Report created", "Student added", "Timeline event added", "Timeline reordered", "Timeline event deleted", "Action added", "Action status changed", "Incident information updated", "Sign-off saved", "Record closed", "Record reopened" })
                 Assert.Contains(final.History, h => h.Action == action);
-            Assert.All(final.History, h => Assert.Equal("Discipline Officer", h.By));
+            // A self-selected "Working as" name is recorded, but marked as such (never presented as a verified sign-in).
+            Assert.All(final.History, h => Assert.Equal("Discipline Officer (Working as)", h.By));
         }
 
         // Student records are unchanged, and a student named in a report is not deleted.
@@ -221,13 +225,15 @@ public class IncidentTests(DbFixture fx)
         static string Sq(string v) => Regex.Replace(v, @"\s+", "");
         foreach (var v in new[]
         {
-            school, "OFFICIAL STUDENT INCIDENT REPORT", reference, "Incident Information", "Physical Aggression & Verbal Misconduct", "Discipline Department",
+            school.ToUpperInvariant(), "OFFICIAL STUDENT INCIDENT REPORT", reference, "Incident Information", "Incident Category", "Date of Incident", "Reporting Dept.",
+            "Severity Level", "Reference ID", "Incident Status", "Physical Aggression & Verbal Misconduct", "Discipline Department",
             "Level 2 (Restorative Intervention)", "Under Investigation",
-            "Students Involved", "Grade & Section", "Role Classification", "Reported Conduct & Involvement", "Involvement of the first student.", "Intervening Student",
-            "Chronological Timeline of Events", "Morning Line", "Assembly & Classroom", "END-OF-ACCOUNT",
-            "Investigation Findings & Administrative Actions", "Restorative Apologies Exchanged", "Acknowledged the importance of respectful conduct.", "Resolved",
-            "Administrative Sign-off & Record Closure", "Prepared By", "Reviewed By", "Signed School", "Approved with conditions", "Monitor for two weeks.", "Record Closure Status",
-            "CONFIDENTIAL", "official administrative use only",
+            "1. STUDENTS INVOLVED", "Student Name", "Grade & Section", "Role Classification", "Reported Conduct & Involvement", "Involvement of the first student.", "Intervening Student",
+            "2. CHRONOLOGICAL TIMELINE OF EVENTS", "Time / Period", "Location", "Students Present", "Factual Account of Incident", "Morning Line", "Assembly & Classroom", "END-OF-ACCOUNT",
+            "3. INVESTIGATION FINDINGS & ADMINISTRATIVE ACTIONS", "Action Item", "Investigation Finding & Action", "Restorative & Disciplinary Details", "Status",
+            "Restorative Apologies Exchanged", "Acknowledged the importance of respectful conduct.", "Resolved",
+            "5. ADMINISTRATIVE SIGN-OFF & RECORD CLOSURE", "ADMINISTRATIVE APPROVAL & ENDORSEMENT", "Prepared By", "School", "Date of Report", "Reviewed By", "Signed School",
+            $"Confidential Student Incident Record • {school} • For Official Administrative & Pastoral Use Only",
         })
             Assert.True(text.Contains(Sq(v)), $"\"{v}\" missing from the PDF");
 
@@ -237,7 +243,7 @@ public class IncidentTests(DbFixture fx)
     }
 
     [Fact]
-    public async Task Pages_render_the_report_and_changes_need_an_identified_user()
+    public async Task Pages_render_the_report_and_anyone_can_change_it_without_working_as()
     {
         var (_, _, s) = await ClassAsync(1);
         var teacher = await fx.NewTeacherAsync();
@@ -250,16 +256,18 @@ public class IncidentTests(DbFixture fx)
         }
         var anonymous = fx.Factory.CreateClient();
         var page = WebUtility.HtmlDecode(await anonymous.GetStringAsync($"/students/behaviour/incidents/{id}"));
-        foreach (var part in new[] { "Incident information", "Students involved", "Chronological timeline of events", "Investigation findings & administrative actions", "Administrative sign-off & record closure", "Audit history", "You are not identified" })
+        foreach (var part in new[] { "Incident information", "Students involved", "Chronological timeline of events", "Investigation findings & administrative actions", "Administrative sign-off & record closure", "Audit history", "Edit Report", "Export PDF" })
             Assert.Contains(part, page);
-        Assert.DoesNotContain("/students/add\" data-modal", page); // no edit controls without an author
-
-        var identified = fx.Factory.CreateClient();
-        identified.DefaultRequestHeaders.Add("Cookie", $"{HttpCurrentUser.OperatorCookie}={teacher.Id}");
-        var editable = WebUtility.HtmlDecode(await identified.GetStringAsync($"/students/behaviour/incidents/{id}"));
-        Assert.Contains($"/students/behaviour/incidents/{id}/students/add", editable);
-        Assert.Contains("New incident report", await identified.GetStringAsync("/students/behaviour/incidents"));
-        foreach (var form in new[] { "edit", "students/add", "timeline/add", "actions/add", "signoff" })
-            Assert.Equal(HttpStatusCode.OK, (await identified.GetAsync($"/students/behaviour/incidents/{id}/{form}")).StatusCode);
+        // Without "Working as": no warning, no link to Settings, and every action is available.
+        Assert.DoesNotContain("You are not identified", page);
+        Assert.DoesNotContain("/settings#operator\">Settings", page);
+        Assert.Contains($"/students/behaviour/incidents/{id}/students/add", page);
+        var list = WebUtility.HtmlDecode(await anonymous.GetStringAsync("/students/behaviour/incidents"));
+        Assert.Contains("Add Report", list);
+        Assert.DoesNotContain("You are not identified", list);
+        foreach (var form in new[] { "edit", "students/add", "timeline/add", "actions/add", "signoff", "report" })
+            Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync($"/students/behaviour/incidents/{id}/{form}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync("/students/behaviour/incidents/new")).StatusCode);
+        _ = teacher;
     }
 }

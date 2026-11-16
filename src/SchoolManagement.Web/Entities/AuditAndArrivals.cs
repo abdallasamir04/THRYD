@@ -162,7 +162,15 @@ public class StudentArrivalRecord : IAuditable
 
     /// <summary>Computed from ArrivalTime and the deadline in force when recorded; null when absent or no deadline was set.</summary>
     public LateStatus? LateStatus { get; set; }
+
+    /// <summary>The school start time in force when recorded (arriving after it = Late).</summary>
     public TimeOnly? DeadlineUsed { get; set; }
+
+    /// <summary>
+    /// The late cutoff in force when recorded (arriving after it = Absent, the arrival time is kept). Null on records
+    /// made before the cutoff rule existed: they keep the outcome they were recorded with.
+    /// </summary>
+    public TimeOnly? CutoffUsed { get; set; }
 
     public int? ReceivedByStaffId { get; set; }
     public StaffMember? ReceivedBy { get; set; }

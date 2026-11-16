@@ -26,6 +26,7 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
     public DbSet<ManagementMember> ManagementMembers => Set<ManagementMember>();
     public DbSet<ManagementTask> ManagementTasks => Set<ManagementTask>();
     public DbSet<ManagementTaskHistory> ManagementTaskHistory => Set<ManagementTaskHistory>();
+    public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
     public DbSet<DepartmentSubcategory> DepartmentSubcategories => Set<DepartmentSubcategory>();
     public DbSet<ManagementPositionAssignment> PositionAssignments => Set<ManagementPositionAssignment>();
     public DbSet<TimeSlot> TimeSlots => Set<TimeSlot>();
@@ -49,6 +50,14 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
     public DbSet<IncidentTimelineStudent> IncidentTimelineStudents => Set<IncidentTimelineStudent>();
     public DbSet<IncidentAction> IncidentActions => Set<IncidentAction>();
     public DbSet<IncidentHistory> IncidentHistoryEntries => Set<IncidentHistory>();
+    public DbSet<SchoolActivity> Activities => Set<SchoolActivity>();
+    public DbSet<SchoolActivityStaff> ActivityStaff => Set<SchoolActivityStaff>();
+    public DbSet<SchoolActivityClass> ActivityClasses => Set<SchoolActivityClass>();
+    public DbSet<SchoolActivitySchedule> ActivitySchedule => Set<SchoolActivitySchedule>();
+    public DbSet<SchoolActivityHistory> ActivityHistory => Set<SchoolActivityHistory>();
+    public DbSet<ActivitySessionCoverage> ActivitySessionCoverage => Set<ActivitySessionCoverage>();
+    public DbSet<ClassTeachingAssignment> ClassTeachingAssignments => Set<ClassTeachingAssignment>();
+    public DbSet<ClassTeachingHistory> ClassTeachingHistory => Set<ClassTeachingHistory>();
 
     /// <summary>Backstop: a new or changed timetable session may not take a teacher above 24 in any week it counts.</summary>
     public const string TimetableLimitTrigger = "TR_TimetableAssignments_MaxWeeklyPeriods";
@@ -64,6 +73,8 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        ConfigureActivities(b);
+
         b.Entity<SchoolClass>(e =>
         {
             e.ToTable("Classes");
@@ -177,14 +188,25 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
         {
             e.ToTable("TimeSlots", t =>
             {
-                t.HasCheckConstraint("CK_TimeSlots_Number", $"[Number] BETWEEN 1 AND {TimeSlot.Count}");
+                // Display order only: any number of periods (no fixed 1–10).
+                t.HasCheckConstraint("CK_TimeSlots_Number", $"[Number] BETWEEN 1 AND {TimeSlot.MaxOrder}");
                 t.HasCheckConstraint("CK_TimeSlots_Times", "([StartTime] IS NULL AND [EndTime] IS NULL) OR ([StartTime] IS NOT NULL AND [EndTime] IS NOT NULL AND [EndTime] > [StartTime])");
+                t.HasCheckConstraint("CK_TimeSlots_DayMask", "[DayMask] BETWEEN 0 AND 127");
+                t.HasCheckConstraint("CK_TimeSlots_ReplacesNeedsClass", "[ReplacesTimeSlotId] IS NULL OR [SchoolClassId] IS NOT NULL");
             });
             e.Property(x => x.Name).HasMaxLength(TimeSlot.NameMaxLength);
             e.Property(x => x.IsActive).HasDefaultValue(true);
-            e.HasIndex(x => x.Number).IsUnique();
-            // Ten slots without times: the school enters its own times.
-            e.HasData(Enumerable.Range(1, TimeSlot.Count).Select(n => new TimeSlot { Id = n, Number = n, IsActive = true, UpdatedAt = SeedTime }));
+            e.Property(x => x.DayMask).HasDefaultValue(0);
+            e.Property(x => x.UpdatedBy).HasMaxLength(150);
+            // A class's own periods go with the class (a class with lessons cannot be deleted anyway).
+            e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Replaces).WithMany().HasForeignKey(x => x.ReplacesTimeSlotId).OnDelete(DeleteBehavior.NoAction);
+            e.HasIndex(x => new { x.SchoolClassId, x.Number });
+            // A class replaces a school-wide period at most once.
+            e.HasIndex(x => new { x.SchoolClassId, x.ReplacesTimeSlotId }).IsUnique()
+                .HasFilter("[ReplacesTimeSlotId] IS NOT NULL").HasDatabaseName("UX_TimeSlots_ClassReplacement");
+            // The ten original periods (school-wide, every day, no times until the school enters them).
+            e.HasData(Enumerable.Range(1, TimeSlot.SeededCount).Select(n => new TimeSlot { Id = n, Number = n, IsActive = true, UpdatedAt = SeedTime }));
         });
 
         ConfigureBelongings(b);
@@ -258,7 +280,7 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
         {
             e.ToTable("ManagementTasks", t =>
             {
-                t.HasCheckConstraint("CK_ManagementTasks_Status", "[Status] BETWEEN 1 AND 4");
+                t.HasCheckConstraint("CK_ManagementTasks_Status", "[Status] BETWEEN 1 AND 5");
                 t.HasCheckConstraint("CK_ManagementTasks_Priority", "[Priority] BETWEEN 1 AND 4");
                 t.HasCheckConstraint("CK_ManagementTasks_TimeNeedsDate", "[DueTime] IS NULL OR [DueDate] IS NOT NULL");
             });
@@ -269,9 +291,14 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.Property(x => x.UpdatedBy).HasMaxLength(150);
             e.Property(x => x.Status).HasDefaultValue(ManagementTaskStatus.ToDo);
             e.Property(x => x.Priority).HasDefaultValue(TaskPriority.Medium);
-            // A member with tasks cannot be deleted: the tasks are reassigned or removed first.
-            e.HasOne(x => x.Member).WithMany().HasForeignKey(x => x.ManagementMemberId).OnDelete(DeleteBehavior.Restrict);
-            e.HasIndex(x => new { x.ManagementMemberId, x.Status });
+            // Executor, reviewer and creator are staff records (any kind). A staff member a task refers to cannot be
+            // deleted: the services refuse first, and these restrict keys back that up.
+            e.HasOne(x => x.AssignedTo).WithMany().HasForeignKey(x => x.AssignedToId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Reviewer).WithMany().HasForeignKey(x => x.ReviewerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Creator).WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.AssignedToId, x.Status });
+            e.HasIndex(x => x.ReviewerId);
+            e.HasIndex(x => x.CreatedById);
             e.HasIndex(x => new { x.Status, x.DueDate });
         });
 
@@ -281,9 +308,24 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.Property(x => x.TaskTitle).HasMaxLength(ManagementTask.TitleMaxLength).IsRequired();
             e.Property(x => x.Summary).HasMaxLength(Entities.ManagementTaskHistory.SummaryMaxLength).IsRequired();
             e.Property(x => x.ChangedBy).HasMaxLength(150);
-            e.HasOne(x => x.Member).WithMany().HasForeignKey(x => x.ManagementMemberId).OnDelete(DeleteBehavior.Cascade);
-            e.HasIndex(x => new { x.ManagementMemberId, x.ChangedAt });
+            e.HasOne(x => x.StaffMember).WithMany().HasForeignKey(x => x.StaffMemberId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.StaffMemberId, x.ChangedAt });
             e.HasIndex(x => x.TaskId);
+        });
+
+        b.Entity<TaskAttachment>(e =>
+        {
+            e.ToTable("TaskAttachments", t => t.HasCheckConstraint("CK_TaskAttachments_Purpose", "[Purpose] = 1"));
+            e.Property(x => x.FileName).HasMaxLength(TaskAttachment.FileNameMaxLength).IsRequired();
+            e.Property(x => x.Extension).HasMaxLength(10).IsRequired();
+            e.Property(x => x.StoredName).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Sha256).HasMaxLength(64).IsRequired();
+            e.Property(x => x.UploadedBy).HasMaxLength(150);
+            // Deleting a task removes its rows (the service deletes the files).
+            e.HasOne(x => x.Task).WithMany(t => t.Attachments).HasForeignKey(x => x.TaskId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.StagingKey).IsUnique();
+            e.HasIndex(x => x.StoredName).IsUnique();
+            e.HasIndex(x => new { x.TaskId, x.UploadedAt });
         });
 
         b.Entity<StudentTransferHistory>(e =>
@@ -362,7 +404,8 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.ToTable("StudentArrivalRecords", t =>
             {
                 t.HasCheckConstraint("CK_StudentArrivals_PresentHasTime", "[Status] <> 1 OR [ArrivalTime] IS NOT NULL");
-                t.HasCheckConstraint("CK_StudentArrivals_AbsentHasNoTime", "[Status] <> 2 OR ([ArrivalTime] IS NULL AND [LateStatus] IS NULL)");
+                // Absent is never Late. An arrival after the late cutoff is Absent and keeps its real arrival time.
+                t.HasCheckConstraint("CK_StudentArrivals_AbsentNotLate", "[Status] <> 2 OR [LateStatus] IS NULL");
             });
             e.Property(x => x.ArrivalLocation).HasMaxLength(StudentArrivalRecord.LocationMaxLength);
             e.Property(x => x.Notes).HasMaxLength(StudentArrivalRecord.NotesMaxLength);
@@ -616,6 +659,7 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.Property(x => x.Category).HasMaxLength(Incident.CategoryMaxLength).IsRequired();
             e.Property(x => x.ReportingDepartment).HasMaxLength(Incident.DepartmentMaxLength).IsRequired();
             e.Property(x => x.SignOffSchool).HasMaxLength(Incident.NameMaxLength);
+            e.Property(x => x.PreparedByText).HasMaxLength(Incident.NameMaxLength);
             e.Property(x => x.ApprovalNotes).HasMaxLength(Incident.NotesMaxLength);
             e.Property(x => x.ClosedBy).HasMaxLength(150);
             e.Property(x => x.CreatedBy).HasMaxLength(150);
@@ -687,6 +731,124 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
         Id = id, DepartmentId = departmentId, ParentId = parentId, Name = name, NormalizedName = name.ToUpperInvariant(),
         IsActive = true, SortOrder = order, CreatedAt = SeedTime, UpdatedAt = SeedTime,
     };
+
+    /// <summary>Duties → Activities: administrator-created activities (P.E. stays in its own module, not here).</summary>
+    private static void ConfigureActivities(ModelBuilder b)
+    {
+        b.Entity<SchoolActivity>(e =>
+        {
+            e.ToTable("Activities");
+            e.Property(x => x.Name).HasMaxLength(SchoolActivity.NameMaxLength).IsRequired();
+            e.Property(x => x.NormalizedName).HasMaxLength(SchoolActivity.NameMaxLength).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(SchoolActivity.DescriptionMaxLength).IsRequired();
+            e.Property(x => x.Category).HasMaxLength(SchoolActivity.CategoryMaxLength);
+            e.Property(x => x.Icon).HasMaxLength(SchoolActivity.IconMaxLength).IsRequired();
+            e.Property(x => x.Color).HasMaxLength(SchoolActivity.ColorMaxLength).IsRequired();
+            e.Property(x => x.Location).HasMaxLength(SchoolActivity.LocationMaxLength);
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.Property(x => x.CreatedBy).HasMaxLength(150);
+            e.Property(x => x.UpdatedBy).HasMaxLength(150);
+            e.HasIndex(x => x.NormalizedName).IsUnique().HasDatabaseName("UX_Activities_Name");
+            e.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<SchoolActivityStaff>(e =>
+        {
+            e.ToTable("ActivityStaff");
+            e.HasKey(x => new { x.SchoolActivityId, x.StaffMemberId });
+            e.HasOne(x => x.Activity).WithMany(a => a.Staff).HasForeignKey(x => x.SchoolActivityId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.StaffMember).WithMany().HasForeignKey(x => x.StaffMemberId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.StaffMemberId);
+        });
+        b.Entity<SchoolActivityClass>(e =>
+        {
+            e.ToTable("ActivityClasses");
+            e.HasKey(x => new { x.SchoolActivityId, x.SchoolClassId });
+            e.HasOne(x => x.Activity).WithMany(a => a.Classes).HasForeignKey(x => x.SchoolActivityId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.SchoolClassId);
+        });
+        b.Entity<SchoolActivitySchedule>(e =>
+        {
+            e.ToTable("ActivitySchedule", t =>
+            {
+                t.HasCheckConstraint("CK_ActivitySchedule_Times", "[EndTime] > [StartTime]");
+                t.HasCheckConstraint("CK_ActivitySchedule_Day", "[Day] BETWEEN 0 AND 6");
+            });
+            e.Property(x => x.Location).HasMaxLength(SchoolActivity.LocationMaxLength);
+            e.Property(x => x.Notes).HasMaxLength(SchoolActivitySchedule.NotesMaxLength);
+            e.HasOne(x => x.Activity).WithMany(a => a.Schedule).HasForeignKey(x => x.SchoolActivityId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.SchoolActivityId, x.Day, x.StartTime });
+        });
+        b.Entity<SchoolActivityHistory>(e =>
+        {
+            e.ToTable("ActivityHistory");
+            e.Property(x => x.Action).HasMaxLength(80).IsRequired();
+            e.Property(x => x.Details).HasMaxLength(SchoolActivityHistory.TextMaxLength);
+            e.Property(x => x.By).HasMaxLength(150);
+            e.HasOne(x => x.Activity).WithMany().HasForeignKey(x => x.SchoolActivityId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.SchoolActivityId, x.At });
+        });
+        b.Entity<ActivitySessionCoverage>(e =>
+        {
+            e.ToTable("ActivitySessionCoverage", t =>
+            {
+                t.HasCheckConstraint("CK_ActivitySessionCoverage_Link",
+                    "([Kind] = 1 AND [TimetableAssignmentId] IS NOT NULL AND [ActivityScheduleId] IS NULL) OR " +
+                    "([Kind] = 2 AND [ActivityScheduleId] IS NOT NULL AND [TimetableAssignmentId] IS NULL)");
+                t.HasCheckConstraint("CK_ActivitySessionCoverage_Status", "[Status] BETWEEN 1 AND 3");
+            });
+            e.Property(x => x.UpdatedBy).HasMaxLength(150);
+            // Timetable rows are ended, never deleted (like SessionCancellations); a meeting removed from an activity's
+            // schedule is no longer scheduled, so its coverage rows go with it.
+            e.HasOne(x => x.Session).WithMany().HasForeignKey(x => x.TimetableAssignmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Meeting).WithMany().HasForeignKey(x => x.ActivityScheduleId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.TimetableAssignmentId, x.SessionDate }).IsUnique()
+                .HasFilter("[TimetableAssignmentId] IS NOT NULL").HasDatabaseName("UX_ActivitySessionCoverage_Lesson");
+            e.HasIndex(x => new { x.ActivityScheduleId, x.SessionDate }).IsUnique()
+                .HasFilter("[ActivityScheduleId] IS NOT NULL").HasDatabaseName("UX_ActivitySessionCoverage_Meeting");
+            e.HasIndex(x => x.SessionDate);
+        });
+
+        // KG class teaching teams. Class, staff and year are never deleted through these rows (Restrict): the class and
+        // teacher delete services refuse while any assignment or history row points at them.
+        b.Entity<ClassTeachingAssignment>(e =>
+        {
+            e.ToTable("ClassTeachingAssignments", t =>
+            {
+                t.HasCheckConstraint("CK_ClassTeachingAssignments_Role", "[Role] IN (1, 2)");
+                t.HasCheckConstraint("CK_ClassTeachingAssignments_Ended",
+                    "([IsActive] = 1 AND [EndedAt] IS NULL) OR ([IsActive] = 0 AND [EndedAt] IS NOT NULL)");
+            });
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.Property(x => x.AssignedBy).HasMaxLength(150);
+            e.Property(x => x.EndedBy).HasMaxLength(150);
+            e.Property(x => x.EndReason).HasMaxLength(ClassTeachingAssignment.EndReasonMaxLength);
+            e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.StaffMember).WithMany().HasForeignKey(x => x.StaffMemberId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.Restrict);
+            // At most one active Homeroom Teacher per class and academic year.
+            e.HasIndex(x => new { x.SchoolClassId, x.AcademicYearId }).IsUnique()
+                .HasFilter("[IsActive] = 1 AND [Role] = 1").HasDatabaseName("UX_ClassTeaching_Homeroom");
+            // One active role per staff member in a class and year: no duplicate Co-Teacher, never both roles.
+            e.HasIndex(x => new { x.SchoolClassId, x.AcademicYearId, x.StaffMemberId }).IsUnique()
+                .HasFilter("[IsActive] = 1").HasDatabaseName("UX_ClassTeaching_StaffOnce");
+            e.HasIndex(x => new { x.StaffMemberId, x.AcademicYearId });
+        });
+        b.Entity<ClassTeachingHistory>(e =>
+        {
+            e.ToTable("ClassTeachingHistory", t =>
+            {
+                t.HasCheckConstraint("CK_ClassTeachingHistory_PreviousRole", "[PreviousRole] IS NULL OR [PreviousRole] IN (1, 2)");
+                t.HasCheckConstraint("CK_ClassTeachingHistory_NewRole", "[NewRole] IS NULL OR [NewRole] IN (1, 2)");
+            });
+            e.Property(x => x.Details).HasMaxLength(Entities.ClassTeachingHistory.DetailsMaxLength);
+            e.Property(x => x.By).HasMaxLength(150);
+            e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.StaffMember).WithMany().HasForeignKey(x => x.StaffMemberId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.SchoolClassId, x.At });
+        });
+    }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {

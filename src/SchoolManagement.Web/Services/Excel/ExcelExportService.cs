@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Common;
 using ClosedXML.Excel;
 using SchoolManagement.Web.Services.Import;
 
@@ -11,6 +12,12 @@ public interface IExcelExportService
     byte[] TeacherTemplate();
     byte[] ImportReport(ImportKind kind, string fileName, IReadOnlyList<PreviewRow> rows);
     byte[] WorkloadReport(DateOnly weekStart, IReadOnlyList<WorkloadSummary> teachers, IReadOnlyList<WorkloadAssignmentRow> assignments);
+
+    /// <summary>One student's attendance over a period: summary sheet and one row per school day.</summary>
+    byte[] AttendanceStudent(StudentAttendanceReport report, string schoolName);
+
+    /// <summary>A class, grade or the whole school over a period: summary, by grade, by class and one row per student.</summary>
+    byte[] AttendanceGroup(GroupAttendanceReport report, string schoolName);
 }
 
 /// <summary>Builds every downloadable workbook. Contact numbers are always written as text.</summary>
@@ -33,8 +40,8 @@ public sealed class ExcelExportService : IExcelExportService
             ws.Cell(r, 2).Value = s.FullName;
             ws.Cell(r, 3).Value = s.ClassName;
             ws.Cell(r, 4).Value = s.ClassActive ? "Active" : "Inactive";
-            ws.Cell(r, 5).Value = s.CreatedAt.ToLocalTime();
-            ws.Cell(r, 6).Value = s.UpdatedAt.ToLocalTime();
+            ws.Cell(r, 5).Value = SchoolTime.Current.ToLocal(s.CreatedAt);
+            ws.Cell(r, 6).Value = SchoolTime.Current.ToLocal(s.UpdatedAt);
             r++;
         }
         FinishTable(ws, rows.Count, 6);
@@ -56,8 +63,8 @@ public sealed class ExcelExportService : IExcelExportService
             ws.Cell(r, 2).Value = t.FullName;
             ws.Cell(r, 3).Value = t.JobTitle ?? "";
             ws.Cell(r, 4).SetValue(t.ContactNumber ?? ""); // text, keeps leading zeros
-            ws.Cell(r, 5).Value = t.CreatedAt.ToLocalTime();
-            ws.Cell(r, 6).Value = t.UpdatedAt.ToLocalTime();
+            ws.Cell(r, 5).Value = SchoolTime.Current.ToLocal(t.CreatedAt);
+            ws.Cell(r, 6).Value = SchoolTime.Current.ToLocal(t.UpdatedAt);
             r++;
         }
         FinishTable(ws, rows.Count, 6);
@@ -194,7 +201,7 @@ public sealed class ExcelExportService : IExcelExportService
             detail.Cell(r, 4).Value = a.ClassName ?? "";
             detail.Cell(r, 5).Value = a.DutyLabel ?? "";
             detail.Cell(r, 6).Value = a.Description ?? "";
-            detail.Cell(r, 7).Value = a.UpdatedAt.ToLocalTime();
+            detail.Cell(r, 7).Value = SchoolTime.Current.ToLocal(a.UpdatedAt);
             r++;
         }
         FinishTable(detail, assignments.Count, 7);
@@ -202,6 +209,207 @@ public sealed class ExcelExportService : IExcelExportService
 
         AddInfoSheet(wb, $"Teacher workload — week of {Common.SchoolWeek.Label(weekStart)}", teachers.Count,
             $"Maximum {WorkloadRules.Max} periods per teacher per week (Class + Substitution + Duty + Office).");
+        return Save(wb);
+    }
+
+
+    // ------------------------------------------------------------------ attendance history & reports
+
+    private static readonly XLColor PresentFill = XLColor.FromHtml("#E3F5EE");
+    private static readonly XLColor LateFill = XLColor.FromHtml("#FFF0E3");
+    private static readonly XLColor AbsentFill = XLColor.FromHtml("#FDECEC");
+    private static readonly XLColor NotRecordedFill = XLColor.FromHtml("#EEF1F7");
+
+    private static string Status(ArrivalOutcome? o) => Arrivals.Label(o);
+
+    private static void StatusCell(IXLCell cell, ArrivalOutcome? o)
+    {
+        cell.Value = Status(o);
+        cell.Style.Fill.BackgroundColor = o switch
+        {
+            ArrivalOutcome.Present => PresentFill, ArrivalOutcome.Late => LateFill, ArrivalOutcome.Absent => AbsentFill, _ => NotRecordedFill,
+        };
+    }
+
+    private static string Period(DateOnly from, DateOnly to) =>
+        from == to ? from.ToString("dddd d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)
+                   : $"{from.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)} – {to.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)}";
+
+    /// <summary>Title block + label / value pairs on a summary sheet; returns the next free row.</summary>
+    private static int SummarySheet(IXLWorksheet ws, string schoolName, string title, IReadOnlyList<(string Label, object? Value)> items)
+    {
+        ws.Cell(1, 1).Value = schoolName;
+        ws.Cell(1, 1).Style.Font.FontColor = XLColor.FromHtml("#6D28D9");
+        ws.Cell(2, 1).Value = title;
+        ws.Cell(2, 1).Style.Font.Bold = true;
+        ws.Cell(2, 1).Style.Font.FontSize = 14;
+        var r = 4;
+        foreach (var (label, value) in items)
+        {
+            ws.Cell(r, 1).Value = label;
+            ws.Cell(r, 1).Style.Font.Bold = true;
+            ws.Cell(r, 2).Value = value switch { int i => i, double d => d, null => "—", _ => value.ToString() };
+            r++;
+        }
+        ws.Cell(r + 1, 1).Value = "Generated";
+        ws.Cell(r + 1, 2).Value = SchoolTime.Current.Now;
+        ws.Cell(r + 1, 2).Style.DateFormat.Format = "d mmm yyyy, h:mm AM/PM";
+        ws.Cell(r + 2, 1).Value = "Rules";
+        ws.Cell(r + 2, 2).Value = "Not Recorded = no attendance record (never an absence). Attendance % = (Present + Late) ÷ days with a record. School days exclude weekends and school holidays.";
+        ws.Column(1).Width = 26;
+        ws.Column(2).Width = 60;
+        return r + 4;
+    }
+
+    private static IReadOnlyList<(string, object?)> CountItems(AttendanceCounts k) =>
+    [
+        ("Present", k.Present), ("Late", k.Late), ("Absent", k.Absent), ("Not Recorded", k.NotRecorded),
+        ("Days with a record", k.Recorded), ("Attendance %", k.Percent is { } p ? p / 100.0 : null),
+    ];
+
+    private static void PercentCell(IXLCell cell, double? percent)
+    {
+        if (percent is { } p) { cell.Value = p / 100.0; cell.Style.NumberFormat.Format = "0.0%"; }
+        else cell.Value = "—";
+    }
+
+    public byte[] AttendanceStudent(StudentAttendanceReport report, string schoolName)
+    {
+        using var wb = new XLWorkbook();
+        var info = wb.Worksheets.Add("Summary");
+        var items = new List<(string, object?)>
+        {
+            ("Student", report.Name), ("Student ID", report.StudentId), ("Current class", report.ClassName), ("Period", Period(report.From, report.To)),
+            ("School days", report.Counts.Days),
+        };
+        items.AddRange(CountItems(report.Counts));
+        SummarySheet(info, schoolName, "Student Attendance Report", items);
+        var pct = info.Search("Attendance %").FirstOrDefault();
+        if (pct is not null && report.Counts.Percent is not null) info.Cell(pct.Address.RowNumber, 2).Style.NumberFormat.Format = "0.0%";
+
+        var ws = wb.Worksheets.Add("Daily attendance");
+        WriteHeader(ws, ["Date", "Day", "Status", "Arrival Time", "Class", "Notes", "Recorded By", "Corrections", "Last Correction Reason"]);
+        var r = 2;
+        foreach (var d in report.Days)
+        {
+            ws.Cell(r, 1).Value = d.Date.ToDateTime(TimeOnly.MinValue);
+            ws.Cell(r, 1).Style.DateFormat.Format = "d mmm yyyy";
+            ws.Cell(r, 2).Value = d.Date.DayOfWeek.ToString();
+            StatusCell(ws.Cell(r, 3), d.Outcome);
+            if (d.Time is { } t) { ws.Cell(r, 4).Value = t.ToTimeSpan(); ws.Cell(r, 4).Style.NumberFormat.Format = "h:mm AM/PM"; }
+            ws.Cell(r, 5).Value = d.ClassName ?? "";
+            ws.Cell(r, 6).Value = d.Notes ?? "";
+            ws.Cell(r, 7).Value = d.RecordedBy ?? "";
+            ws.Cell(r, 8).Value = d.Corrections;
+            ws.Cell(r, 9).Value = d.LastCorrection ?? "";
+            r++;
+        }
+        FinishTable(ws, report.Days.Count, 9);
+
+        if (report.Corrections.Count > 0)
+        {
+            var c = wb.Worksheets.Add("Corrections");
+            WriteHeader(c, ["Date", "Before", "After", "Reason", "Corrected At", "Corrected By"]);
+            r = 2;
+            foreach (var x in report.Corrections)
+            {
+                c.Cell(r, 1).Value = x.Date.ToDateTime(TimeOnly.MinValue);
+                c.Cell(r, 1).Style.DateFormat.Format = "d mmm yyyy";
+                c.Cell(r, 2).Value = x.Before;
+                c.Cell(r, 3).Value = x.After;
+                c.Cell(r, 4).Value = x.Reason;
+                c.Cell(r, 5).Value = SchoolTime.Current.ToLocal(x.CorrectedAt);
+                c.Cell(r, 5).Style.DateFormat.Format = "d mmm yyyy, h:mm AM/PM";
+                c.Cell(r, 6).Value = x.CorrectedBy ?? "";
+                r++;
+            }
+            FinishTable(c, report.Corrections.Count, 6);
+        }
+        return Save(wb);
+    }
+
+    public byte[] AttendanceGroup(GroupAttendanceReport report, string schoolName)
+    {
+        using var wb = new XLWorkbook();
+        var info = wb.Worksheets.Add("Summary");
+        var items = new List<(string, object?)>
+        {
+            ("Report", report.Title), ("Period", Period(report.From, report.To)), ("School days", report.SchoolDays), ("Students", report.Students),
+        };
+        items.AddRange(CountItems(report.Counts));
+        var title = report.Scope switch { "class" => "Class Attendance Report", "grade" => "Grade Attendance Report", _ => "Whole-School Attendance Report" };
+        SummarySheet(info, schoolName, title, items);
+        var pct = info.Search("Attendance %").FirstOrDefault();
+        if (pct is not null && report.Counts.Percent is not null) info.Cell(pct.Address.RowNumber, 2).Style.NumberFormat.Format = "0.0%";
+
+        void Groups(string name, IReadOnlyList<GroupRow> rows)
+        {
+            var g = wb.Worksheets.Add(name);
+            WriteHeader(g, [name == "By grade" ? "Grade" : "Class", "Students", "Present", "Late", "Absent", "Not Recorded", "Attendance %"]);
+            var i = 2;
+            foreach (var x in rows)
+            {
+                g.Cell(i, 1).Value = x.Label;
+                g.Cell(i, 2).Value = x.Students;
+                g.Cell(i, 3).Value = x.Counts.Present;
+                g.Cell(i, 4).Value = x.Counts.Late;
+                g.Cell(i, 5).Value = x.Counts.Absent;
+                g.Cell(i, 6).Value = x.Counts.NotRecorded;
+                PercentCell(g.Cell(i, 7), x.Counts.Percent);
+                i++;
+            }
+            // Totals row (the same totals as the summary).
+            g.Cell(i, 1).Value = "Total";
+            g.Cell(i, 2).Value = rows.Sum(x => x.Students);
+            g.Cell(i, 3).Value = report.Counts.Present;
+            g.Cell(i, 4).Value = report.Counts.Late;
+            g.Cell(i, 5).Value = report.Counts.Absent;
+            g.Cell(i, 6).Value = report.Counts.NotRecorded;
+            PercentCell(g.Cell(i, 7), report.Counts.Percent);
+            g.Range(i, 1, i, 7).Style.Font.Bold = true;
+            FinishTable(g, rows.Count, 7);
+        }
+        if (report.Scope != "class")
+        {
+            Groups("By grade", report.ByGrade);
+            Groups("By class", report.ByClass);
+        }
+
+        var ws = wb.Worksheets.Add("Students");
+        if (report.SingleDay)
+        {
+            WriteHeader(ws, ["Student", "Student ID", "Class", "Status", "Arrival Time"]);
+            var r = 2;
+            foreach (var x in report.StudentRows)
+            {
+                ws.Cell(r, 1).Value = x.Name;
+                ws.Cell(r, 2).Value = x.StudentId;
+                ws.Cell(r, 3).Value = x.ClassName;
+                StatusCell(ws.Cell(r, 4), x.DayOutcome);
+                if (x.DayTime is { } t) { ws.Cell(r, 5).Value = t.ToTimeSpan(); ws.Cell(r, 5).Style.NumberFormat.Format = "h:mm AM/PM"; }
+                r++;
+            }
+            FinishTable(ws, report.StudentRows.Count, 5);
+        }
+        else
+        {
+            WriteHeader(ws, ["Student", "Student ID", "Class", "School Days", "Present", "Late", "Absent", "Not Recorded", "Attendance %"]);
+            var r = 2;
+            foreach (var x in report.StudentRows)
+            {
+                ws.Cell(r, 1).Value = x.Name;
+                ws.Cell(r, 2).Value = x.StudentId;
+                ws.Cell(r, 3).Value = x.ClassName;
+                ws.Cell(r, 4).Value = x.Counts.Days;
+                ws.Cell(r, 5).Value = x.Counts.Present;
+                ws.Cell(r, 6).Value = x.Counts.Late;
+                ws.Cell(r, 7).Value = x.Counts.Absent;
+                ws.Cell(r, 8).Value = x.Counts.NotRecorded;
+                PercentCell(ws.Cell(r, 9), x.Counts.Percent);
+                r++;
+            }
+            FinishTable(ws, report.StudentRows.Count, 9);
+        }
         return Save(wb);
     }
 
@@ -237,7 +445,7 @@ public sealed class ExcelExportService : IExcelExportService
         info.Cell(4, 1).Value = "Filters";
         info.Cell(4, 2).Value = filterSummary;
         info.Cell(5, 1).Value = "Exported";
-        info.Cell(5, 2).Value = DateTime.Now;
+        info.Cell(5, 2).Value = SchoolTime.Now;
         info.Cell(5, 2).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
         info.Range(3, 1, 5, 1).Style.Font.Bold = true;
         info.Column(1).Width = 14;

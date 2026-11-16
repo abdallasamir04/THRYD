@@ -1,0 +1,288 @@
+@model IncidentReportForm
+@*
+    Add Report / Edit Report: the official Student Incident Report in five sections, saved together in one transaction.
+    Save Draft keeps an incomplete report (category and date are enough); Save Report checks every section.
+    Students, timeline events and actions are cards added / removed in place (incidents.js); nothing needs "Working as".
+*@
+@{
+    var m = Model;
+    var s = m.Suggestions!;
+    string json(object v) => System.Text.Json.JsonSerializer.Serialize(v);
+    const string tpl = "__i__"; // key of the template entry, replaced by incidents.js
+    var action = m.IsEdit ? $"/students/behaviour/incidents/{m.Id}/report" : "/students/behaviour/incidents/new";
+    var back = m.IsEdit ? $"/students/behaviour/incidents/{m.Id}" : "/students/behaviour/incidents";
+    var canDraft = !m.IsEdit || m.IsDraft;
+    var title = m.IsEdit ? (m.IsDraft ? "Complete Draft Report" : "Edit Incident Report") : "Add Incident Report";
+    ViewData["Title"] = title;
+    ViewData["Nav"] = "Behaviour";
+    var preparedStaff = m.PreparedByMode == "staff";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/students/behaviour">Behavioural / Discipline</a></li><li><a href="/students/behaviour/incidents">Incident</a></li><li><span aria-current="page">@(m.IsEdit ? m.Reference : "Add Report")</span></li></ol>
+        <p class="inc-eyebrow" dir="auto">@m.SchoolName · Official Student Incident Report</p>
+        <h1 class="page-title">@title</h1>
+        <p class="page-sub">Five sections, as on the official report. Save a draft at any time; Save Report checks every section.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="@back">@Ui.Icon("arrow-left")@(m.IsEdit ? "Back to report" : "Back to Incident Reports")</a>
+    </div>
+</div>
+
+<partial name="_Confidential" />
+
+<form class="inc-report" action="@action" method="post" data-loading data-incident-report autocomplete="off">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="SubmissionKey" value="@m.SubmissionKey" />
+    @* The clicked button (Save Draft / Save Report), copied by incidents.js: the busy state disables the button, and a disabled button's value is not sent. *@
+    <input type="hidden" name="chosenIntent" value="" data-intent />
+    <div class="inc-report__layout">
+        @* ---------------------------------------------------------------- outline + actions *@
+        <aside class="inc-outline" aria-label="Report outline">
+            <div class="inc-outline__ref">
+                <span class="inc-outline__label">Reference ID</span>
+                <strong class="inc-ref">@m.Reference</strong>
+                <span class="inc-outline__hint">@(m.IsEdit ? (m.IsDraft ? "Draft — not yet a final report" : "Saved report") : "Assigned automatically when saved")</span>
+            </div>
+            <nav class="inc-outline__nav">
+                <a href="#sec-1">@Ui.Icon("flag", "icon--sm")<span>Incident information</span></a>
+                <a href="#sec-2">@Ui.Icon("users", "icon--sm")<span>Students involved</span><b data-count="students">@m.Students.Count</b></a>
+                <a href="#sec-3">@Ui.Icon("clock", "icon--sm")<span>Timeline of events</span><b data-count="events">@m.Timeline.Count</b></a>
+                <a href="#sec-4">@Ui.Icon("clipboard-check", "icon--sm")<span>Findings &amp; actions</span><b data-count="actions">@m.Actions.Count</b></a>
+                <a href="#sec-5">@Ui.Icon("shield-check", "icon--sm")<span>Sign-off &amp; closure</span></a>
+            </nav>
+            <div class="inc-outline__actions inc-report__actions">
+                <button class="btn btn--primary" type="submit" name="intent" value="final" data-report-submit>@Ui.Icon("check")Save Report</button>
+                @if (canDraft)
+                {
+                    <button class="btn btn--secondary" type="submit" name="intent" value="draft" formnovalidate data-report-submit>@Ui.Icon("file-text")Save Draft</button>
+                }
+                <a class="btn btn--ghost" href="@back">Cancel</a>
+            </div>
+            <p class="inc-outline__hint">@(canDraft ? "A draft may be incomplete — only the category and date are needed." : "All sections are checked when you save.")</p>
+        </aside>
+
+        <div class="inc-report__main">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="notice notice--error">@Ui.Icon("alert-circle")<div class="notice__body"><strong>The report was not saved.</strong>Check the highlighted fields below — everything you entered is still here.</div></div>
+            }
+
+            @* ---------------------------------------------------------------- 1. Incident information *@
+            <section class="inc-card" id="sec-1" aria-labelledby="sec-1-title">
+                <header class="inc-card__head">
+                    <span class="inc-card__icon inc-card__icon--rose">@Ui.Icon("flag")</span>
+                    <div><h2 class="inc-card__title" id="sec-1-title"><span class="inc-card__step">1</span>Incident Information</h2>
+                        <p class="inc-card__sub">What happened, when, how serious it is and where the report stands.</p></div>
+                </header>
+                <div class="inc-card__body">
+                    <div class="inc-fields inc-fields--info">
+                        <div class="field">
+                            <label class="label" for="Category">Incident category <span class="req" aria-hidden="true">*</span></label>
+                            <input class="input" id="Category" name="Category" value="@m.Category" maxlength="@Incident.CategoryMaxLength" required dir="auto"
+                                   data-suggest='@json(s.Categories)' placeholder="e.g. Physical Aggression &amp; Verbal Misconduct" autocomplete="off" />
+                            @Html.ValidationMessage("Category", new { @class = "field-validation-error" })
+                        </div>
+                        <div class="field">
+                            <label class="label" for="Date">Date of incident <span class="req" aria-hidden="true">*</span></label>
+                            <input class="input picker" type="date" id="Date" name="Date" value="@(m.Date is { } dt ? SchoolWeek.Iso(dt) : "")" max="@SchoolWeek.Iso(SchoolWeek.Today)" min="2000-01-01"
+                                   required data-datepicker data-empty-text="Choose the date" />
+                            @Html.ValidationMessage("Date", new { @class = "field-validation-error" })
+                        </div>
+                        <div class="field">
+                            <label class="label" for="Department">Reporting department <span class="req" aria-hidden="true">*</span></label>
+                            <input class="input" id="Department" name="Department" value="@m.Department" maxlength="@Incident.DepartmentMaxLength" required dir="auto"
+                                   data-suggest='@json(s.Departments)' placeholder="e.g. Discipline Department" autocomplete="off" />
+                            @Html.ValidationMessage("Department", new { @class = "field-validation-error" })
+                        </div>
+                        <div class="field">
+                            <span class="label">Reference ID</span>
+                            <div class="inc-readonly">@Ui.Icon("hash", "icon--sm")<strong class="inc-ref">@m.Reference</strong>@if (!m.IsEdit) { <span class="inc-readonly__tag">automatic</span> }</div>
+                        </div>
+                    </div>
+
+                    <fieldset class="field inc-choice-field">
+                        <legend class="label">Severity level</legend>
+                        <div class="inc-choices inc-choices--severity">
+                            @foreach (var lv in IncidentLabels.Severities)
+                            {
+                                var parts = IncidentLabels.Severity(lv).Split(" (", 2);
+                                <label class="inc-choice inc-choice--level@((int)lv)">
+                                    <input type="radio" name="Severity" value="@lv" checked="@(m.Severity == lv)" />
+                                    <span class="inc-choice__dot" aria-hidden="true"></span>
+                                    <span class="inc-choice__text"><strong>@parts[0]</strong><small>@parts.ElementAtOrDefault(1)?.TrimEnd(')')</small></span>
+                                </label>
+                            }
+                        </div>
+                        @Html.ValidationMessage("Severity", new { @class = "field-validation-error" })
+                    </fieldset>
+
+                    <fieldset class="field inc-choice-field">
+                        <legend class="label">Incident status</legend>
+                        <div class="inc-choices inc-choices--status">
+                            @foreach (var st in IncidentLabels.Statuses)
+                            {
+                                <label class="inc-choice inc-choice--status">
+                                    <input type="radio" name="Status" value="@st" checked="@(m.Status == st)" />
+                                    <span class="inc-choice__dot" aria-hidden="true"></span>
+                                    <span class="inc-choice__text"><strong>@IncidentLabels.Status(st)</strong></span>
+                                </label>
+                            }
+                        </div>
+                        <p class="hint">Closing the record (read-only) is done on the report page once every section is complete.</p>
+                        @Html.ValidationMessage("Status", new { @class = "field-validation-error" })
+                    </fieldset>
+                </div>
+            </section>
+
+            @* ---------------------------------------------------------------- 2. Students involved *@
+            <section class="inc-card" id="sec-2" aria-labelledby="sec-2-title">
+                <header class="inc-card__head">
+                    <span class="inc-card__icon inc-card__icon--violet">@Ui.Icon("users")</span>
+                    <div><h2 class="inc-card__title" id="sec-2-title"><span class="inc-card__step">2</span>Students Involved</h2>
+                        <p class="inc-card__sub">Choose each student from the Student Directory — grade &amp; section come from their class.</p></div>
+                </header>
+                <div class="inc-card__body">
+                    @Html.ValidationMessage("Students", new { @class = "field-validation-error" })
+                    <div class="inc-entries" data-entries="Students" data-kind="student">
+                        @for (var i = 0; i < m.Students.Count; i++)
+                        {
+                            <partial name="_ReportStudent" model="new ReportEntry<ReportStudentEntry>(m.Students[i], i.ToString(), m)" />
+                        }
+                    </div>
+                    <p class="inc-entries__empty" data-entries-empty="Students" hidden="@(m.Students.Count > 0)">No students added yet.</p>
+                    <button class="btn btn--secondary inc-add" type="button" data-entry-add="Students">@Ui.Icon("user-plus")Add Student</button>
+                    <template data-entry-template="Students"><partial name="_ReportStudent" model="new ReportEntry<ReportStudentEntry>(new ReportStudentEntry(), tpl, m)" /></template>
+                </div>
+            </section>
+
+            @* ---------------------------------------------------------------- 3. Timeline *@
+            <section class="inc-card" id="sec-3" aria-labelledby="sec-3-title">
+                <header class="inc-card__head">
+                    <span class="inc-card__icon inc-card__icon--blue">@Ui.Icon("clock")</span>
+                    <div><h2 class="inc-card__title" id="sec-3-title"><span class="inc-card__step">3</span>Chronological Timeline of Events</h2>
+                        <p class="inc-card__sub">One card per event. A period alone is enough; events with an exact time are ordered by time.</p></div>
+                </header>
+                <div class="inc-card__body">
+                    <div class="inc-entries" data-entries="Timeline" data-kind="event">
+                        @for (var i = 0; i < m.Timeline.Count; i++)
+                        {
+                            <partial name="_ReportEvent" model="new ReportEntry<ReportTimelineEntry>(m.Timeline[i], i.ToString(), m)" />
+                        }
+                    </div>
+                    <p class="inc-entries__empty" data-entries-empty="Timeline" hidden="@(m.Timeline.Count > 0)">No events added yet.</p>
+                    <button class="btn btn--secondary inc-add" type="button" data-entry-add="Timeline">@Ui.Icon("plus")Add Timeline Entry</button>
+                    <template data-entry-template="Timeline"><partial name="_ReportEvent" model="new ReportEntry<ReportTimelineEntry>(new ReportTimelineEntry(), tpl, m)" /></template>
+                </div>
+            </section>
+
+            @* ---------------------------------------------------------------- 4. Findings & actions *@
+            <section class="inc-card" id="sec-4" aria-labelledby="sec-4-title">
+                <header class="inc-card__head">
+                    <span class="inc-card__icon inc-card__icon--amber">@Ui.Icon("clipboard-check")</span>
+                    <div><h2 class="inc-card__title" id="sec-4-title"><span class="inc-card__step">4</span>Investigation Findings &amp; Administrative Actions</h2>
+                        <p class="inc-card__sub">As many as needed — inquiries, warnings, guidance, restorative steps — each with its own status.</p></div>
+                </header>
+                <div class="inc-card__body">
+                    <div class="inc-entries" data-entries="Actions" data-kind="action">
+                        @for (var i = 0; i < m.Actions.Count; i++)
+                        {
+                            <partial name="_ReportAction" model="new ReportEntry<ReportActionEntry>(m.Actions[i], i.ToString(), m)" />
+                        }
+                    </div>
+                    <p class="inc-entries__empty" data-entries-empty="Actions" hidden="@(m.Actions.Count > 0)">No findings or actions added yet.</p>
+                    <button class="btn btn--secondary inc-add" type="button" data-entry-add="Actions">@Ui.Icon("plus")Add Action</button>
+                    <template data-entry-template="Actions"><partial name="_ReportAction" model="new ReportEntry<ReportActionEntry>(new ReportActionEntry(), tpl, m)" /></template>
+                </div>
+            </section>
+
+            @* ---------------------------------------------------------------- 5. Sign-off *@
+            <section class="inc-card" id="sec-5" aria-labelledby="sec-5-title">
+                <header class="inc-card__head">
+                    <span class="inc-card__icon inc-card__icon--teal">@Ui.Icon("shield-check")</span>
+                    <div><h2 class="inc-card__title" id="sec-5-title"><span class="inc-card__step">5</span>Administrative Sign-off &amp; Record Closure</h2>
+                        <p class="inc-card__sub">Administrative approval &amp; endorsement. Optional while the report is a draft.</p></div>
+                </header>
+                <div class="inc-card__body">
+                    <div class="inc-fields inc-fields--2">
+                        <div class="field">
+                            <span class="label" id="prep-label">Prepared by</span>
+                            <div class="segmented inc-mode" role="radiogroup" aria-labelledby="prep-label">
+                                <label><input type="radio" name="PreparedByMode" value="text" checked="@(!preparedStaff)" data-prepared-mode /><span>Department or person</span></label>
+                                <label><input type="radio" name="PreparedByMode" value="staff" checked="@preparedStaff" data-prepared-mode /><span>Staff member</span></label>
+                            </div>
+                            <div data-prepared="text" hidden="@preparedStaff">
+                                <input class="input" name="PreparedByText" value="@m.PreparedByText" maxlength="@Incident.NameMaxLength" dir="auto" aria-labelledby="prep-label"
+                                       data-suggest='@json(s.Departments)' placeholder="e.g. Discipline Department" autocomplete="off" />
+                            </div>
+                            <div data-prepared="staff" hidden="@(!preparedStaff)">
+                                <select class="select" id="PreparedById" name="PreparedById" data-searchable data-search-notes aria-labelledby="prep-label">
+                                    <option value="">Choose a staff member…</option>
+                                    @foreach (var st in m.Staff)
+                                    {
+                                        <option value="@st.Id" selected="@(m.PreparedById == st.Id)" data-note="@st.JobTitle">@st.FullName</option>
+                                    }
+                                </select>
+                            </div>
+                            @Html.ValidationMessage("PreparedById", new { @class = "field-validation-error" })
+                            @Html.ValidationMessage("PreparedByText", new { @class = "field-validation-error" })
+                        </div>
+                        <div class="field">
+                            <label class="label" for="School">School</label>
+                            <input class="input" id="School" name="School" value="@(m.School ?? m.SchoolName)" maxlength="@Incident.NameMaxLength" dir="auto" />
+                            <p class="hint">From Settings → school name.</p>
+                            @Html.ValidationMessage("School", new { @class = "field-validation-error" })
+                        </div>
+                        <div class="field">
+                            <label class="label" for="ReportDate">Date of report</label>
+                            <input class="input picker" type="date" id="ReportDate" name="ReportDate" value="@(m.ReportDate is { } rd ? SchoolWeek.Iso(rd) : "")" min="2000-01-01"
+                                   max="@SchoolWeek.Iso(SchoolWeek.Today.AddYears(1))" data-datepicker data-empty-text="Not dated yet" />
+                            @Html.ValidationMessage("ReportDate", new { @class = "field-validation-error" })
+                        </div>
+                        <div class="field">
+                            <label class="label" for="ReviewedById">Reviewed by</label>
+                            <select class="select" id="ReviewedById" name="ReviewedById" data-searchable data-search-notes>
+                                <option value="">Not reviewed yet</option>
+                                @foreach (var st in m.Staff)
+                                {
+                                    <option value="@st.Id" selected="@(m.ReviewedById == st.Id)" data-note="@st.JobTitle">@st.FullName</option>
+                                }
+                            </select>
+                            @Html.ValidationMessage("ReviewedById", new { @class = "field-validation-error" })
+                        </div>
+                        <div class="field">
+                            <label class="label" for="Approval">Administrative approval &amp; endorsement</label>
+                            <select class="select" id="Approval" name="Approval">
+                                @foreach (var ap in IncidentLabels.Approvals)
+                                {
+                                    <option value="@ap" selected="@(m.Approval == ap)">@IncidentLabels.Approval(ap)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="ApprovalNotes">Approval notes <span class="faint" style="font-weight:600">(optional)</span></label>
+                            <textarea class="input textarea" id="ApprovalNotes" name="ApprovalNotes" rows="2" maxlength="@Incident.NotesMaxLength" dir="auto"
+                                      placeholder="Conditions, comments of the reviewer…">@m.ApprovalNotes</textarea>
+                            @Html.ValidationMessage("ApprovalNotes", new { @class = "field-validation-error" })
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="inc-report__bar inc-report__actions">
+                <a class="btn btn--ghost" href="@back">Cancel</a>
+                @if (canDraft)
+                {
+                    <button class="btn btn--secondary" type="submit" name="intent" value="draft" formnovalidate data-report-submit>@Ui.Icon("file-text")Save Draft</button>
+                }
+                <button class="btn btn--primary" type="submit" name="intent" value="final" data-report-submit>@Ui.Icon("check")Save Report</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script src="~/js/incidents.js" asp-append-version="true"></script>
+}
