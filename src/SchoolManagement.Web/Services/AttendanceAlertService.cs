@@ -14,7 +14,7 @@ public sealed record AlertRow(
 {
     public bool IsPending => Status is AttendanceAlertStatus.Open or AttendanceAlertStatus.FollowUp;
     public string Period => SlotNumber is null ? "" : string.IsNullOrWhiteSpace(SlotName) ? $"Period {SlotNumber}" : SlotName!;
-    public string Times => ScheduleRules.Times(Start, End);
+    public string Times => ScheduleRules.Times12(Start, End);
     public string? Teacher => TeacherName is null ? null : SubstituteName is null ? TeacherName : $"{SubstituteName} (covering {TeacherName})";
 }
 
@@ -231,7 +231,7 @@ public sealed class AttendanceAlertService(SchoolDbContext db, ICurrentUser curr
     private async Task<int> SyncLessonsAsync(int studentId, DateOnly date, SchoolDays days, CancellationToken ct)
     {
         var school = await db.StudentArrivals.AsNoTracking().Where(a => a.StudentId == studentId && a.ArrivalDate == date)
-            .Select(a => new { a.Status, a.ArrivalTime, a.LateStatus }).FirstOrDefaultAsync(ct);
+            .Select(a => new { a.Status, a.ArrivalTime, a.LateStatus, Name = a.Student.FullName }).FirstOrDefaultAsync(ct);
         var absent = await db.SessionAttendance.AsNoTracking()
             .Where(r => r.StudentId == studentId && r.SessionDate == date && r.Status == SessionAttendanceStatus.Absent)
             .Select(r => new { r.TimetableAssignmentId, r.SchoolClassId }).ToListAsync(ct);
@@ -250,8 +250,12 @@ public sealed class AttendanceAlertService(SchoolDbContext db, ICurrentUser curr
         var changes = 0;
         foreach (var (key, (l, classId)) in wanted)
         {
-            var arrived = school?.ArrivalTime is { } t ? $" (arrived {t.ToString("HH:mm", CultureInfo.InvariantCulture)}{(school.LateStatus == LateStatus.Late ? ", late" : "")})" : "";
-            var summary = $"Present at school{arrived} but marked Absent in {l.Subject}, {l.Period} ({l.Times}) with {l.Teacher} on {AlertLabels.Day(date)}.";
+            // "Ahmed Mohamed was recorded as Present at School on Mon 16 Nov 2026 (arrived 7:32 AM) but was marked Absent in
+            //  Mathematics — G4B, Period 3 (10:00–10:45 AM), teacher Ms Laila."
+            var arrived = school?.ArrivalTime is { } t ? $" (arrived {t.ToString("h:mm tt", CultureInfo.InvariantCulture)})" : "";
+            var how = school?.LateStatus == LateStatus.Late ? "Late" : "Present";
+            var summary = $"{school?.Name} was recorded as {how} at School on {AlertLabels.Day(date)}{arrived} but was marked Absent in " +
+                $"{l.Subject} — {l.ClassName}, {l.Period} ({l.Times12}), teacher {l.Teacher}.";
             var alert = existing.FirstOrDefault(a => a.Key == key);
             if (alert is null)
             {

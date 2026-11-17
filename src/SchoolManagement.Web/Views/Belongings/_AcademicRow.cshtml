@@ -1,0 +1,46 @@
+@model AcademicRowModel
+@* One student in an Academic Belongings lesson: Book and Copy Book, one click each. Redrawn from this partial after every save. *@
+@{
+    var r = Model.Row;
+    var state = r.Complete ? "done" : r.Started ? "progress" : "idle";
+    var disabled = !Model.CanRecord;
+    (string Key, string Label, ItemStatus? Value)[] items = [("Book", "Book", r.Book), ("CopyBook", "Copy Book", r.CopyBook)];
+}
+<li class="bl-row bl-row--@state" data-bl-row data-student="@r.StudentId" data-name="@($"{r.Name} {r.StudentId}".ToLowerInvariant())" data-complete="@(r.Complete ? "true" : "false")">
+    <div class="bl-row__who">
+        <span class="avatar avatar--@Ui.Tone(r.Name)" aria-hidden="true">@Ui.Initials(r.Name)</span>
+        <span class="bl-row__name">
+            <a href="/belongings/academic/history?studentId=@r.StudentId" dir="auto"><strong>@r.Name</strong></a>
+            <span class="bl-row__meta">ID @r.StudentId · <span class="bl-state bl-state--@state">@(r.Complete ? "Checked" : r.Started ? "In progress" : "Not checked")</span></span>
+        </span>
+    </div>
+    <div class="bl-row__items">
+        @foreach (var (key, label, current) in items)
+        {
+            <div class="bl-check bl-check--wide @(current is null ? "is-empty" : "")" role="group" aria-label="@label of @r.Name: @BelongingsStatus.Label(current)">
+                <span class="bl-check__label">@label</span>
+                <span class="bl-seg">
+                    @foreach (var s in BelongingsStatus.Choices)
+                    {
+                        <button type="button" class="bl-seg__btn bl-seg__btn--@BelongingsStatus.Slug(s) bl-seg__btn--text" data-bl-mark data-item="@key" data-status="@s"
+                                aria-pressed="@(current == s ? "true" : "false")" aria-label="@label: @BelongingsStatus.Label(s)" disabled="@disabled">
+                            @if (s == ItemStatus.Green) { @Ui.Icon("check", "icon--sm") }
+                            else if (s == ItemStatus.Red) { @Ui.Icon("x", "icon--sm") }
+                            <span>@BelongingsStatus.Label(s)</span>
+                        </button>
+                    }
+                </span>
+            </div>
+        }
+    </div>
+    <div class="bl-row__side">
+        @* Only "Both available", in the same place on every row (disabled once both items have a status). *@
+        <button type="button" class="btn btn--ghost btn--sm" data-bl-all disabled="@(disabled || r.Complete)"
+                title="@(r.Complete ? "Book and Copy Book already have a status" : "Marks Book and Copy Book as Available where not checked yet")">@Ui.Icon("check-circle", "icon--sm")Both available</button>
+    </div>
+    @* Notes saved earlier stay visible (read only). *@
+    @if (r.Notes is not null)
+    {
+        <p class="bl-row__note" dir="auto">@Ui.Icon("file-text", "icon--sm")<span>@r.Notes</span></p>
+    }
+</li>

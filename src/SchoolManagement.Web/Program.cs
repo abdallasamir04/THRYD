@@ -40,6 +40,7 @@ builder.Services.AddScoped<IImportService, ImportService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
 builder.Services.AddScoped<IDutyService, DutyService>();
+builder.Services.AddScoped<IDutyBoardService, DutyBoardService>();
 builder.Services.AddScoped<IWorkloadService, WorkloadService>();
 builder.Services.AddScoped<IStaffDutyService, StaffDutyService>();
 builder.Services.AddScoped<IArrivalService, ArrivalService>();
@@ -55,6 +56,9 @@ builder.Services.AddScoped<IStaffDirectoryService, StaffDirectoryService>();
 builder.Services.AddScoped<IAttendanceReportService, AttendanceReportService>();
 builder.Services.AddScoped<IPeService, PeService>();
 builder.Services.AddScoped<IBelongingsService, BelongingsService>();
+builder.Services.AddScoped<IBelongingsDailyService, BelongingsDailyService>();
+builder.Services.AddScoped<IBelongingsHistoryService, BelongingsHistoryService>();
+builder.Services.AddScoped<ISchoolCalendarService, SchoolCalendarService>();
 builder.Services.AddScoped<IAttendanceAlertService, AttendanceAlertService>();
 builder.Services.AddScoped<ISessionAttendanceService, SessionAttendanceService>();
 builder.Services.AddScoped<IAttendanceCalendarService, AttendanceCalendarService>();
@@ -101,6 +105,13 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<SchoolDbContext>();
     await db.Database.MigrateAsync();
+}
+
+// Sub-Duty definitions (names, slugs, order) come from the database; the built-in list is the fallback until then.
+{
+    using var scope = app.Services.CreateScope();
+    try { await DutyCatalog.LoadAsync(scope.ServiceProvider.GetRequiredService<SchoolDbContext>()); }
+    catch (Exception ex) { app.Logger.LogWarning(ex, "Duty sections could not be loaded; using the built-in list."); }
 }
 
 if (testDataCommand is not null)

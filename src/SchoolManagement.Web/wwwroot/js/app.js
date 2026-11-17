@@ -6,7 +6,7 @@
  *  - AJAX lists: filters, sorting and paging replace the table without a page reload
  *  - Modal forms: add / edit / details open in a dialog and save with fetch()
  *  - Confirm dialog for destructive actions, toast notifications, loading indicators
- *  - Searchable dropdowns for <select data-searchable>
+ *  - Dropdowns, date and time pickers: js/thryd-ui.js (ThrydUI.enhance)
  *  - File dropzone and the import column-mapping helpers
  */
 (function () {
@@ -409,8 +409,6 @@
             });
             var g = group(el);
             if (g) g.classList.remove("is-invalid");
-            var combo = el.closest(".combo");
-            if (combo) combo.classList.remove("is-invalid");
             var msg = el._appMsg;
             if (msg) {
                 if (msg._appCreated) msg.remove();
@@ -433,7 +431,7 @@
                 msg = doc.createElement("span");
                 msg.className = "field-validation-error app-field-error";
                 msg._appCreated = true;
-                var anchor = group(el) || el.closest(".combo") || el.closest(".input-icon") || el;
+                var anchor = group(el) || el.closest(".input-icon") || el;
                 anchor.insertAdjacentElement("afterend", msg);
             }
             msg.textContent = text;
@@ -449,8 +447,6 @@
             });
             var g = group(el);
             if (g) g.classList.add("is-invalid");
-            var combo = el.closest(".combo");
-            if (combo) combo.classList.add("is-invalid");
         }
 
         /** Shows every invalid field of the form and moves focus to the first. Returns false when invalid. */
@@ -465,7 +461,7 @@
             invalid.forEach(function (el) { mark(el, messageFor(el)); });
             if (invalid.length === 0) return true;
             var first = invalid[0];
-            var target = first.closest(".combo") ? first.closest(".combo").querySelector(".combo__button") : first;
+            var target = first._thrydTrigger || first; // date / time pickers: the visible button
             if (first.type === "radio") target = members(first).filter(function (r) { return !r.disabled; })[0] || first;
             target.scrollIntoView({ block: "center", behavior: "smooth" });
             try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); }
@@ -578,7 +574,7 @@
 
     // ------------------------------------------------------------------ enhancements applied to new HTML
     function enhance(root) {
-        $$("select[data-searchable]", root).forEach(Combo.init);
+        if (window.ThrydUI) window.ThrydUI.enhance(root);
         $$("[data-dropzone]", root).forEach(initDropzone);
         if (window.jQuery && jQuery.validator && jQuery.validator.unobtrusive) {
             $$("form", root).forEach(function (f) {
@@ -591,7 +587,8 @@
         forms.forEach(function (f) {
             Validate.adopt(f);
             // A form the server sent back with errors still holds what the user typed: it is not saved.
-            if (f.querySelector(".input-validation-error, .validation-summary-errors, .field-validation-error:not(:empty)")) Unsaved.force(f);
+            // (A summary with asp-validation-summary="All" is always rendered; "validation-summary-valid" means it holds no errors.)
+            if (f.querySelector(".input-validation-error, .validation-summary-errors:not(.validation-summary-valid), .field-validation-error:not(:empty)")) Unsaved.force(f);
         });
         var autofocus = root.querySelector && root.querySelector("[data-autofocus]");
         if (autofocus && root !== doc) setTimeout(function () { autofocus.focus(); }, 30);
@@ -778,8 +775,7 @@
     /** A filter (date, class…) whose page change was cancelled shows the current page's values again. */
     function revertFilter(form) {
         if ((form.getAttribute("method") || "get").toLowerCase() !== "get") return;
-        form.reset();
-        $$("select", form).forEach(function (s) { if (s._combo) s._combo.sync(); });
+        form.reset(); // thryd-ui.js shows the restored values
     }
 
     // ------------------------------------------------------------------ confirm dialog for data-confirm forms
@@ -896,157 +892,10 @@
             $$("input[name], select[name]", form).forEach(function (field) {
                 if (field.type === "hidden" && field.name !== "sort" && field.name !== "dir" && field.name !== "pageSize") return;
                 var v = params.get(field.name) || "";
-                if (field.value !== v) {
-                    field.value = v;
-                    if (field._combo) field._combo.sync();
-                }
+                if (field.value !== v) field.value = v;
             });
         });
     }
-
-    // ------------------------------------------------------------------ searchable select
-    var comboSeq = 0;
-    var Combo = {
-        init: function (select) {
-            if (select._combo) return;
-            var id = "combo-" + (++comboSeq);
-            var wrap = doc.createElement("div");
-            wrap.className = "combo";
-            select.parentNode.insertBefore(wrap, select);
-            wrap.appendChild(select);
-            select.classList.add("combo__native");
-            select.tabIndex = -1;
-            select.setAttribute("aria-hidden", "true");
-
-            var button = doc.createElement("button");
-            button.type = "button";
-            button.className = (select.className.indexOf("select") >= 0 ? "select " : "input ") + "combo__button";
-            button.setAttribute("aria-haspopup", "listbox");
-            button.setAttribute("aria-expanded", "false");
-            var labelEl = select.id ? doc.querySelector('label[for="' + select.id + '"]') : null;
-            if (labelEl) { labelEl.id = labelEl.id || id + "-label"; button.setAttribute("aria-labelledby", labelEl.id + " " + id + "-value"); labelEl.setAttribute("for", id + "-btn"); }
-            else if (select.getAttribute("aria-label")) button.setAttribute("aria-label", select.getAttribute("aria-label"));
-            button.id = id + "-btn";
-            button.innerHTML = '<span class="combo__value" id="' + id + '-value"></span>';
-            wrap.appendChild(button);
-
-            var panel = null, list = null, search = null, active = -1, items = [];
-
-            function options() {
-                return Array.prototype.slice.call(select.options).map(function (o, i) {
-                    return { index: i, value: o.value, text: o.text, note: o.getAttribute("data-note") || "", placeholder: o.value === "" };
-                });
-            }
-            function sync() {
-                var o = select.options[select.selectedIndex];
-                var span = button.querySelector(".combo__value");
-                var empty = !o || o.value === "";
-                span.textContent = o ? o.text : "";
-                span.classList.toggle("combo__placeholder", empty);
-            }
-            function render(filter) {
-                var term = (filter || "").trim().toLowerCase();
-                items = options().filter(function (o) {
-                    if (o.placeholder && (select.hasAttribute("required") || select.hasAttribute("data-val-required"))) return false;
-                    // data-search-notes: the note (e.g. department · job title) is searched too.
-                    var hay = select.hasAttribute("data-search-notes") ? o.text + " " + o.note : o.text;
-                    return !term || hay.toLowerCase().indexOf(term) >= 0;
-                });
-                list.innerHTML = "";
-                if (items.length === 0) {
-                    var li = doc.createElement("li");
-                    li.className = "combo__empty";
-                    li.textContent = "No matches";
-                    list.appendChild(li);
-                }
-                items.forEach(function (o, i) {
-                    var li = doc.createElement("li");
-                    li.className = "combo__option";
-                    li.id = id + "-opt-" + i;
-                    li.setAttribute("role", "option");
-                    li.setAttribute("aria-selected", select.selectedIndex === o.index ? "true" : "false");
-                    var t = doc.createElement("span");
-                    t.textContent = o.text;
-                    li.appendChild(t);
-                    if (o.note) { var n = doc.createElement("span"); n.className = "combo__option-note"; n.textContent = o.note; li.appendChild(n); }
-                    li.addEventListener("mousedown", function (ev) { ev.preventDefault(); choose(o); });
-                    list.appendChild(li);
-                });
-                active = Math.max(0, items.findIndex(function (o) { return o.index === select.selectedIndex; }));
-                highlight();
-            }
-            function highlight() {
-                $$(".combo__option", list).forEach(function (li, i) { li.classList.toggle("is-active", i === active); });
-                var cur = list.querySelector(".is-active");
-                if (cur) { cur.scrollIntoView({ block: "nearest" }); search.setAttribute("aria-activedescendant", cur.id); }
-            }
-            function open() {
-                if (panel) return;
-                panel = doc.createElement("div");
-                panel.className = "combo__panel";
-                panel.innerHTML = '<input class="input combo__search" type="text" autocomplete="off" placeholder="Type to search…" role="combobox" aria-expanded="true" aria-controls="' + id + '-list" aria-label="Search options"><ul class="combo__list" role="listbox" id="' + id + '-list"></ul>';
-                wrap.appendChild(panel);
-                list = panel.querySelector("ul");
-                search = panel.querySelector("input");
-                render("");
-                var rect = wrap.getBoundingClientRect();
-                if (window.innerHeight - rect.bottom < 320 && rect.top > 320) panel.classList.add("is-up");
-                button.setAttribute("aria-expanded", "true");
-                search.focus();
-                search.addEventListener("input", function () { render(search.value); });
-                search.addEventListener("keydown", onKey);
-                doc.addEventListener("mousedown", outside, true);
-            }
-            function close(focusButton) {
-                if (!panel) return;
-                panel.remove();
-                panel = null;
-                button.setAttribute("aria-expanded", "false");
-                doc.removeEventListener("mousedown", outside, true);
-                if (focusButton) button.focus();
-            }
-            function outside(ev) { if (!wrap.contains(ev.target)) close(false); }
-            function choose(o) {
-                var changed = select.selectedIndex !== o.index;
-                select.selectedIndex = o.index;
-                sync();
-                close(true);
-                if (changed) select.dispatchEvent(new Event("change", { bubbles: true }));
-                validate();
-            }
-            function validate() {
-                if (!window.jQuery) return;
-                var $form = jQuery(select.form);
-                if (!$form.data("validator")) return;
-                jQuery(select).valid();
-                var other = select.getAttribute("data-revalidate");
-                if (other) {
-                    var field = select.form.querySelector(other);
-                    if (field && field.value) { jQuery(field).removeData("previousValue"); jQuery(field).valid(); }
-                }
-            }
-            function onKey(ev) {
-                if (ev.key === "ArrowDown") { ev.preventDefault(); active = Math.min(items.length - 1, active + 1); highlight(); }
-                else if (ev.key === "ArrowUp") { ev.preventDefault(); active = Math.max(0, active - 1); highlight(); }
-                else if (ev.key === "Enter") { ev.preventDefault(); if (items[active]) choose(items[active]); }
-                else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); close(true); }
-                else if (ev.key === "Tab") close(false);
-            }
-
-            button.addEventListener("click", function () { panel ? close(true) : open(); });
-            button.addEventListener("keydown", function (ev) {
-                if (ev.key === "ArrowDown" || ev.key === "ArrowUp" || (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey)) {
-                    ev.preventDefault();
-                    open();
-                    if (ev.key.length === 1) { search.value = ev.key; render(ev.key); }
-                }
-            });
-            // Validation focuses the invalid native select: send focus to the visible button.
-            select.addEventListener("focus", function () { button.focus(); });
-            select._combo = { sync: sync };
-            sync();
-        }
-    };
 
     // ------------------------------------------------------------------ dropzone
     function initDropzone(zone) {

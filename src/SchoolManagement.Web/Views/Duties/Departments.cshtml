@@ -1,0 +1,63 @@
+@model DutyDepartmentsViewModel
+@*
+    Duties by department: each department's Sub-Duties (from the Sub-Duty schedules), its staff and what was covered or not.
+    The department's status comes from its required responsibilities, never from individual staff.
+*@
+@{
+    ViewData["Title"] = "Duties by department";
+    ViewData["Nav"] = "MorningDuty";
+    var date = SchoolWeek.Iso(Model.Date);
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties?date=@date">Duties</a></li><li>By department</li></ol>
+        <h1 class="page-title">Duties by department</h1>
+        <p class="page-sub">Each Sub-Duty belongs to the department named in its schedule. A department is Covered when all its required Sub-Duties are covered.</p>
+    </div>
+</div>
+
+<partial name="~/Views/Attendance/_SessionDayNav.cshtml" model="Model.Date" />
+
+@if (Model.Departments.Count == 0)
+{
+    <div class="card"><div class="empty">@Ui.Icon("layers")<p class="empty__title">No duties scheduled on this day</p><p class="empty__text">Departments are set in each Main Duty's Schedule.</p></div></div>
+}
+<div class="ddept-grid">
+    @foreach (var d in Model.Departments)
+    {
+        var staff = d.Subs.SelectMany(x => x.Sub.Staff).Distinct().ToList();
+        <section class="card ddept" aria-label="@d.Name">
+            <header class="ddept__head">
+                <div>
+                    <h2>@d.Name</h2>
+                    <span class="faint">@Ui.Plural(d.Subs.Count, "Sub-Duty", "Sub-Duties") · @Ui.Plural(staff.Count, "staff member", "staff members")</span>
+                </div>
+                <partial name="_DStatus" model="d.Status" />
+            </header>
+            <ul class="ddept__list">
+                @foreach (var (main, sub) in d.Subs)
+                {
+                    <li>
+                        <div class="ddept__row">
+                            <a href="@DutyComponents.Href(sub.Info)?date=@date"><strong>@sub.Info.Name</strong></a>
+                            <partial name="_DStatus" model="sub.Status" />
+                        </div>
+                        <span class="faint num">@main.Name · @sub.Times · @(sub.Required ? "Required" : "Optional")</span>
+                        <span class="ddept__staff" dir="auto">@(sub.Staff.Count == 0 ? "No staff assigned" : string.Join(", ", sub.Staff))</span>
+                        @if (sub.Status == DutyStatus.NotCovered)
+                        {
+                            <ul class="ddept__gaps">
+                                @foreach (var line in SchoolManagement.Web.Services.Pdf.DutyCoverageReports.Gaps(sub)) { <li dir="auto">@line</li> }
+                            </ul>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+</div>
+
+@section Scripts {
+    <script src="~/js/duties.js" asp-append-version="true"></script>
+}

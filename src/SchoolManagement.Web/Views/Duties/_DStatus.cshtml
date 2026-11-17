@@ -1,0 +1,3 @@
+@model DutyStatus
+@* A calculated duty status (PENDING / IN PROGRESS / COVERED / NOT COVERED), with its meaning as a tooltip. *@
+<span class="dstat dstat--@DutyStatuses.Slug(Model)" title="@DutyStatuses.Meaning(Model)">@if (Model == DutyStatus.InProgress) { <span class="dstat__pulse" aria-hidden="true"></span> }@DutyStatuses.Label(Model)</span>

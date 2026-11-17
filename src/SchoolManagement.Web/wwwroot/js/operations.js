@@ -20,7 +20,6 @@
             panel.hidden = !absent;
             if (!absent && backup && backup.value !== "") {
                 backup.value = "";
-                if (backup._combo) backup._combo.sync();
             }
         };
         $$("[data-duty-attendance]", form).forEach(function (r) { r.addEventListener("change", sync); });

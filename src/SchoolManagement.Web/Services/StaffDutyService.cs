@@ -117,8 +117,11 @@ public interface IStaffDutyService
     Task<ServiceResult> AddFeedbackAsync(FeedbackInput input, CancellationToken ct = default);
 }
 
-public sealed class StaffDutyService(SchoolDbContext db, ICurrentUser currentUser) : IStaffDutyService
+public sealed class StaffDutyService(SchoolDbContext db, ICurrentUser currentUser, IDutyBoardService? board = null) : IStaffDutyService
 {
+    /// <summary>Calculated duty statuses (school clock + records).</summary>
+    private IDutyBoardService Board => board ?? new DutyBoardService(db, currentUser);
+
     public async Task<StaffProfile?> ProfileAsync(int staffId, CancellationToken ct = default)
     {
         var staff = await StaffAsync(db.StaffMembers.Where(s => s.Id == staffId), ct);
@@ -163,8 +166,9 @@ public sealed class StaffDutyService(SchoolDbContext db, ICurrentUser currentUse
             .FirstOrDefaultAsync(ct);
         if (a is null) return null;
         var previous = await FeedbackAsync(db.StaffFeedback.Where(f => f.DutyStaffAssignmentId == assignmentId), ct);
+        var live = await Board.PointStatusesAsync([a.DutyAssignmentId], ct);
         return new EvaluationContext(a.Id, a.StaffMemberId, a.FullName, a.Role, a.Attendance, a.DutyAssignmentId, a.Component, a.DutyDate,
-            a.Description, a.StartTime, a.EndTime, a.Status, StaffDutyRules.CanEvaluate(a.Role, a.IsCurrent, a.BackupStatus, a.DutyDate), previous);
+            a.Description, a.StartTime, a.EndTime, live.GetValueOrDefault(a.DutyAssignmentId, a.Status), StaffDutyRules.CanEvaluate(a.Role, a.IsCurrent, a.BackupStatus, a.DutyDate), previous);
     }
 
     public async Task<ServiceResult> AddFeedbackAsync(FeedbackInput input, CancellationToken ct = default)
@@ -240,14 +244,16 @@ public sealed class StaffDutyService(SchoolDbContext db, ICurrentUser currentUse
                     .Select(w => (int?)w.Periods).FirstOrDefault(),
             })
             .ToListAsync(ct);
+        var live = await Board.PointStatusesAsync(rows.Select(r => r.DutyAssignmentId).Distinct().ToList(), ct);
 
         return rows.Select(a =>
         {
-            var outcome = StaffDutyRules.Outcome(a.Role, a.IsCurrent, a.BackupStatus, a.Attendance, a.Status);
+            var status = live.GetValueOrDefault(a.DutyAssignmentId, a.Status);
+            var outcome = StaffDutyRules.Outcome(a.Role, a.IsCurrent, a.BackupStatus, a.Attendance, status);
             var canCount = isTeacher && a.Periods is null && a.IsCurrent && a.Attendance != AttendanceStatus.Absent
                 && (a.Role == DutyRole.Primary || a.BackupStatus == BackupRequestStatus.Accepted);
             return (a.StaffMemberId, new StaffDutyHistoryRow(a.Id, a.DutyAssignmentId, a.DutyType, a.Component, a.DutyDate, a.Description,
-                a.StartTime, a.EndTime, a.Location, a.Role, a.Attendance, a.BackupStatus, a.IsCurrent, a.EndReason, a.Status, outcome,
+                a.StartTime, a.EndTime, a.Location, a.Role, a.Attendance, a.BackupStatus, a.IsCurrent, a.EndReason, status, outcome,
                 a.Count, a.Latest, StaffDutyRules.CanEvaluate(a.Role, a.IsCurrent, a.BackupStatus, a.DutyDate), a.Periods, canCount));
         }).ToList();
     }

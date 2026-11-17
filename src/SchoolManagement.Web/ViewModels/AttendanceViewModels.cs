@@ -19,32 +19,6 @@ public sealed class AttendanceHubViewModel
     public double? SchoolPercent => School.Recorded == 0 ? null : Math.Round(School.Attended * 100.0 / School.Recorded, 1);
 }
 
-public sealed class SessionListViewModel
-{
-    public required SessionDay Day { get; init; }
-    public required SessionFilterOptions Options { get; init; }
-
-    public string Query(params (string Key, object? Value)[] changes)
-    {
-        var f = Day.Filter;
-        var values = new Dictionary<string, string?>
-        {
-            ["date"] = SchoolWeek.Iso(f.Date), ["classId"] = f.ClassId?.ToString(), ["slotId"] = f.SlotId?.ToString(),
-            ["subject"] = f.Subject, ["teacherId"] = f.TeacherId?.ToString(), ["studentId"] = f.StudentId?.ToString(),
-        };
-        foreach (var (k, v) in changes) values[k] = v?.ToString();
-        return "/attendance/sessions?" + string.Join("&", values.Where(v => !string.IsNullOrEmpty(v.Value)).Select(v => $"{v.Key}={Uri.EscapeDataString(v.Value!)}"));
-    }
-}
-
-public sealed class SessionRegisterViewModel
-{
-    public required SessionRegister Register { get; init; }
-
-    /// <summary>The list the user came from (filters kept).</summary>
-    public required string Back { get; init; }
-}
-
 /// <summary>The register form: one entry per student (a student without a status stays "Not recorded").</summary>
 public sealed class SessionSaveForm
 {
@@ -128,3 +102,62 @@ public sealed class HolidayForm
     [Display(Name = "Last day")]
     public DateOnly? EndDate { get; set; }
 }
+
+/// <summary>Session Attendance: the class picker (cards per stage) for a date.</summary>
+public sealed class SessionPickerViewModel
+{
+    public required DateOnly Date { get; init; }
+    public required IReadOnlyList<ClassCard> Cards { get; init; }
+    public required IReadOnlyList<StudentPick> Students { get; init; }
+    public bool IsSchoolDay { get; init; }
+    public string? Holiday { get; init; }
+}
+
+/// <summary>A class's Session Attendance page: the day's lessons and the register of the lesson shown.</summary>
+public sealed class SessionClassViewModel
+{
+    public required ClassDay Day { get; init; }
+    public LiveRegister? Register { get; init; }
+}
+
+/// <summary>Session Attendance reports: student, class, lesson (one date) or school, over a period.</summary>
+public sealed class SessionReportForm
+{
+    public string Mode { get; set; } = "school";
+    public int? StudentId { get; set; }
+    public int? ClassId { get; set; }
+    public int? Lesson { get; set; }
+    public string? Date { get; set; }
+    public string? From { get; set; }
+    public string? To { get; set; }
+
+    private static DateOnly? Parse(string? s) =>
+        DateOnly.TryParseExact(s, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
+
+    /// <summary>Everything the chosen report needs is there.</summary>
+    public bool IsComplete => Mode switch
+    {
+        "student" => StudentId is not null,
+        "class" => ClassId is not null,
+        "lesson" => Lesson is not null,
+        _ => true,
+    };
+
+    public SessionReportQuery ToQuery()
+    {
+        var today = SchoolWeek.Today;
+        if (Mode == "lesson") { var d = Parse(Date) ?? today; return new("lesson", null, ClassId, Lesson, d, d); }
+        var to = Parse(To) ?? today;
+        var from = Parse(From) ?? (Mode == "school" ? to : to.AddDays(-29));
+        return new(Mode is "student" or "class" ? Mode : "school", StudentId, ClassId, null, from, to);
+    }
+}
+
+public sealed class SessionReportsViewModel
+{
+    public required SessionReportForm Form { get; init; }
+    public required SessionFilterOptions Options { get; init; }
+    public SessionReport? Report { get; init; }
+    public IReadOnlyList<ClassLesson> LessonChoices { get; init; } = [];
+}
+

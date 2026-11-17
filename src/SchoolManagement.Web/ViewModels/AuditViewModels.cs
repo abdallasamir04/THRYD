@@ -18,7 +18,6 @@ public sealed class DutyAuditViewModel
 public sealed class DutyAuditFormModel
 {
     public int Id { get; set; }
-    public DutyStatus Status { get; set; } = DutyStatus.Pending;
 
     [Display(Name = "Audit notes")]
     [StringLength(DutyAssignment.NotesMaxLength, ErrorMessage = "Use {1} characters or fewer.")]

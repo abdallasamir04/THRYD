@@ -595,33 +595,6 @@ a.kpi:hover { text-decoration: none; box-shadow: var(--shadow-hover); transform:
 [dir="rtl"] .switch input:checked + .switch__track::after { transform: translateX(-18px); }
 .switch input:focus-visible + .switch__track { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
-/* Searchable select (app.js enhances <select data-searchable>) */
-.combo { position: relative; }
-.combo__native { position: absolute !important; opacity: 0; pointer-events: none; width: 1px !important; height: 1px !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; bottom: 0; left: 0; }
-.combo__button { text-align: start; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.combo__button .combo__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.combo__button .combo__placeholder { color: var(--color-placeholder); }
-.combo__button .icon { color: var(--color-text-faint); flex: none; }
-.combo:has(.input-validation-error) .combo__button { border-color: var(--color-error); box-shadow: 0 0 0 4px rgb(211 47 47 / 0.1); }
-.combo__panel {
-    position: absolute; z-index: 90; inset-inline: 0; top: calc(100% + 6px);
-    padding: 8px; border: 1px solid var(--color-border); border-radius: 14px;
-    background: var(--color-surface-raised); box-shadow: var(--shadow-pop);
-    min-width: 220px;
-}
-.combo__panel.is-up { top: auto; bottom: calc(100% + 6px); }
-.combo__search { min-height: 38px; margin-bottom: 6px; }
-.combo__list { max-height: 248px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
-.combo__option {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 600;
-}
-.combo__option[aria-selected="true"] { color: var(--color-primary-ink); background: var(--tint-primary); }
-.combo__option.is-active { background: var(--color-surface-soft); }
-.combo__option[aria-selected="true"].is-active { background: var(--tint-primary); }
-.combo__option .icon { width: 16px; height: 16px; }
-.combo__option-note { font-size: 0.72rem; font-weight: 700; color: var(--color-text-faint); }
-.combo__empty { padding: 12px 10px; color: var(--color-text-muted); font-size: 0.85rem; }
 
 /* ---------- Toolbar & filters ---------- */
 .toolbar {

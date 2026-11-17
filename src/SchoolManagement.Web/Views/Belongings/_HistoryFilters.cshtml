@@ -1,0 +1,189 @@
+@model (HistoryOptions Options, BelongingsQuery Query, bool Academic, BelongingsScope Scope)
+@*
+    History & Reports filters (GET). Period: academic year, quarter, month, school week, one day or a custom range (only the
+    fields of the chosen period are shown, belongings.js). Scope: whole school, a grade, a class or a student. They all apply
+    together, to the page and to the PDF / Excel downloads alike.
+*@
+@{
+    var o = Model.Options;
+    var q = Model.Query;
+    var module = Model.Academic ? "academic" : "personal";
+    var period = q.Period ?? "year";
+    string? Iso(DateOnly? d) => d is { } x ? SchoolWeek.Iso(x) : null;
+}
+<form class="card bl-filters" method="get" action="/belongings/@module/history" aria-label="Filters" data-bl-filters>
+    <div class="bl-filters__grid">
+        <div class="field">
+            <label class="label" for="f-year">Academic year</label>
+            <select class="select" id="f-year" name="yearId">
+                @foreach (var y in o.Years)
+                {
+                    <option value="@y.Id" selected="@(y.Id == o.Year?.Id)">@y.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="f-period">Period</label>
+            <select class="select" id="f-period" name="period" data-bl-period>
+                <option value="year" selected="@(period == "year")">Entire academic year</option>
+                <option value="quarter" selected="@(period == "quarter")">Quarter</option>
+                <option value="month" selected="@(period == "month")">Month</option>
+                <option value="week" selected="@(period == "week")">School week</option>
+                <option value="day" selected="@(period == "day")">One day</option>
+                <option value="range" selected="@(period == "range")">Custom date range</option>
+            </select>
+        </div>
+        <div class="field" data-bl-when="quarter">
+            <label class="label" for="f-quarter">Quarter</label>
+            <select class="select" id="f-quarter" name="quarterId">
+                @foreach (var x in o.Year?.Quarters.Where(x => x.IsConfigured) ?? [])
+                {
+                    <option value="@x.Id" selected="@(x.Id == q.QuarterId)">@x.Name · @x.StartDate!.Value.ToString("d MMM") – @x.EndDate!.Value.ToString("d MMM yyyy")</option>
+                }
+            </select>
+        </div>
+        <div class="field" data-bl-when="month">
+            <label class="label" for="f-month">Month</label>
+            <select class="select" id="f-month" name="month">
+                @foreach (var (value, label) in o.Months)
+                {
+                    <option value="@value" selected="@(value == q.Month)">@label</option>
+                }
+            </select>
+        </div>
+        <div class="field" data-bl-when="week">
+            <label class="label" for="f-week">School week</label>
+            <select class="select" id="f-week" name="week">
+                @foreach (var w in o.Weeks)
+                {
+                    <option value="@SchoolWeek.Iso(w.Start)" selected="@(q.Week is { } qw && SchoolWeek.StartOf(qw) == w.Start)">@w.Label</option>
+                }
+            </select>
+        </div>
+        <div class="field" data-bl-when="day">
+            <label class="label" for="f-date">Date</label>
+            <input class="input" type="date" id="f-date" name="date" value="@Iso(q.Date ?? SchoolWeek.Today)" />
+        </div>
+        <div class="field" data-bl-when="range">
+            <label class="label" for="f-from">From</label>
+            <input class="input" type="date" id="f-from" name="from" value="@Iso(q.From)" data-empty-text="First day" />
+        </div>
+        <div class="field" data-bl-when="range">
+            <label class="label" for="f-to">To</label>
+            <input class="input" type="date" id="f-to" name="to" value="@Iso(q.To)" data-empty-text="Last day" />
+        </div>
+
+        <div class="field">
+            <label class="label" for="f-grade">Grade</label>
+            <select class="select" id="f-grade" name="grade">
+                <option value="">All grades</option>
+                @foreach (var (key, label) in GradeCatalog.All)
+                {
+                    <option value="@key" selected="@(key == q.Grade)">@label</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="f-class">Class</label>
+            <select class="select" id="f-class" name="classId">
+                <option value="">All classes</option>
+                @foreach (var x in o.Classes)
+                {
+                    <option value="@x.Id" selected="@(x.Id == q.ClassId)">@x.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="f-student">Student</label>
+            <select class="select" id="f-student" name="studentId" data-searchable data-search-notes>
+                <option value="">All students</option>
+                @foreach (var s in o.Students)
+                {
+                    <option value="@s.Id" data-note="ID @s.Id · @s.ClassName" selected="@(s.Id == q.StudentId)">@s.Name</option>
+                }
+            </select>
+        </div>
+        @if (Model.Academic)
+        {
+            <div class="field">
+                <label class="label" for="f-subject">Subject</label>
+                <select class="select" id="f-subject" name="subject">
+                    <option value="">All subjects</option>
+                    @foreach (var s in o.Subjects)
+                    {
+                        <option value="@s" selected="@(s == q.Subject)">@s</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="f-teacher">Teacher</label>
+                <select class="select" id="f-teacher" name="teacherId">
+                    <option value="">All teachers</option>
+                    @foreach (var (id, name) in o.Teachers)
+                    {
+                        <option value="@id" selected="@(id == q.TeacherId)">@name</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="f-pn">Period</label>
+                <select class="select" id="f-pn" name="periodNumber">
+                    <option value="">All periods</option>
+                    @foreach (var (n, label) in o.Periods)
+                    {
+                        <option value="@n" selected="@(n == q.PeriodNumber)">@label</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="f-book">Book</label>
+                <select class="select" id="f-book" name="book">
+                    <option value="">Any</option>
+                    @foreach (var (v, label) in new[] { ("Available", "Available"), ("Missing", "Missing"), ("NA", "N/A"), ("None", "Not checked") })
+                    {
+                        <option value="@v" selected="@(v == q.Book)">@label</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="f-copy">Copy Book</label>
+                <select class="select" id="f-copy" name="copyBook">
+                    <option value="">Any</option>
+                    @foreach (var (v, label) in new[] { ("Available", "Available"), ("Missing", "Missing"), ("NA", "N/A"), ("None", "Not checked") })
+                    {
+                        <option value="@v" selected="@(v == q.CopyBook)">@label</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="f-status">Check status</label>
+                <select class="select" id="f-status" name="status">
+                    <option value="">Any</option>
+                    <option value="complete" selected="@(q.Status == "complete")">Complete (both checked)</option>
+                    <option value="incomplete" selected="@(q.Status == "incomplete")">Incomplete</option>
+                </select>
+            </div>
+        }
+        else
+        {
+            <div class="field">
+                <label class="label" for="f-status">Record status</label>
+                <select class="select" id="f-status" name="status">
+                    <option value="">Any</option>
+                    <option value="complete" selected="@(q.Status == "complete")">Complete (all items checked)</option>
+                    <option value="incomplete" selected="@(q.Status == "incomplete")">Incomplete</option>
+                    <option value="missing" selected="@(q.Status == "missing")">Any item missing</option>
+                    @foreach (var item in PersonalItems.All)
+                    {
+                        <option value="missing:@item.Key" selected="@(q.Status == "missing:" + item.Key)">@item.Label missing</option>
+                    }
+                </select>
+            </div>
+        }
+    </div>
+    <div class="bl-filters__foot">
+        <p class="bl-filters__scope">@Ui.Icon("filter", "icon--sm")<span><strong>@Model.Scope.Audience</strong> · @Model.Scope.PeriodLabel · <span class="num">@Model.Scope.DatesLabel</span></span></p>
+        <a class="btn btn--ghost" href="/belongings/@module/history">Reset</a>
+        <button class="btn btn--primary" type="submit">@Ui.Icon("filter", "icon--sm")Apply filters</button>
+    </div>
+</form>

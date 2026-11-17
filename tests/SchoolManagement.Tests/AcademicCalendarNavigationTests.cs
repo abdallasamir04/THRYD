@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace SchoolManagement.Tests;
 
-/// <summary>Academic Calendar is its own sidebar item (Academics), no longer inside Belongings; same data and operations.</summary>
+/// <summary>School Calendar is its own sidebar item (Academics), no longer inside Belongings; same data and operations.</summary>
 [Collection("db")]
 public class AcademicCalendarNavigationTests(DbFixture fx)
 {
@@ -18,27 +18,27 @@ public class AcademicCalendarNavigationTests(DbFixture fx)
         var client = fx.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         // Its own item under Academics (after Timetables), active on its page.
-        var page = await client.GetStringAsync("/academic-calendar");
+        var page = await client.GetStringAsync("/school-calendar");
         var sidebar = Sidebar(page);
-        Assert.Contains("href=\"/academic-calendar\" aria-current=\"page\"", sidebar);
+        Assert.Contains("href=\"/school-calendar\" aria-current=\"page\"", sidebar);
         Assert.Contains("#i-calendar-days", sidebar);
-        Assert.True(sidebar.IndexOf("href=\"/timetables\"", StringComparison.Ordinal) < sidebar.IndexOf("href=\"/academic-calendar\"", StringComparison.Ordinal));
-        Assert.Contains("Academic Calendar", page);
+        Assert.True(sidebar.IndexOf("href=\"/timetables\"", StringComparison.Ordinal) < sidebar.IndexOf("href=\"/school-calendar\"", StringComparison.Ordinal));
+        Assert.Contains("School Calendar", page);
         // Every other page shows the item, not active.
-        Assert.Contains("<a class=\"nav__link\" href=\"/academic-calendar\">", Sidebar(await client.GetStringAsync("/")));
+        Assert.Contains("<a class=\"nav__link\" href=\"/school-calendar\">", Sidebar(await client.GetStringAsync("/")));
 
         // Belongings no longer leads to it.
         foreach (var url in new[] { "/belongings", "/belongings/personal", "/belongings/academic" })
         {
             var html = await client.GetStringAsync(url);
             Assert.DoesNotContain("/belongings/calendar", html);
-            Assert.DoesNotContain("/academic-calendar\" ", html[html.IndexOf("</aside>", StringComparison.Ordinal)..]); // not in the page body
+            Assert.DoesNotContain("/school-calendar\" ", html[html.IndexOf("</aside>", StringComparison.Ordinal)..]); // not in the page body
         }
 
         // Old addresses still work: they lead to the new page (forms keep their method).
         var old = await client.GetAsync("/belongings/calendar");
         Assert.Equal(HttpStatusCode.MovedPermanently, old.StatusCode);
-        Assert.Equal("/academic-calendar", old.Headers.Location!.OriginalString);
+        Assert.Equal("/school-calendar", old.Headers.Location!.OriginalString);
         Assert.Equal(HttpStatusCode.PermanentRedirect, (await client.PostAsync("/belongings/years", new FormUrlEncodedContent([]))).StatusCode);
     }
 
@@ -46,11 +46,11 @@ public class AcademicCalendarNavigationTests(DbFixture fx)
     public async Task Years_and_quarters_are_created_and_edited_on_the_new_page_with_the_same_data()
     {
         var client = fx.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var token = Token.Match(await client.GetStringAsync("/academic-calendar")).Groups[1].Value;
+        var token = Token.Match(await client.GetStringAsync("/school-calendar")).Groups[1].Value;
         var name = "Year " + DbFixture.Unique();
-        var created = await client.PostAsync("/academic-calendar/years", new FormUrlEncodedContent([new("__RequestVerificationToken", token), new("name", name)]));
+        var created = await client.PostAsync("/school-calendar/years", new FormUrlEncodedContent([new("__RequestVerificationToken", token), new("name", name)]));
         Assert.Equal(HttpStatusCode.Redirect, created.StatusCode);
-        Assert.Equal("/academic-calendar", created.Headers.Location!.OriginalString);
+        Assert.Equal("/school-calendar", created.Headers.Location!.OriginalString);
 
         int quarterId;
         await using (var db = fx.NewContext())
@@ -59,11 +59,11 @@ public class AcademicCalendarNavigationTests(DbFixture fx)
             Assert.Equal(4, year.Quarters.Count);
             quarterId = year.Quarters.OrderBy(q => q.Number).First().Id;
         }
-        Assert.Contains(name, await client.GetStringAsync("/academic-calendar"));
-        Assert.Contains($"/academic-calendar/quarters/{quarterId}/edit", await client.GetStringAsync("/academic-calendar"));
+        Assert.Contains(name, await client.GetStringAsync("/school-calendar"));
+        Assert.Contains($"/school-calendar/quarters/{quarterId}/edit", await client.GetStringAsync("/school-calendar"));
 
-        var form = await client.GetStringAsync($"/academic-calendar/quarters/{quarterId}/edit");
-        var saved = await client.PostAsync($"/academic-calendar/quarters/{quarterId}/edit", new FormUrlEncodedContent(
+        var form = await client.GetStringAsync($"/school-calendar/quarters/{quarterId}/edit");
+        var saved = await client.PostAsync($"/school-calendar/quarters/{quarterId}/edit", new FormUrlEncodedContent(
         [
             new("__RequestVerificationToken", Token.Match(form).Groups[1].Value), new("Name", "Quarter 1"),
             new("StartDate", "2035-01-07"), new("EndDate", "2035-03-01"), // Sunday 7 Jan → Thursday 1 Mar 2035: 8 school weeks

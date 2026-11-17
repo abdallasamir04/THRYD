@@ -1,0 +1,58 @@
+@model CalendarDayView
+@* One date of the School Calendar (dialog): the events on that date and the date's colour in the month grid. *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Calendar day"; ViewData["Nav"] = "AcademicCalendar"; }
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <div class="modal__head">
+        <span class="modal__icon">@Ui.Icon("calendar", "icon--lg")</span>
+        <div>
+            <h2 class="modal__title">@Model.Date.ToString("dddd d MMMM yyyy", c)</h2>
+            <p class="modal__sub">@Model.YearName · School Calendar</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+    <div class="modal__body form-grid">
+        <section aria-labelledby="day-events">
+            <h3 class="sc-day-dialog__title" id="day-events">Events on this date</h3>
+            @if (Model.Events.Count == 0)
+            {
+                <p class="hint">No event covers this date.</p>
+            }
+            else
+            {
+                <ol class="sc-events">
+                    @foreach (var e in Model.Events)
+                    {
+                        var text = e.DateLabel ?? SchoolCalendarService.RangeText(e.StartDate!.Value, e.LastDate!.Value, true);
+                        <partial name="_EventLine" model="new CalendarRow(e, text, false, null)" />
+                    }
+                </ol>
+            }
+            <a class="btn btn--ghost btn--sm" href="/school-calendar/events/new?year=@Model.YearId&date=@SchoolWeek.Iso(Model.Date)" data-modal>@Ui.Icon("plus", "icon--sm")Add an event on this date</a>
+        </section>
+
+        <form class="sc-markform" action="/school-calendar/marks" method="post" data-ajax-form data-loading>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="year" value="@Model.YearId" />
+            <input type="hidden" name="date" value="@SchoolWeek.Iso(Model.Date)" />
+            <div class="field">
+                <label class="label" for="day-color">Colour of this date in the month grid</label>
+                <div class="sc-markform__row">
+                    <span class="sc-swatch @CalendarColors.Css(Model.Mark)" aria-hidden="true"></span>
+                    <select class="select" id="day-color" name="color">
+                        @foreach (var col in CalendarColors.All)
+                        {
+                            <option value="@((int)col)" selected="@(Model.Mark == col)">@CalendarColors.Name(col)</option>
+                        }
+                    </select>
+                    <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save colour</button>
+                </div>
+                <span class="hint">Reproduces the printed calendar. Friday and Saturday shading is automatic and is not a colour.</span>
+            </div>
+        </form>
+    </div>
+</div>

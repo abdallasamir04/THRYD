@@ -1,0 +1,140 @@
+@model SessionClassViewModel
+@*
+    The register of the lesson shown. One click per student: Present / Late / Absent (saved at once, attendance.js).
+    School Attendance decides first: a student absent from school is locked ("School Absent"); a student with no school
+    record shows "School: Not Recorded" and is never assumed absent. Present at school + Absent here raises an alert.
+*@
+@{
+    var r = Model.Register;
+}
+@if (r is not null)
+{
+    var l = r.Lesson.Lesson;
+    var k = r.Counts;
+    var editable = r.Lesson.CanRecord;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : parts.Length == 1 ? parts[0][..1].ToUpperInvariant() : $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+    string Slug(SessionAttendanceStatus? s) => s switch
+    {
+        SessionAttendanceStatus.Present => "present", SessionAttendanceStatus.Late => "late", SessionAttendanceStatus.Absent => "absent",
+        SessionAttendanceStatus.Excused => "excused", _ => "none",
+    };
+
+    @if (l.Cancelled)
+    {
+        <div class="notice notice--warning">@Ui.Icon("x-circle")<div class="notice__body"><strong>This lesson did not take place (cancelled for this date).</strong><span dir="auto">@l.CancelReason</span> No attendance is taken and no alerts are raised.</div></div>
+    }
+    else if (r.Lesson.Phase == LessonPhase.Upcoming)
+    {
+        <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>This lesson has not started yet.</strong>Attendance opens at @Arrivals.Time(l.Start).</div></div>
+    }
+
+    <section class="ses-register" data-ses-register data-session="@l.SessionId" data-date="@SchoolWeek.Iso(l.Date)" aria-label="Register — @l.Subject">
+        @Html.AntiForgeryToken()
+        <ul class="ses-tiles" aria-label="Lesson counts">
+            <li class="ses-tile"><span class="ses-tile__value num" data-ses-count="students">@k.Students</span><span class="ses-tile__label">Students</span></li>
+            <li class="ses-tile ses-tile--present"><span class="ses-tile__value num" data-ses-count="present">@k.Present</span><span class="ses-tile__label">Present</span></li>
+            <li class="ses-tile ses-tile--late"><span class="ses-tile__value num" data-ses-count="late">@k.Late</span><span class="ses-tile__label">Late</span></li>
+            <li class="ses-tile ses-tile--absent"><span class="ses-tile__value num" data-ses-count="absent">@k.Absent</span><span class="ses-tile__label">Absent</span></li>
+            <li class="ses-tile ses-tile--school"><span class="ses-tile__value num" data-ses-count="schoolAbsent">@k.SchoolAbsent</span><span class="ses-tile__label">School Absent</span></li>
+            <li class="ses-tile ses-tile--none"><span class="ses-tile__value num" data-ses-count="notRecorded">@k.NotRecorded</span><span class="ses-tile__label">Not Recorded</span></li>
+        </ul>
+
+        <div class="card ses-list-card">
+            <div class="ses-toolbar">
+                <div class="ses-search">
+                    @Ui.Icon("search")
+                    <label class="visually-hidden" for="ses-search">Find a student</label>
+                    <input class="input" type="search" id="ses-search" placeholder="Find a student…" autocomplete="off" data-ses-search />
+                </div>
+                @if (editable)
+                {
+                    <p class="ses-toolbar__hint">@Ui.Icon("info", "icon--sm")<span>One click saves. <strong>Absent</strong> for a student who is at school raises an alert at once.</span></p>
+                }
+            </div>
+            @if (r.Rows.Count == 0)
+            {
+                <div class="empty">@Ui.Icon("users")<p>No students in @l.ClassName on this date.</p></div>
+            }
+            <ol class="ses-list">
+                @foreach (var row in r.Rows)
+                {
+                    var school = row.School;
+                    <li class="ses-row ses-row--@(row.Locked ? "locked" : Slug(row.Status)) @(row.Alert ? "has-alert" : "")" data-ses-row data-student="@row.StudentId" data-name="@($"{row.Name} {row.StudentId}".ToLowerInvariant())">
+                        <div class="ses-row__who">
+                            <span class="ses-avatar" aria-hidden="true">@Initials(row.Name)</span>
+                            <span class="ses-row__name">
+                                <a href="/attendance/sessions/reports?mode=student&studentId=@row.StudentId" dir="auto"><strong>@row.Name</strong></a>
+                                <span class="ses-row__meta">ID @row.StudentId</span>
+                            </span>
+                        </div>
+                        <div class="ses-row__school">
+                            @switch (school.Presence)
+                            {
+                                case SchoolPresence.Present:
+                                    <span class="ses-school ses-school--in">@Ui.Icon("check-circle", "icon--sm")At school@(school.Time is { } t ? $" · {Arrivals.Time(t)}" : "")</span>
+                                    break;
+                                case SchoolPresence.Late:
+                                    <span class="ses-school ses-school--late">@Ui.Icon("clock", "icon--sm")Late to school@(school.Time is { } t2 ? $" · {Arrivals.Time(t2)}" : "")</span>
+                                    break;
+                                case SchoolPresence.Absent:
+                                    <span class="ses-school ses-school--out">@Ui.Icon("lock", "icon--sm")School Absent@(school.Automatic ? " · no arrival by 9:30 AM" : "")</span>
+                                    break;
+                                default:
+                                    <span class="ses-school ses-school--none" title="No School Attendance record for this day — not treated as absent">@Ui.Icon("info", "icon--sm")School: Not Recorded</span>
+                                    break;
+                            }
+                        </div>
+                        <div class="ses-row__marks">
+                            @if (row.Locked)
+                            {
+                                <div class="ses-marks" role="group" aria-label="Lesson attendance of @row.Name (locked)">
+                                    @foreach (var st in new[] { SessionAttendanceStatus.Present, SessionAttendanceStatus.Late, SessionAttendanceStatus.Absent })
+                                    {
+                                        <button type="button" class="ses-mark ses-mark--@Slug(st)" disabled aria-disabled="true">@SessionStatuses.Label(st)</button>
+                                    }
+                                </div>
+                                <span class="ses-row__why">Absent from school today — no lesson attendance.</span>
+                            }
+                            else
+                            {
+                                <div class="ses-marks" role="group" aria-label="Lesson attendance of @row.Name">
+                                    @foreach (var st in new[] { SessionAttendanceStatus.Present, SessionAttendanceStatus.Late, SessionAttendanceStatus.Absent })
+                                    {
+                                        <button type="button" class="ses-mark ses-mark--@Slug(st)" data-mark="@st" aria-pressed="@(row.Status == st ? "true" : "false")" disabled="@(!editable)">@SessionStatuses.Label(st)</button>
+                                    }
+                                </div>
+                                @if (row.Status == SessionAttendanceStatus.Excused) { <span class="badge badge--primary">Excused</span> }
+                            }
+                        </div>
+                        <div class="ses-row__time">
+                            <span class="num" data-ses-time>@(row.RecordedAt is { } at ? SchoolTime.Current.ToLocal(at).ToString("h:mm tt", c) : "—")</span>
+                            <span class="ses-row__by" data-ses-by>@(row.RecordedBy is { } by ? by : row.Status is null && !row.Locked ? "Not recorded" : "")@(row.Corrections > 0 ? $" · corrected {row.Corrections}×" : "")</span>
+                            <span class="ses-alert" data-ses-alert @(row.Alert ? "" : "hidden")>@Ui.Icon("alert-triangle", "icon--sm")Alert raised</span>
+                        </div>
+                    </li>
+                }
+            </ol>
+        </div>
+    </section>
+
+    @if (r.History.Count > 0)
+    {
+        <section class="card" aria-labelledby="hist-title">
+            <div class="card__head"><h2 class="card__title" id="hist-title">@Ui.Icon("clock")Corrections · @l.Subject</h2></div>
+            <ol class="timeline" style="margin:16px 22px">
+                @foreach (var h in r.History)
+                {
+                    <li class="timeline__item">
+                        <span class="timeline__when">@Ui.DateTime(h.At)@(h.By is null ? "" : " · " + h.By)</span>
+                        <span><strong dir="auto">@h.StudentName</strong>: @h.Before → <strong>@h.After</strong>@(h.Reason is null ? "" : " — " + h.Reason)</span>
+                    </li>
+                }
+            </ol>
+        </section>
+    }
+}

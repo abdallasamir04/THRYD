@@ -1,0 +1,41 @@
+@model CalendarRow
+@*
+    One event line under a month: the date (or the date as printed) and the event name.
+    The whole line takes the event's colour, unless only part of the name is coloured in the print (AccentText).
+    A continuation is the part of a multi-month event that is listed under another month.
+*@
+@{
+    var e = Model.Event;
+    var accentAt = e.AccentText is { Length: > 0 } a ? e.Title.IndexOf(a, StringComparison.OrdinalIgnoreCase) : -1;
+    var whole = e.Color != CalendarColor.None && accentAt < 0;
+    var cls = "sc-ev" + (whole ? " is-colored " + CalendarColors.Css(e.Color) : "") + (Model.Continuation ? " is-cont" : "")
+        + (e.NeedsConfirmation ? " is-unconfirmed" : "") + (e.IsHidden ? " is-hidden" : "");
+}
+<li class="@cls">
+    <a class="sc-ev__link" href="/school-calendar/events/@e.Id/edit" data-modal>
+        <span class="sc-ev__date">@Model.DateText</span>
+        <span class="sc-ev__body">
+            <span class="sc-ev__title">
+                @if (accentAt >= 0)
+                {
+                    @(e.Title[..accentAt])<mark class="sc-ev__accent @CalendarColors.Css(e.Color)">@(e.Title.Substring(accentAt, e.AccentText!.Length))</mark>@(e.Title[(accentAt + e.AccentText.Length)..])
+                }
+                else
+                {
+                    @e.Title
+                }
+            </span>
+            @if (Model.ContinuationText is not null)
+            {
+                <span class="sc-ev__meta">@Model.ContinuationText</span>
+            }
+            @if (e.NeedsConfirmation || e.IsHidden)
+            {
+                <span class="sc-ev__flags">
+                    @if (e.NeedsConfirmation) { <span class="sc-flag sc-flag--confirm">@Ui.Icon("alert-circle", "icon--sm")To confirm</span> }
+                    @if (e.IsHidden) { <span class="sc-flag">Hidden</span> }
+                </span>
+            }
+        </span>
+    </a>
+</li>

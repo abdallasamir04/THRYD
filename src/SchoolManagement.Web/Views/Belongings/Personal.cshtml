@@ -1,0 +1,91 @@
+@model PersonalDaily
+@*
+    Personal Belongings · Daily Checks: today's date (Africa/Cairo) and every class at once, with its real student count and
+    today's progress from the stored records. A class opens its students. No timetable, no filters to fill in first.
+*@
+@{
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var date = SchoolWeek.Iso(Model.Date);
+    var q = Model.IsToday ? "" : $"?date={date}";
+    ViewData["Title"] = "Personal Belongings";
+    ViewData["Nav"] = "Belongings";
+    var students = Model.Classes.Sum(x => x.Students);
+    var complete = Model.Classes.Sum(x => x.Complete);
+    string State(DailyState s) => s switch { DailyState.Completed => "bl-state--done", DailyState.InProgress => "bl-state--progress", _ => "bl-state--idle" };
+}
+@section Head { <link rel="stylesheet" href="~/css/belongings.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/belongings">Belongings</a></li><li><span aria-current="page">Personal Belongings</span></li></ol>
+        <h1 class="page-title">Personal Belongings</h1>
+        <p class="page-sub">Each student's Jacket, School Bag, Pencil Case, Water Flask and Lunch Box / Bag for the school day. Open a class to record its students.</p>
+    </div>
+</div>
+
+<partial name="_Tabs" model='("personal", false)' />
+
+<section class="bl-day" aria-label="School day">
+    <div class="bl-day__date">
+        <span class="bl-day__eyebrow">@(Model.IsToday ? "Today" : "Viewing")</span>
+        <strong>@Model.Date.ToString("dddd d MMMM yyyy", c)</strong>
+        <span class="faint">School time · @SchoolTime.Current.Location</span>
+    </div>
+    <ul class="bl-day__stats" aria-label="Today's progress">
+        <li><span class="num">@Model.Classes.Count</span>Classes</li>
+        <li><span class="num">@students</span>Students</li>
+        <li class="is-ok"><span class="num">@complete</span>Checked</li>
+        <li class="is-warn"><span class="num">@Math.Max(0, students - complete)</span>Pending</li>
+    </ul>
+    @if (!Model.IsToday)
+    {
+        <a class="btn btn--secondary btn--sm" href="/belongings/personal">@Ui.Icon("calendar", "icon--sm")Back to today</a>
+    }
+</section>
+
+@if (!Model.IsSchoolDay)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>@(Model.Holiday is null ? "Not a school day." : $"School holiday: {Model.Holiday}.")</strong>Belongings are checked on school days. <a href="/belongings/personal?date=@SchoolWeek.Iso(Model.LastSchoolDay)">Open the last school day (@Model.LastSchoolDay.ToString("ddd d MMM", c))</a> or see earlier days in History &amp; Reports.</div></div>
+}
+
+<div class="bl-search">
+    @Ui.Icon("search")
+    <label class="visually-hidden" for="bl-class-search">Find a class</label>
+    <input class="input" type="search" id="bl-class-search" placeholder="Find a class…" autocomplete="off" data-bl-class-search />
+</div>
+
+@if (Model.Classes.Count == 0)
+{
+    <div class="empty empty--boxed"><span class="empty__icon">@Ui.Icon("door")</span><p class="empty__title">No active classes</p><p class="empty__text">Add classes under Academics → Classes.</p></div>
+}
+@foreach (var stage in Model.Classes.GroupBy(x => x.Stage))
+{
+    var id = "stage-" + stage.Key.GetHashCode().ToString("x");
+    <section class="ses-stage" aria-labelledby="@id" data-bl-stage>
+        <h2 class="ses-stage__title" id="@id">@stage.Key <span class="count">@stage.Count()</span></h2>
+        <div class="ses-cards bl-cards">
+            @foreach (var card in stage)
+            {
+                <a class="ses-card bl-card @State(card.State)" href="/belongings/personal/classes/@card.ClassId@q" data-bl-card data-name="@card.Name.ToLowerInvariant() @card.Grade?.ToLowerInvariant()">
+                    <span class="ses-card__head">
+                        <strong class="ses-card__name">@card.Name</strong>
+                        <span class="bl-state @State(card.State)">@DailyStates.Label(card.State)</span>
+                    </span>
+                    <span class="ses-card__meta">@string.Join(" · ", new[] { card.Grade, card.Section is null ? null : $"Section {card.Section}", Ui.Plural(card.Students, "student", "students") }.Where(x => x is not null))</span>
+                    <span class="bl-card__figures">
+                        <span><strong class="num">@card.Complete</strong> checked</span>
+                        <span><strong class="num">@card.Pending</strong> pending</span>
+                        <span title="Items Available ÷ items checked (N/A excluded)"><strong class="num">@ReadinessCounts.Text(card.Readiness.Percent)</strong> ready</span>
+                    </span>
+                    <span class="ses-card__progress" title="Students with every item checked">
+                        <span class="ses-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@card.Percent" aria-label="@card.Name completion"><span style="width:@card.Percent%"></span></span>
+                        <span class="num">@card.Percent%</span>
+                    </span>
+                </a>
+            }
+        </div>
+    </section>
+}
+<p class="empty bl-search-empty" data-bl-search-empty hidden>@Ui.Icon("search")No class matches this search.</p>
+
+@section Scripts { <script src="~/js/belongings.js" asp-append-version="true"></script> }

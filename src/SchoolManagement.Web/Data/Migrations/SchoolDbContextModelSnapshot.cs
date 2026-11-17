@@ -33,36 +33,82 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Property<int>("BelongingsRecordId")
                         .HasColumnType("int");
 
-                    b.Property<int>("Book")
+                    b.Property<int?>("Book")
                         .HasColumnType("int");
 
-                    b.Property<int>("CopyBook")
+                    b.Property<int?>("CopyBook")
                         .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("DepartmentId")
                         .HasColumnType("int");
+
+                    b.Property<TimeOnly?>("LessonEnd")
+                        .HasColumnType("time");
+
+                    b.Property<TimeOnly?>("LessonStart")
+                        .HasColumnType("time");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("PeriodName")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("PeriodNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecordedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<string>("Subject")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("TeacherId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TeacherName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("TimetableAssignmentId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("DepartmentId");
 
+                    b.HasIndex("TimetableAssignmentId");
+
+                    b.HasIndex("BelongingsRecordId", "TimetableAssignmentId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AcademicMaterials_RecordLesson")
+                        .HasFilter("[TimetableAssignmentId] IS NOT NULL");
+
                     b.HasIndex("BelongingsRecordId", "DepartmentId", "Subject")
                         .IsUnique()
-                        .HasDatabaseName("UX_AcademicMaterials_RecordSubject");
+                        .HasDatabaseName("UX_AcademicMaterials_RecordSubject")
+                        .HasFilter("[TimetableAssignmentId] IS NULL");
 
                     b.ToTable("AcademicMaterialRecords", null, t =>
                         {
-                            t.HasCheckConstraint("CK_AcademicMaterials_Book", "[Book] BETWEEN 1 AND 3");
+                            t.HasCheckConstraint("CK_AcademicMaterials_Book", "[Book] IS NULL OR [Book] BETWEEN 1 AND 3");
 
-                            t.HasCheckConstraint("CK_AcademicMaterials_CopyBook", "[CopyBook] BETWEEN 1 AND 3");
+                            t.HasCheckConstraint("CK_AcademicMaterials_CopyBook", "[CopyBook] IS NULL OR [CopyBook] BETWEEN 1 AND 3");
                         });
                 });
 
@@ -76,6 +122,12 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     b.Property<int>("AcademicYearId")
                         .HasColumnType("int");
+
+                    b.Property<DateOnly?>("CalendarEndDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("CalendarStartDate")
+                        .HasColumnType("date");
 
                     b.Property<DateOnly?>("EndDate")
                         .HasColumnType("date");
@@ -98,6 +150,8 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     b.ToTable("AcademicQuarters", null, t =>
                         {
+                            t.HasCheckConstraint("CK_AcademicQuarters_CalendarDates", "([CalendarStartDate] IS NULL AND [CalendarEndDate] IS NULL) OR ([CalendarStartDate] IS NOT NULL AND [CalendarEndDate] IS NOT NULL AND [CalendarEndDate] >= [CalendarStartDate])");
+
                             t.HasCheckConstraint("CK_AcademicQuarters_Dates", "([StartDate] IS NULL AND [EndDate] IS NULL) OR ([StartDate] IS NOT NULL AND [EndDate] IS NOT NULL AND [EndDate] >= [StartDate])");
 
                             t.HasCheckConstraint("CK_AcademicQuarters_Number", "[Number] BETWEEN 1 AND 4");
@@ -317,6 +371,51 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.ToTable("AttendanceAlertEvents", (string)null);
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.BelongingsChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("AcademicMaterialRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("After")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Before")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("BelongingsRecordId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Context")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Item")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BelongingsRecordId", "ChangedAt");
+
+                    b.ToTable("BelongingsChanges", (string)null);
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.BelongingsNoteHistory", b =>
                 {
                     b.Property<long>("Id")
@@ -375,6 +474,10 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     b.Property<int?>("PencilCase")
                         .HasColumnType("int");
+
+                    b.Property<string>("RecordedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<int?>("SchoolBag")
                         .HasColumnType("int");
@@ -483,6 +586,10 @@ namespace SchoolManagement.Web.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_ClassTeaching_StaffOnce")
                         .HasFilter("[IsActive] = 1");
+
+                    b.HasIndex(new[] { "SchoolClassId", "AcademicYearId" }, "UX_ClassTeaching_CoTeacher")
+                        .IsUnique()
+                        .HasFilter("[IsActive] = 1 AND [Role] = 2");
 
                     b.ToTable("ClassTeachingAssignments", null, t =>
                         {
@@ -1170,6 +1277,343 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.HasIndex("DutyAssignmentId", "RecordedAt");
 
                     b.ToTable("DutyBackupResponses", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.DutyCoverageReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Area")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("Component")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DutyAssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("DutyDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("Reason")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RecordedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("SupersedesId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Withdrawn")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DutyAssignmentId");
+
+                    b.HasIndex("SupersedesId");
+
+                    b.HasIndex("DutyDate", "Component");
+
+                    b.ToTable("DutyCoverageReports", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.DutyMainSchedule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("DayMask")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DutyType")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DutyType", "EffectiveFrom");
+
+                    b.ToTable("DutyMainSchedules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DutyMainSchedules_Times", "[EndTime] > [StartTime]");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.DutySection", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("DetailsPending")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("DutyType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Grades")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<bool>("HasClasses")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly?>("RetiredOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.ToTable("DutySections", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = false,
+                            DutyType = 1,
+                            HasClasses = false,
+                            Icon = "users",
+                            Name = "Students Arrival Check",
+                            Slug = "students-arrival",
+                            SortOrder = 1,
+                            Summary = "Staff on duty while students arrive at school."
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = false,
+                            DutyType = 1,
+                            HasClasses = true,
+                            Icon = "door",
+                            Name = "In-Class Morning",
+                            Slug = "in-class-morning",
+                            SortOrder = 2,
+                            Summary = "Staff supervising classes before the first lesson."
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = true,
+                            DutyType = 1,
+                            HasClasses = false,
+                            Icon = "activity",
+                            Name = "Morning Assembly (Line) / Proadcast",
+                            Slug = "morning-assembly",
+                            SortOrder = 3,
+                            Summary = "Assembly line-up and proadcast duty."
+                        },
+                        new
+                        {
+                            Id = 8,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = false,
+                            DutyType = 2,
+                            Grades = "Grades Pre-K and KG1",
+                            HasClasses = false,
+                            Icon = "school",
+                            Name = "Pre-K / KG1",
+                            Slug = "prek-kg1",
+                            SortOrder = 1,
+                            Summary = "Break supervision for Pre-K and KG1."
+                        },
+                        new
+                        {
+                            Id = 7,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = false,
+                            DutyType = 2,
+                            Grades = "Grade KG2",
+                            HasClasses = false,
+                            Icon = "school",
+                            Name = "KG2",
+                            Slug = "kg2",
+                            SortOrder = 2,
+                            Summary = "Break supervision for KG2."
+                        },
+                        new
+                        {
+                            Id = 6,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = false,
+                            DutyType = 2,
+                            Grades = "Grades 1–3",
+                            HasClasses = false,
+                            Icon = "users",
+                            Name = "Lower Elementary",
+                            Slug = "lower-elementary",
+                            SortOrder = 3,
+                            Summary = "Break supervision for grades 1–3."
+                        },
+                        new
+                        {
+                            Id = 5,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = false,
+                            DutyType = 2,
+                            Grades = "Grades 4–6",
+                            HasClasses = false,
+                            Icon = "users",
+                            Name = "Upper Elementary",
+                            Slug = "upper-elementary",
+                            SortOrder = 4,
+                            Summary = "Break supervision for grades 4–6."
+                        },
+                        new
+                        {
+                            Id = 4,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = false,
+                            DutyType = 2,
+                            Grades = "Grades 7–10",
+                            HasClasses = false,
+                            Icon = "users",
+                            Name = "Middle / High School Break",
+                            Slug = "middle-high-break",
+                            SortOrder = 5,
+                            Summary = "Break supervision for grades 7–10."
+                        },
+                        new
+                        {
+                            Id = 9,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = false,
+                            DutyType = 3,
+                            HasClasses = false,
+                            Icon = "door",
+                            Name = "Bus",
+                            Slug = "bus",
+                            SortOrder = 1,
+                            Summary = "Staff seeing students onto the school buses. Gate and bus details go in location and notes."
+                        },
+                        new
+                        {
+                            Id = 10,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DetailsPending = false,
+                            DutyType = 3,
+                            HasClasses = false,
+                            Icon = "user",
+                            Name = "Pickup",
+                            Slug = "pickup",
+                            SortOrder = 2,
+                            Summary = "Staff handing students over to parents at pickup. Gate details go in location and notes."
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.DutySectionSchedule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("DayMask")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DutySectionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("DutySectionId", "EffectiveFrom");
+
+                    b.ToTable("DutySectionSchedules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DutySectionSchedules_Times", "[EndTime] > [StartTime]");
+                        });
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.DutyStaffAssignment", b =>
@@ -1954,6 +2398,101 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.HasIndex("StaffMemberId");
 
                     b.ToTable("ActivityStaff", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SchoolCalendarEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AcademicYearId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AccentText")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Color")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DateLabel")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsHidden")
+                        .HasColumnType("bit");
+
+                    b.Property<DateOnly>("ListMonth")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("NeedsConfirmation")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicYearId", "ListMonth", "SortOrder");
+
+                    b.ToTable("SchoolCalendarEvents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SchoolCalendarEvents_Color", "[Color] BETWEEN 0 AND 9");
+
+                            t.HasCheckConstraint("CK_SchoolCalendarEvents_Dates", "[EndDate] IS NULL OR ([StartDate] IS NOT NULL AND [EndDate] >= [StartDate])");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SchoolCalendarMark", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AcademicYearId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Color")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicYearId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("SchoolCalendarMarks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SchoolCalendarMarks_Color", "[Color] BETWEEN 1 AND 9");
+                        });
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.SchoolClass", b =>
@@ -3272,9 +3811,16 @@ namespace SchoolManagement.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SchoolManagement.Web.Entities.TimetableAssignment", "Session")
+                        .WithMany()
+                        .HasForeignKey("TimetableAssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Department");
 
                     b.Navigation("Record");
+
+                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.AcademicQuarter", b =>
@@ -3340,6 +3886,17 @@ namespace SchoolManagement.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Alert");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.BelongingsChange", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.BelongingsRecord", "Record")
+                        .WithMany()
+                        .HasForeignKey("BelongingsRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Record");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.BelongingsNoteHistory", b =>
@@ -3525,6 +4082,24 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("DutyAssignment");
 
                     b.Navigation("StaffMember");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.DutySectionSchedule", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SchoolManagement.Web.Entities.DutySection", "Section")
+                        .WithMany("Schedules")
+                        .HasForeignKey("DutySectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Department");
+
+                    b.Navigation("Section");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.DutyStaffAssignment", b =>
@@ -3786,6 +4361,28 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("Activity");
 
                     b.Navigation("StaffMember");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SchoolCalendarEvent", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.AcademicYear", "AcademicYear")
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AcademicYear");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.SchoolCalendarMark", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.AcademicYear", "AcademicYear")
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AcademicYear");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.SessionAttendanceCorrection", b =>
@@ -4082,6 +4679,11 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("Classes");
 
                     b.Navigation("StaffAssignments");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.DutySection", b =>
+                {
+                    b.Navigation("Schedules");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.DutyStaffAssignment", b =>

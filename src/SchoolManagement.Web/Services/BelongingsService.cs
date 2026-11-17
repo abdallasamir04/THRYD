@@ -101,7 +101,7 @@ public sealed record YearView(int Id, string Name, IReadOnlyList<QuarterView> Qu
 
 public sealed record StudentOption(int Id, string Name, string ClassName);
 
-public sealed record MaterialView(int Id, int DepartmentId, string DepartmentName, string Subject, ItemStatus Book, ItemStatus CopyBook);
+public sealed record MaterialView(int Id, int DepartmentId, string DepartmentName, string Subject, ItemStatus? Book, ItemStatus? CopyBook);
 
 public sealed record NoteVersion(string? Notes, DateTime ChangedAt, string? ChangedBy);
 
@@ -303,7 +303,7 @@ public sealed class BelongingsService(SchoolDbContext db, ITimetableService time
         var (context, error) = await ContextAsync(input.StudentId, input.Date, input.Grade, ct);
         if (error is not null) return error;
         var record = await RecordAsync(input.StudentId, input.Date, context!.Value, ct);
-        var row = record.Materials.FirstOrDefault(m => m.DepartmentId == input.DepartmentId && m.Subject == subject);
+        var row = record.Materials.FirstOrDefault(m => m.TimetableAssignmentId == null && m.DepartmentId == input.DepartmentId && m.Subject == subject);
         if (row is null) record.Materials.Add(row = new AcademicMaterialRecord { DepartmentId = input.DepartmentId!.Value, Subject = subject });
         (row.Book, row.CopyBook, row.UpdatedAt) = (input.Book!.Value, input.CopyBook!.Value, DateTime.UtcNow);
         record.UpdatedBy = currentUser.Name;

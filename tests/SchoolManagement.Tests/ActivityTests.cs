@@ -39,7 +39,7 @@ public class ActivityTests(DbFixture fx)
         var client = fx.Factory.CreateClient();
         var duties = WebUtility.HtmlDecode(await client.GetStringAsync("/duties"));
         foreach (var title in new[] { "Morning Duty", "Midday Duty", "Dismissal Duty", "Activities" })
-            Assert.Contains($"<span class=\"hub-card__title\">{title}</span>", duties);
+            Assert.Matches($"<h2[^>]*><a href=\"[^\"]+\">{System.Text.RegularExpressions.Regex.Escape(title)}</a></h2>", duties);
         Assert.DoesNotContain("<span class=\"hub-card__title\">P.E.</span>", duties);
         Assert.DoesNotContain("Add Activity", duties);
 

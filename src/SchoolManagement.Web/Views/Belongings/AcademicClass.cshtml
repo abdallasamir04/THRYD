@@ -1,0 +1,188 @@
+@model AcademicClassDay
+@*
+    A class's Academic Belongings. Today the lesson in progress is found from the class timetable and the school clock and
+    opens by itself: period, subject, teacher and times are never chosen by hand. With no lesson in progress the next one
+    is shown and nothing can be recorded. Lessons that have started (or finished, or whose period has no times) can be
+    opened from the day's timetable; upcoming and cancelled lessons cannot.
+*@
+@{
+    var d = Model.Day;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var date = SchoolWeek.Iso(d.Date);
+    var sel = Model.Lesson;
+    var k = Model.Counts;
+    ViewData["Title"] = $"{d.ClassName} · Academic Belongings";
+    ViewData["Nav"] = "Belongings";
+    string Phase(LessonPhase p) => p switch
+    {
+        LessonPhase.InProgress => "ses-phase--live", LessonPhase.Finished => "ses-phase--done", LessonPhase.Upcoming => "ses-phase--next",
+        LessonPhase.Cancelled => "ses-phase--off", _ => "ses-phase--untimed",
+    };
+    string LessonHref(ClassLesson l) => $"/belongings/academic/classes/{d.ClassId}?date={date}&lesson={l.Lesson.SessionId}";
+}
+@section Head { <link rel="stylesheet" href="~/css/belongings.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/belongings">Belongings</a></li><li><a href="/belongings/academic@(d.IsToday ? "" : $"?date={date}")">Academic Belongings</a></li><li><span aria-current="page">@d.ClassName</span></li></ol>
+        <h1 class="page-title">@d.ClassName <span class="faint">· Academic Belongings</span></h1>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/belongings/academic@(d.IsToday ? "" : $"?date={date}")">@Ui.Icon("arrow-left")All classes</a>
+        <a class="btn btn--secondary" href="/belongings/academic/history?classId=@d.ClassId">@Ui.Icon("chart")Class history</a>
+    </div>
+</div>
+
+<partial name="_Tabs" model='("academic", false)' />
+
+@if (!d.IsSchoolDay)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>@(d.Holiday is null ? "Not a school day." : $"School holiday: {d.Holiday}.")</strong>No lessons take place on @d.Date.ToString("dddd d MMMM", c).</div></div>
+}
+else if (d.Lessons.Count == 0)
+{
+    <div class="notice">@Ui.Icon("calendar")<div class="notice__body"><strong>No lessons on @d.ClassName's timetable on @d.Date.ToString("dddd d MMMM", c).</strong>Academic Belongings are recorded only for lessons of the class timetable.</div></div>
+}
+else
+{
+    <section class="ses-now @(sel?.Phase == LessonPhase.InProgress ? "is-live" : "")" aria-label="Lesson">
+        @if (sel is { } s)
+        {
+            var l = s.Lesson;
+            <div class="ses-now__main">
+                <span class="ses-now__eyebrow">
+                    <span class="ses-phase @Phase(s.Phase)">@if (s.Phase == LessonPhase.InProgress) { <span class="ses-pulse" aria-hidden="true"></span> }@s.PhaseLabel</span>
+                    @if (d.Current is not null && d.Current.Lesson.SessionId != l.SessionId) { <a href="/belongings/academic/classes/@d.ClassId" class="ses-now__jump">@Ui.Icon("activity", "icon--sm")Go to the lesson in progress: @d.Current.Lesson.Subject</a> }
+                </span>
+                <h2 class="ses-now__subject" dir="auto">@l.Subject</h2>
+                <p class="ses-now__dept">@l.DepartmentName</p>
+            </div>
+            <dl class="ses-now__facts">
+                <div><dt>Class</dt><dd>@l.ClassName</dd></div>
+                <div><dt>Date</dt><dd>@l.Date.ToString("ddd d MMM yyyy", c)</dd></div>
+                <div><dt>Period</dt><dd>@l.Period</dd></div>
+                <div><dt>Starts</dt><dd class="num">@(l.Start is { } st ? Arrivals.Time(st) : "Not set")</dd></div>
+                <div><dt>Ends</dt><dd class="num">@(l.End is { } en ? Arrivals.Time(en) : "Not set")</dd></div>
+                <div><dt>Teacher</dt><dd dir="auto">@l.Teacher</dd></div>
+            </dl>
+        }
+        else
+        {
+            <div class="ses-now__main">
+                <span class="ses-now__eyebrow"><span class="ses-phase ses-phase--idle">@(d.IsToday ? "No Active Lesson" : "Past day")</span></span>
+                @if (d.IsToday)
+                {
+                    <h2 class="ses-now__subject">No lesson is in progress right now</h2>
+                    @if (d.Next is { } n)
+                    {
+                        <p class="ses-now__dept">Next: <strong dir="auto">@n.Lesson.Subject</strong> · @n.Lesson.Period · starts at <strong class="num">@Arrivals.Time(n.Lesson.Start)</strong> (@n.Lesson.Teacher). Checks open when it starts.</p>
+                    }
+                    else if (!d.TimesMissing)
+                    {
+                        <p class="ses-now__dept">No more lessons today. Finished lessons can be opened below to complete or correct their checks.</p>
+                    }
+                }
+                else
+                {
+                    <h2 class="ses-now__subject">@d.Date.ToString("dddd d MMMM yyyy", c)</h2>
+                    <p class="ses-now__dept">Choose a lesson from the timetable below to see or complete its checks.</p>
+                }
+            </div>
+            <dl class="ses-now__facts">
+                <div><dt>Class</dt><dd>@d.ClassName</dd></div>
+                <div><dt>Date</dt><dd>@d.Date.ToString("ddd d MMM yyyy", c)</dd></div>
+                @if (d.IsToday) { <div><dt>Now</dt><dd class="num" data-ses-clock>@d.Now.ToString("h:mm tt", c)</dd></div> }
+            </dl>
+        }
+    </section>
+
+    @if (d.TimesMissing && d.IsToday)
+    {
+        <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>Some periods have no start and end time.</strong>The lesson in progress is found from the clock only when its period has times (<a href="/timetable/periods">Timetables → Periods</a>). Until then, open today's lesson below.</div></div>
+    }
+
+    <section class="card ses-day" aria-labelledby="bl-day-title">
+        <div class="ses-day__head"><h2 id="bl-day-title">@(d.IsToday ? "Today's timetable" : "Timetable") · @d.ClassName</h2><span class="faint">@Ui.Plural(d.Lessons.Count, "lesson", "lessons")</span></div>
+        <ol class="ses-day__list">
+            @foreach (var l in d.Lessons)
+            {
+                var isSel = sel?.Lesson.SessionId == l.Lesson.SessionId;
+                var done = Model.CheckedByLesson.GetValueOrDefault(l.Lesson.SessionId);
+                <li class="ses-slot @Phase(l.Phase) @(isSel ? "is-selected" : "")">
+                    @if (l.CanRecord)
+                    {
+                        <a class="ses-slot__link" href="@LessonHref(l)" aria-current="@(isSel ? "true" : null)">
+                            <span class="ses-slot__period">@l.Lesson.Period</span>
+                            <span class="ses-slot__time num">@l.Lesson.Times12</span>
+                            <strong class="ses-slot__subject" dir="auto">@l.Lesson.Subject</strong>
+                            <span class="ses-slot__teacher" dir="auto">@l.Lesson.Teacher</span>
+                            <span class="ses-slot__foot"><span class="ses-phase @Phase(l.Phase)">@l.PhaseLabel</span><span class="num faint" title="Students with Book and Copy Book checked">@done/@l.Counts.Expected</span></span>
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="ses-slot__link" aria-disabled="true" title="@(l.Phase == LessonPhase.Cancelled ? "Cancelled on this date" : "Opens when the lesson starts")">
+                            <span class="ses-slot__period">@l.Lesson.Period</span>
+                            <span class="ses-slot__time num">@l.Lesson.Times12</span>
+                            <strong class="ses-slot__subject" dir="auto">@l.Lesson.Subject</strong>
+                            <span class="ses-slot__teacher" dir="auto">@l.Lesson.Teacher</span>
+                            <span class="ses-slot__foot"><span class="ses-phase @Phase(l.Phase)">@l.PhaseLabel</span></span>
+                        </span>
+                    }
+                </li>
+            }
+        </ol>
+    </section>
+}
+
+@if (sel is not null && d.IsSchoolDay)
+{
+    var l = sel.Lesson;
+    if (!Model.InQuarter)
+    {
+        <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>This date is not inside a quarter.</strong>Every record belongs to a quarter. Set the quarter dates in <a href="/school-calendar">School Calendar</a> first.</div></div>
+    }
+    else if (l.Cancelled)
+    {
+        <div class="notice notice--warning">@Ui.Icon("x-circle")<div class="notice__body"><strong>This lesson did not take place (cancelled for this date).</strong>No checks are recorded.</div></div>
+    }
+
+    <section class="bl-head" aria-label="Lesson counts">
+        <ul class="ses-tiles bl-tiles">
+            <li class="ses-tile"><span class="ses-tile__value num">@k.Students</span><span class="ses-tile__label">Students</span></li>
+            <li class="ses-tile ses-tile--present"><span class="ses-tile__value num" data-bl-count="complete">@k.Complete</span><span class="ses-tile__label">Checked</span></li>
+            <li class="ses-tile ses-tile--late"><span class="ses-tile__value num" data-bl-count="pending">@k.Pending</span><span class="ses-tile__label">Pending</span></li>
+            <li class="ses-tile"><span class="ses-tile__value num" data-bl-count="percent">@k.Percent%</span><span class="ses-tile__label">Completion</span></li>
+            <li class="ses-tile"><span class="ses-tile__value num" data-bl-count="readiness">@ReadinessCounts.Text(k.Readiness.Percent)</span><span class="ses-tile__label">Readiness</span></li>
+        </ul>
+    </section>
+
+    <section class="card bl-board" data-bl-board data-kind="academic" data-date="@date" data-session="@l.SessionId" data-mark-url="/belongings/academic" aria-label="Students in @l.Subject">
+        @Html.AntiForgeryToken()
+        <div class="ses-toolbar">
+            <div class="ses-search">
+                @Ui.Icon("search")
+                <label class="visually-hidden" for="bl-search">Find a student</label>
+                <input class="input" type="search" id="bl-search" placeholder="Find a student…" autocomplete="off" data-bl-search />
+            </div>
+            <label class="switch bl-pending-toggle"><input type="checkbox" data-bl-pending /><span class="switch__track" aria-hidden="true"></span><span>Only students still to check</span></label>
+            @if (Model.CanRecord)
+            {
+                <p class="ses-toolbar__hint">@Ui.Icon("info", "icon--sm")<span>One click saves to <strong dir="auto">@l.Subject</strong> · @l.Period.</span></p>
+            }
+        </div>
+        @if (Model.Rows.Count == 0)
+        {
+            <div class="empty">@Ui.Icon("users")<p>No students in @d.ClassName on this date.</p></div>
+        }
+        <ol class="bl-list">
+            @foreach (var row in Model.Rows)
+            {
+                <partial name="_AcademicRow" model="new AcademicRowModel(row, l.SessionId, d.Date, Model.CanRecord)" />
+            }
+        </ol>
+        <p class="empty bl-search-empty" data-bl-search-empty hidden>@Ui.Icon("search")No student matches.</p>
+    </section>
+}
+
+@section Scripts { <script src="~/js/belongings.js" asp-append-version="true"></script> }

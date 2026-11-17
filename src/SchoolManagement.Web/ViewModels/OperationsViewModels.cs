@@ -20,6 +20,95 @@ public sealed class DutyListViewModel
     public required DutyComponentInfo Info { get; init; }
     public required DateOnly Date { get; init; }
     public required IReadOnlyList<DutyRow> Duties { get; init; }
+
+    /// <summary>The Sub-Duty on that date: schedule, calculated status, coverage points and reports.</summary>
+    public SubDutyView? Sub { get; init; }
+    public MainDutyView? Main { get; init; }
+    public IReadOnlyList<DutyReportView> ReportHistory { get; init; } = [];
+}
+
+/// <summary>Duties landing page: every Main Duty of the day with its Sub-Duties, plus Activities.</summary>
+public sealed class DutyHubViewModel
+{
+    public required DutyDay Day { get; init; }
+    public int Activities { get; init; }
+}
+
+/// <summary>A Main Duty page: its schedule, status, Sub-Duties and the coverage report.</summary>
+public sealed class MainDutyPageViewModel
+{
+    public required DutyDay Day { get; init; }
+    public required MainDutyView Main { get; init; }
+}
+
+public sealed class DutyDepartmentsViewModel
+{
+    public required DateOnly Date { get; init; }
+    public required IReadOnlyList<DutyDepartmentView> Departments { get; init; }
+}
+
+/// <summary>Schedule page: the Main Duty range and each Sub-Duty's schedule (all versions kept).</summary>
+public sealed class DutySchedulePageViewModel
+{
+    public required DutyScheduleView Schedule { get; init; }
+    public required IReadOnlyList<(int Id, string Name)> Departments { get; init; }
+}
+
+/// <summary>Main Duty time range, from a date.</summary>
+public sealed class MainScheduleForm
+{
+    public string? EffectiveFrom { get; set; }
+    public string? StartTime { get; set; }
+    public string? EndTime { get; set; }
+    public bool AllDays { get; set; } = true;
+    public List<DayOfWeek> Days { get; set; } = [];
+}
+
+/// <summary>A Sub-Duty: name and description (when added or renamed) and its schedule from a date.</summary>
+public sealed class SectionForm
+{
+    public int? Id { get; set; }
+    public DutyType Type { get; set; }
+    public string? Name { get; set; }
+    public string? Summary { get; set; }
+    public string? EffectiveFrom { get; set; }
+    public string? StartTime { get; set; }
+    public string? EndTime { get; set; }
+    public bool Required { get; set; } = true;
+    public int? DepartmentId { get; set; }
+    public bool AllDays { get; set; } = true;
+    public List<DayOfWeek> Days { get; set; } = [];
+
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever] public IReadOnlyList<(int Id, string Name)> Departments { get; set; } = [];
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever] public TimeOnly? MainStart { get; set; }
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever] public TimeOnly? MainEnd { get; set; }
+
+    public SectionInput ToInput(DateOnly today) => new(
+        Name, Summary, DutyForms.Date(EffectiveFrom) ?? today, DutyForms.Time(StartTime), DutyForms.Time(EndTime), Required, DepartmentId,
+        PeriodDays.Mask(AllDays, Days));
+}
+
+/// <summary>Report that a responsibility was not covered (or edit a report: a new version replaces it).</summary>
+public sealed class CoverageReportForm
+{
+    public string? Component { get; set; }
+    public string? Date { get; set; }
+    public int? PointId { get; set; }
+    public string? Area { get; set; }
+    public DutyUncoveredReason? Reason { get; set; }
+    public string? Notes { get; set; }
+    public int? Supersedes { get; set; }
+
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever] public SubDutyView? Sub { get; set; }
+}
+
+public static class DutyForms
+{
+    public static DateOnly? Date(string? s) =>
+        DateOnly.TryParseExact(s, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
+
+    public static TimeOnly? Time(string? s) =>
+        TimeOnly.TryParseExact(s, ["HH:mm", "HH:mm:ss"], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var t) ? t : null;
 }
 
 public sealed class DutyDetailsViewModel

@@ -1,0 +1,230 @@
+@model SessionReportsViewModel
+@*
+    Session Attendance reports: one student (lesson history, repeated lesson absences), one class, one lesson (one date),
+    or the whole school, over a date or a period. School Absent (absent from school) is always kept apart from a lesson
+    absence while at school. PDF of exactly what is shown.
+*@
+@{
+    var f = Model.Form;
+    var r = Model.Report;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var q = r?.Query ?? f.ToQuery();
+    var qs = Context.Request.QueryString.Value ?? "";
+    var today = SchoolWeek.Iso(SchoolWeek.Today);
+    ViewData["Title"] = "Session Attendance Reports";
+    ViewData["Nav"] = "Attendance";
+    string KindBadge(SessionKind k, SchoolPresence school) => k switch
+    {
+        SessionKind.Present => "badge--success", SessionKind.Late => "badge--warning", SessionKind.Absent => "badge--error",
+        SessionKind.Excused => "badge--primary", _ => "badge--neutral",
+    };
+    string KindLabel(SessionKind k, SchoolPresence school) => k switch
+    {
+        SessionKind.Absent when school is SchoolPresence.Present or SchoolPresence.Late => "Absent · at school",
+        SessionKind.SchoolAbsent => "School Absent",
+        SessionKind.NotRecorded => "Not Recorded",
+        _ => k.ToString(),
+    };
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/attendance">Student Attendance</a></li><li><a href="/attendance/sessions">Session Attendance</a></li><li>Reports</li></ol>
+        <h1 class="page-title">Session Attendance Reports</h1>
+    </div>
+    @if (r is not null)
+    {
+        <div class="page-head__actions">
+            <a class="btn btn--primary" href="/attendance/sessions/reports/pdf@(qs)" download>@Ui.Icon("file-pdf")PDF</a>
+        </div>
+    }
+</div>
+
+<form class="card ses-report-form" method="get" action="/attendance/sessions/reports" data-ses-report-form aria-label="Report">
+    <div class="seg-toggle">
+        <label><input type="radio" name="mode" value="student" checked="@(f.Mode == "student")" /><span>@Ui.Icon("user", "icon--sm")Student</span></label>
+        <label><input type="radio" name="mode" value="class" checked="@(f.Mode == "class")" /><span>@Ui.Icon("door", "icon--sm")Class</span></label>
+        <label><input type="radio" name="mode" value="lesson" checked="@(f.Mode == "lesson")" /><span>@Ui.Icon("presentation", "icon--sm")Lesson</span></label>
+        <label><input type="radio" name="mode" value="school" checked="@(f.Mode is not ("student" or "class" or "lesson"))" /><span>@Ui.Icon("school", "icon--sm")Whole school</span></label>
+    </div>
+    <div class="ses-report-form__fields">
+        <div class="field" data-for="student">
+            <label class="label" for="r-student">Student</label>
+            <select class="select" id="r-student" name="studentId" data-searchable data-search-notes>
+                <option value="">Search by name or ID…</option>
+                @foreach (var s in Model.Options.Students)
+                {
+                    <option value="@s.Id" selected="@(f.StudentId == s.Id)" data-note="ID @s.Id · @s.ClassName">@s.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field" data-for="class lesson">
+            <label class="label" for="r-class">Class</label>
+            <select class="select" id="r-class" name="classId" data-searchable>
+                <option value="">Choose a class…</option>
+                @foreach (var (id, name) in Model.Options.Classes)
+                {
+                    <option value="@id" selected="@(f.ClassId == id)">@name</option>
+                }
+            </select>
+        </div>
+        <div class="field" data-for="lesson">
+            <label class="label" for="r-date">Date</label>
+            <input class="input picker" type="date" id="r-date" name="date" value="@(f.Date ?? today)" max="@today" data-datepicker data-empty-text="Today" />
+        </div>
+        <div class="field" data-for="lesson">
+            <label class="label" for="r-lesson">Lesson</label>
+            <select class="select" id="r-lesson" name="lesson">
+                <option value="">@(Model.LessonChoices.Count == 0 ? "Choose the class and date, then Show" : "Choose a lesson…")</option>
+                @foreach (var l in Model.LessonChoices.Where(x => x.Lesson.IsExpected))
+                {
+                    <option value="@l.Lesson.SessionId" selected="@(f.Lesson == l.Lesson.SessionId)">@l.Lesson.Period · @l.Lesson.Subject (@l.Lesson.Times12)</option>
+                }
+            </select>
+        </div>
+        <div class="field" data-for="student class school">
+            <label class="label" for="r-from">From</label>
+            <input class="input picker" type="date" id="r-from" name="from" value="@SchoolWeek.Iso(q.From)" max="@today" data-datepicker data-empty-text="From" />
+        </div>
+        <div class="field" data-for="student class school">
+            <label class="label" for="r-to">To</label>
+            <input class="input picker" type="date" id="r-to" name="to" value="@SchoolWeek.Iso(q.To)" max="@today" data-datepicker data-empty-text="Today" />
+        </div>
+        <div class="ses-report-form__go"><button class="btn btn--primary" type="submit">@Ui.Icon("search")Show report</button></div>
+    </div>
+</form>
+
+@if (r is null)
+{
+    <div class="card empty">@Ui.Icon("chart")<p>@(f.Mode switch { "student" => "Choose a student.", "class" => "Choose a class.", "lesson" => "Choose the class, the date and the lesson.", _ => "Choose what to report on." })</p></div>
+}
+else
+{
+    var k = r.Tally;
+    var period = q.From == q.To ? q.From.ToString("dddd d MMMM yyyy", c) : $"{q.From.ToString("d MMM yyyy", c)} – {q.To.ToString("d MMM yyyy", c)}";
+    <section class="sa-report-head">
+        <span class="sa-report-head__eyebrow">@r.Title</span>
+        <h2 class="sa-report-head__title" dir="auto">@(r.Subtitle ?? "—")</h2>
+        <p class="sa-report-head__meta">@period · @Ui.Plural(r.Lessons, "lesson", "lessons") that took place</p>
+    </section>
+    <ul class="ses-tiles ses-tiles--7" aria-label="Summary">
+        <li class="ses-tile ses-tile--present"><span class="ses-tile__value num">@k.Present</span><span class="ses-tile__label">Present</span></li>
+        <li class="ses-tile ses-tile--late"><span class="ses-tile__value num">@k.Late</span><span class="ses-tile__label">Late</span></li>
+        <li class="ses-tile ses-tile--absent"><span class="ses-tile__value num">@k.Absent</span><span class="ses-tile__label">Absent from lesson</span></li>
+        <li class="ses-tile ses-tile--absent"><span class="ses-tile__value num">@k.AbsentAtSchool</span><span class="ses-tile__label">…of which at school</span></li>
+        <li class="ses-tile ses-tile--school"><span class="ses-tile__value num">@k.SchoolAbsent</span><span class="ses-tile__label">School Absent</span></li>
+        <li class="ses-tile ses-tile--none"><span class="ses-tile__value num">@k.NotRecorded</span><span class="ses-tile__label">Not Recorded</span></li>
+        <li class="ses-tile ses-tile--pct"><span class="ses-tile__value num">@k.PercentText</span><span class="ses-tile__label">Attendance</span></li>
+    </ul>
+
+    @if (r.Repeated.Count > 0)
+    {
+        <section class="card table-card" aria-label="Repeated lesson absences">
+            <div class="sa-section-head"><h2>@Ui.Icon("alert-triangle", "icon--sm") Repeated lesson absences while at school</h2><span class="sa-section-head__sub">Two or more in this period</span></div>
+            <div class="table-wrap"><table class="table sa-table">
+                <thead><tr><th>Student</th><th>Class</th><th class="num">Absent at school</th><th class="num">Absent (all)</th></tr></thead>
+                <tbody>
+                    @foreach (var s in r.Repeated)
+                    {
+                        <tr><td data-label="Student"><a href="/attendance/sessions/reports?mode=student&studentId=@s.StudentId&from=@SchoolWeek.Iso(q.From)&to=@SchoolWeek.Iso(q.To)" dir="auto"><strong>@s.Name</strong></a></td><td data-label="Class">@s.ClassName</td><td data-label="Absent at school" class="num sa-n--absent">@s.Tally.AbsentAtSchool</td><td data-label="Absent (all)" class="num">@s.Tally.Absent</td></tr>
+                    }
+                </tbody>
+            </table></div>
+        </section>
+    }
+
+    @if (q.Mode != "lesson")
+    {
+        <div class="sa-breakdowns">
+            @foreach (var (title, rows) in q.Mode == "school" ? new[] { ("By class", r.ByClass), ("By subject", r.BySubject) } : new[] { ("By subject", r.BySubject) })
+            {
+                <section class="card table-card" aria-label="@title">
+                    <div class="sa-section-head"><h2>@title</h2></div>
+                    <div class="table-wrap"><table class="table sa-table sa-table--compact">
+                        <thead><tr><th>@(title == "By class" ? "Class" : "Subject")</th><th class="num">Lessons</th><th class="num">Present</th><th class="num">Late</th><th class="num">Absent</th><th class="num">At school</th><th class="num">School Absent</th><th class="num">Not Rec.</th><th class="num">%</th></tr></thead>
+                        <tbody>
+                            @foreach (var g in rows)
+                            {
+                                <tr>
+                                    <td data-label="Name" dir="auto"><strong>@g.Label</strong></td><td data-label="Lessons" class="num">@g.Lessons</td>
+                                    <td data-label="Present" class="num sa-n--present">@g.Tally.Present</td><td data-label="Late" class="num sa-n--late">@g.Tally.Late</td>
+                                    <td data-label="Absent" class="num sa-n--absent">@g.Tally.Absent</td><td data-label="At school" class="num sa-n--absent">@g.Tally.AbsentAtSchool</td>
+                                    <td data-label="School Absent" class="num muted">@g.Tally.SchoolAbsent</td><td data-label="Not Recorded" class="num muted">@g.Tally.NotRecorded</td>
+                                    <td data-label="%" class="num"><strong>@g.Tally.PercentText</strong></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table></div>
+                    @if (rows.Count == 0) { <div class="empty"><p>No lessons took place in this period.</p></div> }
+                </section>
+            }
+        </div>
+    }
+
+    @if (q.Mode is "school" or "class")
+    {
+        <section class="card table-card" aria-label="Students">
+            <div class="sa-section-head"><h2>Students</h2><span class="sa-section-head__sub">@Ui.Plural(r.Students.Count, "student", "students")</span></div>
+            <div class="table-wrap"><table class="table sa-table">
+                <thead><tr><th>Student</th><th>Class</th><th class="num">Lessons</th><th class="num">Present</th><th class="num">Late</th><th class="num">Absent</th><th class="num">At school</th><th class="num">School Absent</th><th class="num">Not Rec.</th><th class="num">%</th></tr></thead>
+                <tbody>
+                    @foreach (var s in r.Students)
+                    {
+                        <tr>
+                            <td data-label="Student"><a href="/attendance/sessions/reports?mode=student&studentId=@s.StudentId&from=@SchoolWeek.Iso(q.From)&to=@SchoolWeek.Iso(q.To)" dir="auto"><strong>@s.Name</strong></a></td>
+                            <td data-label="Class">@s.ClassName</td><td data-label="Lessons" class="num">@s.Tally.Total</td>
+                            <td data-label="Present" class="num sa-n--present">@s.Tally.Present</td><td data-label="Late" class="num sa-n--late">@s.Tally.Late</td>
+                            <td data-label="Absent" class="num sa-n--absent">@s.Tally.Absent</td><td data-label="At school" class="num sa-n--absent">@s.Tally.AbsentAtSchool</td>
+                            <td data-label="School Absent" class="num muted">@s.Tally.SchoolAbsent</td><td data-label="Not Recorded" class="num muted">@s.Tally.NotRecorded</td>
+                            <td data-label="%" class="num"><strong>@s.Tally.PercentText</strong></td>
+                        </tr>
+                    }
+                </tbody>
+            </table></div>
+        </section>
+    }
+
+    <section class="card table-card" aria-label="Lessons">
+        <div class="sa-section-head">
+            <h2>@(q.Mode switch { "student" => "Lessons", "lesson" => "Register", _ => "Lesson absences" })</h2>
+            <span class="sa-section-head__sub">@(q.Mode is "school" or "class" ? "Absent from a lesson (with the school status of that day)" : Ui.Plural(r.Lines.Count, "entry", "entries"))</span>
+        </div>
+        <div class="table-wrap"><table class="table sa-table">
+            @if (q.Mode == "lesson")
+            {
+                <thead><tr><th>Student</th><th>Status</th><th>Notes</th></tr></thead>
+                <tbody>
+                    @foreach (var x in r.Lines)
+                    {
+                        <tr><td data-label="Student"><a href="/attendance/sessions/reports?mode=student&studentId=@x.StudentId" dir="auto"><strong>@x.StudentName</strong></a></td>
+                            <td data-label="Status"><span class="badge badge--dot @KindBadge(x.Kind, x.School)">@KindLabel(x.Kind, x.School)</span></td>
+                            <td data-label="Notes" dir="auto">@(x.Notes ?? "—")</td></tr>
+                    }
+                </tbody>
+            }
+            else
+            {
+                <thead><tr><th>Date</th><th>Lesson</th><th>Teacher</th>@if (q.Mode != "student") { <th>Student</th> }<th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var x in r.Lines)
+                    {
+                        <tr>
+                            <td data-label="Date" class="num">@x.Lesson.Date.ToString("ddd d MMM", c)</td>
+                            <td data-label="Lesson"><a href="/attendance/sessions/class/@x.Lesson.ClassId?date=@SchoolWeek.Iso(x.Lesson.Date)&lesson=@x.Lesson.SessionId" dir="auto"><strong>@x.Lesson.Subject</strong></a><div class="person__meta">@x.Lesson.ClassName · @x.Lesson.Period · @x.Lesson.Times12</div></td>
+                            <td data-label="Teacher" dir="auto">@x.Lesson.Teacher</td>
+                            @if (q.Mode != "student") { <td data-label="Student"><a href="/attendance/sessions/reports?mode=student&studentId=@x.StudentId&from=@SchoolWeek.Iso(q.From)&to=@SchoolWeek.Iso(q.To)" dir="auto">@x.StudentName</a></td> }
+                            <td data-label="Status"><span class="badge badge--dot @KindBadge(x.Kind, x.School)">@KindLabel(x.Kind, x.School)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            }
+        </table></div>
+        @if (r.Lines.Count == 0) { <div class="empty"><p>@(q.Mode is "school" or "class" ? "No lesson absences in this period." : "No lessons took place.")</p></div> }
+    </section>
+
+    <p class="sa-rules">@Ui.Icon("info", "icon--sm")@SchoolManagement.Web.Services.Pdf.SessionReports.Rules</p>
+}
+
+@section Scripts {
+    <script src="~/js/attendance.js" asp-append-version="true"></script>
+}

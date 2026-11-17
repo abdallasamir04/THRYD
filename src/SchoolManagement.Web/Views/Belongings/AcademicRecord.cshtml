@@ -1,0 +1,81 @@
+@model AcademicLessonDetail
+@*
+    One lesson as recorded (dialog): the lesson exactly as it was when checked (period, times, subject, teacher, kept with the
+    records), every student's Book and Copy Book in it, and every correction. A day-based row recorded before lesson-based
+    checks shows on its own.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Academic Belongings record"; ViewData["Nav"] = "Belongings"; }
+    var l = Model.Lesson;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var date = SchoolWeek.Iso(l.Date);
+    var lessonReport = $"/belongings/academic/history/pdf?period=day&date={date}&classId={Model.ClassId}&subject={Uri.EscapeDataString(l.Subject)}" + (l.PeriodNumber is { } pn ? $"&periodNumber={pn}" : "");
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <div class="modal__head">
+        <span class="modal__icon">@Ui.Icon("graduation-cap", "icon--lg")</span>
+        <div>
+            <h2 class="modal__title" dir="auto">@l.Subject · @l.ClassName</h2>
+            <p class="modal__sub">@l.Date.ToString("dddd d MMMM yyyy", c) · @l.Period@(l.IsLesson ? " · " + l.Times : "")</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+    <div class="modal__body bl-detail">
+        @if (!l.IsLesson)
+        {
+            <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>Recorded per day and subject.</strong>This record was made before lesson-based checks, so it has no period, times or teacher.</div></div>
+        }
+        <dl class="dl">
+            <dt>Class</dt><dd>@l.ClassName</dd>
+            <dt>Date</dt><dd>@l.Date.ToString("ddd d MMM yyyy", c)</dd>
+            <dt>Period</dt><dd>@l.Period</dd>
+            <dt>Lesson time</dt><dd class="num">@l.Times</dd>
+            <dt>Subject</dt><dd dir="auto">@l.Subject</dd>
+            <dt>Teacher</dt><dd dir="auto">@(l.TeacherName ?? "—")</dd>
+        </dl>
+        @if (l.IsLesson) { <p class="hint">The lesson is shown as it was when it was checked, even if the timetable has changed since.</p> }
+
+        <h3 class="bl-detail__title">@Ui.Icon("users", "icon--sm")Students (@Model.Students.Count)</h3>
+        <div class="table-wrap">
+            <table class="table bl-table">
+                <thead><tr><th scope="col">Student</th><th scope="col">Book</th><th scope="col">Copy Book</th><th scope="col">Notes</th><th scope="col">Recorded / modified</th></tr></thead>
+                <tbody>
+                    @foreach (var s in Model.Students)
+                    {
+                        <tr class="@(s.Id == l.Id ? "is-selected" : "")">
+                            <th scope="row" dir="auto">@s.StudentName</th>
+                            <td><span class="bl-pill bl-pill--@BelongingsStatus.Slug(s.Book)">@BelongingsStatus.Label(s.Book)</span></td>
+                            <td><span class="bl-pill bl-pill--@BelongingsStatus.Slug(s.CopyBook)">@BelongingsStatus.Label(s.CopyBook)</span></td>
+                            <td dir="auto">@(s.Notes ?? "—")</td>
+                            <td class="bl-table__who"><span>@(s.RecordedBy ?? "—")</span><span class="faint">@Ui.DateTime(s.UpdatedAt)@(s.UpdatedBy is null ? "" : " · " + s.UpdatedBy)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <h3 class="bl-detail__title">@Ui.Icon("clock", "icon--sm")Corrections</h3>
+        @if (Model.Changes.Count == 0)
+        {
+            <p class="hint">No corrections: these are the results as first saved.</p>
+        }
+        else
+        {
+            <ol class="timeline">
+                @foreach (var x in Model.Changes)
+                {
+                    <li class="timeline__item"><span class="timeline__when">@Ui.DateTime(x.At)@(x.By is null ? "" : " · " + x.By)</span><span><strong>@x.Item</strong>@(x.Context is null ? "" : $" ({x.Context})"): @(x.Before ?? "—") → <strong>@(x.After ?? "—")</strong></span></li>
+                }
+            </ol>
+        }
+    </div>
+    <div class="modal__foot">
+        <a class="btn btn--secondary" href="@lessonReport">@Ui.Icon("file-pdf")Lesson report</a>
+        @if (l.SessionId is { } sid)
+        {
+            <a class="btn btn--primary" href="/belongings/academic/classes/@Model.ClassId?date=@date&lesson=@sid">@Ui.Icon("pencil")Open this lesson</a>
+        }
+    </div>
+</div>

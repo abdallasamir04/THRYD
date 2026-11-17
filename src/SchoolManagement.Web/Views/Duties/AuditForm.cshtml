@@ -1,12 +1,11 @@
 @model DutyAuditFormModel
 @*
-    Duty audit record: operational status plus audit notes, issues and follow-up. Covered and
-    In Progress are refused by the server unless someone on duty is recorded present.
+    Duty audit record: audit notes, issues and follow-up. The status is calculated from the school clock and the recorded
+    attendance (shown here, never chosen).
 *@
 @{
     var modal = Context.Request.IsAjax();
     var d = Model.Duty!;
-    var someonePresent = Coverage.IsCovered(d.Coverage);
     if (modal) { Layout = null; }
     else { ViewData["Title"] = "Duty audit"; ViewData["Nav"] = "DutyAudit"; }
 }
@@ -18,7 +17,7 @@
             <span class="modal__icon">@Ui.Icon("clipboard-check", "icon--lg")</span>
             <div>
                 <h2 class="modal__title">Duty audit record</h2>
-                <p class="modal__sub" dir="auto">@DutyComponents.Name(d.Component) · @d.DutyDate.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) · @d.StartTime.ToString("HH:mm")–@d.EndTime.ToString("HH:mm") · @d.Description</p>
+                <p class="modal__sub" dir="auto">@DutyComponents.Name(d.Component) · @d.DutyDate.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) · @ScheduleRules.Times12(d.StartTime, d.EndTime) · @d.Description</p>
             </div>
             <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
         </div>
@@ -31,32 +30,11 @@
                 <div><span class="duty__role">Staffing</span><span class="badge badge--@Coverage.Tone(d.Coverage) badge--dot">@Coverage.Label(d.Coverage)</span></div>
             </div>
 
-            <fieldset class="field">
-                <legend class="label">Duty status</legend>
-                <div class="status-choice">
-                    @foreach (var s in DutyStatuses.All)
-                    {
-                        var blocked = s is DutyStatus.Covered or DutyStatus.InProgress && !someonePresent;
-                        <label class="status-choice__option status-choice__option--@DutyStatuses.Slug(s) @(blocked ? "is-blocked" : "")">
-                            <input type="radio" name="Status" value="@s" checked="@(Model.Status == s)" disabled="@(blocked && Model.Status != s)" />
-                            <span>
-                                <strong>@DutyStatuses.Label(s)</strong>
-                                <small>@(s switch
-                                {
-                                    DutyStatus.Pending => "Scheduled, not started",
-                                    DutyStatus.InProgress => "Started, being performed",
-                                    DutyStatus.Covered => "Completed with confirmed staff",
-                                    _ => "Not adequately covered",
-                                })</small>
-                            </span>
-                        </label>
-                    }
-                </div>
-                @if (!someonePresent)
-                {
-                    <span class="hint">Covered and In Progress need the assigned staff member, or a backup who accepted, recorded as present.</span>
-                }
-            </fieldset>
+            <div class="duty-status-explain">
+                <span class="duty__role">Duty status (calculated)</span>
+                <span class="status-badge status-badge--@DutyStatuses.Slug(d.Status)">@DutyStatuses.Label(d.Status)</span>
+                <span class="hint">@DutyStatuses.Meaning(d.Status) The status follows the school clock and the recorded attendance; it is not chosen here. To report what was not covered, use “Report not covered” on the Sub-Duty page.</span>
+            </div>
 
             <div class="field">
                 <label class="label" asp-for="AuditNotes">Audit notes</label>

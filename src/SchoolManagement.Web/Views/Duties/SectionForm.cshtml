@@ -1,0 +1,71 @@
+@model SectionForm
+@* Add or edit a Sub-Duty: name and description, and its schedule from a date (time, days, required / optional, department). *@
+@{
+    var modal = Context.Request.IsAjax();
+    var isNew = Model.Id is null;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = isNew ? "Add Sub-Duty" : "Edit Sub-Duty"; ViewData["Nav"] = "MorningDuty"; }
+    var today = SchoolWeek.Iso(SchoolWeek.Today);
+    var action = isNew ? "/duties/sections/new" : $"/duties/sections/{Model.Id}/edit";
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Type" value="@Model.Type" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(isNew ? "plus" : "clock", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@(isNew ? $"Add a {DutyComponents.TypeName(Model.Type)} Sub-Duty" : $"Edit {Model.Name}")</h2>
+                <p class="modal__sub">@(Model.MainStart is { } ms && Model.MainEnd is { } me ? $"{DutyComponents.TypeName(Model.Type)} runs {ScheduleRules.Times12(ms, me)}: the Sub-Duty must fall within it." : "Set the Sub-Duty's own time range.")</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="s-name">Name <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="s-name" name="Name" value="@Model.Name" maxlength="@DutySection.NameMaxLength" dir="auto" data-autofocus />
+                </div>
+                <div class="field">
+                    <label class="label" for="s-dept">Assigned department</label>
+                    <select class="select" id="s-dept" name="DepartmentId" data-searchable>
+                        <option value="">No department</option>
+                        @foreach (var (id, name) in Model.Departments) { <option value="@id" selected="@(Model.DepartmentId == id)">@name</option> }
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label" for="s-summary">Description</label>
+                <input class="input" id="s-summary" name="Summary" value="@Model.Summary" maxlength="@DutySection.SummaryMaxLength" dir="auto" placeholder="What staff do in this Sub-Duty" />
+            </div>
+            <div class="form-grid form-grid--3">
+                <div class="field">
+                    <label class="label" for="s-start">Start time <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input picker" type="time" id="s-start" name="StartTime" value="@Model.StartTime" data-timepicker data-empty-text="Choose the start" />
+                </div>
+                <div class="field">
+                    <label class="label" for="s-end">End time <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input picker" type="time" id="s-end" name="EndTime" value="@Model.EndTime" data-timepicker data-empty-text="Choose the end" />
+                </div>
+                <div class="field">
+                    <label class="label" for="s-from">Takes effect from</label>
+                    <input class="input picker" type="date" id="s-from" name="EffectiveFrom" value="@(Model.EffectiveFrom ?? today)" min="@today" data-datepicker data-empty-text="Today" />
+                </div>
+            </div>
+            <partial name="_DaysField" model='(Prefix: "s", Mask: Model.AllDays ? 0 : PeriodDays.Mask(false, Model.Days))' />
+            <label class="switch">
+                <input type="checkbox" name="Required" value="true" checked="@Model.Required" />
+                <span class="switch__track" aria-hidden="true"></span>
+                <span><strong>Required</strong> — the Main Duty is Covered only when this Sub-Duty is covered. Optional Sub-Duties are tracked but never decide it.</span>
+            </label>
+            <input type="hidden" name="Required" value="false" />
+            <p class="hint">Earlier days keep the schedule they had: this change applies from the date above.</p>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="/duties/@DutyComponents.TypeSlug(Model.Type)/schedule">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(isNew ? "Add Sub-Duty" : "Save")</button>
+        </div>
+    </form>
+</div>

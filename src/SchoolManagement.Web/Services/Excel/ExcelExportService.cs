@@ -18,10 +18,16 @@ public interface IExcelExportService
 
     /// <summary>A class, grade or the whole school over a period: summary, by grade, by class and one row per student.</summary>
     byte[] AttendanceGroup(GroupAttendanceReport report, string schoolName);
+
+    /// <summary>Personal Belongings over the filtered scope: summary, by class, repeated missing items, weekly trend, every record.</summary>
+    byte[] BelongingsPersonal(PersonalHistory history, string schoolName);
+
+    /// <summary>Academic Belongings over the filtered scope: summary, by class / subject / teacher / quarter, trends, every student-lesson record.</summary>
+    byte[] BelongingsAcademic(AcademicHistory history, string schoolName);
 }
 
 /// <summary>Builds every downloadable workbook. Contact numbers are always written as text.</summary>
-public sealed class ExcelExportService : IExcelExportService
+public sealed partial class ExcelExportService : IExcelExportService
 {
     private const int TemplateRows = 2000;
     private static readonly XLColor HeaderFill = XLColor.FromHtml("#4F46E5");

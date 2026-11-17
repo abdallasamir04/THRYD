@@ -57,17 +57,17 @@
                 <div class="form-grid form-grid--3">
                     <div class="field">
                         <label class="label" for="DutyDate">Date <span class="req" aria-hidden="true">*</span></label>
-                        <input class="input picker" type="date" id="DutyDate" name="DutyDate" value="@(Model.DutyDate is { } dd ? SchoolWeek.Iso(dd) : "")" required />
+                        <input class="input picker" type="date" id="DutyDate" name="DutyDate" value="@(Model.DutyDate is { } dd ? SchoolWeek.Iso(dd) : "")" required data-datepicker data-empty-text="Choose the date" />
                         <span asp-validation-for="DutyDate" class="field-validation-error"></span>
                     </div>
                     <div class="field">
                         <label class="label" for="StartTime">Start time <span class="req" aria-hidden="true">*</span></label>
-                        <input class="input picker" type="time" id="StartTime" name="StartTime" value="@Model.StartTime?.ToString("HH:mm")" required />
+                        <input class="input picker" type="time" id="StartTime" name="StartTime" value="@Model.StartTime?.ToString("HH:mm")" required data-timepicker data-empty-text="Choose the start time" />
                         <span asp-validation-for="StartTime" class="field-validation-error"></span>
                     </div>
                     <div class="field">
                         <label class="label" for="EndTime">End time <span class="req" aria-hidden="true">*</span></label>
-                        <input class="input picker" type="time" id="EndTime" name="EndTime" value="@Model.EndTime?.ToString("HH:mm")" required />
+                        <input class="input picker" type="time" id="EndTime" name="EndTime" value="@Model.EndTime?.ToString("HH:mm")" required data-timepicker data-empty-text="Choose the end time" />
                         <span asp-validation-for="EndTime" class="field-validation-error"></span>
                     </div>
                 </div>

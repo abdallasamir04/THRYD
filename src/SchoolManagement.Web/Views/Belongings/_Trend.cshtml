@@ -1,0 +1,26 @@
+@model (string Title, IReadOnlyList<TrendPoint> Points)
+@* Completion and readiness per school week, as two bars per week (readiness = Available ÷ checked). *@
+<section class="card" aria-label="@Model.Title">
+    <div class="card__head"><h2 class="card__title">@Ui.Icon("chart")@Model.Title</h2><span class="hint bl-legend"><span class="bl-legend__done"></span>Completion <span class="bl-legend__ready"></span>Readiness</span></div>
+    @if (Model.Points.Count == 0)
+    {
+        <div class="empty">@Ui.Icon("chart")<p>No records in this period.</p></div>
+    }
+    else
+    {
+        <ol class="bl-trend">
+            @foreach (var p in Model.Points)
+            {
+                var ready = (int)Math.Round(p.Readiness.Percent ?? 0);
+                <li class="bl-trend__week" title="@p.Label: @p.Records records, @p.CompletePercent% complete, readiness @ReadinessCounts.Text(p.Readiness.Percent)">
+                    <span class="bl-trend__bars" aria-hidden="true">
+                        <span class="bl-trend__bar bl-trend__bar--done" style="height:@p.CompletePercent%"></span>
+                        <span class="bl-trend__bar bl-trend__bar--ready" style="height:@ready%"></span>
+                    </span>
+                    <span class="bl-trend__label">@p.WeekStart.ToString("d MMM")</span>
+                    <span class="visually-hidden">@p.Label: @p.Records records, @p.CompletePercent% complete, readiness @ReadinessCounts.Text(p.Readiness.Percent)</span>
+                </li>
+            }
+        </ol>
+    }
+</section>

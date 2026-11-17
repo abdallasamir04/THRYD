@@ -289,7 +289,6 @@
                     if (ok) return;
                     // Stayed on the page: show the current choice again.
                     Array.prototype.forEach.call(nav.options, function (o) { o.selected = o.defaultSelected; });
-                    if (nav._combo) nav._combo.sync();
                 });
             } else window.location.href = url;
         }

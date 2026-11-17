@@ -9,8 +9,8 @@ using SchoolManagement.Web.Services;
 namespace SchoolManagement.Tests;
 
 /// <summary>
-/// KG Stage class teaching teams: one Homeroom Teacher and any number of Co-Teachers per Pre-K / KG1 / KG2 class and
-/// academic year, kept as history, never for other stages, and never touching timetable, P.E. or workload data.
+/// KG Stage class teaching teams: exactly one Homeroom Teacher and one Co-Teacher per Pre-K / KG1 / KG2 class and
+/// academic year, replacements kept as history, never for other stages, and never touching timetable, P.E. or workload data.
 /// </summary>
 [Collection("db")]
 public class ClassTeamTests(DbFixture fx)
@@ -97,13 +97,13 @@ public class ClassTeamTests(DbFixture fx)
             var panel = WebUtility.HtmlDecode(await client.GetStringAsync($"/classes/{id}?panel=team"));
             Assert.Contains("Class Teaching Team", panel);
             Assert.Contains("No Homeroom Teacher assigned.", panel);
-            Assert.Contains("No Co-Teachers assigned.", panel);
+            Assert.Contains("No Co-Teacher assigned.", panel);
             Assert.Contains("Edit Teaching Team", panel);
             Assert.DoesNotContain("Save Changes", panel);
             Assert.DoesNotContain("data-team-co", panel);
             Assert.DoesNotContain(student, panel);
 
-            // Edit: the searchable dropdown and checklist, with Save Changes and Cancel.
+            // Edit: the same searchable dropdown for both roles, with Save Changes and Cancel.
             var edit = WebUtility.HtmlDecode(await client.GetStringAsync($"/classes/{id}?panel=team&edit=1"));
             Assert.Contains("name=\"HomeroomId\"", edit);
             Assert.Contains("data-team-co", edit);
@@ -155,7 +155,7 @@ public class ClassTeamTests(DbFixture fx)
         var (g4, _) = await NewClassAsync("G4");
         var (staff, _) = await fx.NewTeacherAsync();
         await using var db = fx.NewContext();
-        Fails(await Teams(db).SaveAsync(g4, yearId, staff, []), "not a KG Stage class");
+        Fails(await Teams(db).SaveAsync(g4, yearId, staff, null), "not a KG Stage class");
         Assert.Null(await Teams(db).TeamAsync(g4, yearId));
         Assert.False(await db.ClassTeachingAssignments.AnyAsync(a => a.SchoolClassId == g4));
 
@@ -174,82 +174,121 @@ public class ClassTeamTests(DbFixture fx)
     // ------------------------------------------------------------------ assignment rules
 
     [Fact]
-    public async Task One_homeroom_many_co_teachers_no_duplicates_no_double_roles_and_removal_is_independent()
+    public async Task One_homeroom_and_one_co_teacher_replacements_are_kept_and_no_second_of_either_role()
     {
         var yearId = await NewYearAsync();
         var (cls, _) = await NewClassAsync("KG1");
         var (a, _) = await fx.NewTeacherAsync();
         var (b, _) = await fx.NewTeacherAsync();
-        var (c, _) = await fx.NewTeacherAsync();
+        var (c, cName) = await fx.NewTeacherAsync();
         var (d, dName) = await fx.NewTeacherAsync();
         await using var db = fx.NewContext();
         var teams = Teams(db);
 
-        // One Homeroom Teacher and several Co-Teachers.
-        Ok(await teams.SaveAsync(cls, yearId, a, [b, c]));
+        // One Homeroom Teacher and one Co-Teacher at the same time.
+        Ok(await teams.SaveAsync(cls, yearId, a, b));
         var team = (await teams.TeamAsync(cls, yearId))!;
-        Assert.Equal(a, team.Homeroom!.StaffId);
-        Assert.Equal(new[] { b, c }.Order(), team.CoTeachers.Select(x => x.StaffId).Order());
+        Assert.Equal((a, b, false), (team.Homeroom!.StaffId, team.CoTeacher!.StaffId, team.HasExtraCoTeachers));
 
-        // Same person in both roles, a duplicate Co-Teacher, an unknown staff member: all rejected, nothing changes.
-        Fails(await teams.SaveAsync(cls, yearId, a, [a, b]), "both roles");
-        Fails(await teams.SaveAsync(cls, yearId, a, [b, b, c]), "more than once");
-        Fails(await teams.SaveAsync(cls, yearId, a, [b, c, int.MaxValue]), "from the list");
-        Assert.Equal(3, await db.ClassTeachingAssignments.CountAsync(x => x.SchoolClassId == cls && x.IsActive));
+        // Same person in both roles, an unknown staff member: rejected, nothing changes.
+        Fails(await teams.SaveAsync(cls, yearId, a, a), "both roles");
+        Fails(await teams.SaveAsync(cls, yearId, a, int.MaxValue), "from the list");
+        Assert.Equal(2, await db.ClassTeachingAssignments.CountAsync(x => x.SchoolClassId == cls && x.IsActive));
 
-        // The database itself refuses a second active Homeroom Teacher, or a second active row for the same person.
-        await using (var raw = fx.NewContext())
+        // The database itself refuses a second active Homeroom Teacher and a second active Co-Teacher.
+        foreach (var role in new[] { ClassTeachingRole.HomeroomTeacher, ClassTeachingRole.CoTeacher })
         {
-            raw.ClassTeachingAssignments.Add(new ClassTeachingAssignment { SchoolClassId = cls, AcademicYearId = yearId, StaffMemberId = d, Role = ClassTeachingRole.HomeroomTeacher, AssignedAt = DateTime.UtcNow });
-            await Assert.ThrowsAsync<DbUpdateException>(() => raw.SaveChangesAsync());
-        }
-        await using (var raw = fx.NewContext())
-        {
-            raw.ClassTeachingAssignments.Add(new ClassTeachingAssignment { SchoolClassId = cls, AcademicYearId = yearId, StaffMemberId = b, Role = ClassTeachingRole.CoTeacher, AssignedAt = DateTime.UtcNow });
+            await using var raw = fx.NewContext();
+            raw.ClassTeachingAssignments.Add(new ClassTeachingAssignment { SchoolClassId = cls, AcademicYearId = yearId, StaffMemberId = d, Role = role, AssignedAt = DateTime.UtcNow });
             await Assert.ThrowsAsync<DbUpdateException>(() => raw.SaveChangesAsync());
         }
 
-        // Removing one Co-Teacher leaves the others and the Homeroom Teacher alone; the row is ended, not deleted.
-        var bRow = team.CoTeachers.Single(x => x.StaffId == b).AssignmentId;
-        var cRow = team.CoTeachers.Single(x => x.StaffId == c).AssignmentId;
-        Ok(await teams.RemoveAsync(cls, bRow));
-        team = (await teams.TeamAsync(cls, yearId))!;
-        Assert.Equal(a, team.Homeroom!.StaffId);
-        Assert.Equal(cRow, team.CoTeachers.Single().AssignmentId);
-        var ended = await db.ClassTeachingAssignments.AsNoTracking().SingleAsync(x => x.Id == bRow);
-        Assert.False(ended.IsActive);
-        Assert.NotNull(ended.EndedAt);
-
-        // Replacing the Homeroom Teacher (explicit Save Changes) keeps the Co-Teachers exactly as they were.
+        // Replacing the Co-Teacher works exactly like replacing the Homeroom Teacher: the previous assignment is ended
+        // and kept, the replacement logged; the other role is untouched.
         var aRow = team.Homeroom.AssignmentId;
-        Ok(await teams.SaveAsync(cls, yearId, d, [c]));
+        var bRow = team.CoTeacher.AssignmentId;
+        Ok(await teams.SaveAsync(cls, yearId, a, c));
+        team = (await teams.TeamAsync(cls, yearId))!;
+        Assert.Equal((aRow, c), (team.Homeroom!.AssignmentId, team.CoTeacher!.StaffId));
+        var oldCo = await db.ClassTeachingAssignments.AsNoTracking().SingleAsync(x => x.Id == bRow);
+        Assert.Equal((false, $"Replaced by {cName}"), (oldCo.IsActive, oldCo.EndReason));
+
+        var cRow = team.CoTeacher.AssignmentId;
+        Ok(await teams.SaveAsync(cls, yearId, d, c));
+        team = (await teams.TeamAsync(cls, yearId))!;
+        Assert.Equal((d, cRow), (team.Homeroom!.StaffId, team.CoTeacher!.AssignmentId));
+        var oldHr = await db.ClassTeachingAssignments.AsNoTracking().SingleAsync(x => x.Id == aRow);
+        Assert.Equal((false, $"Replaced by {dName}"), (oldHr.IsActive, oldHr.EndReason));
+
+        // Removing one role leaves the other alone; the row is ended, not deleted.
+        Ok(await teams.RemoveAsync(cls, cRow));
         team = (await teams.TeamAsync(cls, yearId))!;
         Assert.Equal(d, team.Homeroom!.StaffId);
-        Assert.Equal(cRow, team.CoTeachers.Single().AssignmentId);
-        var replaced = await db.ClassTeachingAssignments.AsNoTracking().SingleAsync(x => x.Id == aRow);
-        Assert.False(replaced.IsActive);
-        Assert.Equal($"Replaced by {dName}", replaced.EndReason);
+        Assert.Null(team.CoTeacher);
 
-        // Moving someone between roles is logged as a role change; a class may also have no team at all.
-        Ok(await teams.SaveAsync(cls, yearId, c, [d]));
-        Ok(await teams.SaveAsync(cls, yearId, null, []));
+        // Moving someone between roles is a role change; a class may also have no team at all.
+        Ok(await teams.SaveAsync(cls, yearId, c, d));
+        Ok(await teams.SaveAsync(cls, yearId, null, null));
         team = (await teams.TeamAsync(cls, yearId))!;
         Assert.Null(team.Homeroom);
-        Assert.Empty(team.CoTeachers);
-        Fails(await teams.SaveAsync(cls, yearId, null, []), "Nothing was changed");
+        Assert.Null(team.CoTeacher);
+        Fails(await teams.SaveAsync(cls, yearId, null, null), "Nothing was changed");
 
-        // History: who / which class / staff / roles / year / when / operation, and every row is kept.
+        // History: both kinds of replacement, the removal and the role change; every row is kept.
         var history = await db.ClassTeachingHistory.AsNoTracking().Where(h => h.SchoolClassId == cls).ToListAsync();
         Assert.All(history, h => { Assert.Equal(yearId, h.AcademicYearId); Assert.Equal("Test runner", h.By); });
-        Assert.Contains(history, h => h.StaffMemberId == b && h.Operation == ClassTeachingOperation.Removed && h.PreviousRole == ClassTeachingRole.CoTeacher);
-        Assert.Contains(history, h => h.StaffMemberId == a && h.Operation == ClassTeachingOperation.Replaced && h.PreviousRole == ClassTeachingRole.HomeroomTeacher);
-        Assert.Contains(history, h => h.StaffMemberId == c && h.Operation == ClassTeachingOperation.RoleChanged
-            && h.PreviousRole == ClassTeachingRole.CoTeacher && h.NewRole == ClassTeachingRole.HomeroomTeacher);
+        Assert.Contains(history, h => h.StaffMemberId == b && h.Operation == ClassTeachingOperation.Replaced && h.PreviousRole == ClassTeachingRole.CoTeacher
+            && h.Details == $"Replaced as Co-Teacher by {cName}");
+        Assert.Contains(history, h => h.StaffMemberId == a && h.Operation == ClassTeachingOperation.Replaced && h.PreviousRole == ClassTeachingRole.HomeroomTeacher
+            && h.Details == $"Replaced as Homeroom Teacher by {dName}");
+        Assert.Contains(history, h => h.StaffMemberId == c && h.Operation == ClassTeachingOperation.Removed && h.PreviousRole == ClassTeachingRole.CoTeacher);
+        Assert.Contains(history, h => h.StaffMemberId == d && h.Operation == ClassTeachingOperation.RoleChanged
+            && h.PreviousRole == ClassTeachingRole.HomeroomTeacher && h.NewRole == ClassTeachingRole.CoTeacher);
         Assert.Equal(6, await db.ClassTeachingAssignments.CountAsync(x => x.SchoolClassId == cls)); // a, b, c, d, then c as homeroom and d as co: none deleted
         Assert.Equal(0, await db.ClassTeachingAssignments.CountAsync(x => x.SchoolClassId == cls && x.IsActive));
 
         // Removing an already-ended assignment is refused.
         Fails(await teams.RemoveAsync(cls, bRow), "already been removed");
+    }
+
+    [Fact]
+    public async Task Several_active_co_teachers_from_before_are_shown_and_only_the_chosen_one_stays_when_saved()
+    {
+        var yearId = await NewYearAsync();
+        var (cls, _) = await NewClassAsync("KG2");
+        var (a, _) = await fx.NewTeacherAsync();
+        var (b, _) = await fx.NewTeacherAsync();
+        var (c, cName) = await fx.NewTeacherAsync();
+        await using var db = fx.NewContext();
+        // Data saved under the old rule: two active Co-Teachers (the one-Co-Teacher index is paused to recreate it).
+        await db.Database.ExecuteSqlRawAsync("ALTER INDEX [UX_ClassTeaching_CoTeacher] ON [ClassTeachingAssignments] DISABLE");
+        try
+        {
+            foreach (var staff in new[] { b, c })
+                db.ClassTeachingAssignments.Add(new ClassTeachingAssignment { SchoolClassId = cls, AcademicYearId = yearId, StaffMemberId = staff, Role = ClassTeachingRole.CoTeacher, AssignedAt = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+            var teams = Teams(db);
+
+            // Shown as they are, flagged, nothing changed automatically.
+            var team = (await teams.TeamAsync(cls, yearId))!;
+            Assert.Equal((true, 2), (team.HasExtraCoTeachers, team.CoTeachers.Count));
+            var page = WebUtility.HtmlDecode(await fx.Factory.CreateClient().GetStringAsync($"/classes/{cls}?panel=team&year={yearId}"));
+            Assert.Contains("2 active Co-Teachers from before the one-Co-Teacher rule", page);
+            Assert.Equal(2, await db.ClassTeachingAssignments.CountAsync(x => x.SchoolClassId == cls && x.IsActive));
+
+            // Saving with one chosen Co-Teacher keeps that one; the other is ended (kept, with the reason).
+            Ok(await teams.SaveAsync(cls, yearId, a, c));
+            team = (await teams.TeamAsync(cls, yearId))!;
+            Assert.Equal((a, c, false), (team.Homeroom!.StaffId, team.CoTeacher!.StaffId, team.HasExtraCoTeachers));
+            var ended = await db.ClassTeachingAssignments.AsNoTracking().SingleAsync(x => x.SchoolClassId == cls && x.StaffMemberId == b);
+            Assert.Equal((false, $"One Co-Teacher per class: {cName} kept"), (ended.IsActive, ended.EndReason));
+        }
+        finally
+        {
+            await db.ClassTeachingAssignments.Where(x => x.SchoolClassId == cls && x.IsActive && x.Role == ClassTeachingRole.CoTeacher && x.StaffMemberId == b)
+                .ExecuteUpdateAsync(x => x.SetProperty(r => r.IsActive, false).SetProperty(r => r.EndedAt, DateTime.UtcNow));
+            await db.Database.ExecuteSqlRawAsync("ALTER INDEX [UX_ClassTeaching_CoTeacher] ON [ClassTeachingAssignments] REBUILD");
+        }
     }
 
     // ------------------------------------------------------------------ academic years, profile, integration
@@ -267,19 +306,19 @@ public class ClassTeamTests(DbFixture fx)
         await using var db = fx.NewContext();
         var teams = Teams(db);
 
-        Ok(await teams.SaveAsync(kg1, y1, a, [b]));
-        Ok(await teams.SaveAsync(kg1, y2, c, [a])); // a new year: different team, y1 untouched
-        Ok(await teams.SaveAsync(kg2, y1, null, [a]));
+        Ok(await teams.SaveAsync(kg1, y1, a, b));
+        Ok(await teams.SaveAsync(kg1, y2, c, a)); // a new year: different team, y1 untouched
+        Ok(await teams.SaveAsync(kg2, y1, null, a));
 
         var t1 = (await teams.TeamAsync(kg1, y1))!;
         var t2 = (await teams.TeamAsync(kg1, y2))!;
         Assert.Equal(a, t1.Homeroom!.StaffId);
-        Assert.Equal(b, t1.CoTeachers.Single().StaffId);
+        Assert.Equal(b, t1.CoTeacher!.StaffId);
         Assert.Equal(c, t2.Homeroom!.StaffId);
-        Assert.Equal(a, t2.CoTeachers.Single().StaffId);
+        Assert.Equal(a, t2.CoTeacher!.StaffId);
 
         // Staff profile data: every KG assignment, by year, with role and status (ended ones kept).
-        Ok(await teams.SaveAsync(kg2, y1, null, []));
+        Ok(await teams.SaveAsync(kg2, y1, null, null));
         var mine = await teams.ForStaffAsync(a);
         Assert.Contains(mine, x => x.ClassId == kg1 && x.YearId == y1 && x.Role == ClassTeachingRole.HomeroomTeacher && x.IsActive);
         Assert.Contains(mine, x => x.ClassId == kg1 && x.YearId == y2 && x.Role == ClassTeachingRole.CoTeacher && x.IsActive);
@@ -312,16 +351,28 @@ public class ClassTeamTests(DbFixture fx)
             return await client.PostAsync(action, new FormUrlEncodedContent(fields));
         }
 
-        var saved = await Post($"/classes/{cls}/team", ("HomeroomId", a.ToString()), ("CoTeacherIds", b.ToString()));
+        // The edit form: the same searchable dropdown for both roles.
+        var form = await client.GetStringAsync($"/classes/{cls}?panel=team&edit=1&year={yearId}");
+        Assert.Contains("<select class=\"select\" id=\"HomeroomId\" name=\"HomeroomId\" data-searchable", form);
+        Assert.Contains("<select class=\"select\" id=\"CoTeacherId\" name=\"CoTeacherId\" data-searchable", form);
+        Assert.DoesNotContain("name=\"CoTeacherIds\"", form);
+
+        var saved = await Post($"/classes/{cls}/team", ("HomeroomId", a.ToString()), ("CoTeacherId", b.ToString()));
         var html = WebUtility.HtmlDecode(await saved.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
         Assert.Contains("Class teaching team saved.", html);
         Assert.Contains(aName, html);
         Assert.Contains(bName, html);
 
-        var bad = await Post($"/classes/{cls}/team", ("HomeroomId", a.ToString()), ("CoTeacherIds", a.ToString()));
+        var bad = await Post($"/classes/{cls}/team", ("HomeroomId", a.ToString()), ("CoTeacherId", a.ToString()));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, bad.StatusCode);
         Assert.Contains("cannot hold both roles", WebUtility.HtmlDecode(await bad.Content.ReadAsStringAsync()));
+
+        // A direct request with two Co-Teachers is refused (one per class), nothing changes.
+        var (c, _) = await fx.NewTeacherAsync();
+        var two = await Post($"/classes/{cls}/team", ("HomeroomId", a.ToString()), ("CoTeacherIds", b.ToString()), ("CoTeacherIds", c.ToString()));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, two.StatusCode);
+        Assert.Contains("one Co-Teacher", WebUtility.HtmlDecode(await two.Content.ReadAsStringAsync()));
 
         await using var db = fx.NewContext();
         var bRow = await db.ClassTeachingAssignments.Where(x => x.SchoolClassId == cls && x.StaffMemberId == b && x.IsActive).Select(x => x.Id).SingleAsync();
@@ -344,7 +395,7 @@ public class ClassTeamTests(DbFixture fx)
         var before = await Counts();
         var workloadBefore = await DbFixture.Workload(db).SummaryAsync(a, SchoolWeek.Current);
 
-        Ok(await Teams(db).SaveAsync(cls, yearId, a, [b]));
+        Ok(await Teams(db).SaveAsync(cls, yearId, a, b));
 
         Assert.Equal(before, await Counts());
         var workloadAfter = await DbFixture.Workload(db).SummaryAsync(a, SchoolWeek.Current);

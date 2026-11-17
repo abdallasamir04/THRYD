@@ -266,8 +266,9 @@ public class AttendanceTests(DbFixture fx)
         Assert.True((await SaveLessonAsync(math, day, null, new SessionEntry(present, SessionAttendanceStatus.Present, null))).Succeeded);
         Assert.True((await SaveLessonAsync(english, day, null,
             new SessionEntry(present, SessionAttendanceStatus.Absent, null),
-            new SessionEntry(absentFromSchool, SessionAttendanceStatus.Absent, null),    // absent from school → no lesson alert
             new SessionEntry(notRecorded, SessionAttendanceStatus.Absent, null))).Succeeded); // school not recorded → no alert
+        // Absent from school: lesson attendance is locked (refused), so no lesson alert either.
+        Assert.False((await SaveLessonAsync(english, day, null, new SessionEntry(absentFromSchool, SessionAttendanceStatus.Absent, null))).Succeeded);
         Assert.True((await SaveLessonAsync(science, day, null, new SessionEntry(present, SessionAttendanceStatus.Present, null))).Succeeded);
 
         var alert = Assert.Single(await AlertsAsync(present));
@@ -351,12 +352,15 @@ public class AttendanceTests(DbFixture fx)
         Assert.Contains("href=\"/attendance/sessions?date=2025-06-16\"", hub);
         foreach (var label in new[] { "Total students", "Absent", "Expected sessions", "Pending", "3 consecutive absences · pending" }) Assert.Contains(label, hub);
 
+        // The class picker, then the class page (an older filtered link opens it too) with the day's lessons from the timetable.
+        var picker = WebUtility.HtmlDecode(await client.GetStringAsync("/attendance/sessions?date=2025-06-16"));
+        Assert.Contains($"/attendance/sessions/class/{classId}?date=2025-06-16", picker);
         var list = WebUtility.HtmlDecode(await client.GetStringAsync($"/attendance/sessions?date=2025-06-16&classId={classId}"));
-        Assert.Contains($"/attendance/sessions/{lesson}?date=2025-06-16", list);
-        foreach (var filter in new[] { "name=\"classId\"", "name=\"slotId\"", "name=\"subject\"", "name=\"teacherId\"", "name=\"studentId\"" }) Assert.Contains(filter, list);
+        Assert.Contains($"/attendance/sessions/class/{classId}?date=2025-06-16&lesson={lesson}", list);
 
+        // A lesson's older link opens the class page with that lesson: one-click Present / Late / Absent.
         var page = WebUtility.HtmlDecode(await client.GetStringAsync($"/attendance/sessions/{lesson}?date=2025-06-16"));
-        foreach (var status in new[] { "value=\"Present\"", "value=\"Late\"", "value=\"Absent\"", "value=\"Excused\"" }) Assert.Contains(status, page);
+        foreach (var status in new[] { "data-mark=\"Present\"", "data-mark=\"Late\"", "data-mark=\"Absent\"" }) Assert.Contains(status, page);
         var token = Regex.Match(page, "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"").Groups[1].Value;
 
         var req = new HttpRequestMessage(HttpMethod.Post, $"/attendance/sessions/{lesson}")

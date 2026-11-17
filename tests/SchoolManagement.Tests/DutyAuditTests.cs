@@ -31,59 +31,29 @@ public class DutyAuditTests(DbFixture fx)
     }
 
     [Fact]
-    public async Task All_four_statuses_work_and_covered_needs_confirmed_presence()
+    public async Task Assignment_and_acceptance_are_not_coverage_only_recorded_presence_is()
     {
-        var (primary, _) = await fx.NewTeacherAsync();
-        var id = await NewDutyAsync(Input(primary));
-        Assert.Equal(DutyStatus.Pending, (await GetAsync(id)).Status);
-
-        await using var db = fx.NewContext();
-        var duties = DbFixture.Duties(db);
-        // Assigned is not covered: nobody recorded present yet.
-        Assert.False((await duties.SetStatusAsync(id, DutyStatus.Covered)).Succeeded);
-        Assert.False((await duties.SetStatusAsync(id, DutyStatus.InProgress)).Succeeded);
-        Assert.True((await duties.SetStatusAsync(id, DutyStatus.NotCovered)).Succeeded);
-        Assert.Equal(DutyStatus.NotCovered, (await GetAsync(id)).Status);
-        Assert.True((await duties.SetStatusAsync(id, DutyStatus.Pending)).Succeeded);
-
-        Assert.True((await duties.SetPrimaryAttendanceAsync(id, AttendanceStatus.Present)).Succeeded);
-        Assert.True((await duties.SetStatusAsync(id, DutyStatus.InProgress)).Succeeded);
-        Assert.Equal(DutyStatus.InProgress, (await GetAsync(id)).Status);
-        Assert.True((await duties.SetStatusAsync(id, DutyStatus.Covered)).Succeeded);
-        Assert.Equal(DutyStatus.Covered, (await GetAsync(id)).Status);
-    }
-
-    [Fact]
-    public async Task Status_is_independent_of_attendance()
-    {
+        // A past day: every duty has ended, so its status is Covered or Not Covered from what was recorded.
         var (primary, _) = await fx.NewTeacherAsync();
         var (backup, _) = await fx.NewTeacherAsync();
         var id = await NewDutyAsync(Input(primary));
+        Assert.Equal(DutyStatus.NotCovered, (await GetAsync(id)).Status); // assigned, nobody recorded present
+
         await using var db = fx.NewContext();
         var duties = DbFixture.Duties(db);
-
-        // Recording attendance does not change the status…
         Assert.True((await duties.SetPrimaryAttendanceAsync(id, AttendanceStatus.Present)).Succeeded);
-        var d = await GetAsync(id);
-        Assert.Equal((AttendanceStatus.Present, DutyStatus.Pending), (d.PrimaryAttendance, d.Status));
+        Assert.Equal(DutyStatus.Covered, (await GetAsync(id)).Status);
 
-        // …and setting the status does not change attendance.
-        Assert.True((await duties.SetStatusAsync(id, DutyStatus.Covered)).Succeeded);
-        Assert.Equal(AttendanceStatus.Present, (await GetAsync(id)).PrimaryAttendance);
-
-        // A Covered duty cannot silently lose its only present person.
-        var absent = await duties.UpdateAsync(id, Input(primary, AttendanceStatus.Absent, backup));
-        Assert.False(absent.Succeeded);
-        d = await GetAsync(id);
-        Assert.Equal((AttendanceStatus.Present, DutyStatus.Covered), (d.PrimaryAttendance, d.Status));
-
-        // A backup accepting is not coverage either.
-        Assert.True((await duties.SetStatusAsync(id, DutyStatus.Pending)).Succeeded);
+        // Absent with a backup who accepted is still not covered until the backup is recorded present.
         Assert.True((await duties.UpdateAsync(id, Input(primary, AttendanceStatus.Absent, backup))).Succeeded);
         Assert.True((await duties.RecordBackupResponseAsync(id, true, null)).Succeeded);
-        Assert.False((await duties.SetStatusAsync(id, DutyStatus.Covered)).Succeeded);
+        Assert.Equal(DutyStatus.NotCovered, (await GetAsync(id)).Status);
         Assert.True((await duties.SetBackupAttendanceAsync(id, AttendanceStatus.Present)).Succeeded);
-        Assert.True((await duties.SetStatusAsync(id, DutyStatus.Covered)).Succeeded);
+        Assert.Equal(DutyStatus.Covered, (await GetAsync(id)).Status);
+
+        // A future duty is Pending whatever is recorded: the status follows the clock, it is never chosen.
+        var future = await NewDutyAsync(Input(primary, AttendanceStatus.Present, day: SchoolWeek.Today.AddDays(30)));
+        Assert.Equal(DutyStatus.Pending, (await GetAsync(future)).Status);
     }
 
     [Fact]
@@ -115,7 +85,7 @@ public class DutyAuditTests(DbFixture fx)
 
         // The absent primary did not complete the duty, even once the backup covers it.
         Assert.True((await duties.SetBackupAttendanceAsync(id, AttendanceStatus.Present)).Succeeded);
-        Assert.True((await duties.SetStatusAsync(id, DutyStatus.Covered)).Succeeded);
+        Assert.Equal(DutyStatus.Covered, (await GetAsync(id)).Status);
         var primaryProfile = (await DbFixture.StaffDuty(db).ProfileAsync(primary))!;
         Assert.Equal(StaffDutyOutcome.Absent, primaryProfile.Duties.Single().Outcome);
         Assert.Equal((1, 0, 1), (primaryProfile.Summary.TotalAssigned, primaryProfile.Summary.Covered, primaryProfile.Summary.NotCovered));
@@ -193,7 +163,7 @@ public class DutyAuditTests(DbFixture fx)
         await using var db = fx.NewContext();
         var duties = DbFixture.Duties(db);
         Assert.True((await duties.SetPrimaryAttendanceAsync(id, AttendanceStatus.Present)).Succeeded);
-        Assert.True((await duties.UpdateAuditAsync(id, DutyStatus.Covered, "Smooth morning", "Gate opened late", true)).Succeeded);
+        Assert.True((await duties.UpdateAuditAsync(id, "Smooth morning", "Gate opened late", true)).Succeeded);
 
         var d = await GetAsync(id);
         Assert.Equal((DutyStatus.Covered, "Smooth morning", "Gate opened late", true), (d.Status, d.AuditNotes, d.IssuesEncountered, d.FollowUpRequired));
@@ -202,7 +172,7 @@ public class DutyAuditTests(DbFixture fx)
         var trail = await duties.AuditTrailAsync(id);
         Assert.Contains(trail, a => a.Action == DutyAuditAction.Created);
         Assert.Contains(trail, a => a.Action == DutyAuditAction.AttendanceRecorded);
-        Assert.Contains(trail, a => a.Action == DutyAuditAction.StatusChanged && a.StatusAfter == DutyStatus.Covered);
+        Assert.Contains(trail, a => a.Action == DutyAuditAction.AttendanceRecorded && a.StatusAfter == DutyStatus.Covered); // calculated at the change
         Assert.Contains(trail, a => a.Action == DutyAuditAction.AuditNotesUpdated);
 
         Assert.True((await duties.DeleteAsync(id)).Succeeded);
@@ -217,14 +187,14 @@ public class DutyAuditTests(DbFixture fx)
         var id = await NewDutyAsync(Input(primary, day: day) with { Location = "North gate " + DbFixture.Unique() });
         await using var db = fx.NewContext();
         var duties = DbFixture.Duties(db);
-        Assert.True((await duties.SetStatusAsync(id, DutyStatus.NotCovered)).Succeeded);
-        var location = (await GetAsync(id)).Location!;
+        var location = (await GetAsync(id)).Location!; // a future day: Pending
 
         async Task<int> Count(DutyAuditQuery q) => (await duties.AuditListAsync(q)).TotalCount;
         var iso = SchoolWeek.Iso(day);
         Assert.Equal(1, await Count(new() { StaffId = primary }));
-        Assert.Equal(1, await Count(new() { StaffId = primary, Status = "not-covered", From = iso, To = iso, Component = "students-arrival", Type = "Morning" }));
+        Assert.Equal(1, await Count(new() { StaffId = primary, Status = "pending", From = iso, To = iso, Component = "students-arrival", Type = "Morning" }));
         Assert.Equal(0, await Count(new() { StaffId = primary, Status = "covered" }));
+        Assert.Equal(0, await Count(new() { StaffId = primary, Status = "not-covered" }));
         Assert.Equal(0, await Count(new() { StaffId = primary, Component = "in-class-morning" }));
         Assert.Equal(1, await Count(new() { Location = location }));
         Assert.Equal(0, await Count(new() { StaffId = primary, From = SchoolWeek.Iso(day.AddDays(1)) }));
@@ -269,22 +239,18 @@ public class DutyAuditTests(DbFixture fx)
     }
 
     [Fact]
-    public async Task Status_counts_match_the_database()
+    public async Task Status_counts_match_the_calculated_statuses()
     {
-        var day = new DateOnly(2031, 6, 1);
+        var day = new DateOnly(2024, 6, 4); // a past school day no other test uses
         var (primary, _) = await fx.NewTeacherAsync();
         var a = await NewDutyAsync(Input(primary, day: day));
-        var b = await NewDutyAsync(Input(primary, day: day));
+        var b = await NewDutyAsync(Input(primary, AttendanceStatus.Present, day: day));
         await NewDutyAsync(Input(primary, day: day));
         await using var db = fx.NewContext();
-        var duties = DbFixture.Duties(db);
-        Assert.True((await duties.SetStatusAsync(a, DutyStatus.NotCovered)).Succeeded);
-        Assert.True((await duties.SetPrimaryAttendanceAsync(b, AttendanceStatus.Present)).Succeeded);
-        Assert.True((await duties.SetStatusAsync(b, DutyStatus.InProgress)).Succeeded);
-
-        var counts = await duties.StatusCountsAsync(day);
-        foreach (var status in DutyStatuses.All)
-            Assert.Equal(await db.DutyAssignments.CountAsync(d => d.DutyDate == day && d.Status == status), counts[status]);
-        Assert.Equal((1, 1, 1, 0), (counts[DutyStatus.Pending], counts[DutyStatus.InProgress], counts[DutyStatus.NotCovered], counts[DutyStatus.Covered]));
+        var counts = await DbFixture.Duties(db).StatusCountsAsync(day);
+        var points = (await DbFixture.DutyBoard(db).DayAsync(day)).AllSubs.SelectMany(s => s.Points).ToList();
+        foreach (var status in DutyStatuses.All) Assert.Equal(points.Count(p => p.Status == status), counts[status]);
+        Assert.Equal((0, 0, 2, 1), (counts[DutyStatus.Pending], counts[DutyStatus.InProgress], counts[DutyStatus.NotCovered], counts[DutyStatus.Covered]));
+        _ = (a, b);
     }
 }

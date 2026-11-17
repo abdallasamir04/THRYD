@@ -1,0 +1,26 @@
+@model (string Column, IReadOnlyList<GroupStat> Groups)
+@* Records, completion and readiness per class / subject / teacher / quarter (counts added, never averaged). *@
+@if (Model.Groups.Count == 0)
+{
+    <div class="empty">@Ui.Icon("inbox")<p>No records in this period.</p></div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="table bl-group">
+            <thead><tr><th scope="col">@Model.Column</th><th scope="col" class="num">Records</th><th scope="col" class="num">Complete</th><th scope="col">Completion</th><th scope="col" class="num">Readiness</th></tr></thead>
+            <tbody>
+                @foreach (var g in Model.Groups)
+                {
+                    <tr>
+                        <th scope="row" dir="auto">@g.Label</th>
+                        <td class="num">@g.Records</td>
+                        <td class="num">@g.Complete</td>
+                        <td><span class="bl-meter" role="img" aria-label="@g.CompletePercent% complete"><span style="width:@g.CompletePercent%"></span></span><span class="num bl-meter__text">@g.CompletePercent%</span></td>
+                        <td class="num"><strong>@ReadinessCounts.Text(g.Readiness.Percent)</strong></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

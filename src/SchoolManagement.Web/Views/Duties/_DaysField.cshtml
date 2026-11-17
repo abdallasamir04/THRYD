@@ -1,0 +1,23 @@
+@model (string Prefix, int Mask)
+@* Days a schedule applies: every school day, or chosen weekdays (stored as a weekday mask). *@
+@{
+    var all = PeriodDays.IsAll(Model.Mask);
+    var chosen = all ? [] : PeriodDays.Days(Model.Mask);
+}
+<fieldset class="field ddays" data-days>
+    <legend class="label">Days</legend>
+    <div class="ddays__row">
+    <label class="switch">
+        <input type="checkbox" name="AllDays" value="true" checked="@all" data-days-all />
+        <span class="switch__track" aria-hidden="true"></span>
+        <span>Every school day</span>
+    </label>
+    <input type="hidden" name="AllDays" value="false" />
+    <div class="ddays__list" data-days-list @(all ? "hidden" : "")>
+        @foreach (var d in ScheduleRules.Days)
+        {
+            <label class="ddays__day"><input type="checkbox" name="Days" value="@d" checked="@(chosen.Contains(d))" /><span>@ScheduleRules.DayShort(d)</span></label>
+        }
+    </div>
+    </div>
+</fieldset>

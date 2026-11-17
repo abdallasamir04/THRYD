@@ -1,0 +1,110 @@
+@model AcademicDailyViewModel
+@*
+    Academic Belongings · Daily Checks: every class with its lesson right now, read from the class timetable on the school
+    clock (Africa/Cairo): subject, period, teacher, times and state. Nothing is chosen by hand. A class opens its lesson.
+*@
+@{
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var date = SchoolWeek.Iso(Model.Date);
+    var q = Model.IsToday ? "" : $"?date={date}";
+    ViewData["Title"] = "Academic Belongings";
+    ViewData["Nav"] = "Belongings";
+    var timesMissing = Model.Cards.Any(x => x.TimesMissing);
+    var live = Model.Cards.Count(x => x.Lesson is not null);
+    string State(AcademicClassCard x) => x.State switch
+    {
+        "In Progress" => "ses-phase--live", "Finished" => "ses-phase--done", "Times not set" => "ses-phase--next", _ => "ses-phase--idle",
+    };
+}
+@section Head { <link rel="stylesheet" href="~/css/belongings.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/belongings">Belongings</a></li><li><span aria-current="page">Academic Belongings</span></li></ol>
+        <h1 class="page-title">Academic Belongings</h1>
+        <p class="page-sub">Book and Copy Book for every student in the lesson in progress. The lesson, subject, teacher and times come from the class timetable.</p>
+    </div>
+</div>
+
+<partial name="_Tabs" model='("academic", false)' />
+
+<section class="bl-day" aria-label="School day">
+    <div class="bl-day__date">
+        <span class="bl-day__eyebrow">@(Model.IsToday ? "Today" : "Viewing")</span>
+        <strong>@Model.Date.ToString("dddd d MMMM yyyy", c)</strong>
+        @if (Model.IsToday) { <span class="faint">Now <span class="num" data-ses-clock>@SchoolTime.Current.Now.ToString("h:mm tt", c)</span> · @SchoolTime.Current.Location</span> }
+    </div>
+    <ul class="bl-day__stats" aria-label="Lessons now">
+        <li><span class="num">@Model.Cards.Count</span>Classes</li>
+        <li class="is-ok"><span class="num">@live</span>Lessons in progress</li>
+    </ul>
+    @if (!Model.IsToday)
+    {
+        <a class="btn btn--secondary btn--sm" href="/belongings/academic">@Ui.Icon("calendar", "icon--sm")Back to today</a>
+    }
+</section>
+
+@if (timesMissing && Model.IsToday)
+{
+    <div class="notice notice--warning">@Ui.Icon("clock")<div class="notice__body"><strong>Some periods have no start and end time.</strong>The lesson in progress is found from the clock only when its period has times (<a href="/timetable/periods">Timetables → Periods</a>). Until then, open a class and choose today's lesson from its timetable.</div></div>
+}
+
+<div class="bl-search">
+    @Ui.Icon("search")
+    <label class="visually-hidden" for="bl-class-search">Find a class</label>
+    <input class="input" type="search" id="bl-class-search" placeholder="Find a class…" autocomplete="off" data-bl-class-search />
+</div>
+
+@if (Model.Cards.Count == 0)
+{
+    <div class="empty empty--boxed"><span class="empty__icon">@Ui.Icon("door")</span><p class="empty__title">No active classes</p><p class="empty__text">Add classes under Academics → Classes.</p></div>
+}
+@foreach (var stage in Model.Cards.GroupBy(x => x.Card.Stage))
+{
+    var id = "stage-" + stage.Key.GetHashCode().ToString("x");
+    <section class="ses-stage" aria-labelledby="@id" data-bl-stage>
+        <h2 class="ses-stage__title" id="@id">@stage.Key <span class="count">@stage.Count()</span></h2>
+        <div class="ses-cards bl-cards">
+            @foreach (var x in stage)
+            {
+                var card = x.Card;
+                var lesson = x.Lesson?.Lesson;
+                var pct = card.Students == 0 ? 0 : (int)Math.Round(x.Checked * 100.0 / card.Students);
+                <a class="ses-card bl-card @(lesson is not null ? "is-live" : "")" href="/belongings/academic/classes/@card.ClassId@q" data-bl-card data-name="@card.Name.ToLowerInvariant() @card.Grade?.ToLowerInvariant()">
+                    <span class="ses-card__head">
+                        <strong class="ses-card__name">@card.Name</strong>
+                        <span class="ses-phase @State(x)">@if (lesson is not null) { <span class="ses-pulse" aria-hidden="true"></span> }@x.State</span>
+                    </span>
+                    <span class="ses-card__meta">@string.Join(" · ", new[] { card.Grade, card.Section is null ? null : $"Section {card.Section}", Ui.Plural(card.Students, "student", "students") }.Where(s => s is not null))</span>
+                    @if (lesson is not null)
+                    {
+                        <span class="bl-lesson">
+                            <strong dir="auto">@lesson.Subject</strong>
+                            <span>@lesson.Period · <span class="num">@lesson.Times12</span></span>
+                            <span dir="auto">@lesson.Teacher</span>
+                        </span>
+                        <span class="ses-card__progress" title="Students with Book and Copy Book checked in this lesson">
+                            <span class="ses-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@pct" aria-label="@card.Name checks"><span style="width:@pct%"></span></span>
+                            <span class="num">@x.Checked / @card.Students</span>
+                        </span>
+                    }
+                    else if (card.Lessons.Count == 0)
+                    {
+                        <span class="bl-lesson faint">No lessons on the timetable @(Model.IsToday ? "today" : "on this day")</span>
+                    }
+                    else if (Model.IsToday && card.Next is { } nx)
+                    {
+                        <span class="bl-lesson"><span class="faint">Next</span><strong dir="auto">@nx.Lesson.Subject</strong><span>@nx.Lesson.Period · starts <span class="num">@Arrivals.Time(nx.Lesson.Start)</span></span></span>
+                    }
+                    else
+                    {
+                        <span class="bl-lesson faint">@Ui.Plural(card.Lessons.Count, "lesson", "lessons") on the timetable@(x.TimesMissing ? " · times not set" : "")</span>
+                    }
+                </a>
+            }
+        </div>
+    </section>
+}
+<p class="empty bl-search-empty" data-bl-search-empty hidden>@Ui.Icon("search")No class matches this search.</p>
+
+@section Scripts { <script src="~/js/belongings.js" asp-append-version="true"></script> }

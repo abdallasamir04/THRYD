@@ -1,0 +1,9 @@
+@model (string Module, bool History)
+@* Daily Checks | History & Reports, the two areas of a Belongings module. *@
+@{
+    var name = Model.Module == "academic" ? "Academic Belongings" : "Personal Belongings";
+}
+<nav class="segmented sa-tabs" aria-label="@name">
+    <a href="/belongings/@Model.Module" aria-current="@(Model.History ? null : "true")">@Ui.Icon("check-circle", "icon--sm")Daily Checks</a>
+    <a href="/belongings/@Model.Module/history" aria-current="@(Model.History ? "true" : null)">@Ui.Icon("chart", "icon--sm")History &amp; Reports</a>
+</nav>

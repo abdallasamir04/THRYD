@@ -1,0 +1,127 @@
+@model CalendarEventFormModel
+@*
+    Add / edit one line of the School Calendar (dialog, or a page without JavaScript). Also the event's details:
+    selecting an event line in the calendar opens this form.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = Model.Id is null ? "New calendar event" : "Calendar event"; ViewData["Nav"] = "AcademicCalendar"; }
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var action = Model.Id is null ? "/school-calendar/events/new" : $"/school-calendar/events/{Model.Id}/edit";
+    var back = $"/school-calendar?year={Model.YearId}";
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="YearId" value="@Model.YearId" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("calendar-days", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@(Model.Id is null ? "Add a calendar event" : "Calendar event")</h2>
+                <p class="modal__sub">@Model.YearName · School Calendar. Keep the event name exactly as the school writes it.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+
+            <div class="field">
+                <label class="label" asp-for="Title">Event name <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Title" maxlength="@SchoolCalendarEvent.TitleMaxLength" data-autofocus />
+                <span asp-validation-for="Title" class="field-validation-error"></span>
+            </div>
+
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="StartDate">Date (or first day)</label>
+                    <input class="input picker" type="date" id="StartDate" name="StartDate" value="@(Model.StartDate is { } s ? SchoolWeek.Iso(s) : "")" data-empty-text="No date yet (to confirm)" />
+                    <span asp-validation-for="StartDate" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="EndDate">Last day <span class="faint" style="font-weight:600">(for a range)</span></label>
+                    <input class="input picker" type="date" id="EndDate" name="EndDate" value="@(Model.EndDate is { } e ? SchoolWeek.Iso(e) : "")" data-empty-text="One day only" />
+                    <span asp-validation-for="EndDate" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" asp-for="DateLabel">Date as printed <span class="faint" style="font-weight:600">(optional)</span></label>
+                    <input class="input" asp-for="DateLabel" maxlength="@SchoolCalendarEvent.DateLabelMaxLength" placeholder="e.g. 7/8 — shown instead of the date" />
+                    <span asp-validation-for="DateLabel" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="ListMonth">Listed under</label>
+                    <select class="select" id="ListMonth" name="ListMonth">
+                        <option value="">The month of the first day</option>
+                        @foreach (var m in Model.Months)
+                        {
+                            <option value="@SchoolWeek.Iso(m)" selected="@(Model.ListMonth == m)">@m.ToString("MMMM yyyy", c)</option>
+                        }
+                    </select>
+                    <span class="hint">Needed for an event without a date; a range across months is listed once.</span>
+                    <span asp-validation-for="ListMonth" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" for="Color">Colour</label>
+                    <select class="select" id="Color" name="Color">
+                        @foreach (var col in CalendarColors.All)
+                        {
+                            <option value="@((int)col)" selected="@(Model.Color == col)">@CalendarColors.Name(col)</option>
+                        }
+                    </select>
+                    <span class="hint">As in the printed calendar. Colours have no official meaning.</span>
+                    <span asp-validation-for="Color" class="field-validation-error"></span>
+                </div>
+                <div class="field">
+                    <label class="label" asp-for="AccentText">Coloured part only <span class="faint" style="font-weight:600">(optional)</span></label>
+                    <input class="input" asp-for="AccentText" maxlength="@SchoolCalendarEvent.AccentMaxLength" placeholder="e.g. Fire Drill" />
+                    <span class="hint">Words of the name that take the colour; the rest of the line stays plain.</span>
+                    <span asp-validation-for="AccentText" class="field-validation-error"></span>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label" asp-for="Notes">Notes <span class="faint" style="font-weight:600">(optional)</span></label>
+                <textarea class="input textarea" asp-for="Notes" rows="2" maxlength="@SchoolCalendarEvent.NotesMaxLength"></textarea>
+                <span asp-validation-for="Notes" class="field-validation-error"></span>
+            </div>
+
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" asp-for="SortOrder">Order in the month</label>
+                    <input class="input" asp-for="SortOrder" type="number" min="0" max="9999" step="1" />
+                    <span class="hint">Lower numbers come first, as in the printed list.</span>
+                    <span asp-validation-for="SortOrder" class="field-validation-error"></span>
+                </div>
+                <div class="sc-switches">
+                    <label class="switch">
+                        <input type="checkbox" name="NeedsConfirmation" value="true" checked="@Model.NeedsConfirmation" />
+                        <span class="switch__track" aria-hidden="true"></span>
+                        <span>Date or wording to confirm</span>
+                    </label>
+                    <label class="switch">
+                        <input type="checkbox" name="IsHidden" value="true" checked="@Model.IsHidden" />
+                        <span class="switch__track" aria-hidden="true"></span>
+                        <span>Hidden from the calendar</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (Model.Id is not null)
+            {
+                <button class="btn btn--soft-danger sc-delete-btn" type="submit" form="sc-delete-@Model.Id">@Ui.Icon("trash", "icon--sm")Delete</button>
+            }
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@back">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save event</button>
+        </div>
+    </form>
+    @if (Model.Id is not null)
+    {
+        <form id="sc-delete-@Model.Id" hidden action="/school-calendar/events/@Model.Id/delete" method="post" data-ajax-form
+              data-confirm="“@Model.Title” is removed from the School Calendar. This cannot be undone." data-confirm-title="Delete this event?" data-confirm-button="Delete event">
+            @Html.AntiForgeryToken()
+        </form>
+    }
+</div>

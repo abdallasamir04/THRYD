@@ -1,0 +1,117 @@
+@model DutySchedulePageViewModel
+@*
+    Schedule of a Main Duty: its overall time range and each Sub-Duty's time, days, required / optional and department.
+    Every change takes effect from a date (today or later) and is kept as a new version: earlier days keep their schedule.
+*@
+@{
+    var sc = Model.Schedule;
+    var name = DutyComponents.TypeName(sc.Type);
+    var slug = DutyComponents.TypeSlug(sc.Type);
+    var main = sc.Main;
+    var today = SchoolWeek.Iso(SchoolWeek.Today);
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    ViewData["Title"] = $"{name} schedule";
+    ViewData["Nav"] = "MorningDuty";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties">Duties</a></li><li><a href="/duties?type=@slug">@name</a></li><li>Schedule</li></ol>
+        <h1 class="page-title">@name <span class="faint">· Schedule</span></h1>
+        <p class="page-sub">Times are the school's (Cairo). A change applies from the date you choose; earlier days keep the schedule they had, so their results never change.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--primary" href="/duties/sections/new?type=@slug" data-modal>@Ui.Icon("plus")Add Sub-Duty</a>
+    </div>
+</div>
+
+<section class="card dsched-main" aria-labelledby="main-title">
+    <div class="card__head"><h2 class="card__title" id="main-title">@Ui.Icon("clock")@name time range</h2></div>
+    <form class="card__body dsched-form" method="post" action="/duties/@slug/schedule" data-ajax-form data-loading>
+        @Html.AntiForgeryToken()
+        <div class="field">
+            <label class="label" for="m-start">Start time</label>
+            <input class="input picker" type="time" id="m-start" name="StartTime" value="@main?.StartTime.ToString("HH:mm")" data-timepicker data-empty-text="Choose the start" />
+        </div>
+        <div class="field">
+            <label class="label" for="m-end">End time</label>
+            <input class="input picker" type="time" id="m-end" name="EndTime" value="@main?.EndTime.ToString("HH:mm")" data-timepicker data-empty-text="Choose the end" />
+        </div>
+        <div class="field">
+            <label class="label" for="m-from">Takes effect from</label>
+            <input class="input picker" type="date" id="m-from" name="EffectiveFrom" value="@today" min="@today" data-datepicker data-empty-text="Today" />
+        </div>
+        <partial name="_DaysField" model='(Prefix: "m", Mask: main?.DayMask ?? 0)' />
+        <div class="dsched-form__go"><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save time range</button></div>
+    </form>
+    <p class="dsched-current">
+        @if (main is null) { <span>Not set yet: the range is taken from the Sub-Duties' times.</span> }
+        else { <span>In force: <strong class="num">@ScheduleRules.Times12(main.StartTime, main.EndTime)</strong> · @PeriodDays.Label(main.DayMask) · since @main.EffectiveFrom.ToString("d MMM yyyy", c)</span> }
+    </p>
+</section>
+
+<section class="card table-card" aria-labelledby="subs-title">
+    <div class="sa-section-head"><h2 id="subs-title">Sub-Duties</h2><span class="sa-section-head__sub">Each has its own time range inside the duty's range. Optional Sub-Duties are tracked but never decide the duty's result.</span></div>
+    <div class="table-wrap">
+        <table class="table dsched-table">
+            <thead><tr><th>Sub-Duty</th><th>Time</th><th>Days</th><th>Required</th><th>Department</th><th>Since</th><th class="col-actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+            <tbody>
+                @foreach (var (info, cur, history) in sc.Sections)
+                {
+                    var retired = info.RetiredOn is { } r && r <= SchoolWeek.Today;
+                    <tr class="@(retired ? "is-retired" : "")">
+                        <td data-label="Sub-Duty"><strong>@info.Name</strong>@if (retired) { <span class="dtag">Removed from @info.RetiredOn!.Value.ToString("d MMM yyyy", c)</span> }<div class="person__meta">@info.Summary</div></td>
+                        <td data-label="Time" class="num">@(cur is null ? "Not set" : ScheduleRules.Times12(cur.StartTime, cur.EndTime))</td>
+                        <td data-label="Days">@(cur is null ? "—" : PeriodDays.Label(cur.DayMask))</td>
+                        <td data-label="Required">@if (cur is null) { <span class="faint">—</span> } else { <span class="dtag @(cur.IsRequired ? "dtag--req" : "dtag--opt")">@(cur.IsRequired ? "Required" : "Optional")</span> }</td>
+                        <td data-label="Department">@(cur?.Department?.Name ?? "—")</td>
+                        <td data-label="Since" class="num">@(cur is null ? "—" : cur.EffectiveFrom.ToString("d MMM yyyy", c))@if (history.Count > 1) { <div class="person__meta">@Ui.Plural(history.Count, "version", "versions")</div> }</td>
+                        <td class="col-actions">
+                            <div class="row-actions">
+                                @if (!retired)
+                                {
+                                    <a class="btn btn--secondary btn--sm" href="/duties/sections/@((int)info.Component)/edit" data-modal>@Ui.Icon("pencil", "icon--sm")@(cur is null ? "Set time" : "Edit")</a>
+                                    <form action="/duties/sections/@((int)info.Component)/retire" method="post" data-ajax-form
+                                          data-confirm="@info.Name will no longer be scheduled from today. Its earlier records, statuses and reports stay." data-confirm-title="Remove this Sub-Duty?" data-confirm-button="Remove">
+                                        @Html.AntiForgeryToken()<input type="hidden" name="from" value="@today" />
+                                        <button class="btn btn--ghost btn--sm" type="submit">@Ui.Icon("trash", "icon--sm")Remove</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <form action="/duties/sections/@((int)info.Component)/restore" method="post" data-ajax-form>
+                                        @Html.AntiForgeryToken()
+                                        <button class="btn btn--secondary btn--sm" type="submit">@Ui.Icon("refresh", "icon--sm")Restore</button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+@if (sc.MainHistory.Count > 0 || sc.Sections.Any(s => s.History.Count > 0))
+{
+    <section class="card" aria-labelledby="hist-title">
+        <details class="dsched-history">
+            <summary><h2 class="card__title" id="hist-title">@Ui.Icon("clock")Schedule history</h2></summary>
+            <ol class="timeline" style="margin:12px 22px 20px">
+                @foreach (var h in sc.MainHistory)
+                {
+                    <li class="timeline__item"><span class="timeline__when">@Ui.DateTime(h.CreatedAt) · @(h.CreatedBy ?? "—")</span><span><strong>@name</strong>: @ScheduleRules.Times12(h.StartTime, h.EndTime), @PeriodDays.Label(h.DayMask), from @h.EffectiveFrom.ToString("d MMM yyyy", c)</span></li>
+                }
+                @foreach (var (info, _, history) in sc.Sections)
+                {
+                    foreach (var h in history)
+                    {
+                        <li class="timeline__item"><span class="timeline__when">@Ui.DateTime(h.CreatedAt) · @(h.CreatedBy ?? "—")</span><span><strong>@info.Name</strong>: @ScheduleRules.Times12(h.StartTime, h.EndTime), @PeriodDays.Label(h.DayMask), @(h.IsRequired ? "required" : "optional")@(h.Department is null ? "" : ", " + h.Department.Name), from @h.EffectiveFrom.ToString("d MMM yyyy", c)</span></li>
+                    }
+                }
+            </ol>
+        </details>
+    </section>
+}

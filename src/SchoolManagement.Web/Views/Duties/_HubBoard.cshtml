@@ -1,0 +1,71 @@
+@model DutyHubViewModel
+@{
+    var day = Model.Day;
+    var date = SchoolWeek.Iso(day.Date);
+    string Tone(DutyType t) => t switch { DutyType.Midday => "amber", DutyType.Dismissal => "teal", _ => "violet" };
+}
+@if (!day.IsSchoolDay)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>@(day.Holiday is null ? "Not a school day." : $"School holiday: {day.Holiday}.")</strong>Duties are only scheduled on school days; records made on this day are still shown.</div></div>
+}
+<div class="dmain-grid" data-updated="@day.Now.ToString("h:mm:ss tt", System.Globalization.CultureInfo.InvariantCulture)">
+    @foreach (var m in day.Duties)
+    {
+        var (icon, text) = DutyComponents.TypeCard(m.Type);
+        var href = $"/duties?type={DutyComponents.TypeSlug(m.Type)}&date={date}";
+        var pct = m.Required.Count == 0 ? 0 : (int)Math.Round(m.RequiredCovered * 100.0 / m.Required.Count);
+        <article class="dmain dmain--@DutyStatuses.Slug(m.Status) @(m.Scheduled ? "" : "is-idle")" aria-labelledby="dm-@m.Type">
+            <header class="dmain__head">
+                <span class="dmain__icon dmain__icon--@Tone(m.Type)">@Ui.Icon(icon, "icon--lg")</span>
+                <div class="dmain__title">
+                    <h2 id="dm-@m.Type"><a href="@href">@m.Name</a></h2>
+                    <span class="dmain__time num">@Ui.Icon("clock", "icon--sm")@(m.Scheduled ? m.Times : "Not scheduled on this day")</span>
+                </div>
+                @if (m.Scheduled) { <partial name="_DStatus" model="m.Status" /> }
+            </header>
+            @if (m.Scheduled)
+            {
+                <div class="dmain__count">
+                    <strong class="num">@m.RequiredCovered / @m.Required.Count</strong> <span>required Sub-Duties covered</span>
+                </div>
+                <div class="dmain__bar" aria-hidden="true"><span class="is-ok" style="width:@pct%"></span><span class="is-bad" style="width:@(m.Required.Count == 0 ? 0 : (int)Math.Round(m.RequiredNotCovered * 100.0 / m.Required.Count))%"></span></div>
+                <ul class="dmain__chips">
+                    <li class="is-ok"><span class="num">@m.RequiredCovered</span> covered</li>
+                    <li class="is-bad"><span class="num">@m.RequiredNotCovered</span> not covered</li>
+                    <li><span class="num">@m.RequiredOpen</span> pending / in progress</li>
+                    @if (m.Optional.Count > 0) { <li class="is-muted"><span class="num">@m.Optional.Count</span> optional</li> }
+                </ul>
+                <details class="dmain__subs">
+                    <summary>@Ui.Icon("chevron-down", "icon--sm")Sub-Duties (@m.Scheduled_.Count)</summary>
+                    <ul>
+                        @foreach (var s in m.Scheduled_)
+                        {
+                            <li>
+                                <a href="@DutyComponents.Href(s.Info)?date=@date">@s.Info.Name</a>
+                                <span class="dmain__sub-meta num">@s.Times@(s.Required ? "" : " · optional")</span>
+                                <partial name="_DStatus" model="s.Status" />
+                            </li>
+                        }
+                    </ul>
+                </details>
+            }
+            else
+            {
+                <p class="dmain__text">@text</p>
+            }
+            <footer class="dmain__foot">
+                <a class="btn btn--secondary btn--sm" href="@href">Open @Ui.Icon("arrow-right", "icon--sm")</a>
+                @if (m.Scheduled) { <a class="btn btn--ghost btn--sm" href="/duties/@DutyComponents.TypeSlug(m.Type)/report.pdf?date=@date" data-download-direct>@Ui.Icon("file-pdf", "icon--sm")Coverage report</a> }
+                <a class="btn btn--ghost btn--sm" href="/duties/@DutyComponents.TypeSlug(m.Type)/schedule">@Ui.Icon("clock", "icon--sm")Schedule</a>
+            </footer>
+        </article>
+    }
+    <article class="dmain is-idle">
+        <header class="dmain__head">
+            <span class="dmain__icon dmain__icon--green">@Ui.Icon("activity", "icon--lg")</span>
+            <div class="dmain__title"><h2><a href="/duties/activities?date=@date">Activities</a></h2><span class="dmain__time">P.E. and the school's other activities</span></div>
+        </header>
+        <p class="dmain__text">@(Model.Activities == 0 ? "P.E." : $"P.E. + {Ui.Plural(Model.Activities, "activity", "activities")}") — staff, classes, schedules and session coverage.</p>
+        <footer class="dmain__foot"><a class="btn btn--secondary btn--sm" href="/duties/activities?date=@date">Open @Ui.Icon("arrow-right", "icon--sm")</a></footer>
+    </article>
+</div>

@@ -18,6 +18,9 @@ public sealed record LessonView(
 {
     public string Period => string.IsNullOrWhiteSpace(SlotName) ? $"Period {SlotNumber}" : SlotName!;
     public string Times => ScheduleRules.Times(Start, End);
+
+    /// <summary>"10:00–10:45 AM" (12-hour), or "time not set".</summary>
+    public string Times12 => ScheduleRules.Times12(Start, End);
     public bool Cancelled => CancelReason is not null;
 
     /// <summary>Who teaches the lesson on that date: the substitute when there is one.</summary>
@@ -73,7 +76,7 @@ public sealed record SessionFilterOptions(
     IReadOnlyList<(int Id, string Name)> Classes, IReadOnlyList<SlotView> Slots, IReadOnlyList<string> Subjects,
     IReadOnlyList<(int Id, string Name)> Teachers, IReadOnlyList<StudentPick> Students);
 
-public interface ISessionAttendanceService
+public partial interface ISessionAttendanceService
 {
     Task<SessionDay> DayAsync(SessionFilter filter, CancellationToken ct = default);
     Task<SessionFilterOptions> OptionsAsync(DateOnly date, int? classId, CancellationToken ct = default);
@@ -115,7 +118,7 @@ public static class Lessons
 {
     public sealed record Scope(int? ClassId = null, int? SlotId = null, string? Subject = null, IReadOnlyCollection<int>? SessionIds = null);
 
-    public static async Task<List<LessonView>> OnAsync(SchoolDbContext db, DateOnly date, SchoolDays days, Scope? scope, CancellationToken ct)
+    public static async Task<List<LessonView>> OnAsync(SchoolDbContext db, DateOnly date, SchoolDays days, Scope? scope, CancellationToken ct, ISchoolTimeService? time = null)
     {
         if (!days.IsSchoolDay(date)) return [];
         var week = SchoolWeek.StartOf(date);
@@ -164,8 +167,9 @@ public static class Lessons
             .ToDictionaryAsync(x => x.TimetableAssignmentId, x => x.Reason, ct);
 
         // A lesson has started when its school-local start time has passed (Africa/Cairo), not the server's clock.
-        var today = SchoolTime.Today;
-        var now = SchoolTime.Current.TimeOfDay;
+        var clock = time ?? SchoolTime.Current;
+        var today = clock.Today;
+        var now = clock.TimeOfDay;
         return rows.Select(r =>
             {
                 subs.TryGetValue((r.SchoolClassId, r.TimeSlotId), out var sub);
@@ -221,9 +225,18 @@ public static class Lessons
 /// Session Attendance: per-lesson registers built from the class timetable. Statuses Present, Late,
 /// Absent and Excused; a student without a record stays "Not recorded". Every change to a saved record
 /// is kept as a correction (before, after, optional reason, who). Alerts are re-checked after each save.
+/// School Attendance decides who can be marked: a student absent from school that day is locked (refused here too).
 /// </summary>
-public sealed class SessionAttendanceService(SchoolDbContext db, ICurrentUser currentUser, IAttendanceAlertService alerts) : ISessionAttendanceService
+public sealed partial class SessionAttendanceService(SchoolDbContext db, ICurrentUser currentUser, IAttendanceAlertService alerts,
+    IArrivalService? arrivals = null, ISchoolTimeService? time = null) : ISessionAttendanceService
 {
+    /// <summary>The school clock (Africa/Cairo); a fixed clock in tests.</summary>
+    private readonly ISchoolTimeService _time = time ?? SchoolTime.Current;
+    private SchoolDbContext Db => db;
+    private ICurrentUser User => currentUser;
+    private IAttendanceAlertService Alerts => alerts;
+    private IArrivalService? SchoolAttendance => arrivals;
+
     public async Task<SessionDay> DayAsync(SessionFilter filter, CancellationToken ct = default)
     {
         var days = await SchoolDays.LoadAsync(db, ct);
@@ -330,6 +343,11 @@ public sealed class SessionAttendanceService(SchoolDbContext db, ICurrentUser cu
                 return ServiceResult.Fail("", $"The note for {who.Name} is too long (at most {SessionAttendanceRecord.NotesMaxLength} characters).");
         }
 
+        // Absent from school that day (recorded, or no arrival by the cutoff): lesson attendance is locked.
+        var presence = await SchoolPresenceAsync(chosen.Select(e => e.StudentId).ToList(), date, ct);
+        if (chosen.FirstOrDefault(e => presence.GetValueOrDefault(e.StudentId).Presence == SchoolPresence.Absent) is { } locked)
+            return ServiceResult.Fail("", $"{roster[locked.StudentId].Name} was absent from school on {date.ToString("ddd d MMM", CultureInfo.InvariantCulture)}: lesson attendance is locked.");
+
         var studentIds = chosen.Select(e => e.StudentId).ToList();
         var existing = await db.SessionAttendance.Where(r => r.TimetableAssignmentId == sessionId && r.SessionDate == date && studentIds.Contains(r.StudentId))
             .ToDictionaryAsync(r => r.StudentId, ct);
@@ -409,7 +427,7 @@ public sealed class SessionAttendanceService(SchoolDbContext db, ICurrentUser cu
     private async Task<LessonView?> LessonAsync(int sessionId, DateOnly date, CancellationToken ct)
     {
         var days = await SchoolDays.LoadAsync(db, ct);
-        var lessons = await Lessons.OnAsync(db, date, days, new Lessons.Scope(SessionIds: [sessionId]), ct);
+        var lessons = await Lessons.OnAsync(db, date, days, new Lessons.Scope(SessionIds: [sessionId]), ct, _time);
         return lessons.FirstOrDefault(l => l.SessionId == sessionId);
     }
 

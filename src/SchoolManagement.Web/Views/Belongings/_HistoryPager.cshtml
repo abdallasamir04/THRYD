@@ -1,0 +1,16 @@
+@model (int Page, int Pages, int First, int Last, int Total, string Href)
+@* "Showing 1–25 of 312" and previous / next pages, keeping every filter. *@
+@{
+    string To(int page) => Model.Href + (Model.Href.Contains('?') ? "&" : "?") + $"page={page}";
+}
+<div class="table-foot">
+    <div>Showing <strong class="num">@Model.First–@Model.Last</strong> of <strong class="num">@Model.Total</strong></div>
+    @if (Model.Pages > 1)
+    {
+        <nav class="bl-pager" aria-label="Pages">
+            @if (Model.Page > 1) { <a class="btn btn--secondary btn--sm" href="@To(Model.Page - 1)">@Ui.Icon("chevron-left", "icon--sm")Previous</a> }
+            <span class="num">Page @Model.Page of @Model.Pages</span>
+            @if (Model.Page < Model.Pages) { <a class="btn btn--secondary btn--sm" href="@To(Model.Page + 1)"><span>Next</span>@Ui.Icon("chevron-right", "icon--sm")</a> }
+        </nav>
+    }
+</div>

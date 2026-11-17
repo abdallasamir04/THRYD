@@ -62,6 +62,11 @@ public sealed class DbFixture : IAsyncLifetime
     /// <summary>School attendance on a given school clock with automatic absences after the cutoff (from <see cref="AttendanceOptions.From"/>).</summary>
     public static ArrivalService SchoolAttendanceWith(SchoolDbContext db, SchoolManagement.Web.Common.ISchoolTimeService time, AttendanceOptions options) =>
         new(db, Settings(db), new NoUser(), Alerts(db), time, options);
+    /// <summary>Session attendance on a given school clock, reading School Attendance on the same clock (optionally with automatic absences).</summary>
+    public static SessionAttendanceService SessionsAt(SchoolDbContext db, SchoolManagement.Web.Common.ISchoolTimeService time, AttendanceOptions? options = null) =>
+        new(db, new NoUser(), Alerts(db), new ArrivalService(db, Settings(db), new NoUser(), Alerts(db), time, options), time);
+    /// <summary>Duty schedules, calculated statuses and coverage reports on a given school clock.</summary>
+    public static DutyBoardService DutyBoard(SchoolDbContext db, SchoolManagement.Web.Common.ISchoolTimeService? time = null) => new(db, new NoUser(), time);
     public static SessionAttendanceService Sessions(SchoolDbContext db) => new(db, new NoUser(), Alerts(db));
     public static AttendanceCalendarService Calendar(SchoolDbContext db) => new(db, new NoUser(), Alerts(db));
 

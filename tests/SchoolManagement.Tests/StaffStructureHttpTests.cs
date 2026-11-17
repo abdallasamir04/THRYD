@@ -289,22 +289,22 @@ public partial class HttpTests
         var client = fx.Factory.CreateClient();
         // The Duties page is four cards: each duty, then Activities (P.E. and the other activities open from there).
         var landing = await client.GetStringAsync("/duties");
-        Assert.Equal(4, Regex.Matches(landing, "class=\"hub-card ").Count);
+        Assert.Equal(4, Regex.Matches(landing, "<article class=\"dmain").Count);
         foreach (var t in new[] { "morning", "midday", "dismissal" }) Assert.Contains($"href=\"/duties?type={t}&amp;date=", landing);
-        Assert.Matches("<a class=\"hub-card hub-card--\\w+\" href=\"/duties/activities\\?date=[0-9-]+\">", landing);
+        Assert.Matches("href=\"/duties/activities\\?date=[0-9-]+\"", landing);
         Assert.DoesNotContain("href=\"/pe?", landing); // no standalone P.E. card
         Assert.DoesNotContain("/duties/activities/new", landing); // Add Activity lives inside Activities only
 
         // Midday: youngest first, each with its grade line.
         var midday = WebUtility.HtmlDecode(await client.GetStringAsync("/duties?type=midday"));
-        Assert.Equal(5, Regex.Matches(midday, "class=\"duty-component\"").Count);
+        Assert.Equal(5, Regex.Matches(midday, "<li class=\"dsub dsub--").Count);
         var order = new[] { "Pre-K / KG1", "KG2", "Lower Elementary", "Upper Elementary", "Middle / High School Break" }
             .Select(n => midday.IndexOf($">{n}</a>", StringComparison.Ordinal)).ToList();
         Assert.True(order.All(i => i > 0) && order.SequenceEqual(order.Order()), string.Join(",", order));
         foreach (var g in new[] { "Grades Pre-K and KG1", "Grade KG2", "Grades 1–3", "Grades 4–6", "Grades 7–10" }) Assert.Contains(g, midday);
         Assert.Contains("Grades 4–6", WebUtility.HtmlDecode(await client.GetStringAsync("/duties/midday/upper-elementary?date=2026-11-10")));
         var dismissal = await client.GetStringAsync("/duties?type=dismissal");
-        Assert.Equal(2, Regex.Matches(dismissal, "class=\"duty-component\"").Count);
+        Assert.Equal(2, Regex.Matches(dismissal, "<li class=\"dsub dsub--").Count);
         foreach (var tab in new[] { "Morning Duty", "Midday Duty", "Dismissal Duty" }) Assert.Contains(tab, dismissal);
 
         // The create form is preselected for its section and saves with the right duty type.

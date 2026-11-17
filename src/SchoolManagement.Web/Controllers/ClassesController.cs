@@ -36,16 +36,19 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
         if (model.Team is { } t)
         {
             model.HomeroomId = t.Homeroom?.StaffId;
-            model.CoTeacherIds = t.CoTeachers.Select(c => c.StaffId).ToList();
+            model.CoTeacherId = t.CoTeacher?.StaffId;
         }
         return View(model);
     }
 
-    /// <summary>Save Changes: the Homeroom Teacher (one, optional) and the Co-Teachers (any number) for the class and year.</summary>
+    /// <summary>Save Changes: the Homeroom Teacher (one) and the Co-Teacher (one) for the class and year; either may be empty.</summary>
     [HttpPost("/classes/{id:int}/team"), ValidateAntiForgeryToken]
-    public async Task<IActionResult> SaveTeam(int id, int yearId, int? homeroomId, List<int>? coTeacherIds, CancellationToken ct)
+    public async Task<IActionResult> SaveTeam(int id, int yearId, int? homeroomId, int? coTeacherId, [FromForm(Name = "CoTeacherIds")] List<int>? coTeacherIds, CancellationToken ct)
     {
-        var result = await teams.SaveAsync(id, yearId, homeroomId, coTeacherIds ?? [], ct);
+        // Older forms and direct requests may still send a list: one Co-Teacher at most.
+        var result = (coTeacherIds?.Distinct().Count() ?? 0) > 1
+            ? Common.ServiceResult.Fail("CoTeacherId", "A KG class has one Co-Teacher. Choose a single staff member.")
+            : await teams.SaveAsync(id, yearId, homeroomId, coTeacherId ?? coTeacherIds?.FirstOrDefault(), ct);
         if (result.Succeeded)
         {
             Toast("Class teaching team saved.");
@@ -63,7 +66,7 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
         // Back to the edit form with the posted choices and the messages.
         AddErrors(result);
         model.HomeroomId = homeroomId;
-        model.CoTeacherIds = coTeacherIds ?? [];
+        model.CoTeacherId = coTeacherId ?? coTeacherIds?.FirstOrDefault();
         Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         return View("Details", model);
     }

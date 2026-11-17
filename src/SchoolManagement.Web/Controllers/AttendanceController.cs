@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
+using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
@@ -32,20 +33,45 @@ public class AttendanceController(
 
     // ------------------------------------------------------------------ session attendance
 
+    /// <summary>Session Attendance: choose a class (today by default; earlier dates for history).</summary>
     [HttpGet("sessions")]
-    public async Task<IActionResult> Sessions(string? date, int? classId, int? slotId, string? subject, int? teacherId, int? studentId, CancellationToken ct)
+    public async Task<IActionResult> Sessions(string? date, int? classId, int? studentId, CancellationToken ct)
     {
         var day = SchoolWeek.ParseDayOrToday(date);
-        var filter = new SessionFilter(day, classId, slotId, string.IsNullOrWhiteSpace(subject) ? null : subject.Trim(), teacherId, studentId);
-        return View(new SessionListViewModel
+        // Older links with filters open the class page or the student's history.
+        if (classId is { } cid) return LocalRedirect($"/attendance/sessions/class/{cid}?date={SchoolWeek.Iso(day)}");
+        if (studentId is { } sid) return LocalRedirect($"/attendance/sessions/reports?mode=student&studentId={sid}&from={SchoolWeek.Iso(day)}&to={SchoolWeek.Iso(day)}");
+        var schoolDay = await arrivals.DayAsync(day, ct);
+        return View(new SessionPickerViewModel
         {
-            Day = await sessions.DayAsync(filter, ct),
-            Options = await sessions.OptionsAsync(day, classId, ct),
+            Date = day,
+            Cards = await sessions.ClassesAsync(day, ct),
+            Students = (await sessions.OptionsAsync(day, null, ct)).Students,
+            IsSchoolDay = schoolDay.IsSchoolDay,
+            Holiday = schoolDay.Holiday,
         });
     }
 
+    /// <summary>A class's lessons on a date from the timetable; today the lesson in progress opens automatically.</summary>
+    [HttpGet("sessions/class/{classId:int}")]
+    public async Task<IActionResult> Class(int classId, string? date, int? lesson, CancellationToken ct)
+    {
+        var day = SchoolWeek.ParseDayOrToday(date);
+        var classDay = await sessions.ClassDayAsync(classId, day, lesson, ct);
+        if (classDay is null) return NotFoundResult("This class no longer exists.");
+        if (lesson is not null && classDay.Selected is null)
+            Toast($"That lesson is not on {classDay.ClassName}'s timetable on {day.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)}.", "warning");
+        var model = new SessionClassViewModel
+        {
+            Day = classDay,
+            Register = classDay.Selected is { } sel ? await sessions.LiveRegisterAsync(sel.Lesson.SessionId, day, ct) : null,
+        };
+        return IsAjax ? PartialView("_SessionRegister", model) : View("SessionClass", model);
+    }
+
+    /// <summary>A lesson's register (older links): opens its class page with that lesson.</summary>
     [HttpGet("sessions/{id:int}")]
-    public async Task<IActionResult> Register(int id, string? date, string? back, CancellationToken ct)
+    public async Task<IActionResult> Register(int id, string? date, CancellationToken ct)
     {
         var day = SchoolWeek.ParseDayOrToday(date);
         var register = await sessions.RegisterAsync(id, day, ct);
@@ -54,7 +80,60 @@ public class AttendanceController(
             Toast($"This lesson is not on the timetable on {day.ToString("dddd d MMM yyyy", CultureInfo.InvariantCulture)}.", "warning");
             return LocalRedirect($"/attendance/sessions?date={SchoolWeek.Iso(day)}");
         }
-        return View(new SessionRegisterViewModel { Register = register, Back = SafeBack(back) ?? $"/attendance/sessions?date={SchoolWeek.Iso(day)}" });
+        return LocalRedirect($"/attendance/sessions/class/{register.Lesson.ClassId}?date={SchoolWeek.Iso(day)}&lesson={id}");
+    }
+
+    /// <summary>One click: Present, Late or Absent for one student in one lesson (saved at once; the alert with it).</summary>
+    [HttpPost("sessions/{id:int}/mark"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> Mark(int id, string? date, int studentId, SessionAttendanceStatus status, CancellationToken ct)
+    {
+        if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+            return AjaxFailure("Choose a valid date.", 422);
+        var r = await sessions.MarkAsync(id, day, studentId, status, ct);
+        if (!IsAjax)
+        {
+            Toast(r.AlertText is null ? r.Message : $"{r.Message} Alert raised: {r.AlertText}", r.Saved ? (r.AlertText is null ? "success" : "warning") : "error");
+            return LocalRedirect($"/attendance/sessions/{id}?date={SchoolWeek.Iso(day)}");
+        }
+        if (!r.Saved) return AjaxFailure(r.Message, 409);
+        return Json(new
+        {
+            success = true, message = r.Message, alert = r.AlertText,
+            row = r.Row is null ? null : new
+            {
+                studentId = r.Row.StudentId, status = r.Row.Status?.ToString(), label = SessionStatuses.Label(r.Row.Status),
+                time = r.Row.RecordedAt is { } at ? SchoolTime.Current.ToLocal(at).ToString("h:mm tt", CultureInfo.InvariantCulture) : null,
+                by = r.Row.RecordedBy, alerted = r.Row.Alert, corrections = r.Row.Corrections,
+            },
+            counts = r.Counts is null ? null : new
+            {
+                students = r.Counts.Students, present = r.Counts.Present, late = r.Counts.Late, absent = r.Counts.Absent,
+                schoolAbsent = r.Counts.SchoolAbsent, notRecorded = r.Counts.NotRecorded,
+            },
+        });
+    }
+
+    // ------------------------------------------------------------------ session reports
+
+    [HttpGet("sessions/reports")]
+    public async Task<IActionResult> SessionReports([FromQuery] SessionReportForm form, CancellationToken ct)
+    {
+        var query = form.ToQuery();
+        var model = new SessionReportsViewModel
+        {
+            Form = form,
+            Options = await sessions.OptionsAsync(SchoolWeek.Today, null, ct),
+            Report = form.IsComplete ? await sessions.ReportAsync(query, ct) : null,
+            LessonChoices = form.Mode == "lesson" && form.ClassId is { } cid ? (await sessions.ClassDayAsync(cid, query.From, null, ct))?.Lessons ?? [] : [],
+        };
+        return View(model);
+    }
+
+    [HttpGet("sessions/reports/pdf")]
+    public async Task<IActionResult> SessionReportsPdf([FromQuery] SessionReportForm form, CancellationToken ct)
+    {
+        if (!form.IsComplete) return NotFound();
+        return await PdfFile(Services.Pdf.SessionReports.Build(await sessions.ReportAsync(form.ToQuery(), ct)), ct);
     }
 
     [HttpPost("sessions/{id:int}"), ValidateAntiForgeryToken]

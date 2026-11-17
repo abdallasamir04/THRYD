@@ -1,0 +1,152 @@
+@model MainDutyPageViewModel
+@{
+    var m = Model.Main;
+    var day = Model.Day;
+    var date = SchoolWeek.Iso(day.Date);
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var subs = m.Subs.Where(s => s.Scheduled).ToList();
+    var covered = subs.Where(s => s.Status == DutyStatus.Covered).ToList();
+    var notCovered = subs.Where(s => s.Status == DutyStatus.NotCovered).ToList();
+    var open = subs.Where(s => s.Status is DutyStatus.Pending or DutyStatus.InProgress).ToList();
+    var ended = m.Status is DutyStatus.Covered or DutyStatus.NotCovered;
+}
+
+@* ---------------------------------------------------------------- the Main Duty *@
+<section class="dhero dhero--@DutyStatuses.Slug(m.Status)" aria-label="@m.Name">
+    <div class="dhero__main">
+        <span class="dhero__eyebrow">@day.Date.ToString("dddd d MMMM yyyy", c)@(day.IsToday ? " · now " + day.Now.ToString("h:mm tt", c) : "")</span>
+        <h2 class="dhero__title">@m.Name</h2>
+        @if (m.Scheduled)
+        {
+            <p class="dhero__time num">@Ui.Icon("clock")@m.Times@if (!m.Configured) { <span class="dhero__note" title="No Main Duty time was configured for this day: the range is taken from its Sub-Duties."> · from its Sub-Duties</span> }</p>
+        }
+        else
+        {
+            <p class="dhero__time">Not scheduled on this day.</p>
+        }
+    </div>
+    @if (m.Scheduled)
+    {
+        <div class="dhero__status">
+            <partial name="_DStatus" model="m.Status" />
+            <span class="dhero__why">@DutyStatuses.Meaning(m.Status)</span>
+        </div>
+        <dl class="dhero__facts">
+            <div><dt>Required covered</dt><dd class="num">@m.RequiredCovered / @m.Required.Count</dd></div>
+            <div><dt>Not covered</dt><dd class="num is-bad">@m.RequiredNotCovered</dd></div>
+            <div><dt>Pending / in progress</dt><dd class="num">@m.RequiredOpen</dd></div>
+            <div><dt>Coverage</dt><dd class="num">@(m.Percent is { } p ? p.ToString("0", c) + "%" : "—")</dd></div>
+            <div><dt>Departments</dt><dd>@(m.Departments.Count == 0 ? "—" : string.Join(", ", m.Departments))</dd></div>
+            <div><dt>Staff on duty</dt><dd class="num">@m.Staff.Count</dd></div>
+        </dl>
+    }
+</section>
+
+@if (!m.Scheduled && m.Subs.All(s => !s.Configured))
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>No schedule yet for @m.Name.</strong>Set its time range and each Sub-Duty's time in <a href="/duties/@DutyComponents.TypeSlug(m.Type)/schedule">Schedule</a>, then add the staff at each coverage point.</div></div>
+}
+
+@* ---------------------------------------------------------------- Sub-Duties *@
+<section aria-labelledby="subs-title" class="dsubs">
+    <h2 class="dsection-title" id="subs-title">Sub-Duties</h2>
+    <ul class="dsub-grid">
+        @foreach (var s in m.Subs)
+        {
+            var href = $"{DutyComponents.Href(s.Info)}?date={date}";
+            var pts = s.Points;
+            <li class="dsub dsub--@(s.Scheduled ? DutyStatuses.Slug(s.Status) : "idle")">
+                <div class="dsub__top">
+                    <span class="dsub__icon">@Ui.Icon(s.Info.Icon)</span>
+                    @if (s.Scheduled) { <partial name="_DStatus" model="s.Status" /> } else { <span class="dstat dstat--idle">Not scheduled</span> }
+                </div>
+                <h3 class="dsub__title"><a href="@href">@s.Info.Name</a></h3>
+                @if (s.Info.Grades is not null) { <p class="duty-component__grades">@Ui.Icon("graduation-cap", "icon--sm")@s.Info.Grades</p> }
+                <p class="dsub__meta">
+                    <span class="num">@Ui.Icon("clock", "icon--sm")@(s.Scheduled || s.Configured ? s.Times : "No time set")</span>
+                    <span class="dtag @(s.Required ? "dtag--req" : "dtag--opt")">@(s.Required ? "Required" : "Optional")</span>
+                    @if (s.DepartmentName is not null) { <span class="dtag">@Ui.Icon("layers", "icon--sm")@s.DepartmentName</span> }
+                </p>
+                @if (s.Scheduled)
+                {
+                    <p class="dsub__points">
+                        <strong class="num">@pts.Count(p => p.Status == DutyStatus.Covered)/@pts.Count</strong> coverage point@(pts.Count == 1 ? "" : "s") covered
+                        @if (pts.Count(p => p.Status == DutyStatus.NotCovered) is > 0 and var nc) { <span class="is-bad"> · @nc not covered</span> }
+                    </p>
+                    <p class="dsub__staff" dir="auto">@(s.Staff.Count == 0 ? "No staff assigned" : string.Join(", ", s.Staff))</p>
+                }
+                <div class="dsub__foot">
+                    <a class="btn btn--secondary btn--sm" href="@href">Open @Ui.Icon("arrow-right", "icon--sm")</a>
+                    <a class="btn btn--ghost btn--sm" href="/duties/create?component=@s.Info.Slug&date=@date" data-modal>@Ui.Icon("plus", "icon--sm")Coverage point</a>
+                </div>
+            </li>
+        }
+    </ul>
+</section>
+
+@* ---------------------------------------------------------------- Coverage report *@
+@if (m.Scheduled)
+{
+    <section class="card dreport" aria-labelledby="report-title">
+        <div class="dreport__head">
+            <div>
+                <h2 id="report-title">@(ended ? "Final coverage report" : "Coverage so far")</h2>
+                <p class="dreport__summary">
+                    <strong>@Ui.Plural(covered.Count, "Sub-Duty", "Sub-Duties") covered</strong> ·
+                    <strong class="is-bad">@notCovered.Count not covered</strong>@(open.Count > 0 ? $" · {open.Count} pending or in progress" : "")
+                </p>
+            </div>
+            <a class="btn btn--secondary btn--sm" href="/duties/@DutyComponents.TypeSlug(m.Type)/report.pdf?date=@date">@Ui.Icon("file-pdf", "icon--sm")PDF</a>
+        </div>
+        <div class="dreport__cols">
+            <div class="dreport__col dreport__col--ok">
+                <h3>@Ui.Icon("check-circle", "icon--sm")Covered (@covered.Count)</h3>
+                @if (covered.Count == 0) { <p class="faint">Nothing covered @(ended ? "" : "yet").</p> }
+                <ol>
+                    @foreach (var s in covered)
+                    {
+                        <li>
+                            <strong>@s.Info.Name</strong>@if (!s.Required) { <span class="dtag dtag--opt">Optional</span> }
+                            <span class="dreport__meta num">@s.Times@(s.DepartmentName is null ? "" : " · " + s.DepartmentName)</span>
+                            <ul class="dreport__points">
+                                @foreach (var p in s.Points)
+                                {
+                                    <li dir="auto">@p.Area — @p.Staff@if (p.CoveredAt is { } at) { <span class="faint"> · recorded @SchoolTime.Current.ToLocal(at.At).ToString("h:mm tt", c)@(at.By is null ? "" : " by " + at.By)</span> }@if (!string.IsNullOrWhiteSpace(p.Notes)) { <span class="faint"> · @p.Notes</span> }</li>
+                                }
+                            </ul>
+                        </li>
+                    }
+                </ol>
+            </div>
+            <div class="dreport__col dreport__col--bad">
+                <h3>@Ui.Icon("x-circle", "icon--sm")Not covered (@notCovered.Count)</h3>
+                @if (notCovered.Count == 0) { <p class="faint">Nothing left uncovered@(ended ? "." : " so far.")</p> }
+                <ol>
+                    @foreach (var s in notCovered)
+                    {
+                        <li>
+                            <strong>@s.Info.Name</strong>@if (!s.Required) { <span class="dtag dtag--opt">Optional — does not decide the duty</span> }
+                            <span class="dreport__meta num">@s.Times@(s.DepartmentName is null ? "" : " · " + s.DepartmentName)@(s.Staff.Count == 0 ? "" : " · " + string.Join(", ", s.Staff))</span>
+                            <ul class="dreport__points">
+                                @foreach (var line in SchoolManagement.Web.Services.Pdf.DutyCoverageReports.Gaps(s))
+                                {
+                                    <li dir="auto">@line</li>
+                                }
+                            </ul>
+                            <a class="btn btn--ghost btn--sm" href="/duties/report-uncovered?component=@s.Info.Slug&date=@date" data-modal>@Ui.Icon("pencil", "icon--sm")Record area / reason</a>
+                        </li>
+                    }
+                </ol>
+            </div>
+        </div>
+        @if (open.Count > 0)
+        {
+            <div class="dreport__open">
+                <h3>@Ui.Icon("clock", "icon--sm")Not finished yet (@open.Count)</h3>
+                <ul>
+                    @foreach (var s in open) { <li><strong>@s.Info.Name</strong> <span class="num faint">@s.Times</span> <partial name="_DStatus" model="s.Status" /></li> }
+                </ul>
+            </div>
+        }
+    </section>
+}

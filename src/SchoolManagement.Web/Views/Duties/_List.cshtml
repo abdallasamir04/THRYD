@@ -1,9 +1,100 @@
 @model DutyListViewModel
+@*
+    A Sub-Duty on a date: its schedule and calculated status, the uncovered areas reported (with history), then its coverage
+    points (one card per duty record: staff, attendance, backup). Statuses are calculated, never chosen.
+*@
 @{
     var duties = Model.Duties;
-    int Count(DutyStatus s) => duties.Count(d => d.Status == s);
+    var s = Model.Sub;
+    var date = SchoolWeek.Iso(Model.Date);
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    int Count(DutyStatus st) => duties.Count(d => d.Status == st);
     var staffAction = duties.Count(d => Coverage.NeedsAction(d.Coverage));
-    var notRecorded = duties.Count(d => d.Coverage == CoverageState.AttendanceNotRecorded);
+    var back = $"{DutyComponents.Href(Model.Info)}?date={date}";
+}
+
+@if (s is not null)
+{
+    <section class="dsubhero dsubhero--@(s.Scheduled ? DutyStatuses.Slug(s.Status) : "idle")" aria-label="Sub-Duty">
+        <div class="dsubhero__main">
+            <span class="dhero__eyebrow">@DutyComponents.TypeName(Model.Info.Type)@(Model.Main is { Scheduled: true } mm ? $" · {mm.Times}" : "")</span>
+            <p class="dsubhero__time num">@Ui.Icon("clock")@(s.Scheduled || s.Configured ? s.Times : "No time set")@if (s.Scheduled && !s.Configured) { <span class="dhero__note"> · from its coverage points</span> }</p>
+            <p class="dsub__meta">
+                <span class="dtag @(s.Required ? "dtag--req" : "dtag--opt")">@(s.Required ? "Required" : "Optional")</span>
+                <span class="dtag">@Ui.Icon("layers", "icon--sm")@(s.DepartmentName ?? "No department")</span>
+                <span class="dtag">@Ui.Icon("users", "icon--sm")@(s.Staff.Count == 0 ? "No staff assigned" : string.Join(", ", s.Staff))</span>
+            </p>
+        </div>
+        <div class="dhero__status">
+            @if (s.Scheduled) { <partial name="_DStatus" model="s.Status" /> <span class="dhero__why">@DutyStatuses.Meaning(s.Status)</span> }
+            else { <span class="dstat dstat--idle">Not scheduled on this day</span> }
+        </div>
+    </section>
+
+    @if (s.Status == DutyStatus.NotCovered || s.AreaReports.Count > 0 || s.Points.Any(p => p.Report is not null))
+    {
+        <section class="card dgaps" aria-labelledby="gaps-title">
+            <div class="dgaps__head">
+                <h2 id="gaps-title">@Ui.Icon("alert-triangle", "icon--sm")Not covered</h2>
+                <a class="btn btn--secondary btn--sm" href="/duties/report-uncovered?component=@Model.Info.Slug&date=@date" data-modal>@Ui.Icon("plus", "icon--sm")Record area / reason</a>
+            </div>
+            <ul class="dgaps__list">
+                @if (s.Reason is not null) { <li><strong>@Model.Info.Name</strong> — @s.Reason</li> }
+                @foreach (var p in s.Points.Where(p => p.Status == DutyStatus.NotCovered || p.Report is not null))
+                {
+                    <li>
+                        <strong dir="auto">@p.Area</strong> <span class="faint">(@p.Staff)</span> —
+                        @if (p.Report is { } r)
+                        {
+                            <span>@r.ReasonLabel@(r.Notes is null ? "" : " — " + r.Notes)</span>
+                            <span class="faint"> · @(r.RecordedBy ?? "—"), @Ui.DateTime(r.RecordedAt)</span>
+                            <span class="dgaps__acts">
+                                <a class="btn btn--ghost btn--sm" href="/duties/report-uncovered?component=@Model.Info.Slug&date=@date&supersedes=@r.Id" data-modal>Edit</a>
+                                <form action="/duties/reports/@r.Id/withdraw" method="post" data-ajax-form data-confirm="The report stays in the history; the point's status goes back to what its records show." data-confirm-title="Withdraw this report?" data-confirm-button="Withdraw">
+                                    @Html.AntiForgeryToken()<input type="hidden" name="back" value="@back" />
+                                    <button class="btn btn--ghost btn--sm" type="submit">Withdraw</button>
+                                </form>
+                            </span>
+                        }
+                        else
+                        {
+                            <span>@p.Reason</span>
+                            <a class="btn btn--ghost btn--sm" href="/duties/report-uncovered?component=@Model.Info.Slug&date=@date&point=@p.Id" data-modal>Add reason</a>
+                        }
+                    </li>
+                }
+                @foreach (var r in s.AreaReports)
+                {
+                    <li>
+                        <strong dir="auto">@r.Area</strong> — @r.ReasonLabel@(r.Notes is null ? "" : " — " + r.Notes)
+                        <span class="faint"> · @(r.RecordedBy ?? "—"), @Ui.DateTime(r.RecordedAt)</span>
+                        <span class="dgaps__acts">
+                            <a class="btn btn--ghost btn--sm" href="/duties/report-uncovered?component=@Model.Info.Slug&date=@date&supersedes=@r.Id" data-modal>Edit</a>
+                            <form action="/duties/reports/@r.Id/withdraw" method="post" data-ajax-form data-confirm="The report stays in the history." data-confirm-title="Withdraw this report?" data-confirm-button="Withdraw">
+                                @Html.AntiForgeryToken()<input type="hidden" name="back" value="@back" />
+                                <button class="btn btn--ghost btn--sm" type="submit">Withdraw</button>
+                            </form>
+                        </span>
+                    </li>
+                }
+            </ul>
+            @if (Model.ReportHistory.Count > 0)
+            {
+                <details class="dgaps__history">
+                    <summary>Report history (@Model.ReportHistory.Count)</summary>
+                    <ol class="timeline">
+                        @foreach (var r in Model.ReportHistory)
+                        {
+                            <li class="timeline__item">
+                                <span class="timeline__when">@Ui.DateTime(r.RecordedAt) · @(r.RecordedBy ?? "—")@(r.Withdrawn ? " · withdrawn" : r.SupersedesId is not null ? " · edit" : "")@(r.Current ? " · current" : "")</span>
+                                <span dir="auto"><strong>@r.Area</strong>: @r.ReasonLabel@(r.Notes is null ? "" : " — " + r.Notes)</span>
+                            </li>
+                        }
+                    </ol>
+                </details>
+            }
+        </section>
+    }
 }
 
 @if (duties.Count == 0)
@@ -11,24 +102,23 @@
     <div class="card">
         <div class="empty">
             <span class="empty__icon">@Ui.Icon(Model.Info.Icon)</span>
-            <p class="empty__title">No @Model.Info.Name duties on this day</p>
-            <p class="empty__text">Add a duty with its time, location and the staff member assigned. Attendance and any backup are recorded on the same duty.</p>
+            <p class="empty__title">No coverage points for @Model.Info.Name on this day</p>
+            <p class="empty__text">Add each gate, area or class group with its time and the staff member assigned. Attendance and any backup are recorded on the same card; recorded attendance is what counts as coverage.</p>
             <div class="empty__actions">
-                <a class="btn btn--primary" href="/duties/create?component=@Model.Info.Slug&date=@SchoolWeek.Iso(Model.Date)" data-modal>@Ui.Icon("plus")Add duty</a>
+                <a class="btn btn--primary" href="/duties/create?component=@Model.Info.Slug&date=@date" data-modal>@Ui.Icon("plus")Add coverage point</a>
             </div>
         </div>
     </div>
 }
 else
 {
-    <ul class="coverage-strip" aria-label="Duty status for this day">
-        <li><span class="num">@duties.Count</span> duties</li>
+    <ul class="coverage-strip" aria-label="Coverage points on this day">
+        <li><span class="num">@duties.Count</span> coverage points</li>
         <li><span class="num">@Count(DutyStatus.Pending)</span> pending</li>
         <li class="is-info"><span class="num">@Count(DutyStatus.InProgress)</span> in progress</li>
         <li class="is-ok"><span class="num">@Count(DutyStatus.Covered)</span> covered</li>
         <li class="is-bad"><span class="num">@Count(DutyStatus.NotCovered)</span> not covered</li>
         <li class="is-wait"><span class="num">@staffAction</span> need staff action</li>
-        <li class="is-muted"><span class="num">@notRecorded</span> attendance not recorded</li>
     </ul>
     <div class="duty-grid">
         @foreach (var d in duties)

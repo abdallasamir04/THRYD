@@ -21,7 +21,16 @@ public sealed class ClassTeamView
     public required string ClassName { get; init; }
     public required AcademicYearOption Year { get; init; }
     public TeamMemberView? Homeroom { get; init; }
+
+    /// <summary>The class's Co-Teacher (one per class and year).</summary>
+    public TeamMemberView? CoTeacher => CoTeachers.FirstOrDefault();
+
+    /// <summary>
+    /// Every active Co-Teacher, earliest first. More than one is only possible for data saved before the one-Co-Teacher
+    /// rule (<see cref="HasExtraCoTeachers"/>): those are shown and kept until someone chooses which one stays.
+    /// </summary>
     public IReadOnlyList<TeamMemberView> CoTeachers { get; init; } = [];
+    public bool HasExtraCoTeachers => CoTeachers.Count > 1;
     public IReadOnlyList<EndedAssignmentView> Ended { get; init; } = [];
     public IReadOnlyList<TeamHistoryView> History { get; init; } = [];
 }
@@ -61,10 +70,11 @@ public interface IClassTeamService
     Task<IReadOnlyList<StaffOption>> StaffOptionsAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Save Changes: makes the active team for the class and year exactly <paramref name="homeroomId"/> plus
-    /// <paramref name="coTeacherIds"/>. Assignments that stay are untouched; the others are ended, never deleted.
+    /// Save Changes: makes the active team for the class and year exactly one Homeroom Teacher (<paramref name="homeroomId"/>)
+    /// and one Co-Teacher (<paramref name="coTeacherId"/>); either may be empty. Assignments that stay are untouched; a replaced
+    /// or removed one is ended (kept in the history), never deleted.
     /// </summary>
-    Task<ServiceResult> SaveAsync(int classId, int yearId, int? homeroomId, IReadOnlyList<int> coTeacherIds, CancellationToken ct = default);
+    Task<ServiceResult> SaveAsync(int classId, int yearId, int? homeroomId, int? coTeacherId, CancellationToken ct = default);
 
     /// <summary>Remove Assignment: ends this one active assignment only.</summary>
     Task<ServiceResult> RemoveAsync(int classId, int assignmentId, CancellationToken ct = default);
@@ -74,8 +84,9 @@ public interface IClassTeamService
 }
 
 /// <summary>
-/// KG class teaching teams (Pre-K, KG1, KG2 only). Every rule is checked here; the database indexes back up the
-/// "one Homeroom Teacher" and "one role per person" rules. Nothing here changes timetable, P.E. or workload data.
+/// KG class teaching teams (Pre-K, KG1, KG2 only): one Homeroom Teacher and one Co-Teacher per class and academic year.
+/// Every rule is checked here; the database indexes back up "one Homeroom Teacher", "one Co-Teacher" and "one role per
+/// person". Nothing here changes timetable, P.E. or workload data.
 /// </summary>
 public sealed class ClassTeamService(SchoolDbContext db, ICurrentUser currentUser, ISchoolTimeService? schoolTime = null) : IClassTeamService
 {
@@ -130,7 +141,7 @@ public sealed class ClassTeamService(SchoolDbContext db, ICurrentUser currentUse
             ClassName = cls.Name,
             Year = year,
             Homeroom = active.FirstOrDefault(m => m.Role == ClassTeachingRole.HomeroomTeacher),
-            CoTeachers = active.Where(m => m.Role == ClassTeachingRole.CoTeacher).OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
+            CoTeachers = active.Where(m => m.Role == ClassTeachingRole.CoTeacher).OrderBy(m => m.AssignedAt).ThenBy(m => m.AssignmentId).ToList(),
             Ended = rows.Where(r => !r.IsActive).OrderByDescending(r => r.EndedAt)
                 .Select(r => new EndedAssignmentView(r.FullName, r.Role, r.AssignedAt, r.EndedAt, r.EndReason, r.EndedBy)).ToList(),
             History = history,
@@ -173,18 +184,17 @@ public sealed class ClassTeamService(SchoolDbContext db, ICurrentUser currentUse
         return ServiceResult.Ok(assignmentId);
     }
 
-    public async Task<ServiceResult> SaveAsync(int classId, int yearId, int? homeroomId, IReadOnlyList<int> coTeacherIds, CancellationToken ct = default)
+    public async Task<ServiceResult> SaveAsync(int classId, int yearId, int? homeroomId, int? coTeacherId, CancellationToken ct = default)
     {
         var (problem, team) = await LoadAsync(classId, yearId, ct);
         if (problem is not null) return problem;
 
-        // ---- validate the requested team
-        var co = coTeacherIds.ToList();
-        if (co.Count != co.Distinct().Count()) return ServiceResult.Fail("CoTeacherIds", "A Co-Teacher is listed more than once.");
-        if (homeroomId is { } h && co.Contains(h))
-            return ServiceResult.Fail("CoTeacherIds", $"{await NameAsync(h, ct)} is chosen as Homeroom Teacher and as Co-Teacher. One staff member cannot hold both roles in the same class and academic year.");
-        var wanted = co.Select(id => (Staff: id, Role: ClassTeachingRole.CoTeacher)).ToList();
+        // ---- validate the requested team: one Homeroom Teacher and one Co-Teacher, never the same person
+        if (homeroomId is { } h && coTeacherId == h)
+            return ServiceResult.Fail("CoTeacherId", $"{await NameAsync(h, ct)} is chosen as Homeroom Teacher and as Co-Teacher. One staff member cannot hold both roles in the same class and academic year.");
+        var wanted = new List<(int Staff, ClassTeachingRole Role)>();
         if (homeroomId is { } hr) wanted.Add((hr, ClassTeachingRole.HomeroomTeacher));
+        if (coTeacherId is { } co) wanted.Add((co, ClassTeachingRole.CoTeacher));
         var ids = wanted.Select(w => w.Staff).ToList();
         if (ids.Count > 0 && await db.StaffMembers.CountAsync(s => ids.Contains(s.Id), ct) != ids.Count)
             return ServiceResult.Fail("", "Choose staff members from the list.");
@@ -196,7 +206,9 @@ public sealed class ClassTeamService(SchoolDbContext db, ICurrentUser currentUse
         if (ending.Count == 0 && adding.Count == 0) return ServiceResult.Fail("", "Nothing was changed.");
 
         var now = _time.UtcNow;
-        var newHomeroom = adding.Where(a => a.Role == ClassTeachingRole.HomeroomTeacher).Select(a => (int?)a.Staff).FirstOrDefault();
+        var incoming = adding.ToDictionary(a => a.Role, a => a.Staff);
+        // The Co-Teacher who stays when a class still has several from before the one-Co-Teacher rule.
+        var keptCo = keep.Where(k => k.Role == ClassTeachingRole.CoTeacher).Select(k => (int?)k.StaffMemberId).FirstOrDefault();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         foreach (var old in ending)
         {
@@ -206,11 +218,18 @@ public sealed class ClassTeamService(SchoolDbContext db, ICurrentUser currentUse
                 End(old, now, $"Role changed to {ClassTeachingRoles.Label(role)}");
                 Log(classId, yearId, old.StaffMemberId, ClassTeachingOperation.RoleChanged, old.Role, role, null, now);
             }
-            else if (old.Role == ClassTeachingRole.HomeroomTeacher && newHomeroom is { } by)
+            else if (incoming.TryGetValue(old.Role, out var by))
             {
+                // The same for both roles: the outgoing teacher's assignment is ended and kept, the replacement logged.
                 var name = await NameAsync(by, ct);
                 End(old, now, $"Replaced by {name}");
-                Log(classId, yearId, old.StaffMemberId, ClassTeachingOperation.Replaced, old.Role, null, $"Replaced as Homeroom Teacher by {name}", now);
+                Log(classId, yearId, old.StaffMemberId, ClassTeachingOperation.Replaced, old.Role, null, $"Replaced as {ClassTeachingRoles.Label(old.Role)} by {name}", now);
+            }
+            else if (old.Role == ClassTeachingRole.CoTeacher && keptCo is { } kept)
+            {
+                var name = await NameAsync(kept, ct);
+                End(old, now, $"One Co-Teacher per class: {name} kept");
+                Log(classId, yearId, old.StaffMemberId, ClassTeachingOperation.Removed, old.Role, null, $"A class has one Co-Teacher; {name} was kept", now);
             }
             else
             {

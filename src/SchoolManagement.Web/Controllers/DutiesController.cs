@@ -9,7 +9,7 @@ namespace SchoolManagement.Web.Controllers;
 
 /// <summary>Daily Operations → Morning Duty (Students Arrival Check, In-Class Morning, Morning Assembly / Proadcast).</summary>
 [Route("duties")]
-public class DutiesController(IDutyService duties, IClassService classes, IStaffDutyService staffDuty, IActivityService activities) : AppController
+public class DutiesController(IDutyService duties, IClassService classes, IStaffDutyService staffDuty, IActivityService activities, IDutyBoardService board) : AppController
 {
     /// <summary>
     /// Duties landing page: Morning, Midday and Dismissal cards (?type=morning | midday | dismissal opens
@@ -19,36 +19,15 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
     public async Task<IActionResult> Index(string? date, string? type, CancellationToken ct)
     {
         var day = SchoolWeek.ParseDayOrToday(date);
+        var dutyDay = await board.DayAsync(day, ct);
         if (string.IsNullOrWhiteSpace(type))
         {
-            var cards = new List<HubCard>();
-            foreach (var t in DutyComponents.Types)
-            {
-                var summary = await duties.SummaryAsync(t, day, ct);
-                var (icon, text) = DutyComponents.TypeCard(t);
-                var total = summary.Sum(s => s.Total);
-                var open = summary.Sum(s => s.NeedsStaffAction);
-                cards.Add(new HubCard($"/duties?type={DutyComponents.TypeSlug(t)}&date={SchoolWeek.Iso(day)}", icon, DutyComponents.TypeName(t), text,
-                    $"{summary.Count} sections · {(total == 0 ? "no duties today" : $"{total} today{(open > 0 ? $" · {open} need action" : "")}")}",
-                    t switch { DutyType.Midday => "amber", DutyType.Dismissal => "teal", _ => "violet" }));
-            }
-            // P.E. now opens from Activities (with the activities the school adds).
-            var others = (await activities.ListAsync(false, ct)).Count;
-            cards.Add(new HubCard($"/duties/activities?date={SchoolWeek.Iso(day)}", "activity", "Activities", "P.E. and the school's other activities: staff, classes and schedules.",
-                others == 0 ? "P.E." : $"P.E. + {Ui.Plural(others, "activity", "activities")}", "green"));
-            return View("~/Views/Staff/Hub.cshtml", new HubViewModel
-            {
-                Title = "Duties",
-                Subtitle = "Choose a duty to manage its sections, staff, status and feedback.",
-                Crumbs = [("Dashboard", "/"), ("Duties", null)],
-                Cards = cards,
-                Nav = "MorningDuty",
-                Extra = [("Duty audit", $"/duties/audit?from={SchoolWeek.Iso(day)}&to={SchoolWeek.Iso(day)}", "clipboard-check")],
-            });
+            // Every Main Duty with its calculated status and Sub-Duties; the board refreshes itself as time passes.
+            var hub = new DutyHubViewModel { Day = dutyDay, Activities = (await activities.ListAsync(false, ct)).Count };
+            return IsAjax ? PartialView("_HubBoard", hub) : View("Hub", hub);
         }
-
-        var dutyType = DutyComponents.TypeFromSlug(type);
-        return View(new MorningDutyViewModel { Date = day, Type = dutyType, Components = await duties.SummaryAsync(dutyType, day, ct) });
+        var model = new MainDutyPageViewModel { Day = dutyDay, Main = dutyDay.Get(DutyComponents.TypeFromSlug(type)) };
+        return IsAjax ? PartialView("_MainBoard", model) : View(model);
     }
 
     [HttpGet("{type:regex(^(morning|midday|dismissal)$)}/{slug}")]
@@ -57,7 +36,14 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
         var info = DutyComponents.FromSlug(slug);
         if (info is null || DutyComponents.TypeSlug(info.Type) != type) return NotFound();
         var day = SchoolWeek.ParseDayOrToday(date);
-        var model = new DutyListViewModel { Info = info, Date = day, Duties = await duties.ListAsync(info.Component, day, ct) };
+        var dutyDay = await board.DayAsync(day, ct);
+        var main = dutyDay.Get(info.Type);
+        var model = new DutyListViewModel
+        {
+            Info = info, Date = day, Duties = await duties.ListAsync(info.Component, day, ct), Main = main,
+            Sub = main.Subs.FirstOrDefault(s => s.Info.Component == info.Component),
+            ReportHistory = await board.ReportHistoryAsync(day, info.Component, ct),
+        };
         return IsAjax ? PartialView("_List", model) : View(model);
     }
 
@@ -74,6 +60,148 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
             AuditTrail = await duties.AuditTrailAsync(id, ct),
             Staff = await duties.StaffAsync(id, ct),
         });
+    }
+
+    /// <summary>The final coverage report of a Main Duty on a date, as a PDF.</summary>
+    [HttpGet("{type:regex(^(morning|midday|dismissal)$)}/report.pdf")]
+    public async Task<IActionResult> CoveragePdf(string type, string? date, CancellationToken ct)
+    {
+        var day = await board.DayAsync(SchoolWeek.ParseDayOrToday(date), ct);
+        return await PdfFile(DutyCoverageReports.Build(day, day.Get(DutyComponents.TypeFromSlug(type))), ct);
+    }
+
+    /// <summary>Department view: each department's Sub-Duties (from their schedules) and its coverage on a date.</summary>
+    [HttpGet("departments")]
+    public async Task<IActionResult> Departments(string? date, CancellationToken ct)
+    {
+        var day = SchoolWeek.ParseDayOrToday(date);
+        return View(new DutyDepartmentsViewModel { Date = day, Departments = await board.DepartmentsAsync(day, ct) });
+    }
+
+    // ------------------------------------------------------------------ schedules
+
+    [HttpGet("{type:regex(^(morning|midday|dismissal)$)}/schedule")]
+    public async Task<IActionResult> Schedule(string type, CancellationToken ct) =>
+        View(new DutySchedulePageViewModel { Schedule = await board.ScheduleAsync(DutyComponents.TypeFromSlug(type), ct), Departments = await board.DepartmentOptionsAsync(ct) });
+
+    [HttpPost("{type:regex(^(morning|midday|dismissal)$)}/schedule"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> Schedule(string type, MainScheduleForm form, CancellationToken ct)
+    {
+        var t = DutyComponents.TypeFromSlug(type);
+        var result = await board.SaveMainScheduleAsync(t, DutyForms.Date(form.EffectiveFrom) ?? SchoolWeek.Today, DutyForms.Time(form.StartTime),
+            DutyForms.Time(form.EndTime), PeriodDays.Mask(form.AllDays, form.Days), ct);
+        return Finish(result, $"{DutyComponents.TypeName(t)} time saved. Earlier days keep the schedule they had.", $"/duties/{type}/schedule");
+    }
+
+    [HttpGet("sections/new")]
+    public async Task<IActionResult> AddSection(string? type, CancellationToken ct)
+    {
+        var t = DutyComponents.TypeFromSlug(type);
+        return PageOrPartial("SectionForm", await SectionFormAsync(new SectionForm { Type = t, EffectiveFrom = SchoolWeek.Iso(SchoolWeek.Today) }, ct));
+    }
+
+    [HttpPost("sections/new"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddSection(SectionForm form, CancellationToken ct)
+    {
+        form.Id = null;
+        var result = await board.AddSectionAsync(form.Type, form.ToInput(SchoolWeek.Today), ct);
+        if (result.Succeeded) return Finish(result, $"Sub-Duty “{form.Name?.Trim()}” added.", $"/duties/{DutyComponents.TypeSlug(form.Type)}/schedule");
+        AddErrors(result);
+        return FormView("SectionForm", await SectionFormAsync(form, ct));
+    }
+
+    [HttpGet("sections/{id:int}/edit")]
+    public async Task<IActionResult> EditSection(int id, CancellationToken ct)
+    {
+        var info = DutyComponents.All.FirstOrDefault(c => (int)c.Component == id);
+        if (info is null) return NotFoundResult("This Sub-Duty no longer exists.");
+        var current = (await board.ScheduleAsync(info.Type, ct)).Sections.First(s => s.Info.Component == info.Component).Current;
+        var form = new SectionForm
+        {
+            Id = id, Type = info.Type, Name = info.Name, Summary = info.Summary, EffectiveFrom = SchoolWeek.Iso(SchoolWeek.Today),
+            StartTime = current?.StartTime.ToString("HH:mm"), EndTime = current?.EndTime.ToString("HH:mm"), Required = current?.IsRequired ?? true,
+            DepartmentId = current?.DepartmentId, AllDays = current is null || PeriodDays.IsAll(current.DayMask),
+            Days = current is null ? [] : PeriodDays.Days(current.DayMask).ToList(),
+        };
+        return PageOrPartial("SectionForm", await SectionFormAsync(form, ct));
+    }
+
+    [HttpPost("sections/{id:int}/edit"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditSection(int id, SectionForm form, CancellationToken ct)
+    {
+        form.Id = id;
+        var info = DutyComponents.All.FirstOrDefault(c => (int)c.Component == id);
+        if (info is null) return NotFoundResult("This Sub-Duty no longer exists.");
+        form.Type = info.Type;
+        var result = await board.SaveSectionAsync(info.Component, form.ToInput(SchoolWeek.Today), ct);
+        if (result.Succeeded) return Finish(result, $"{form.Name?.Trim() ?? info.Name} saved. Earlier days keep the schedule they had.", $"/duties/{DutyComponents.TypeSlug(info.Type)}/schedule");
+        AddErrors(result);
+        return FormView("SectionForm", await SectionFormAsync(form, ct));
+    }
+
+    [HttpPost("sections/{id:int}/retire"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> RetireSection(int id, string? from, CancellationToken ct)
+    {
+        var info = DutyComponents.All.FirstOrDefault(c => (int)c.Component == id);
+        if (info is null) return NotFoundResult("This Sub-Duty no longer exists.");
+        return Finish(await board.RetireSectionAsync(info.Component, DutyForms.Date(from) ?? SchoolWeek.Today, ct),
+            $"{info.Name} removed from the schedule. Its earlier records stay.", $"/duties/{DutyComponents.TypeSlug(info.Type)}/schedule");
+    }
+
+    [HttpPost("sections/{id:int}/restore"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> RestoreSection(int id, CancellationToken ct)
+    {
+        var info = DutyComponents.All.FirstOrDefault(c => (int)c.Component == id);
+        if (info is null) return NotFoundResult("This Sub-Duty no longer exists.");
+        return Finish(await board.RestoreSectionAsync(info.Component, ct), $"{info.Name} is scheduled again.", $"/duties/{DutyComponents.TypeSlug(info.Type)}/schedule");
+    }
+
+    private async Task<SectionForm> SectionFormAsync(SectionForm form, CancellationToken ct)
+    {
+        form.Departments = await board.DepartmentOptionsAsync(ct);
+        var main = (await board.ScheduleAsync(form.Type, ct)).Main;
+        (form.MainStart, form.MainEnd) = (main?.StartTime, main?.EndTime);
+        return form;
+    }
+
+    // ------------------------------------------------------------------ not covered: area, reason, notes
+
+    [HttpGet("report-uncovered")]
+    public async Task<IActionResult> ReportUncovered(string? component, string? date, int? point, int? supersedes, CancellationToken ct)
+    {
+        var info = DutyComponents.FromSlug(component);
+        if (info is null) return NotFoundResult("Unknown Sub-Duty.");
+        var day = SchoolWeek.ParseDayOrToday(date);
+        var form = new CoverageReportForm { Component = info.Slug, Date = SchoolWeek.Iso(day), PointId = point, Supersedes = supersedes };
+        if (supersedes is { } sid && (await board.ReportHistoryAsync(day, info.Component, ct)).FirstOrDefault(r => r.Id == sid) is { } old)
+            (form.PointId, form.Area, form.Reason, form.Notes) = (old.PointId, old.Area, old.Reason, old.Notes);
+        form.Sub = (await board.DayAsync(day, ct)).Get(info.Type).Subs.FirstOrDefault(s => s.Info.Component == info.Component);
+        return PageOrPartial("ReportUncovered", form);
+    }
+
+    [HttpPost("report-uncovered"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReportUncovered(CoverageReportForm form, CancellationToken ct)
+    {
+        var info = DutyComponents.FromSlug(form.Component);
+        if (info is null) return NotFoundResult("Unknown Sub-Duty.");
+        var day = DutyForms.Date(form.Date) ?? SchoolWeek.Today;
+        var result = await board.ReportUncoveredAsync(new CoverageReportInput(day, info.Component, form.PointId, form.Area, form.Reason, form.Notes, form.Supersedes), ct);
+        if (result.Succeeded) return Finish(result, "Not-covered report saved. It explains the gap; it does not count as coverage.", $"{DutyComponents.Href(info)}?date={SchoolWeek.Iso(day)}");
+        AddErrors(result);
+        form.Sub = (await board.DayAsync(day, ct)).Get(info.Type).Subs.FirstOrDefault(s => s.Info.Component == info.Component);
+        return FormView("ReportUncovered", form);
+    }
+
+    [HttpPost("reports/{id:int}/withdraw"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> WithdrawReport(int id, string? back, CancellationToken ct) =>
+        Finish(await board.WithdrawReportAsync(id, ct), "Report withdrawn (kept in the history).", back is not null && back.StartsWith("/duties", StringComparison.Ordinal) ? back : "/duties");
+
+    private IActionResult Finish(Common.ServiceResult result, string message, string redirect)
+    {
+        var error = result.Succeeded ? null : string.Join(" ", result.Errors.Select(e => e.Value).Distinct());
+        if (IsAjax) return result.Succeeded ? AjaxSuccess(message) : AjaxFailure(error!, 422);
+        Toast(error ?? message, result.Succeeded ? "success" : "error");
+        return LocalRedirect(redirect);
     }
 
     /// <summary>Duty audit: every duty session with its audit fields, filterable.</summary>
@@ -109,10 +237,6 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
         return await PdfFile(PdfReports.DutyAudit(await duties.AuditListAllAsync(query, ct), query, staff), ct);
     }
 
-    [HttpPost("{id:int}/status"), ValidateAntiForgeryToken]
-    public async Task<IActionResult> Status(int id, DutyStatus status, CancellationToken ct) =>
-        await Done(id, await duties.SetStatusAsync(id, status, ct), $"Status set to {DutyStatuses.Label(status)}.", ct);
-
     [HttpGet("{id:int}/audit-record")]
     public async Task<IActionResult> AuditRecord(int id, CancellationToken ct)
     {
@@ -120,7 +244,7 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
         if (duty is null) return NotFoundResult("This duty no longer exists.");
         return PageOrPartial("AuditForm", new DutyAuditFormModel
         {
-            Id = id, Status = duty.Status, AuditNotes = duty.AuditNotes, IssuesEncountered = duty.IssuesEncountered,
+            Id = id, AuditNotes = duty.AuditNotes, IssuesEncountered = duty.IssuesEncountered,
             FollowUpRequired = duty.FollowUpRequired, Duty = duty,
         });
     }
@@ -131,7 +255,7 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
         model.Id = id;
         if (ModelState.IsValid)
         {
-            var result = await duties.UpdateAuditAsync(id, model.Status, model.AuditNotes, model.IssuesEncountered, model.FollowUpRequired, ct);
+            var result = await duties.UpdateAuditAsync(id, model.AuditNotes, model.IssuesEncountered, model.FollowUpRequired, ct);
             if (result.Succeeded)
             {
                 var duty = await duties.GetAsync(id, ct);
@@ -158,7 +282,7 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
     public async Task<IActionResult> Create(DutyFormModel model, CancellationToken ct)
     {
         model.Id = null;
-        if (!Enum.IsDefined(model.Component)) return NotFoundResult("Unknown duty component.");
+        if (!DutyComponents.Exists(model.Component)) return NotFoundResult("Unknown duty component.");
         if (ModelState.IsValid)
         {
             var result = await duties.CreateAsync(model.ToInput(), ct);

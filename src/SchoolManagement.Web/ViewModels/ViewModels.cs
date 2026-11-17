@@ -215,7 +215,7 @@ public sealed class ClassDetailsViewModel
 
     /// <summary>The form's values (the saved team, or what was posted when validation failed).</summary>
     public int? HomeroomId { get; set; }
-    public List<int> CoTeacherIds { get; set; } = [];
+    public int? CoTeacherId { get; set; }
 }
 
 public sealed class ClassStagePageViewModel

@@ -7,7 +7,7 @@
 }
 
 <div class="@(modal ? "modal__content" : "card form-page")">
-    <form action="/academic-calendar/quarters/@Model.Id/edit" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+    <form action="/school-calendar/quarters/@Model.Id/edit" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
         @Html.AntiForgeryToken()
         <div class="modal__head">
             <span class="modal__icon">@Ui.Icon("calendar", "icon--lg")</span>
@@ -37,10 +37,26 @@
                 </div>
             </div>
             <p class="hint">Week 1 is the school week of the start date; days before the start or after the end are not part of the quarter. Quarters may not overlap.</p>
+            <fieldset class="sc-qform">
+                <legend class="label">As printed in the School Calendar <span class="faint" style="font-weight:600">(optional)</span></legend>
+                <p class="hint">The calendar shows this quarter's months from its first to its last day as printed (holidays included, e.g. 1 Nov – 9 Jan). Only the School Calendar uses these dates.</p>
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" for="CalendarStartDate">First day</label>
+                        <input class="input picker" type="date" id="CalendarStartDate" name="CalendarStartDate" value="@(Model.CalendarStartDate is { } cs ? SchoolWeek.Iso(cs) : "")" data-empty-text="Not set" />
+                        <span asp-validation-for="CalendarStartDate" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="CalendarEndDate">Last day</label>
+                        <input class="input picker" type="date" id="CalendarEndDate" name="CalendarEndDate" value="@(Model.CalendarEndDate is { } ce ? SchoolWeek.Iso(ce) : "")" data-empty-text="Not set" />
+                        <span asp-validation-for="CalendarEndDate" class="field-validation-error"></span>
+                    </div>
+                </div>
+            </fieldset>
         </div>
         <div class="modal__foot">
             @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
-            else { <a class="btn btn--secondary" href="/academic-calendar">Cancel</a> }
+            else { <a class="btn btn--secondary" href="/school-calendar">Cancel</a> }
             <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save quarter</button>
         </div>
     </form>

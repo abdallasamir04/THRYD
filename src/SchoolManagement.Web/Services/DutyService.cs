@@ -7,35 +7,57 @@ using SchoolManagement.Web.Entities;
 namespace SchoolManagement.Web.Services;
 
 /// <param name="Grades">Short grade line shown under the title (Midday sections), e.g. "Grades 4–6".</param>
-public sealed record DutyComponentInfo(DutyType Type, DutyComponent Component, string Slug, string Name, string Summary, string Icon, bool HasClasses, bool DetailsPending, string? Grades = null);
+/// <param name="RetiredOn">A removed Sub-Duty: not scheduled from this date on (its records stay).</param>
+public sealed record DutyComponentInfo(DutyType Type, DutyComponent Component, string Slug, string Name, string Summary, string Icon, bool HasClasses, bool DetailsPending,
+    string? Grades = null, DateOnly? RetiredOn = null, int SortOrder = 0)
+{
+    /// <summary>The section is in use on this date (not retired before it).</summary>
+    public bool ActiveOn(DateOnly date) => RetiredOn is not { } r || date < r;
+}
 
-/// <summary>Duty types and their components. Names and behaviour only; schedules are entered by the school.</summary>
+/// <summary>
+/// Duty types (Main Duties) and their sections (Sub-Duties). The sections are stored in DutySections (the original ten keep
+/// their codes, names and slugs; sections added later get new codes) and loaded by <see cref="DutyCatalog"/>; the built-in
+/// list below is used only until the database has been read.
+/// </summary>
 public static class DutyComponents
 {
-    public static readonly IReadOnlyList<DutyComponentInfo> Morning =
+    private static readonly IReadOnlyList<DutyComponentInfo> BuiltIn =
     [
         new(DutyType.Morning, DutyComponent.StudentsArrival, "students-arrival", "Students Arrival Check",
-            "Staff on duty while students arrive at school.", "users", false, false),
+            "Staff on duty while students arrive at school.", "users", false, false, SortOrder: 1),
         new(DutyType.Morning, DutyComponent.InClassMorning, "in-class-morning", "In-Class Morning",
-            "Staff supervising classes before the first lesson.", "door", true, false),
+            "Staff supervising classes before the first lesson.", "door", true, false, SortOrder: 2),
         new(DutyType.Morning, DutyComponent.MorningAssembly, "morning-assembly", "Morning Assembly (Line) / Proadcast",
-            "Assembly line-up and proadcast duty.", "activity", false, true),
-    ];
-
-    public static readonly IReadOnlyList<DutyComponentInfo> Midday =
-    [
+            "Assembly line-up and proadcast duty.", "activity", false, true, SortOrder: 3),
         // Youngest first. Slugs (URLs) and stored component values are unchanged.
         new(DutyType.Midday, DutyComponent.PreKKg1Break, "prek-kg1", "Pre-K / KG1",
-            "Break supervision for Pre-K and KG1.", "school", false, false, "Grades Pre-K and KG1"),
+            "Break supervision for Pre-K and KG1.", "school", false, false, "Grades Pre-K and KG1", SortOrder: 1),
         new(DutyType.Midday, DutyComponent.Kg2Break, "kg2", "KG2",
-            "Break supervision for KG2.", "school", false, false, "Grade KG2"),
+            "Break supervision for KG2.", "school", false, false, "Grade KG2", SortOrder: 2),
         new(DutyType.Midday, DutyComponent.LowerElementaryBreak, "lower-elementary", "Lower Elementary",
-            "Break supervision for grades 1–3.", "users", false, false, "Grades 1–3"),
+            "Break supervision for grades 1–3.", "users", false, false, "Grades 1–3", SortOrder: 3),
         new(DutyType.Midday, DutyComponent.UpperElementaryBreak, "upper-elementary", "Upper Elementary",
-            "Break supervision for grades 4–6.", "users", false, false, "Grades 4–6"),
+            "Break supervision for grades 4–6.", "users", false, false, "Grades 4–6", SortOrder: 4),
         new(DutyType.Midday, DutyComponent.MiddleHighBreak, "middle-high-break", "Middle / High School Break",
-            "Break supervision for grades 7–10.", "users", false, false, "Grades 7–10"),
+            "Break supervision for grades 7–10.", "users", false, false, "Grades 7–10", SortOrder: 5),
+        new(DutyType.Dismissal, DutyComponent.DismissalBus, "bus", "Bus",
+            "Staff seeing students onto the school buses. Gate and bus details go in location and notes.", "door", false, false, SortOrder: 1),
+        new(DutyType.Dismissal, DutyComponent.DismissalPickup, "pickup", "Pickup",
+            "Staff handing students over to parents at pickup. Gate details go in location and notes.", "user", false, false, SortOrder: 2),
     ];
+
+    private static volatile IReadOnlyList<DutyComponentInfo> _all = BuiltIn;
+
+    /// <summary>Replaces the section list (DutyCatalog, after reading DutySections).</summary>
+    public static void Use(IReadOnlyList<DutyComponentInfo> sections)
+    {
+        if (sections.Count > 0) _all = sections.OrderBy(s => s.Type).ThenBy(s => s.SortOrder).ThenBy(s => (int)s.Component).ToList();
+    }
+
+    public static IReadOnlyList<DutyComponentInfo> Morning => ForType(DutyType.Morning);
+    public static IReadOnlyList<DutyComponentInfo> Midday => ForType(DutyType.Midday);
+    public static IReadOnlyList<DutyComponentInfo> Dismissal => ForType(DutyType.Dismissal);
 
     /// <summary>Card text for the Duties landing page.</summary>
     public static (string Icon, string Description) TypeCard(DutyType t) => t switch
@@ -45,35 +67,36 @@ public static class DutyComponents
         _ => ("shield-check", "Students arrival check, in-class morning and the morning assembly line-up."),
     };
 
-    public static readonly IReadOnlyList<DutyComponentInfo> Dismissal =
-    [
-        new(DutyType.Dismissal, DutyComponent.DismissalBus, "bus", "Bus",
-            "Staff seeing students onto the school buses. Gate and bus details go in location and notes.", "door", false, false),
-        new(DutyType.Dismissal, DutyComponent.DismissalPickup, "pickup", "Pickup",
-            "Staff handing students over to parents at pickup. Gate details go in location and notes.", "user", false, false),
-    ];
-
     public static readonly DutyType[] Types = [DutyType.Morning, DutyType.Midday, DutyType.Dismissal];
 
-    /// <summary>Every component of every duty type.</summary>
-    public static IReadOnlyList<DutyComponentInfo> All { get; } = [.. Morning, .. Midday, .. Dismissal];
+    /// <summary>Every section of every duty type (retired ones included: their records stay readable).</summary>
+    public static IReadOnlyList<DutyComponentInfo> All => _all;
 
-    public static IReadOnlyList<DutyComponentInfo> ForType(DutyType t) => t switch
-    {
-        DutyType.Midday => Midday,
-        DutyType.Dismissal => Dismissal,
-        _ => Morning,
-    };
+    public static IReadOnlyList<DutyComponentInfo> ForType(DutyType t) => _all.Where(s => s.Type == t).ToList();
 
-    public static DutyComponentInfo Get(DutyComponent c) => All.First(m => m.Component == c);
-    public static DutyComponentInfo? FromSlug(string? slug) => All.FirstOrDefault(m => m.Slug == slug);
-    public static string Name(DutyComponent c) => All.FirstOrDefault(m => m.Component == c)?.Name ?? c.ToString();
+    /// <summary>A section whose code is unknown (should not happen) still gets a readable entry.</summary>
+    public static DutyComponentInfo Get(DutyComponent c) => _all.FirstOrDefault(m => m.Component == c)
+        ?? new DutyComponentInfo(DutyType.Morning, c, ((int)c).ToString(CultureInfo.InvariantCulture), $"Section {(int)c}", "", "shield-check", false, false);
+    public static bool Exists(DutyComponent c) => _all.Any(m => m.Component == c);
+    public static DutyComponentInfo? FromSlug(string? slug) => _all.FirstOrDefault(m => m.Slug == slug);
+    public static string Name(DutyComponent c) => _all.FirstOrDefault(m => m.Component == c)?.Name ?? c.ToString();
     public static string TypeName(DutyType t) => t switch { DutyType.Midday => "Midday Duty", DutyType.Dismissal => "Dismissal Duty", _ => "Morning Duty" };
     public static string TypeSlug(DutyType t) => t.ToString().ToLowerInvariant();
     public static DutyType TypeFromSlug(string? slug) => Types.FirstOrDefault(t => TypeSlug(t) == slug?.ToLowerInvariant(), DutyType.Morning);
 
     /// <summary>The component's page, e.g. /duties/midday/kg2.</summary>
     public static string Href(DutyComponentInfo info) => $"/duties/{TypeSlug(info.Type)}/{info.Slug}";
+}
+
+/// <summary>Reads DutySections into <see cref="DutyComponents"/> (at startup and after a Sub-Duty is added, edited or removed).</summary>
+public static class DutyCatalog
+{
+    public static async Task LoadAsync(SchoolDbContext db, CancellationToken ct = default)
+    {
+        var rows = await db.DutySections.AsNoTracking().ToListAsync(ct);
+        DutyComponents.Use(rows.Select(s => new DutyComponentInfo(s.DutyType, (DutyComponent)s.Id, s.Slug, s.Name, s.Summary, s.Icon, s.HasClasses,
+            s.DetailsPending, s.Grades, s.RetiredOn, s.SortOrder)).ToList());
+    }
 }
 
 /// <summary>Who was there, from recorded attendance only (a selected or accepting backup is not coverage).</summary>
@@ -168,14 +191,13 @@ public static class DutyStatuses
 
     public static DutyStatus? FromSlug(string? slug) => All.Cast<DutyStatus?>().FirstOrDefault(s => Slug(s!.Value) == slug);
 
-    /// <summary>Covered and In Progress need someone recorded present; assignment alone is never coverage.</summary>
-    public static string? Problem(DutyStatus status, CoverageState coverage) => status switch
+    /// <summary>What each status means (statuses are calculated from the school clock and the records, never chosen).</summary>
+    public static string Meaning(DutyStatus s) => s switch
     {
-        DutyStatus.Covered when !Coverage.IsCovered(coverage) =>
-            "A duty can be marked Covered only when the assigned staff member, or a backup who accepted, is recorded as present.",
-        DutyStatus.InProgress when !Coverage.IsCovered(coverage) =>
-            "A duty can be In Progress only when someone on duty is recorded as present.",
-        _ => null,
+        DutyStatus.Pending => "The scheduled start time has not arrived yet.",
+        DutyStatus.InProgress => "The current time is within the scheduled time range.",
+        DutyStatus.Covered => "Ended, and the required coverage was recorded.",
+        _ => "Ended without the required coverage recorded.",
     };
 }
 
@@ -294,19 +316,29 @@ public interface IDutyService
     Task<ServiceResult> SetPrimaryAttendanceAsync(int id, AttendanceStatus status, CancellationToken ct = default);
     Task<ServiceResult> RecordBackupResponseAsync(int id, bool accepted, string? note, CancellationToken ct = default);
     Task<ServiceResult> SetBackupAttendanceAsync(int id, AttendanceStatus status, CancellationToken ct = default);
-    Task<ServiceResult> SetStatusAsync(int id, DutyStatus status, CancellationToken ct = default);
-    Task<ServiceResult> UpdateAuditAsync(int id, DutyStatus status, string? auditNotes, string? issues, bool followUp, CancellationToken ct = default);
+    /// <summary>Audit notes, issues and follow-up. The status is calculated automatically and cannot be set.</summary>
+    Task<ServiceResult> UpdateAuditAsync(int id, string? auditNotes, string? issues, bool followUp, CancellationToken ct = default);
     Task<ServiceResult> DeleteAsync(int id, CancellationToken ct = default);
 }
 
 /// <summary>
-/// Duty sessions: assigned staff → attendance → (if absent) backup → backup accepts or declines →
-/// backup attendance, plus the operational status (Pending / In Progress / Covered / Not Covered).
-/// Every change is validated here, mirrored into DutyStaffAssignments (one row per person and role)
-/// and written to the DutyAudits trail.
+/// Duty sessions (coverage points): assigned staff → attendance → (if absent) backup → backup accepts or declines →
+/// backup attendance. The status (Pending / In Progress / Covered / Not Covered) is calculated by <see cref="IDutyBoardService"/>
+/// from the school clock and these records. Every change is validated here, mirrored into DutyStaffAssignments (one row per
+/// person and role) and written to the DutyAudits trail.
 /// </summary>
-public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : IDutyService
+public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser, IDutyBoardService? board = null, ISchoolTimeService? schoolTime = null) : IDutyService
 {
+    private readonly IDutyBoardService _board = board ?? new DutyBoardService(db, currentUser, schoolTime);
+    private readonly ISchoolTimeService _time = schoolTime ?? SchoolTime.Current;
+
+    /// <summary>Replaces the stored status with the calculated one.</summary>
+    private async Task<List<DutyRow>> LiveAsync(List<DutyRow> rows, CancellationToken ct)
+    {
+        var live = await _board.PointStatusesAsync(rows.Select(r => r.Id).ToList(), ct);
+        return rows.Select(r => r with { Status = live.GetValueOrDefault(r.Id, r.Status) }).ToList();
+    }
+
     // ------------------------------------------------------------------ reads
 
     public Task<IReadOnlyList<DutyComponentSummary>> MorningSummaryAsync(DateOnly date, CancellationToken ct = default) =>
@@ -314,38 +346,42 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
 
     public async Task<IReadOnlyList<DutyComponentSummary>> SummaryAsync(DutyType type, DateOnly date, CancellationToken ct = default)
     {
-        var rows = await db.DutyAssignments.AsNoTracking().Where(d => d.DutyDate == date)
-            .Select(d => new { d.Component, d.Status, d.PrimaryAttendance, d.BackupStaffId, d.BackupStatus, d.BackupAttendance })
-            .ToListAsync(ct);
-        return DutyComponents.ForType(type).Select(info =>
-        {
-            var mine = rows.Where(r => r.Component == info.Component).ToList();
-            return new DutyComponentSummary(info, mine.Count,
-                mine.Count(r => r.Status == DutyStatus.Pending),
-                mine.Count(r => r.Status == DutyStatus.InProgress),
-                mine.Count(r => r.Status == DutyStatus.Covered),
-                mine.Count(r => r.Status == DutyStatus.NotCovered),
-                mine.Count(r => Coverage.NeedsAction(Coverage.Of(r.PrimaryAttendance, r.BackupStaffId, r.BackupStatus, r.BackupAttendance))));
-        }).ToList();
+        var day = await _board.DayAsync(date, ct);
+        return day.Get(type).Subs.Select(sub => new DutyComponentSummary(sub.Info, sub.Points.Count,
+            sub.Points.Count(p => p.Status == DutyStatus.Pending),
+            sub.Points.Count(p => p.Status == DutyStatus.InProgress),
+            sub.Points.Count(p => p.Status == DutyStatus.Covered),
+            sub.Points.Count(p => p.Status == DutyStatus.NotCovered),
+            sub.Points.Count(p => Coverage.NeedsAction(p.Coverage)))).ToList();
     }
 
     public async Task<IReadOnlyList<DutyRow>> ListAsync(DutyComponent component, DateOnly date, CancellationToken ct = default) =>
-        await Project(db.DutyAssignments.AsNoTracking().Where(d => d.Component == component && d.DutyDate == date)
-            .OrderBy(d => d.StartTime).ThenBy(d => d.Id)).ToListAsync(ct);
+        await LiveAsync(await Project(db.DutyAssignments.AsNoTracking().Where(d => d.Component == component && d.DutyDate == date)
+            .OrderBy(d => d.StartTime).ThenBy(d => d.Id)).ToListAsync(ct), ct);
 
     public async Task<PagedResult<DutyRow>> AuditListAsync(DutyAuditQuery q, CancellationToken ct = default)
     {
+        var size = Paging.NormalizePageSize(q.PageSize);
+        // A status filter is on the calculated status, so it is applied after the rows are read.
+        if (DutyStatuses.FromSlug(q.Status) is { } status)
+        {
+            var all = (await AuditListAllAsync(q, ct)).ToList();
+            var p = Paging.ClampPage(q.Page, all.Count, size);
+            return new PagedResult<DutyRow> { Items = all.Skip((p - 1) * size).Take(size).ToList(), Page = p, PageSize = size, TotalCount = all.Count };
+        }
         var query = AuditFilter(q);
         var total = await query.CountAsync(ct);
-        var size = Paging.NormalizePageSize(q.PageSize);
         var page = Paging.ClampPage(q.Page, total, size);
-        var items = await Project(AuditOrder(query)).Skip((page - 1) * size).Take(size).ToListAsync(ct);
+        var items = await LiveAsync(await Project(AuditOrder(query)).Skip((page - 1) * size).Take(size).ToListAsync(ct), ct);
         return new PagedResult<DutyRow> { Items = items, Page = page, PageSize = size, TotalCount = total };
     }
 
     /// <summary>Every duty session matching the audit filters, in the audit order (for the PDF download).</summary>
-    public async Task<IReadOnlyList<DutyRow>> AuditListAllAsync(DutyAuditQuery q, CancellationToken ct = default) =>
-        await Project(AuditOrder(AuditFilter(q))).ToListAsync(ct);
+    public async Task<IReadOnlyList<DutyRow>> AuditListAllAsync(DutyAuditQuery q, CancellationToken ct = default)
+    {
+        var rows = await LiveAsync(await Project(AuditOrder(AuditFilter(q))).ToListAsync(ct), ct);
+        return DutyStatuses.FromSlug(q.Status) is { } status ? rows.Where(r => r.Status == status).ToList() : rows;
+    }
 
     private IQueryable<DutyAssignment> AuditFilter(DutyAuditQuery q)
     {
@@ -357,7 +393,6 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
         var location = TextNormalizer.CleanText(q.Location);
         if (location.Length > 0) query = query.Where(d => d.Location != null && d.Location.Contains(location));
         if (q.StaffId is { } staffId) query = query.Where(d => d.StaffAssignments.Any(s => s.StaffMemberId == staffId));
-        if (DutyStatuses.FromSlug(q.Status) is { } status) query = query.Where(d => d.Status == status);
         if (q.FollowUp) query = query.Where(d => d.FollowUpRequired);
         return query;
     }
@@ -365,23 +400,29 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
     private static IQueryable<DutyAssignment> AuditOrder(IQueryable<DutyAssignment> query) =>
         query.OrderByDescending(d => d.DutyDate).ThenBy(d => d.StartTime).ThenBy(d => d.Id);
 
+    /// <summary>Coverage points of the day by calculated status.</summary>
     public async Task<IReadOnlyDictionary<DutyStatus, int>> StatusCountsAsync(DateOnly date, CancellationToken ct = default)
     {
-        var counts = await db.DutyAssignments.AsNoTracking().Where(d => d.DutyDate == date)
-            .GroupBy(d => d.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct);
-        return DutyStatuses.All.ToDictionary(s => s, s => counts.FirstOrDefault(c => c.Key == s)?.Count ?? 0);
+        var points = (await _board.DayAsync(date, ct)).AllSubs.SelectMany(s => s.Points).ToList();
+        return DutyStatuses.All.ToDictionary(s => s, s => points.Count(p => p.Status == s));
     }
 
+    /// <summary>Per Main Duty: its Sub-Duties by calculated status (a Sub-Duty not scheduled that day counts as nothing scheduled).</summary>
     public async Task<IReadOnlyDictionary<DutyType, SectionCoverage>> SectionCoverageAsync(DateOnly date, CancellationToken ct = default)
     {
-        var result = new Dictionary<DutyType, SectionCoverage>();
-        foreach (var type in DutyComponents.Types)
-            result[type] = SectionCoverage.Of((await SummaryAsync(type, date, ct)).Select(s => s.State));
-        return result;
+        var day = await _board.DayAsync(date, ct);
+        return DutyComponents.Types.ToDictionary(t => t, t => SectionCoverage.Of(day.Get(t).Subs.Select(s =>
+            !s.Scheduled ? SectionState.NothingScheduled
+            : s.Status == DutyStatus.Covered ? SectionState.Covered
+            : s.Status == DutyStatus.NotCovered ? SectionState.NotCovered
+            : SectionState.Open)));
     }
 
-    public Task<DutyRow?> GetAsync(int id, CancellationToken ct = default) =>
-        Project(db.DutyAssignments.AsNoTracking().Where(d => d.Id == id)).FirstOrDefaultAsync(ct);
+    public async Task<DutyRow?> GetAsync(int id, CancellationToken ct = default)
+    {
+        var row = await Project(db.DutyAssignments.AsNoTracking().Where(d => d.Id == id)).FirstOrDefaultAsync(ct);
+        return row is null ? null : (await LiveAsync([row], ct))[0];
+    }
 
     public async Task<IReadOnlyList<BackupResponseRow>> BackupHistoryAsync(int id, CancellationToken ct = default) =>
         await db.DutyBackupResponses.AsNoTracking().Where(r => r.DutyAssignmentId == id)
@@ -463,11 +504,6 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
         var check = await ValidateAsync(input, entity, ct);
         if (!check.Succeeded) return check;
 
-        var newCoverage = Coverage.Of(input.PrimaryAttendance, input.BackupStaffId,
-            input.BackupStaffId == entity.BackupStaffId ? entity.BackupStatus : BackupRequestStatus.Pending,
-            input.BackupStaffId == entity.BackupStaffId ? entity.BackupAttendance : AttendanceStatus.NotRecorded);
-        if (StatusGuard(entity.Status, newCoverage) is { } statusProblem) return ServiceResult.Fail("PrimaryAttendance", statusProblem);
-
         // Someone whose Duty periods count this duty must stay on it as present.
         if (entity.PrimaryStaffId != input.PrimaryStaffId || input.PrimaryAttendance == AttendanceStatus.Absent)
             if (await WorkloadProblemAsync(entity.Id, entity.PrimaryStaffId, ct) is { } p) return ServiceResult.Fail("PrimaryStaffId", p);
@@ -510,8 +546,6 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
             return ServiceResult.Fail("BackupStaffId", "The assigned staff member is absent: choose a backup staff member.");
 
         var newBackup = status == AttendanceStatus.Absent ? entity.BackupStaffId : null;
-        var coverage = Coverage.Of(status, newBackup, entity.BackupStatus, entity.BackupAttendance);
-        if (StatusGuard(entity.Status, coverage) is { } problem) return ServiceResult.Fail("", problem);
         if (status == AttendanceStatus.Absent && await WorkloadProblemAsync(id, entity.PrimaryStaffId, ct) is { } wp) return ServiceResult.Fail("", wp);
         if (newBackup is null && entity.BackupStaffId is { } ob && await WorkloadProblemAsync(id, ob, ct) is { } wb) return ServiceResult.Fail("", wb);
 
@@ -560,8 +594,6 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
         if (!Enum.IsDefined(status)) return ServiceResult.Fail("", "Unknown attendance value.");
         if (entity.BackupStaffId is null || entity.BackupStatus != BackupRequestStatus.Accepted)
             return ServiceResult.Fail("", "Backup attendance can be recorded only after the backup has accepted.");
-        var coverage = Coverage.Of(entity.PrimaryAttendance, entity.BackupStaffId, entity.BackupStatus, status);
-        if (StatusGuard(entity.Status, coverage) is { } problem) return ServiceResult.Fail("", problem);
         if (status == AttendanceStatus.Absent && await WorkloadProblemAsync(id, entity.BackupStaffId.Value, ct) is { } wp) return ServiceResult.Fail("", wp);
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -575,14 +607,7 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
         return ServiceResult.Ok(id);
     }
 
-    public async Task<ServiceResult> SetStatusAsync(int id, DutyStatus status, CancellationToken ct = default)
-    {
-        var entity = await db.DutyAssignments.FirstOrDefaultAsync(d => d.Id == id, ct);
-        if (entity is null) return ServiceResult.Fail("", "This duty no longer exists.");
-        return await ApplyStatusAsync(entity, status, null, ct);
-    }
-
-    public async Task<ServiceResult> UpdateAuditAsync(int id, DutyStatus status, string? auditNotes, string? issues, bool followUp, CancellationToken ct = default)
+    public async Task<ServiceResult> UpdateAuditAsync(int id, string? auditNotes, string? issues, bool followUp, CancellationToken ct = default)
     {
         var entity = await db.DutyAssignments.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (entity is null) return ServiceResult.Fail("", "This duty no longer exists.");
@@ -590,28 +615,14 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
         var problems = (issues ?? "").Trim();
         if (notes.Length > DutyAssignment.NotesMaxLength) return ServiceResult.Fail("AuditNotes", $"Use {DutyAssignment.NotesMaxLength} characters or fewer.");
         if (problems.Length > DutyAssignment.NotesMaxLength) return ServiceResult.Fail("IssuesEncountered", $"Use {DutyAssignment.NotesMaxLength} characters or fewer.");
-        return await ApplyStatusAsync(entity, status, (notes, problems, followUp), ct);
-    }
-
-    private async Task<ServiceResult> ApplyStatusAsync(DutyAssignment entity, DutyStatus status, (string Notes, string Issues, bool FollowUp)? audit, CancellationToken ct)
-    {
-        if (!Enum.IsDefined(status)) return ServiceResult.Fail("Status", "Choose Pending, In Progress, Covered or Not Covered.");
-        var coverage = Coverage.Of(entity.PrimaryAttendance, entity.BackupStaffId, entity.BackupStatus, entity.BackupAttendance);
-        if (DutyStatuses.Problem(status, coverage) is { } problem) return ServiceResult.Fail("Status", problem);
-
-        var statusChanged = entity.Status != status;
-        entity.Status = status;
+        var changed = (entity.AuditNotes ?? "") != notes || (entity.IssuesEncountered ?? "") != problems || entity.FollowUpRequired != followUp;
+        if (!changed) return ServiceResult.Ok(entity.Id);
+        entity.AuditNotes = notes.Length == 0 ? null : notes;
+        entity.IssuesEncountered = problems.Length == 0 ? null : problems;
+        entity.FollowUpRequired = followUp;
         entity.UpdatedBy = currentUser.Name;
-        if (statusChanged) Audit(entity, DutyAuditAction.StatusChanged, $"Status → {DutyStatuses.Label(status)}.");
-        if (audit is { } a)
-        {
-            var changed = (entity.AuditNotes ?? "") != a.Notes || (entity.IssuesEncountered ?? "") != a.Issues || entity.FollowUpRequired != a.FollowUp;
-            entity.AuditNotes = a.Notes.Length == 0 ? null : a.Notes;
-            entity.IssuesEncountered = a.Issues.Length == 0 ? null : a.Issues;
-            entity.FollowUpRequired = a.FollowUp;
-            if (changed) Audit(entity, DutyAuditAction.AuditNotesUpdated,
-                $"Audit notes updated{(a.Issues.Length > 0 ? "; issues recorded" : "")}{(a.FollowUp ? "; follow-up required" : "")}.");
-        }
+        Audit(entity, DutyAuditAction.AuditNotesUpdated,
+            $"Audit notes updated{(problems.Length > 0 ? "; issues recorded" : "")}{(followUp ? "; follow-up required" : "")}.");
         await db.SaveChangesAsync(ct);
         return ServiceResult.Ok(entity.Id);
     }
@@ -637,11 +648,6 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
 
     // ------------------------------------------------------------------ rules
 
-    private static string? StatusGuard(DutyStatus status, CoverageState newCoverage) =>
-        status is DutyStatus.Covered or DutyStatus.InProgress && !Coverage.IsCovered(newCoverage)
-            ? $"This duty is marked {DutyStatuses.Label(status)}, which needs someone recorded present. Change the duty status first."
-            : null;
-
     private async Task<string?> WorkloadProblemAsync(int dutyId, int staffId, CancellationToken ct)
     {
         var counted = await db.WorkloadAssignments.AnyAsync(w => w.DutyAssignmentId == dutyId && w.TeacherId == staffId, ct);
@@ -665,6 +671,9 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
         if (input.StartTime is null) r.AddError("StartTime", "Enter the start time.");
         if (input.EndTime is null) r.AddError("EndTime", "Enter the end time.");
         if (input.StartTime is { } s && input.EndTime is { } e && e <= s) r.AddError("EndTime", "The end time must be after the start time.");
+        else if (input.StartTime is { } s2 && input.EndTime is { } e2 && await _board.SectionScheduleOnAsync(input.Component, input.Date, ct) is { } window
+                 && (s2 < window.StartTime || e2 > window.EndTime))
+            r.AddError("StartTime", $"{info.Name} runs {ScheduleRules.Times12(window.StartTime, window.EndTime)} on this day: the duty must fall within it.");
         if (!Enum.IsDefined(input.PrimaryAttendance)) r.AddError("PrimaryAttendance", "Choose Present, Absent or Not recorded.");
 
         if (input.PrimaryStaffId is null) r.AddError("PrimaryStaffId", "Choose the assigned staff member.");
@@ -815,7 +824,8 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser) : 
             DutyDate = d.DutyDate,
             Description = d.Description,
             Action = action,
-            StatusAfter = d.Status,
+            StatusAfter = DutyTiming.Point(d.DutyDate, d.StartTime, d.EndTime, _time.Today, _time.TimeOfDay,
+                Coverage.Of(d.PrimaryAttendance, d.BackupStaffId, d.BackupStatus, d.BackupAttendance), d.Status == DutyStatus.NotCovered),
             Summary = summary.Length > DutyAudit.SummaryMaxLength ? summary[..DutyAudit.SummaryMaxLength] : summary,
             ChangedAt = DateTime.UtcNow,
             ChangedBy = currentUser.Name,

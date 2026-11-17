@@ -26,21 +26,20 @@ public class DashboardCoverageTests(DbFixture fx)
     [Fact]
     public async Task Duty_categories_count_sections_once_and_a_section_is_covered_only_when_all_its_duties_are()
     {
-        // A far-future school day nobody else uses, so this test owns every duty on it.
-        var day = new DateOnly(2032, 5, 11);
+        // A past school day nobody else uses: every duty has ended, so statuses come from the recorded attendance.
+        var day = new DateOnly(2024, 5, 14);
         Assert.Equal(DayOfWeek.Tuesday, day.DayOfWeek);
         var (staff, _) = await fx.NewTeacherAsync();
         var (other, _) = await fx.NewTeacherAsync();
         await using var db = fx.NewContext();
         var duties = DbFixture.Duties(db);
-        async Task<int> Add(DutyComponent c, int who, TimeOnly start)
+        async Task<int> Add(DutyComponent c, int who, TimeOnly start, AttendanceStatus att, DateOnly? on = null)
         {
-            var r = await duties.CreateAsync(new DutyInput(c, day, "Test", start, start.AddMinutes(20), null, who, AttendanceStatus.Present, null, null, []));
+            var r = await duties.CreateAsync(new DutyInput(c, on ?? day, "Test", start, start.AddMinutes(20), null, who, att, null, null, []));
             Ok(r);
             return r.EntityId!.Value;
         }
 
-        // Sections come from the duty cards (3 Morning, 5 Midday, 2 Dismissal); none is covered with nothing scheduled.
         var empty = await duties.SectionCoverageAsync(day);
         foreach (var t in DutyComponents.Types)
         {
@@ -48,29 +47,27 @@ public class DashboardCoverageTests(DbFixture fx)
             Assert.Equal(new SectionCoverage(n, 0, 0, 0, n), empty[t]);
         }
 
-        // Two duties (two staff) in Students Arrival Check are still one section; one pending keeps it open.
-        var a1 = await Add(DutyComponent.StudentsArrival, staff, new(7, 0));
-        var a2 = await Add(DutyComponent.StudentsArrival, other, new(7, 30));
-        Ok(await duties.SetStatusAsync(a1, DutyStatus.Covered));
-        Assert.Equal(new SectionCoverage(3, 0, 1, 0, 2), (await duties.SectionCoverageAsync(day))[DutyType.Morning]);
+        // Two coverage points in Students Arrival Check are one section; one without recorded presence makes it Not Covered.
+        var a1 = await Add(DutyComponent.StudentsArrival, staff, new(7, 0), AttendanceStatus.Present);
+        var a2 = await Add(DutyComponent.StudentsArrival, other, new(7, 30), AttendanceStatus.NotRecorded);
+        Assert.Equal(new SectionCoverage(3, 0, 0, 1, 2), (await duties.SectionCoverageAsync(day))[DutyType.Morning]);
 
-        // In progress is not covered either; once every duty in the section is Covered the section counts once.
-        Ok(await duties.SetStatusAsync(a2, DutyStatus.InProgress));
-        Assert.Equal(0, (await duties.SectionCoverageAsync(day))[DutyType.Morning].Covered);
-        Ok(await duties.SetStatusAsync(a2, DutyStatus.Covered));
+        // Once every point has someone recorded present, the section counts once as covered.
+        Ok(await duties.SetPrimaryAttendanceAsync(a2, AttendanceStatus.Present));
         Assert.Equal(new SectionCoverage(3, 1, 0, 0, 2), (await duties.SectionCoverageAsync(day))[DutyType.Morning]);
 
-        // A Not Covered duty makes its section Not Covered; the other categories never moved.
-        var k = await Add(DutyComponent.Kg2Break, staff, new(10, 0));
-        Ok(await duties.SetStatusAsync(k, DutyStatus.NotCovered));
+        // A point reported not covered makes its section Not Covered (a reason never counts as coverage); others never moved.
+        var k = await Add(DutyComponent.Kg2Break, staff, new(10, 0), AttendanceStatus.Present);
+        Ok(await DbFixture.DutyBoard(db).ReportUncoveredAsync(new CoverageReportInput(day, DutyComponent.Kg2Break, k, null, DutyUncoveredReason.AreaUnattended, "Left early", null)));
         var now = await duties.SectionCoverageAsync(day);
         Assert.Equal(new SectionCoverage(5, 0, 0, 1, 4), now[DutyType.Midday]);
         Assert.Equal(empty[DutyType.Dismissal], now[DutyType.Dismissal]);
 
-        // Moving a duty to another date takes it out of that day's section.
-        Ok(await duties.UpdateAsync(k, new DutyInput(DutyComponent.Kg2Break, day.AddDays(1), "Test", new(10, 0), new(10, 20), null,
-            staff, AttendanceStatus.Present, null, null, [])));
-        Assert.Equal(empty[DutyType.Midday], (await duties.SectionCoverageAsync(day))[DutyType.Midday]);
+        // A future duty keeps its section open (Pending), never covered.
+        var future = new DateOnly(2032, 5, 11);
+        await Add(DutyComponent.StudentsArrival, staff, new(7, 0), AttendanceStatus.Present, future);
+        Assert.Equal(new SectionCoverage(3, 0, 1, 0, 2), (await duties.SectionCoverageAsync(future))[DutyType.Morning]);
+        _ = a1;
     }
 
     [Fact]

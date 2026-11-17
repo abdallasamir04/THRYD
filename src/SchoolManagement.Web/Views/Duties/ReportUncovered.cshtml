@@ -1,0 +1,65 @@
+@model CoverageReportForm
+@*
+    Report a responsibility that was not covered: a coverage point of the Sub-Duty, or another area typed by the user; the
+    reason and notes. Kept with who and when; an edit adds a new version. A report never counts as coverage.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Report not covered"; ViewData["Nav"] = "MorningDuty"; }
+    var sub = Model.Sub;
+    var info = DutyComponents.FromSlug(Model.Component);
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/duties/report-uncovered" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Component" value="@Model.Component" />
+        <input type="hidden" name="Date" value="@Model.Date" />
+        @if (Model.Supersedes is { } sup) { <input type="hidden" name="Supersedes" value="@sup" /> }
+        <div class="modal__head">
+            <span class="modal__icon modal__icon--warning">@Ui.Icon("alert-triangle", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@(Model.Supersedes is null ? "Report not covered" : "Edit not-covered report") — @info?.Name</h2>
+                <p class="modal__sub">@Model.Date@(sub is { Scheduled: true } ? $" · {sub.Times}" : "")</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="r-point">Coverage point</label>
+                <select class="select" id="r-point" name="PointId" data-searchable>
+                    <option value="">Another area or responsibility (type it below)</option>
+                    @foreach (var p in sub?.Points ?? [])
+                    {
+                        <option value="@p.Id" selected="@(Model.PointId == p.Id)" data-note="@ScheduleRules.Times12(p.Start, p.End) · @p.Staff">@p.Area</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="r-area">Uncovered area or responsibility</label>
+                <input class="input" id="r-area" name="Area" value="@Model.Area" maxlength="@DutyCoverageReport.AreaMaxLength" dir="auto" placeholder="e.g. Gate B — left unattended from 7:30 AM" />
+                <span class="hint">Leave empty for a coverage point: its location is used.</span>
+            </div>
+            <fieldset class="field">
+                <legend class="label">Reason <span class="req" aria-hidden="true">*</span></legend>
+                <div class="dreasons">
+                    @foreach (var r in DutyReasons.All)
+                    {
+                        <label class="dreasons__opt"><input type="radio" name="Reason" value="@r" checked="@(Model.Reason == r)" /><span>@DutyReasons.Label(r)</span></label>
+                    }
+                </div>
+            </fieldset>
+            <div class="field">
+                <label class="label" for="r-notes">Notes</label>
+                <textarea class="input textarea" id="r-notes" name="Notes" rows="3" maxlength="@DutyCoverageReport.NotesMaxLength" dir="auto">@Model.Notes</textarea>
+            </div>
+            <p class="hint">A reason explains why something was not covered. It never marks it covered: coverage is the attendance recorded at the point.</p>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="/duties">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save report</button>
+        </div>
+    </form>
+</div>

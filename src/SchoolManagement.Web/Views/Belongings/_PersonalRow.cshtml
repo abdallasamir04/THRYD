@@ -1,0 +1,92 @@
+@model PersonalRowModel
+@*
+    One student on a Personal Belongings class page, as one compact row in three fixed areas:
+    the student (left) · the five items as one aligned checklist (centre) · status, summary and actions (right, fixed width).
+    Notes show as a one-line preview, so every row keeps the same height. Redrawn from this partial after every save.
+*@
+@{
+    var r = Model.Row;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var state = r.Complete ? "done" : r.Started ? "progress" : "idle";
+    var stateLabel = r.Complete ? "Completed" : r.Started ? "In Progress" : "Not Checked";
+    var disabled = !Model.CanRecord;
+    var checkedItems = r.Items.Count(s => s is not null);
+    var changes = r.Corrections + r.NoteVersions;
+}
+<li class="bl-row pb-row pb-row--@state" data-bl-row data-student="@r.StudentId" data-name="@($"{r.Name} {r.StudentId}".ToLowerInvariant())" data-complete="@(r.Complete ? "true" : "false")">
+    <div class="pb-who">
+        <span class="avatar avatar--@Ui.Tone(r.Name)" aria-hidden="true">@Ui.Initials(r.Name)</span>
+        <span class="pb-who__text">
+            <a class="pb-who__name" href="/belongings/personal/history?studentId=@r.StudentId" dir="auto">@r.Name</a>
+            <span class="pb-who__meta">ID @r.StudentId <span class="bl-state bl-state--@state">@stateLabel</span></span>
+            @* The note line is always there (empty when there is no note), so every row has the same height. *@
+            @if (r.Notes is not null)
+            {
+                <span class="pb-who__note" dir="auto" title="@r.Notes">@Ui.Icon("file-text", "icon--sm")<span>@r.Notes</span></span>
+            }
+            else
+            {
+                <span class="pb-who__note is-empty" aria-hidden="true"></span>
+            }
+        </span>
+    </div>
+
+    <div class="pb-items" role="group" aria-label="Belongings of @r.Name">
+        @for (var i = 0; i < PersonalItems.All.Count; i++)
+        {
+            var item = PersonalItems.All[i];
+            var current = r.Items[i];
+            <div class="pb-item @(current is null ? "is-empty" : "is-set")" role="group" aria-label="@item.Label of @r.Name: @BelongingsStatus.Label(current)">
+                <span class="pb-item__label" title="@item.Label">@item.Label</span>
+                <span class="pb-seg">
+                    @foreach (var s in BelongingsStatus.Choices)
+                    {
+                        <button type="button" class="pb-seg__btn pb-seg__btn--@BelongingsStatus.Slug(s)" data-bl-mark data-item="@item.Key" data-status="@s"
+                                aria-pressed="@(current == s ? "true" : "false")" aria-label="@item.Label: @BelongingsStatus.Label(s)" title="@BelongingsStatus.Label(s)" disabled="@disabled">
+                            @if (s == ItemStatus.Green) { @Ui.Icon("check", "icon--sm") }
+                            else if (s == ItemStatus.Red) { @Ui.Icon("x", "icon--sm") }
+                            else { <span>N/A</span> }
+                        </button>
+                    }
+                </span>
+            </div>
+        }
+    </div>
+
+    <div class="pb-side">
+        <div class="pb-side__summary">
+            <span class="pb-side__count"><strong class="num">@checkedItems</strong>/@PersonalItems.All.Count checked</span>
+            <span class="pb-side__ready num" title="Items Available ÷ items checked (N/A excluded)">@ReadinessCounts.Text(r.Readiness.Percent)</span>
+        </div>
+        <div class="pb-side__actions">
+            <button type="button" class="pb-action" data-bl-all disabled="@(disabled || r.Complete)"
+                    title="@(r.Complete ? "Every item already has a status" : "Marks the items not checked yet as Available")">@Ui.Icon("check-circle", "icon--sm")<span>All available</span></button>
+            <button type="button" class="pb-action @(r.Notes is null ? "" : "has-notes")" data-bl-notes-toggle aria-expanded="false" aria-controls="notes-@r.StudentId">
+                @Ui.Icon("file-text", "icon--sm")<span>@(r.Notes is null ? "Add note" : "Edit note")</span>
+            </button>
+        </div>
+        <span class="pb-side__when">
+            @if (r.UpdatedAt is { } at)
+            {
+                <span>@SchoolTime.Current.ToLocal(at).ToString("h:mm tt", c)@(r.UpdatedBy is null ? "" : " · " + r.UpdatedBy)</span>
+            }
+            else
+            {
+                <span>Not recorded</span>
+            }
+            @if (changes > 0)
+            {
+                <a href="/belongings/personal/records/@r.RecordId" data-modal class="bl-row__hist">@Ui.Icon("clock", "icon--sm")@changes change@(changes == 1 ? "" : "s")</a>
+            }
+        </span>
+    </div>
+
+    <div class="bl-row__notes pb-notes" id="notes-@r.StudentId" hidden>
+        <label class="label" for="note-@r.StudentId">Notes / observations for @r.Name</label>
+        <textarea class="input textarea" id="note-@r.StudentId" rows="2" maxlength="@BelongingsRecord.NotesMaxLength" data-bl-notes-text disabled="@disabled">@r.Notes</textarea>
+        <div class="bl-row__notes-actions">
+            <button type="button" class="btn btn--secondary btn--sm" data-bl-notes-toggle>Cancel</button>
+            <button type="button" class="btn btn--primary btn--sm" data-bl-notes-save disabled="@disabled">@Ui.Icon("check", "icon--sm")Save note</button>
+        </div>
+    </div>
+</li>

@@ -1,0 +1,25 @@
+@model DateOnly
+@* Session Attendance day bar: previous / next day and the THRYD date picker (no future dates); keeps the page's other query values. *@
+@{
+    var today = SchoolWeek.Today;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+<div class="ses-daynav" aria-label="Date">
+    <a class="icon-btn icon-btn--bordered" href="@Context.Request.WithQuery(("date", SchoolWeek.Iso(Model.AddDays(-1))), ("lesson", null))" aria-label="Previous day" title="Previous day">@Ui.Icon("chevron-left")</a>
+    <div class="ses-daynav__label">
+        <span class="ses-daynav__eyebrow">@(Model == today ? "Today" : Model < today ? "History" : "Upcoming day")</span>
+        <strong>@Model.ToString("dddd, d MMMM yyyy", c)</strong>
+    </div>
+    @if (Model < today)
+    {
+        <a class="icon-btn icon-btn--bordered" href="@Context.Request.WithQuery(("date", SchoolWeek.Iso(Model.AddDays(1))), ("lesson", null))" aria-label="Next day" title="Next day">@Ui.Icon("chevron-right")</a>
+    }
+    <form method="get" action="@Context.Request.Path" class="ses-daynav__picker">
+        <label class="visually-hidden" for="ses-day">Go to date</label>
+        <input class="input picker" type="date" id="ses-day" name="date" value="@SchoolWeek.Iso(Model)" max="@SchoolWeek.Iso(today)" data-datepicker data-autosubmit data-empty-text="Choose a date" />
+    </form>
+    @if (Model != today)
+    {
+        <a class="btn btn--primary btn--sm" href="@Context.Request.WithQuery(("date", null), ("lesson", null))">Today</a>
+    }
+</div>

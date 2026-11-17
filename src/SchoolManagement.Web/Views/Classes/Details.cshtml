@@ -2,7 +2,8 @@
 @*
     Class page (/classes/{id}). Default: the class's students, like a regular class page. KG Stage classes (Pre-K, KG1,
     KG2) add a compact teaching-team summary and a Teaching Team button that opens the team panel (?panel=team); the
-    Homeroom dropdown and Co-Teacher checklist appear only after Edit Teaching Team (&edit=1). Other stages have no team.
+    Homeroom Teacher and Co-Teacher dropdowns (one each, the same control) appear only after Edit Teaching Team (&edit=1).
+    Other stages have no team.
     The team is class-level information only: it does not change timetable sessions, P.E. staff or workload.
 *@
 @using SchoolManagement.Web.Controllers
@@ -83,18 +84,15 @@
                     }
                 </span>
                 <span class="team-summary__item">
-                    <span class="faint">Co-Teachers</span>
-                    @if (team.CoTeachers.Count == 0)
+                    <span class="faint">Co-Teacher</span>
+                    @if (team.CoTeacher is { } co)
                     {
-                        <span class="muted">None</span>
+                        <span class="team-mini"><span class="avatar avatar--@Ui.Tone(co.Name)" aria-hidden="true">@Ui.Initials(co.Name)</span><span dir="auto">@co.Name</span></span>
+                        @if (team.HasExtraCoTeachers) { <span class="badge badge--warning" title="More than one active Co-Teacher from before: choose one">+@(team.CoTeachers.Count - 1)</span> }
                     }
                     else
                     {
-                        <span class="team-summary__avatars" aria-hidden="true">
-                            @foreach (var m in team.CoTeachers.Take(4)) { <span class="avatar avatar--@Ui.Tone(m.Name)" title="@m.Name">@Ui.Initials(m.Name)</span> }
-                        </span>
-                        <strong class="num">@team.CoTeachers.Count</strong>
-                        <span class="visually-hidden">@string.Join(", ", team.CoTeachers.Select(m => m.Name))</span>
+                        <span class="muted">Not assigned</span>
                     }
                 </span>
             }
@@ -120,7 +118,7 @@ else if (team is null)
         <div class="empty">
             <span class="empty__icon">@Ui.Icon("calendar")</span>
             <p class="empty__title">No academic year yet</p>
-            <p class="empty__text">Teaching teams are kept per academic year. Add one under Academic Calendar (sidebar → Academics), then assign this class's team.</p>
+            <p class="empty__text">Teaching teams are kept per academic year. Add one under School Calendar (sidebar → Academics), then assign this class's team.</p>
         </div>
     </section>
 }
@@ -154,6 +152,10 @@ else
             </div>
         </div>
 
+        @if (team.HasExtraCoTeachers)
+        {
+            <div class="notice notice--warning class-team__notice">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>This class has @team.CoTeachers.Count active Co-Teachers from before the one-Co-Teacher rule: @string.Join(", ", team.CoTeachers.Select(m => m.Name)).</strong>Nothing was changed automatically. Edit the teaching team and choose the one Co-Teacher who stays; the others are then ended and kept in the history.</div></div>
+        }
         @if (!editing)
         {
             <div class="class-team__grid card__body">
@@ -169,10 +171,10 @@ else
                     }
                 </div>
                 <div class="class-team__area">
-                    <h3 class="class-team__label">Co-Teachers <span class="faint">(@team.CoTeachers.Count)</span></h3>
+                    <h3 class="class-team__label">Co-Teacher</h3>
                     @if (team.CoTeachers.Count == 0)
                     {
-                        <p class="muted class-team__empty">No Co-Teachers assigned.</p>
+                        <p class="muted class-team__empty">No Co-Teacher assigned.</p>
                     }
                     else
                     {
@@ -205,22 +207,25 @@ else
                         }
                         <span asp-validation-for="HomeroomId" class="field-validation-error"></span>
                     </div>
-                    <fieldset class="field">
-                        <legend class="label">Co-Teachers <span class="faint" style="font-weight:600">(any number · <span data-team-count>@Model.CoTeacherIds.Count(id => id != Model.HomeroomId)</span> selected)</span></legend>
-                        <div class="input-icon pick-search">@Ui.Icon("search")<input class="input input--sm" type="search" placeholder="Find staff…" aria-label="Find staff" data-filter-cards="#team-coteachers" autocomplete="off" /></div>
-                        <div class="pick-list" id="team-coteachers">
+                    <div class="field">
+                        <label class="label" for="CoTeacherId">Co-Teacher <span class="faint" style="font-weight:600">(one)</span></label>
+                        <select class="select" id="CoTeacherId" name="CoTeacherId" data-searchable data-team-co>
+                            <option value="">No Co-Teacher</option>
                             @foreach (var s in Model.Staff)
                             {
-                                var isHomeroom = Model.HomeroomId == s.Id;
-                                <label class="pick-row" data-card-text="@s.FullName @s.JobTitle">
-                                    <input type="checkbox" name="CoTeacherIds" value="@s.Id" checked="@(Model.CoTeacherIds.Contains(s.Id) && !isHomeroom)" disabled="@isHomeroom" data-team-co />
-                                    <span dir="auto">@s.FullName</span>@if (s.JobTitle is not null) { <span class="faint" dir="auto">@s.JobTitle</span> }
-                                    <span class="faint" data-team-hr-note hidden="@(!isHomeroom)">Homeroom Teacher</span>
-                                </label>
+                                <option value="@s.Id" selected="@(Model.CoTeacherId == s.Id)">@s.FullName@(s.JobTitle is null ? "" : $" — {s.JobTitle}")</option>
                             }
-                        </div>
-                        <span asp-validation-for="CoTeacherIds" class="field-validation-error"></span>
-                    </fieldset>
+                        </select>
+                        @if (team.HasExtraCoTeachers)
+                        {
+                            <p class="hint">Saving keeps only the Co-Teacher chosen here; @(team.CoTeachers.Count - 1) other active Co-Teacher@(team.CoTeachers.Count == 2 ? " is" : "s are") ended and kept in the history.</p>
+                        }
+                        else if (team.CoTeacher is { } currentCo)
+                        {
+                            <p class="hint">Choosing someone else and saving replaces @currentCo.Name; the previous assignment is kept in the history.</p>
+                        }
+                        <span asp-validation-for="CoTeacherId" class="field-validation-error"></span>
+                    </div>
                 </div>
                 <div class="class-team__foot">
                     <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save Changes</button>
@@ -289,24 +294,21 @@ else
     @if (editing)
     {
     <script>
-        // Frontend copy of the rule the server enforces: the Homeroom Teacher cannot also be ticked as a Co-Teacher.
+        // Frontend copy of the rule the server enforces: one staff member cannot be Homeroom Teacher and Co-Teacher of the
+        // same class. Both dropdowns behave the same: choosing someone already in the other role clears that role.
         (function () {
             var form = document.querySelector("[data-class-team]");
             if (!form) return;
             var homeroom = form.querySelector("[data-team-homeroom]");
-            var count = form.querySelector("[data-team-count]");
-            function sync() {
-                form.querySelectorAll("[data-team-co]").forEach(function (box) {
-                    var isHr = box.value === homeroom.value;
-                    if (isHr) box.checked = false;
-                    box.disabled = isHr;
-                    var note = box.closest("label").querySelector("[data-team-hr-note]");
-                    if (note) note.hidden = !isHr;
-                });
-                if (count) count.textContent = form.querySelectorAll("[data-team-co]:checked").length;
+            var co = form.querySelector("[data-team-co]");
+            function guard(changed, other, otherRole) {
+                if (!changed.value || changed.value !== other.value) return;
+                other.value = "";
+                other.dispatchEvent(new Event("change", { bubbles: true }));
+                if (window.App && App.toast) App.toast("One staff member cannot hold both roles: " + otherRole + " cleared.", "info");
             }
-            homeroom.addEventListener("change", sync);
-            form.addEventListener("change", function (e) { if (e.target.matches("[data-team-co]")) sync(); });
+            homeroom.addEventListener("change", function () { guard(homeroom, co, "Co-Teacher"); });
+            co.addEventListener("change", function () { guard(co, homeroom, "Homeroom Teacher"); });
         })();
     </script>
     }

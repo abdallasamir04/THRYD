@@ -1,0 +1,94 @@
+@model AcademicHistoryViewModel
+@*
+    Academic Belongings · History & Reports: every class and every recorded lesson, filtered by period, scope, subject,
+    teacher, period and status; readiness by class / subject / teacher / quarter, trends, and every student-lesson record
+    with the lesson as it was recorded (later timetable edits never change it). Downloads use the same filters.
+*@
+@{
+    var h = Model.History;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var qs = Model.Query.ToQuery();
+    ViewData["Title"] = "Academic Belongings · History & Reports";
+    ViewData["Nav"] = "Belongings";
+}
+@section Head { <link rel="stylesheet" href="~/css/belongings.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/belongings">Belongings</a></li><li><a href="/belongings/academic">Academic Belongings</a></li><li><span aria-current="page">History &amp; Reports</span></li></ol>
+        <h1 class="page-title">Academic Belongings <span class="faint">· History &amp; Reports</span></h1>
+        <p class="page-sub">Every class and every recorded lesson. Filter by period, scope, subject, teacher or status, open a lesson, or download the report.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/belongings/academic/history/excel@(qs)">@Ui.Icon("sheet")Download Excel</a>
+        <a class="btn btn--primary" href="/belongings/academic/history/pdf@(qs)">@Ui.Icon("file-pdf")Download PDF</a>
+    </div>
+</div>
+
+<partial name="_Tabs" model='("academic", true)' />
+<partial name="_HistoryFilters" model="(Model.Options, Model.Query, true, h.Scope)" />
+
+<ul class="kpis bl-kpis" aria-label="Summary">
+    <li class="bl-kpi"><span class="bl-kpi__label">Lessons recorded</span><span class="bl-kpi__value num">@h.Lessons</span></li>
+    <li class="bl-kpi"><span class="bl-kpi__label">Student lesson checks</span><span class="bl-kpi__value num">@h.Checks</span></li>
+    <li class="bl-kpi bl-kpi--ok"><span class="bl-kpi__label">Complete</span><span class="bl-kpi__value num">@h.Complete</span></li>
+    <li class="bl-kpi bl-kpi--warn"><span class="bl-kpi__label">Incomplete</span><span class="bl-kpi__value num">@h.Incomplete</span></li>
+    <li class="bl-kpi bl-kpi--bad"><span class="bl-kpi__label">Missing Book</span><span class="bl-kpi__value num">@h.MissingBook</span></li>
+    <li class="bl-kpi bl-kpi--bad"><span class="bl-kpi__label">Missing Copy Book</span><span class="bl-kpi__value num">@h.MissingCopyBook</span></li>
+    <li class="bl-kpi bl-kpi--primary"><span class="bl-kpi__label">Readiness</span><span class="bl-kpi__value num">@ReadinessCounts.Text(h.Readiness.Percent)</span><span class="bl-kpi__note">Available ÷ checked, N/A excluded</span></li>
+</ul>
+
+<div class="bl-panels">
+    <section class="card" aria-labelledby="by-class"><div class="card__head"><h2 class="card__title" id="by-class">@Ui.Icon("door")Readiness by class</h2></div><partial name="_GroupTable" model='("Class", h.ByClass)' /></section>
+    <section class="card" aria-labelledby="by-subject"><div class="card__head"><h2 class="card__title" id="by-subject">@Ui.Icon("layers")Readiness by subject</h2></div><partial name="_GroupTable" model='("Subject", h.BySubject)' /></section>
+    <section class="card" aria-labelledby="by-teacher"><div class="card__head"><h2 class="card__title" id="by-teacher">@Ui.Icon("users")Readiness by teacher</h2></div><partial name="_GroupTable" model='("Teacher", h.ByTeacher)' /></section>
+    <section class="card" aria-labelledby="by-quarter"><div class="card__head"><h2 class="card__title" id="by-quarter">@Ui.Icon("calendar")Quarterly readiness</h2></div><partial name="_GroupTable" model='("Quarter", h.ByQuarter)' /></section>
+</div>
+
+<div class="bl-panels">
+    <section class="card" aria-labelledby="by-month"><div class="card__head"><h2 class="card__title" id="by-month">@Ui.Icon("calendar-days")Monthly trend</h2></div><partial name="_GroupTable" model='("Month", h.ByMonth)' /></section>
+    <partial name="_Trend" model='("Weekly trend", h.Trend)' />
+</div>
+
+<section class="card" aria-labelledby="records">
+    <div class="card__head"><h2 class="card__title" id="records">@Ui.Icon("list")Student lesson records</h2><span class="hint">@Ui.Plural(h.Checks, "record", "records")</span></div>
+    @if (h.Page.Items.Count == 0)
+    {
+        <div class="empty">@Ui.Icon("inbox")<p>No Academic Belongings records match these filters.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table bl-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th><th scope="col">Class</th><th scope="col">Period</th><th scope="col">Time</th><th scope="col">Subject</th><th scope="col">Teacher</th>
+                        <th scope="col">Student</th><th scope="col">Book</th><th scope="col">Copy Book</th><th scope="col">Notes</th><th scope="col">Recorded / modified</th><th scope="col"><span class="visually-hidden">Open</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in h.Page.Items)
+                    {
+                        <tr>
+                            <td class="nowrap">@r.Date.ToString("ddd d MMM yyyy", c)</td>
+                            <td>@r.ClassName</td>
+                            <td class="nowrap">@if (r.IsLesson) { @r.Period } else { <span class="faint" title="Recorded per day and subject, before lesson-based checks">Daily record</span> }</td>
+                            <td class="nowrap num">@r.Times</td>
+                            <td dir="auto">@r.Subject</td>
+                            <td dir="auto">@(r.TeacherName ?? "—")</td>
+                            <td dir="auto"><strong>@r.StudentName</strong></td>
+                            <td><span class="bl-pill bl-pill--@BelongingsStatus.Slug(r.Book)">@BelongingsStatus.Label(r.Book)</span></td>
+                            <td><span class="bl-pill bl-pill--@BelongingsStatus.Slug(r.CopyBook)">@BelongingsStatus.Label(r.CopyBook)</span></td>
+                            <td class="bl-table__notes" dir="auto">@(r.Notes ?? "—")</td>
+                            <td class="bl-table__who"><span>@(r.RecordedBy ?? "—")</span><span class="faint">@Ui.DateTime(r.UpdatedAt)@(r.UpdatedBy is null ? "" : " · " + r.UpdatedBy)@(r.Corrections > 0 ? $" · {r.Corrections} change{(r.Corrections == 1 ? "" : "s")}" : "")</span></td>
+                            <td><a class="btn btn--ghost btn--sm" href="/belongings/academic/records/@r.Id" data-modal>Open</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <partial name="_HistoryPager" model='(h.Page.Page, h.Page.TotalPages, h.Page.FirstItem, h.Page.LastItem, h.Page.TotalCount, "/belongings/academic/history" + qs)' />
+    }
+</section>
+
+@section Scripts { <script src="~/js/belongings.js" asp-append-version="true"></script> }

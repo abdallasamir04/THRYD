@@ -13,6 +13,10 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<DutyAssignment> DutyAssignments => Set<DutyAssignment>();
+    public DbSet<DutySection> DutySections => Set<DutySection>();
+    public DbSet<DutySectionSchedule> DutySectionSchedules => Set<DutySectionSchedule>();
+    public DbSet<DutyMainSchedule> DutyMainSchedules => Set<DutyMainSchedule>();
+    public DbSet<DutyCoverageReport> DutyCoverageReports => Set<DutyCoverageReport>();
     public DbSet<DutyAssignmentClass> DutyAssignmentClasses => Set<DutyAssignmentClass>();
     public DbSet<DutyBackupResponse> DutyBackupResponses => Set<DutyBackupResponse>();
     public DbSet<TeacherWorkloadAssignment> WorkloadAssignments => Set<TeacherWorkloadAssignment>();
@@ -35,6 +39,9 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
     public DbSet<PeEquipmentItem> PeEquipmentItems => Set<PeEquipmentItem>();
     public DbSet<AcademicYear> AcademicYears => Set<AcademicYear>();
     public DbSet<AcademicQuarter> AcademicQuarters => Set<AcademicQuarter>();
+    public DbSet<BelongingsChange> BelongingsChanges => Set<BelongingsChange>();
+    public DbSet<SchoolCalendarEvent> SchoolCalendarEvents => Set<SchoolCalendarEvent>();
+    public DbSet<SchoolCalendarMark> SchoolCalendarMarks => Set<SchoolCalendarMark>();
     public DbSet<BelongingsRecord> BelongingsRecords => Set<BelongingsRecord>();
     public DbSet<AcademicMaterialRecord> AcademicMaterialRecords => Set<AcademicMaterialRecord>();
     public DbSet<BelongingsNoteHistory> BelongingsNoteHistory => Set<BelongingsNoteHistory>();
@@ -457,6 +464,59 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        // ---- Duty schedules: Sub-Duty definitions (ids = DutyComponent codes), versioned schedules, uncovered reports.
+        b.Entity<DutySection>(e =>
+        {
+            e.ToTable("DutySections");
+            e.Property(x => x.Id).ValueGeneratedNever(); // the DutyComponent code, assigned by the service
+            e.Property(x => x.Name).HasMaxLength(DutySection.NameMaxLength).IsRequired();
+            e.Property(x => x.Slug).HasMaxLength(DutySection.SlugMaxLength).IsRequired();
+            e.Property(x => x.Summary).HasMaxLength(DutySection.SummaryMaxLength).IsRequired();
+            e.Property(x => x.Icon).HasMaxLength(DutySection.IconMaxLength).IsRequired();
+            e.Property(x => x.Grades).HasMaxLength(DutySection.GradesMaxLength);
+            e.Property(x => x.CreatedBy).HasMaxLength(150);
+            e.HasIndex(x => x.Slug).IsUnique();
+            var seeded = new DateTime(2026, 11, 16, 0, 0, 0, DateTimeKind.Utc);
+            e.HasData(
+                new DutySection { Id = 1, DutyType = DutyType.Morning, Slug = "students-arrival", Name = "Students Arrival Check", Summary = "Staff on duty while students arrive at school.", Icon = "users", SortOrder = 1, CreatedAt = seeded },
+                new DutySection { Id = 2, DutyType = DutyType.Morning, Slug = "in-class-morning", Name = "In-Class Morning", Summary = "Staff supervising classes before the first lesson.", Icon = "door", HasClasses = true, SortOrder = 2, CreatedAt = seeded },
+                new DutySection { Id = 3, DutyType = DutyType.Morning, Slug = "morning-assembly", Name = "Morning Assembly (Line) / Proadcast", Summary = "Assembly line-up and proadcast duty.", Icon = "activity", DetailsPending = true, SortOrder = 3, CreatedAt = seeded },
+                new DutySection { Id = 8, DutyType = DutyType.Midday, Slug = "prek-kg1", Name = "Pre-K / KG1", Summary = "Break supervision for Pre-K and KG1.", Icon = "school", Grades = "Grades Pre-K and KG1", SortOrder = 1, CreatedAt = seeded },
+                new DutySection { Id = 7, DutyType = DutyType.Midday, Slug = "kg2", Name = "KG2", Summary = "Break supervision for KG2.", Icon = "school", Grades = "Grade KG2", SortOrder = 2, CreatedAt = seeded },
+                new DutySection { Id = 6, DutyType = DutyType.Midday, Slug = "lower-elementary", Name = "Lower Elementary", Summary = "Break supervision for grades 1–3.", Icon = "users", Grades = "Grades 1–3", SortOrder = 3, CreatedAt = seeded },
+                new DutySection { Id = 5, DutyType = DutyType.Midday, Slug = "upper-elementary", Name = "Upper Elementary", Summary = "Break supervision for grades 4–6.", Icon = "users", Grades = "Grades 4–6", SortOrder = 4, CreatedAt = seeded },
+                new DutySection { Id = 4, DutyType = DutyType.Midday, Slug = "middle-high-break", Name = "Middle / High School Break", Summary = "Break supervision for grades 7–10.", Icon = "users", Grades = "Grades 7–10", SortOrder = 5, CreatedAt = seeded },
+                new DutySection { Id = 9, DutyType = DutyType.Dismissal, Slug = "bus", Name = "Bus", Summary = "Staff seeing students onto the school buses. Gate and bus details go in location and notes.", Icon = "door", SortOrder = 1, CreatedAt = seeded },
+                new DutySection { Id = 10, DutyType = DutyType.Dismissal, Slug = "pickup", Name = "Pickup", Summary = "Staff handing students over to parents at pickup. Gate details go in location and notes.", Icon = "user", SortOrder = 2, CreatedAt = seeded });
+        });
+
+        b.Entity<DutySectionSchedule>(e =>
+        {
+            e.ToTable("DutySectionSchedules", t => t.HasCheckConstraint("CK_DutySectionSchedules_Times", "[EndTime] > [StartTime]"));
+            e.Property(x => x.CreatedBy).HasMaxLength(150);
+            e.HasOne(x => x.Section).WithMany(s => s.Schedules).HasForeignKey(x => x.DutySectionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.DutySectionId, x.EffectiveFrom });
+        });
+
+        b.Entity<DutyMainSchedule>(e =>
+        {
+            e.ToTable("DutyMainSchedules", t => t.HasCheckConstraint("CK_DutyMainSchedules_Times", "[EndTime] > [StartTime]"));
+            e.Property(x => x.CreatedBy).HasMaxLength(150);
+            e.HasIndex(x => new { x.DutyType, x.EffectiveFrom });
+        });
+
+        b.Entity<DutyCoverageReport>(e =>
+        {
+            e.ToTable("DutyCoverageReports");
+            e.Property(x => x.Area).HasMaxLength(DutyCoverageReport.AreaMaxLength).IsRequired();
+            e.Property(x => x.Notes).HasMaxLength(DutyCoverageReport.NotesMaxLength);
+            e.Property(x => x.RecordedBy).HasMaxLength(150);
+            e.HasIndex(x => new { x.DutyDate, x.Component });
+            e.HasIndex(x => x.DutyAssignmentId);
+            e.HasIndex(x => x.SupersedesId);
+        });
+
         b.Entity<DutyBackupResponse>(e =>
         {
             e.ToTable("DutyBackupResponses");
@@ -525,10 +585,32 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             {
                 t.HasCheckConstraint("CK_AcademicQuarters_Number", "[Number] BETWEEN 1 AND 4");
                 t.HasCheckConstraint("CK_AcademicQuarters_Dates", "([StartDate] IS NULL AND [EndDate] IS NULL) OR ([StartDate] IS NOT NULL AND [EndDate] IS NOT NULL AND [EndDate] >= [StartDate])");
+                t.HasCheckConstraint("CK_AcademicQuarters_CalendarDates", "([CalendarStartDate] IS NULL AND [CalendarEndDate] IS NULL) OR ([CalendarStartDate] IS NOT NULL AND [CalendarEndDate] IS NOT NULL AND [CalendarEndDate] >= [CalendarStartDate])");
             });
             e.Property(x => x.Name).HasMaxLength(AcademicQuarter.NameMaxLength).IsRequired();
             e.HasOne(x => x.AcademicYear).WithMany(y => y.Quarters).HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.AcademicYearId, x.Number }).IsUnique();
+        });
+        b.Entity<SchoolCalendarEvent>(e =>
+        {
+            e.ToTable("SchoolCalendarEvents", t =>
+            {
+                t.HasCheckConstraint("CK_SchoolCalendarEvents_Color", "[Color] BETWEEN 0 AND 9");
+                t.HasCheckConstraint("CK_SchoolCalendarEvents_Dates", "[EndDate] IS NULL OR ([StartDate] IS NOT NULL AND [EndDate] >= [StartDate])");
+            });
+            e.Property(x => x.Title).HasMaxLength(SchoolCalendarEvent.TitleMaxLength).IsRequired();
+            e.Property(x => x.DateLabel).HasMaxLength(SchoolCalendarEvent.DateLabelMaxLength);
+            e.Property(x => x.AccentText).HasMaxLength(SchoolCalendarEvent.AccentMaxLength);
+            e.Property(x => x.Notes).HasMaxLength(SchoolCalendarEvent.NotesMaxLength);
+            e.Ignore(x => x.LastDate);
+            e.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.AcademicYearId, x.ListMonth, x.SortOrder });
+        });
+        b.Entity<SchoolCalendarMark>(e =>
+        {
+            e.ToTable("SchoolCalendarMarks", t => t.HasCheckConstraint("CK_SchoolCalendarMarks_Color", "[Color] BETWEEN 1 AND 9"));
+            e.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.AcademicYearId, x.Date }).IsUnique();
         });
         b.Entity<BelongingsRecord>(e =>
         {
@@ -538,6 +620,7 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
                     t.HasCheckConstraint($"CK_BelongingsRecords_{c}", $"[{c}] IS NULL OR [{c}] {status}");
             });
             e.Property(x => x.Notes).HasMaxLength(BelongingsRecord.NotesMaxLength);
+            e.Property(x => x.RecordedBy).HasMaxLength(150);
             e.Property(x => x.UpdatedBy).HasMaxLength(150);
             // Records are history: a student, class or quarter that has records is not deleted with them.
             e.HasOne(x => x.Student).WithMany().HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.Restrict);
@@ -550,13 +633,37 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
         {
             e.ToTable("AcademicMaterialRecords", t =>
             {
-                t.HasCheckConstraint("CK_AcademicMaterials_Book", $"[Book] {status}");
-                t.HasCheckConstraint("CK_AcademicMaterials_CopyBook", $"[CopyBook] {status}");
+                t.HasCheckConstraint("CK_AcademicMaterials_Book", $"[Book] IS NULL OR [Book] {status}");
+                t.HasCheckConstraint("CK_AcademicMaterials_CopyBook", $"[CopyBook] IS NULL OR [CopyBook] {status}");
             });
             e.Property(x => x.Subject).HasMaxLength(TimetableAssignment.SubjectMaxLength).IsRequired();
+            e.Property(x => x.PeriodName).HasMaxLength(AcademicMaterialRecord.PeriodMaxLength);
+            e.Property(x => x.TeacherName).HasMaxLength(AcademicMaterialRecord.TeacherMaxLength);
+            e.Property(x => x.Notes).HasMaxLength(AcademicMaterialRecord.NotesMaxLength);
+            e.Property(x => x.RecordedBy).HasMaxLength(150);
+            e.Property(x => x.UpdatedBy).HasMaxLength(150);
             e.HasOne(x => x.Record).WithMany(r => r.Materials).HasForeignKey(x => x.BelongingsRecordId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
-            e.HasIndex(x => new { x.BelongingsRecordId, x.DepartmentId, x.Subject }).IsUnique().HasDatabaseName("UX_AcademicMaterials_RecordSubject");
+            // Like Session Attendance: a lesson with records is ended in the timetable, never deleted.
+            e.HasOne(x => x.Session).WithMany().HasForeignKey(x => x.TimetableAssignmentId).OnDelete(DeleteBehavior.Restrict);
+            // Day-based rows (before lesson-based checks): one per student, date and subject.
+            e.HasIndex(x => new { x.BelongingsRecordId, x.DepartmentId, x.Subject }).IsUnique()
+                .HasFilter("[TimetableAssignmentId] IS NULL").HasDatabaseName("UX_AcademicMaterials_RecordSubject");
+            // Lesson-based rows: one per student, date and lesson.
+            e.HasIndex(x => new { x.BelongingsRecordId, x.TimetableAssignmentId }).IsUnique()
+                .HasFilter("[TimetableAssignmentId] IS NOT NULL").HasDatabaseName("UX_AcademicMaterials_RecordLesson");
+            e.HasIndex(x => x.TimetableAssignmentId);
+        });
+        b.Entity<BelongingsChange>(e =>
+        {
+            e.ToTable("BelongingsChanges");
+            e.Property(x => x.Item).HasMaxLength(BelongingsChange.ItemMaxLength).IsRequired();
+            e.Property(x => x.Context).HasMaxLength(BelongingsChange.ContextMaxLength);
+            e.Property(x => x.Before).HasMaxLength(BelongingsChange.ValueMaxLength);
+            e.Property(x => x.After).HasMaxLength(BelongingsChange.ValueMaxLength);
+            e.Property(x => x.ChangedBy).HasMaxLength(150);
+            e.HasOne(x => x.Record).WithMany().HasForeignKey(x => x.BelongingsRecordId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.BelongingsRecordId, x.ChangedAt });
         });
         b.Entity<BelongingsNoteHistory>(e =>
         {
@@ -829,7 +936,10 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             // At most one active Homeroom Teacher per class and academic year.
             e.HasIndex(x => new { x.SchoolClassId, x.AcademicYearId }).IsUnique()
                 .HasFilter("[IsActive] = 1 AND [Role] = 1").HasDatabaseName("UX_ClassTeaching_Homeroom");
-            // One active role per staff member in a class and year: no duplicate Co-Teacher, never both roles.
+            // At most one active Co-Teacher per class and academic year (same rule as the Homeroom Teacher).
+            e.HasIndex(x => new { x.SchoolClassId, x.AcademicYearId }, "UX_ClassTeaching_CoTeacher").IsUnique()
+                .HasFilter("[IsActive] = 1 AND [Role] = 2");
+            // One active role per staff member in a class and year: never both roles.
             e.HasIndex(x => new { x.SchoolClassId, x.AcademicYearId, x.StaffMemberId }).IsUnique()
                 .HasFilter("[IsActive] = 1").HasDatabaseName("UX_ClassTeaching_StaffOnce");
             e.HasIndex(x => new { x.StaffMemberId, x.AcademicYearId });

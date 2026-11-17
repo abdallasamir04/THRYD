@@ -16,11 +16,12 @@
         <p class="page-sub">@Model.Info.Summary</p>
     </div>
     <div class="page-head__actions">
-        <a class="btn btn--primary" href="/duties/create?component=@Model.Info.Slug&date=@date" data-modal>@Ui.Icon("plus")Add duty</a>
+        <a class="btn btn--secondary" href="/duties/report-uncovered?component=@Model.Info.Slug&date=@date" data-modal>@Ui.Icon("alert-triangle")Report not covered</a>
+        <a class="btn btn--primary" href="/duties/create?component=@Model.Info.Slug&date=@date" data-modal>@Ui.Icon("plus")Add coverage point</a>
     </div>
 </div>
 
-<partial name="_DayNav" model="Model.Date" />
+<partial name="~/Views/Attendance/_SessionDayNav.cshtml" model="Model.Date" />
 
 @if (Model.Info.DetailsPending)
 {
@@ -33,6 +34,10 @@
     </div>
 }
 
-<div id="duty-list" data-ajax-list aria-live="polite">
+<div id="duty-list" data-ajax-list data-duty-live aria-live="polite">
     <partial name="_List" model="Model" />
 </div>
+
+@section Scripts {
+    <script src="~/js/duties.js" asp-append-version="true"></script>
+}

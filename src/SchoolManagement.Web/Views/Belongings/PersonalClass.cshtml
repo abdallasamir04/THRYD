@@ -1,0 +1,86 @@
+@model PersonalClassDay
+@*
+    A class's Personal Belongings for one school day (today by default): every student of the class that day, the five items
+    with one click each (saved at once, belongings.js), "All available" for the items not checked yet, and notes.
+    A changed value is kept as a correction; nothing is saved for the whole class at once.
+*@
+@{
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var date = SchoolWeek.Iso(Model.Date);
+    var k = Model.Counts;
+    ViewData["Title"] = $"{Model.ClassName} · Personal Belongings";
+    ViewData["Nav"] = "Belongings";
+    string State(DailyState s) => s switch { DailyState.Completed => "bl-state--done", DailyState.InProgress => "bl-state--progress", _ => "bl-state--idle" };
+}
+@section Head { <link rel="stylesheet" href="~/css/belongings.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/belongings">Belongings</a></li><li><a href="/belongings/personal@(Model.IsToday ? "" : $"?date={date}")">Personal Belongings</a></li><li><span aria-current="page">@Model.ClassName</span></li></ol>
+        <h1 class="page-title">@Model.ClassName <span class="faint">· Personal Belongings</span></h1>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/belongings/personal@(Model.IsToday ? "" : $"?date={date}")">@Ui.Icon("arrow-left")All classes</a>
+        <a class="btn btn--secondary" href="/belongings/personal/history?classId=@Model.ClassId">@Ui.Icon("chart")Class history</a>
+    </div>
+</div>
+
+<partial name="_Tabs" model='("personal", false)' />
+
+<section class="bl-head" aria-label="@Model.ClassName on @Model.Date.ToString("d MMMM yyyy", c)">
+    <dl class="bl-head__facts">
+        <div><dt>Class</dt><dd>@Model.ClassName</dd></div>
+        <div><dt>Academic year</dt><dd>@(Model.YearName ?? "Not set")</dd></div>
+        <div><dt>School date</dt><dd>@Model.Date.ToString("ddd d MMM yyyy", c)@(Model.IsToday ? " · Today" : "")</dd></div>
+        <div><dt>Status</dt><dd><span class="bl-state @State(k.State)" data-bl-count="state">@DailyStates.Label(k.State)</span></dd></div>
+    </dl>
+    <ul class="ses-tiles bl-tiles" aria-label="Class counts">
+        <li class="ses-tile"><span class="ses-tile__value num">@k.Students</span><span class="ses-tile__label">Students</span></li>
+        <li class="ses-tile ses-tile--present"><span class="ses-tile__value num" data-bl-count="complete">@k.Complete</span><span class="ses-tile__label">Checked</span></li>
+        <li class="ses-tile ses-tile--late"><span class="ses-tile__value num" data-bl-count="pending">@k.Pending</span><span class="ses-tile__label">Pending</span></li>
+        <li class="ses-tile"><span class="ses-tile__value num" data-bl-count="percent">@k.Percent%</span><span class="ses-tile__label">Completion</span></li>
+        <li class="ses-tile"><span class="ses-tile__value num" data-bl-count="readiness">@ReadinessCounts.Text(k.Readiness.Percent)</span><span class="ses-tile__label">Readiness</span></li>
+    </ul>
+</section>
+
+@if (!Model.IsSchoolDay)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>@(Model.Holiday is null ? "Not a school day." : $"School holiday: {Model.Holiday}.")</strong>Belongings are not recorded on @Model.Date.ToString("dddd d MMMM", c).</div></div>
+}
+else if (Model.Date > Model.Today)
+{
+    <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>This date is in the future.</strong>Belongings can be recorded from that day on.</div></div>
+}
+else if (!Model.InQuarter)
+{
+    <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>This date is not inside a quarter.</strong>Every record belongs to a quarter. Set the quarter dates in <a href="/school-calendar">School Calendar</a> first.</div></div>
+}
+
+<section class="card bl-board" data-bl-board data-kind="personal" data-date="@date" data-mark-url="/belongings/personal" aria-label="Students of @Model.ClassName">
+    @Html.AntiForgeryToken()
+    <div class="ses-toolbar">
+        <div class="ses-search">
+            @Ui.Icon("search")
+            <label class="visually-hidden" for="bl-search">Find a student</label>
+            <input class="input" type="search" id="bl-search" placeholder="Find a student…" autocomplete="off" data-bl-search />
+        </div>
+        <label class="switch bl-pending-toggle"><input type="checkbox" data-bl-pending /><span class="switch__track" aria-hidden="true"></span><span>Only students still to check</span></label>
+        @if (Model.CanRecord)
+        {
+            <p class="ses-toolbar__hint">@Ui.Icon("info", "icon--sm")<span>One click saves. A student is checked when all five items have a status.</span></p>
+        }
+    </div>
+    @if (Model.Rows.Count == 0)
+    {
+        <div class="empty">@Ui.Icon("users")<p>No students in @Model.ClassName on this date.</p></div>
+    }
+    <ol class="bl-list">
+        @foreach (var row in Model.Rows)
+        {
+            <partial name="_PersonalRow" model="new PersonalRowModel(row, Model.Date, Model.CanRecord)" />
+        }
+    </ol>
+    <p class="empty bl-search-empty" data-bl-search-empty hidden>@Ui.Icon("search")No student matches.</p>
+</section>
+
+@section Scripts { <script src="~/js/belongings.js" asp-append-version="true"></script> }

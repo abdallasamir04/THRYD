@@ -1,0 +1,108 @@
+@model PersonalHistoryViewModel
+@*
+    Personal Belongings · History & Reports: every class, every stored daily record, filtered by period and scope;
+    summary figures, readiness by class, students with repeated missing items, the weekly trend and the records.
+    PDF and Excel downloads use the same filters and include every matching record (not only this page).
+*@
+@{
+    var h = Model.History;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var qs = Model.Query.ToQuery();
+    ViewData["Title"] = "Personal Belongings · History & Reports";
+    ViewData["Nav"] = "Belongings";
+    string Pct(double? p) => ReadinessCounts.Text(p);
+}
+@section Head { <link rel="stylesheet" href="~/css/belongings.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students/hub">Students</a></li><li><a href="/belongings">Belongings</a></li><li><a href="/belongings/personal">Personal Belongings</a></li><li><span aria-current="page">History &amp; Reports</span></li></ol>
+        <h1 class="page-title">Personal Belongings <span class="faint">· History &amp; Reports</span></h1>
+        <p class="page-sub">Every class and every recorded school day. Filter by period and scope, open a record, or download the report.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/belongings/personal/history/excel@(qs)">@Ui.Icon("sheet")Download Excel</a>
+        <a class="btn btn--primary" href="/belongings/personal/history/pdf@(qs)">@Ui.Icon("file-pdf")Download PDF</a>
+    </div>
+</div>
+
+<partial name="_Tabs" model='("personal", true)' />
+<partial name="_HistoryFilters" model="(Model.Options, Model.Query, false, h.Scope)" />
+
+<ul class="kpis bl-kpis" aria-label="Summary">
+    <li class="bl-kpi"><span class="bl-kpi__label">Student-days recorded</span><span class="bl-kpi__value num">@h.Total</span></li>
+    <li class="bl-kpi bl-kpi--ok"><span class="bl-kpi__label">Complete checks</span><span class="bl-kpi__value num">@h.Complete</span></li>
+    <li class="bl-kpi bl-kpi--warn"><span class="bl-kpi__label">Incomplete checks</span><span class="bl-kpi__value num">@h.Incomplete</span></li>
+    <li class="bl-kpi bl-kpi--bad"><span class="bl-kpi__label">With missing items</span><span class="bl-kpi__value num">@h.WithMissing</span></li>
+    <li class="bl-kpi bl-kpi--primary"><span class="bl-kpi__label">Readiness</span><span class="bl-kpi__value num">@Pct(h.Readiness.Percent)</span><span class="bl-kpi__note">Available ÷ checked, N/A excluded</span></li>
+</ul>
+
+<div class="bl-panels">
+    <section class="card" aria-labelledby="by-class">
+        <div class="card__head"><h2 class="card__title" id="by-class">@Ui.Icon("door")Readiness by class</h2></div>
+        <partial name="_GroupTable" model='("Class", h.ByClass)' />
+    </section>
+    <section class="card" aria-labelledby="repeat">
+        <div class="card__head"><h2 class="card__title" id="repeat">@Ui.Icon("alert-triangle")Repeated missing items</h2><span class="hint">Missing items on 2 or more days</span></div>
+        @if (h.Repeated.Count == 0)
+        {
+            <div class="empty">@Ui.Icon("check-circle")<p>No student had missing items on more than one day.</p></div>
+        }
+        else
+        {
+            <ol class="bl-repeat">
+                @foreach (var x in h.Repeated)
+                {
+                    <li>
+                        <a href="/belongings/personal/history@(Model.Query.With(f => { f.StudentId = x.StudentId; f.ClassId = null; f.Grade = null; }).ToQuery())"><strong dir="auto">@x.Name</strong></a>
+                        <span class="faint">@x.ClassName</span>
+                        <span class="bl-repeat__days num">@x.Days days</span>
+                        <span class="bl-repeat__items">@x.Items</span>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+</div>
+
+<partial name="_Trend" model='("Weekly trend", h.Trend)' />
+
+<section class="card" aria-labelledby="records">
+    <div class="card__head"><h2 class="card__title" id="records">@Ui.Icon("list")Records</h2><span class="hint">@Ui.Plural(h.Total, "record", "records")</span></div>
+    @if (h.Page.Items.Count == 0)
+    {
+        <div class="empty">@Ui.Icon("inbox")<p>No Personal Belongings records match these filters.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table bl-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th><th scope="col">Class</th><th scope="col">Student</th>
+                        @foreach (var i in PersonalItems.All) { <th scope="col">@i.Label</th> }
+                        <th scope="col">Missing</th><th scope="col">Notes</th><th scope="col">Recorded / modified</th><th scope="col"><span class="visually-hidden">Open</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in h.Page.Items)
+                    {
+                        <tr>
+                            <td class="nowrap">@r.Date.ToString("ddd d MMM yyyy", c)</td>
+                            <td>@r.ClassName</td>
+                            <td dir="auto"><strong>@r.StudentName</strong>@if (!r.Complete) { <span class="bl-state bl-state--progress">Incomplete</span> }</td>
+                            @foreach (var s in r.Items) { <td><span class="bl-pill bl-pill--@BelongingsStatus.Slug(s)">@BelongingsStatus.Label(s)</span></td> }
+                            <td>@(r.Missing.Count == 0 ? "—" : string.Join(", ", r.Missing))</td>
+                            <td class="bl-table__notes" dir="auto">@(r.Notes ?? "—")</td>
+                            <td class="bl-table__who"><span>@(r.RecordedBy ?? "—")</span><span class="faint">@Ui.DateTime(r.UpdatedAt)@(r.UpdatedBy is null ? "" : " · " + r.UpdatedBy)@(r.Corrections > 0 ? $" · {r.Corrections} change{(r.Corrections == 1 ? "" : "s")}" : "")</span></td>
+                            <td><a class="btn btn--ghost btn--sm" href="/belongings/personal/records/@r.RecordId" data-modal>Open</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <partial name="_HistoryPager" model='(h.Page.Page, h.Page.TotalPages, h.Page.FirstItem, h.Page.LastItem, h.Page.TotalCount, "/belongings/personal/history" + qs)' />
+    }
+</section>
+
+@section Scripts { <script src="~/js/belongings.js" asp-append-version="true"></script> }

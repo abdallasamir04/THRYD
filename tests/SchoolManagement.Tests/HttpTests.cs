@@ -55,7 +55,7 @@ public partial class HttpTests(DbFixture fx)
     public async Task Morning_duty_page_shows_exactly_three_components()
     {
         var html = await fx.Factory.CreateClient().GetStringAsync("/duties?type=morning");
-        Assert.Equal(3, Regex.Matches(html, "class=\"duty-component\"").Count);
+        Assert.Equal(3, Regex.Matches(html, "<li class=\"dsub dsub--").Count); // the three Morning Sub-Duties
         Assert.Contains("Students Arrival Check", html);
         Assert.Contains("In-Class Morning", html);
         Assert.Contains("Morning Assembly (Line) / Proadcast", html);

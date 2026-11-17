@@ -34,7 +34,7 @@
         {
             ("Classes", "/classes", "Classes", "door", counts.Classes),
             ("Timetables", "/timetables", "Timetables", "calendar", null),
-            ("AcademicCalendar", "/academic-calendar", "Academic Calendar", "calendar-days", null),
+            ("AcademicCalendar", "/school-calendar", "School Calendar", "calendar-days", null),
         }),
         ("Daily Operations", new (string, string?, string, string, int?)[]
         {
@@ -70,6 +70,7 @@
     <link rel="stylesheet" href="~/css/app.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/operations.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/staff.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/thryd-ui.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/skeleton.css" asp-append-version="true" />
     <link rel="icon" type="image/png" href="~/img/logo-mark.png" asp-append-version="true" />
     @await RenderSectionAsync("Head", required: false)
@@ -210,6 +211,7 @@
     <script src="~/lib/jquery-validation/dist/jquery.validate.min.js" asp-append-version="true"></script>
     <script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js" asp-append-version="true"></script>
     <script src="~/js/school-clock.js" asp-append-version="true"></script>
+    <script src="~/js/thryd-ui.js" asp-append-version="true"></script>
     <script src="~/js/operations.js" asp-append-version="true"></script>
     <script src="~/js/staff.js" asp-append-version="true"></script>
     <script src="~/js/tasks.js" asp-append-version="true"></script>

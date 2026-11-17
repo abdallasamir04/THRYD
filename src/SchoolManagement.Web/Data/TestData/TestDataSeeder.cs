@@ -735,13 +735,14 @@ public sealed partial class TestDataSeeder(IServiceProvider root, TestDataTracke
                         issues = "Backup accepted but did not attend. No one on duty for the first 15 minutes.";
                         followUp = true;
                     }
-                    if (status != DutyStatus.Pending || notes is not null)
-                        await Must(() => S<IDutyService>().UpdateAuditAsync(id, status, notes, issues, followUp), "Duty audit");
+                    // The status is calculated (time + attendance); the audit keeps the notes and issues.
+                    if (notes is not null || issues is not null || followUp)
+                        await Must(() => S<IDutyService>().UpdateAuditAsync(id, notes, issues, followUp), "Duty audit");
                 }
                 else if (isToday && attendance == AttendanceStatus.Present)
                 {
-                    var status = spec.End < new TimeOnly(10, 30) ? DutyStatus.Covered : DutyStatus.InProgress;
-                    await Must(() => S<IDutyService>().UpdateAuditAsync(id, status, status == DutyStatus.Covered ? Pick(CoveredNotes) : null, null, false), "Duty audit (today)");
+                    if (spec.End < new TimeOnly(10, 30))
+                        await Must(() => S<IDutyService>().UpdateAuditAsync(id, Pick(CoveredNotes), null, false), "Duty audit (today)");
                 }
                 _duties.Add(new DutyMade(id, date, spec.Component, spec.Location, spec.Start, spec.End, primary.Id, attendance, backup?.Id, backupPresent));
             }

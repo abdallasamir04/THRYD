@@ -156,7 +156,7 @@
                     </div>
                     <div class="field">
                         <label class="label" for="DueTime">Due time <span class="faint" style="font-weight:600">(optional)</span></label>
-                        <input class="input picker" type="time" id="DueTime" name="DueTime" value="@Model.DueTime?.ToString("HH:mm")" data-needs="#DueDate" data-timepicker />
+                        <input class="input picker" type="time" id="DueTime" name="DueTime" value="@Model.DueTime?.ToString("HH:mm")" data-needs="#DueDate" data-timepicker data-empty-text="No time (end of the day)" data-quick-times="08:00,12:00,14:00,17:00" />
                         <p class="hint" data-time-hint hidden="@(Model.DueDate is not null)">Choose a due date first.</p>
                         <span asp-validation-for="DueTime" class="field-validation-error"></span>
                     </div>

@@ -1,0 +1,58 @@
+@model PersonalRecordDetail
+@* One student's Personal Belongings on one day (dialog): the items, notes, who recorded it, earlier notes and every correction. *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Personal Belongings record"; ViewData["Nav"] = "Belongings"; }
+    var r = Model.Row;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <div class="modal__head">
+        <span class="modal__icon">@Ui.Icon("briefcase", "icon--lg")</span>
+        <div>
+            <h2 class="modal__title" dir="auto">@r.StudentName</h2>
+            <p class="modal__sub">@r.ClassName · @r.Date.ToString("dddd d MMMM yyyy", c) · Personal Belongings</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+    <div class="modal__body bl-detail">
+        <ul class="bl-detail__items">
+            @for (var i = 0; i < PersonalItems.All.Count; i++)
+            {
+                <li><span>@PersonalItems.All[i].Label</span><span class="bl-pill bl-pill--@BelongingsStatus.Slug(r.Items[i])">@BelongingsStatus.Label(r.Items[i])</span></li>
+            }
+        </ul>
+        <dl class="dl">
+            <dt>Check</dt><dd>@(r.Complete ? "Complete: every item has a status" : "Incomplete: some items not checked")</dd>
+            <dt>Missing items</dt><dd>@(r.Missing.Count == 0 ? "None" : string.Join(", ", r.Missing))</dd>
+            <dt>Readiness</dt><dd>@ReadinessCounts.Text(r.Readiness.Percent)</dd>
+            <dt>Notes</dt><dd dir="auto">@(r.Notes ?? "—")</dd>
+            <dt>Recorded by</dt><dd>@(r.RecordedBy ?? "Not kept for this record")</dd>
+            <dt>Last modified</dt><dd>@Ui.DateTime(r.UpdatedAt)@(r.UpdatedBy is null ? "" : " · " + r.UpdatedBy)</dd>
+        </dl>
+
+        <h3 class="bl-detail__title">@Ui.Icon("clock", "icon--sm")Corrections</h3>
+        @if (Model.Changes.Count == 0 && Model.NoteHistory.Count == 0)
+        {
+            <p class="hint">No corrections: this is the record as first saved.</p>
+        }
+        else
+        {
+            <ol class="timeline">
+                @foreach (var x in Model.Changes)
+                {
+                    <li class="timeline__item"><span class="timeline__when">@Ui.DateTime(x.At)@(x.By is null ? "" : " · " + x.By)</span><span><strong>@x.Item</strong>: @(x.Before ?? "—") → <strong>@(x.After ?? "—")</strong></span></li>
+                }
+                @foreach (var n in Model.NoteHistory)
+                {
+                    <li class="timeline__item"><span class="timeline__when">@Ui.DateTime(n.ChangedAt)@(n.ChangedBy is null ? "" : " · " + n.ChangedBy)</span><span><strong>Notes</strong> changed. Earlier notes: <span dir="auto">@(n.Notes ?? "(none)")</span></span></li>
+                }
+            </ol>
+        }
+    </div>
+    <div class="modal__foot">
+        <a class="btn btn--secondary" href="/belongings/personal/history?studentId=@r.StudentId">@Ui.Icon("chart")Student history</a>
+        <a class="btn btn--primary" href="/belongings/personal/classes/@Model.ClassId?date=@SchoolWeek.Iso(r.Date)">@Ui.Icon("pencil")Open this day</a>
+    </div>
+</div>

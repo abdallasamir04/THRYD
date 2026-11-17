@@ -5,7 +5,8 @@
     var m = Model.Member;
     var role = ClassTeachingRoles.Label(m.Role);
 }
-<div class="team-chip @(m.Role == ClassTeachingRole.HomeroomTeacher ? "team-chip--homeroom" : "")">
+@* Both roles use the same card: one Homeroom Teacher and one Co-Teacher per class. *@
+<div class="team-chip team-chip--homeroom">
     <span class="avatar avatar--@Ui.Tone(m.Name)" aria-hidden="true">@Ui.Initials(m.Name)</span>
     <span class="team-chip__body">
         <a class="team-chip__name" href="/staff/@m.StaffId" dir="auto">@m.Name</a>

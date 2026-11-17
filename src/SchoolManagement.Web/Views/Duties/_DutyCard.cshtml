@@ -7,7 +7,6 @@
     var d = Model;
     var state = d.Coverage;
     var tone = DutyStatuses.Tone(d.Status);
-    var someonePresent = Coverage.IsCovered(state);
     string AttendanceBadge(AttendanceStatus a) => a switch
     {
         AttendanceStatus.Present => "badge--success",
@@ -18,7 +17,7 @@
 }
 <article class="duty duty--@tone" aria-labelledby="duty-@d.Id-title">
     <header class="duty__head">
-        <span class="duty__time num">@Ui.Icon("clock", "icon--sm")@d.StartTime.ToString("HH:mm") – @d.EndTime.ToString("HH:mm")</span>
+        <span class="duty__time num">@Ui.Icon("clock", "icon--sm")@ScheduleRules.Times12(d.StartTime, d.EndTime)</span>
         <span class="duty__badges">
             @if (d.FollowUpRequired)
             {
@@ -133,19 +132,7 @@
         <p class="duty__notes" dir="auto">@Ui.Icon("info", "icon--sm")@d.Notes</p>
     }
 
-    <form class="duty__status" action="/duties/@d.Id/status" method="post" data-ajax-form>
-        @Html.AntiForgeryToken()
-        <span class="duty__role">Duty status</span>
-        <div class="status-pills" role="group" aria-label="Duty status">
-            @foreach (var s in DutyStatuses.All)
-            {
-                var blocked = s is DutyStatus.Covered or DutyStatus.InProgress && !someonePresent;
-                <button class="status-pill status-pill--@DutyStatuses.Slug(s)" type="submit" name="status" value="@s"
-                        aria-pressed="@(d.Status == s ? "true" : "false")" disabled="@(blocked || d.Status == s)"
-                        title="@(blocked ? "Needs someone recorded present first" : DutyStatuses.Label(s))">@DutyStatuses.Label(s)</button>
-            }
-        </div>
-    </form>
+    <p class="duty__auto">@Ui.Icon("clock", "icon--sm")<span>@DutyStatuses.Meaning(d.Status)</span></p>
 
     <footer class="duty__foot">
         <div class="duty__actions">
@@ -155,7 +142,7 @@
         <div class="row-actions">
             <a class="icon-btn icon-btn--primary" href="/duties/@d.Id/edit" data-modal title="Edit duty" aria-label="Edit duty">@Ui.Icon("pencil")</a>
             <form action="/duties/@d.Id/delete" method="post" data-ajax-form
-                  data-confirm="“@d.Description” (@d.StartTime.ToString("HH:mm")) will be deleted with its backup history."
+                  data-confirm="“@d.Description” (@Arrivals.Time(d.StartTime)) will be deleted with its backup history."
                   data-confirm-title="Delete this duty?" data-confirm-button="Delete duty">
                 @Html.AntiForgeryToken()
                 <button class="icon-btn icon-btn--danger" type="submit" title="Delete duty" aria-label="Delete duty">@Ui.Icon("trash")</button>

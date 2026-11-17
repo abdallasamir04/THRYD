@@ -156,7 +156,7 @@
         if (prefix === "Timeline") syncPresent();
         setOpen(entry, true);
         entry.scrollIntoView({ block: "center", behavior: "smooth" });
-        var first = entry.querySelector(".combo__button, input:not([type=hidden]), select, textarea");
+        var first = entry.querySelector(".th-trigger, input:not([type=hidden]):not(.th-native), select, textarea");
         if (first) setTimeout(function () { first.focus(); }, 250);
         dirty();
     }
@@ -248,10 +248,10 @@
         var wrap = input.closest(".inc-suggest");
         if (!wrap) return;
         var panel = doc.createElement("ul");
-        panel.className = "combo__panel inc-suggest__panel";
+        panel.className = "th-pop is-open inc-suggest__panel"; // THRYD popup look (css/thryd-ui.css)
         panel.setAttribute("role", "listbox");
         panel.innerHTML = items.map(function (x, i) {
-            return '<li class="combo__option' + (i === 0 ? " is-active" : "") + '" role="option" data-value="' + esc(x) + '">' + esc(x) + "</li>";
+            return '<li class="th-option' + (i === 0 ? " is-active" : "") + '" role="option" data-value="' + esc(x) + '">' + esc(x) + "</li>";
         }).join("");
         wrap.appendChild(panel);
         var rect = wrap.getBoundingClientRect();

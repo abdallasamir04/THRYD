@@ -4,43 +4,17 @@ using SchoolManagement.Web.Services;
 
 namespace SchoolManagement.Web.ViewModels;
 
-/// <summary>The two sections of Belongings, each opened from its own card on the landing page.</summary>
-public enum BelongingsSection { Personal, Academic }
+/// <summary>One student's row on a Personal Belongings class page (also redrawn after each click).</summary>
+public sealed record PersonalRowModel(PersonalStudentRow Row, DateOnly Date, bool CanRecord);
 
-public sealed class BelongingsPageViewModel
-{
-    public BelongingsSection Section { get; init; } = BelongingsSection.Personal;
+/// <summary>One student's row on an Academic Belongings lesson page (also redrawn after each click).</summary>
+public sealed record AcademicRowModel(AcademicStudentRow Row, int SessionId, DateOnly Date, bool CanRecord);
 
-    /// <summary>Route of the current section: /belongings/personal or /belongings/academic.</summary>
-    public string Path => Section == BelongingsSection.Academic ? "/belongings/academic" : "/belongings/personal";
+public sealed record AcademicDailyViewModel(DateOnly Date, bool IsToday, IReadOnlyList<AcademicClassCard> Cards);
 
-    public required IReadOnlyList<YearView> Years { get; init; }
-    public YearView? Year { get; init; }
-    public QuarterView? Quarter { get; init; }
-    public WeekInfo? Week { get; init; }
-    public DateOnly? Date { get; init; }
-    public string? Grade { get; init; }
-    public IReadOnlyList<StudentOption> Students { get; init; } = [];
-    public StudentOption? Student { get; init; }
+public sealed record PersonalHistoryViewModel(PersonalHistory History, HistoryOptions Options, BelongingsQuery Query);
 
-    public DayView? Day { get; init; }
-    public PeriodAnalytics<DayPoint>? WeekStats { get; init; }
-    public PeriodAnalytics<WeekPoint>? QuarterStats { get; init; }
-    public IReadOnlyList<StudentWeekRow> GradeWeek { get; init; } = [];
-    public IReadOnlyList<(int Id, string Name, IReadOnlyList<string> Subjects)> Departments { get; init; } = [];
-
-    /// <summary>Query string of the current selection (forms return here after saving).</summary>
-    public string Query(params (string Key, object? Value)[] changes)
-    {
-        var values = new Dictionary<string, string?>
-        {
-            ["yearId"] = Year?.Id.ToString(), ["quarterId"] = Quarter?.Id.ToString(), ["week"] = Week?.Number.ToString(),
-            ["date"] = Date is { } d ? Common.SchoolWeek.Iso(d) : null, ["grade"] = Grade, ["studentId"] = Student?.Id.ToString(),
-        };
-        foreach (var (k, v) in changes) values[k] = v?.ToString();
-        return Path + "?" + string.Join("&", values.Where(v => !string.IsNullOrEmpty(v.Value)).Select(v => $"{v.Key}={Uri.EscapeDataString(v.Value!)}"));
-    }
-}
+public sealed record AcademicHistoryViewModel(AcademicHistory History, HistoryOptions Options, BelongingsQuery Query);
 
 public sealed class QuarterFormModel
 {
@@ -59,35 +33,12 @@ public sealed class QuarterFormModel
     [Required(ErrorMessage = "Enter the end date.")]
     public DateOnly? EndDate { get; set; }
 
+    /// <summary>The quarter as printed in the School Calendar (optional; groups the calendar's months only).</summary>
+    [Display(Name = "School calendar: first day")]
+    public DateOnly? CalendarStartDate { get; set; }
+
+    [Display(Name = "School calendar: last day")]
+    public DateOnly? CalendarEndDate { get; set; }
+
     public QuarterView? Quarter { get; set; }
-}
-
-public sealed class PersonalFormModel
-{
-    public int StudentId { get; set; }
-    public DateOnly Date { get; set; }
-    public string? Grade { get; set; }
-    public ItemStatus? Jacket { get; set; }
-    public ItemStatus? SchoolBag { get; set; }
-    public ItemStatus? PencilCase { get; set; }
-    public ItemStatus? WaterFlask { get; set; }
-    public ItemStatus? LunchBox { get; set; }
-
-    [StringLength(BelongingsRecord.NotesMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
-    public string? Notes { get; set; }
-
-    public PersonalInput ToInput() => new(StudentId, Date, Grade, Jacket, SchoolBag, PencilCase, WaterFlask, LunchBox, Notes);
-}
-
-public sealed class MaterialFormModel
-{
-    public int StudentId { get; set; }
-    public DateOnly Date { get; set; }
-    public string? Grade { get; set; }
-    public int? DepartmentId { get; set; }
-    public string? Subject { get; set; }
-    public ItemStatus? Book { get; set; }
-    public ItemStatus? CopyBook { get; set; }
-
-    public MaterialInput ToInput() => new(StudentId, Date, Grade, DepartmentId, Subject, Book, CopyBook);
 }

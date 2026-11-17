@@ -1,0 +1,83 @@
+@model (CalendarMonth Month, int YearId, int Quarter)
+@*
+    One month of the School Calendar: the full Sunday–Saturday grid (Friday and Saturday shaded as printed,
+    coloured dates from the school's marks, the days of the other quarter dimmed in a transition month) and,
+    underneath, the month's event lines in the colours of the print. Dates and lines open details in the dialog.
+*@
+@{
+    var m = Model.Month;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var id = $"m-{m.Month:yyyy-MM}-q{Model.Quarter}";
+    string[] dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    string[] dowFull = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+}
+<article class="sc-month@(m.Partial ? " is-partial" : "")" aria-labelledby="@id">
+    <header class="sc-month__head">
+        <h3 class="sc-month__title" id="@id">@m.Month.ToString("MMMM", c) <span>@m.Month.Year</span></h3>
+        @if (m.Partial)
+        {
+            <span class="sc-month__part">@m.From.Day–@m.To.Day · Q@(Model.Quarter)</span>
+        }
+    </header>
+    @if (m.BoundaryNote is not null)
+    {
+        <p class="sc-month__boundary">@Ui.Icon("info", "icon--sm")<span>@m.BoundaryNote</span></p>
+    }
+    <table class="sc-grid">
+        <caption class="visually-hidden">@m.Month.ToString("MMMM yyyy", c)</caption>
+        <thead>
+            <tr>
+                @for (var i = 0; i < 7; i++)
+                {
+                    <th scope="col" class="@(i == 5 ? "sc-fri" : i == 6 ? "sc-sat" : null)"><abbr title="@dowFull[i]">@dow[i]</abbr></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var week in m.Weeks)
+            {
+                <tr>
+                    @for (var i = 0; i < 7; i++)
+                    {
+                        var d = week[i];
+                        if (!d.InMonth)
+                        {
+                            <td class="sc-day is-blank@(i == 5 ? " sc-fri" : i == 6 ? " sc-sat" : "")" aria-hidden="true"></td>
+                            continue;
+                        }
+                        var cls = "sc-day" + (i == 5 ? " sc-fri" : i == 6 ? " sc-sat" : "") + (d.InQuarter ? "" : " is-other")
+                            + (d.Color != SchoolManagement.Web.Entities.CalendarColor.None ? " is-marked " + CalendarColors.Css(d.Color) : "")
+                            + (d.IsToday ? " is-today" : "") + (d.Events.Count > 0 ? " has-events" : "") + (d.QuarterStart is not null ? " is-qstart" : "");
+                        var label = d.Date.ToString("dddd d MMMM yyyy", c) + (d.QuarterStart is not null ? $", {d.QuarterStart}" : "")
+                            + (d.Events.Count > 0 ? ": " + string.Join("; ", d.Events) : "") + (d.InQuarter ? "" : " (other quarter)");
+                        <td class="@cls">
+                            <a class="sc-day__btn" href="/school-calendar/days/@SchoolWeek.Iso(d.Date)?year=@Model.YearId" data-modal
+                               title="@(d.Events.Count > 0 ? string.Join(" · ", d.Events) : d.QuarterStart)" aria-label="@label">
+                                <span class="sc-day__num">@d.Date.Day</span>
+                                @if (d.Events.Count > 0 && d.Color == SchoolManagement.Web.Entities.CalendarColor.None)
+                                {
+                                    <span class="sc-day__dot" aria-hidden="true"></span>
+                                }
+                            </a>
+                            @if (d.QuarterStart is not null)
+                            {
+                                <span class="sc-day__flag" aria-hidden="true">Q@(d.QuarterStart[^1])</span>
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <ol class="sc-events" aria-label="Events in @m.Month.ToString("MMMM yyyy", c)@(m.Partial ? $", quarter {Model.Quarter} part" : "")">
+        @foreach (var r in m.Rows)
+        {
+            <partial name="_EventLine" model="r" />
+        }
+        @if (m.Rows.Count == 0)
+        {
+            <li class="sc-ev sc-ev--none">No events this month.</li>
+        }
+    </ol>
+</article>

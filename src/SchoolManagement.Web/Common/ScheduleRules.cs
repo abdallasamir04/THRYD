@@ -33,6 +33,14 @@ public static class ScheduleRules
     public static bool Overlaps(int slotA, TimeOnly? startA, TimeOnly? endA, int slotB, TimeOnly? startB, TimeOnly? endB) =>
         slotA == slotB || (startA is { } sa && endA is { } ea && startB is { } sb && endB is { } eb && sa < eb && sb < ea);
 
+    /// <summary>"10:00–10:45 AM", "11:30 AM–12:15 PM" (12-hour), or "time not set".</summary>
+    public static string Times12(TimeOnly? start, TimeOnly? end)
+    {
+        if (start is not { } s || end is not { } e) return "time not set";
+        static string T(TimeOnly t, bool suffix) => t.ToString(suffix ? "h:mm tt" : "h:mm", CultureInfo.InvariantCulture);
+        return s.Hour < 12 == e.Hour < 12 ? $"{T(s, false)}–{T(e, true)}" : $"{T(s, true)}–{T(e, true)}";
+    }
+
     public static string Times(TimeOnly? start, TimeOnly? end) =>
         start is { } s && end is { } e ? $"{s.ToString("HH:mm", CultureInfo.InvariantCulture)}–{e.ToString("HH:mm", CultureInfo.InvariantCulture)}" : "time not set";
 

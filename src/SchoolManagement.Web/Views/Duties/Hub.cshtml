@@ -1,0 +1,32 @@
+@model DutyHubViewModel
+@*
+    Duties: every Main Duty of the day with its time range, calculated status and Sub-Duties (expandable), plus Activities.
+    The board reloads itself every 30 seconds (duties.js) so statuses follow the school clock without a page reload.
+*@
+@{
+    ViewData["Title"] = "Duties";
+    ViewData["Nav"] = "MorningDuty";
+    var date = SchoolWeek.Iso(Model.Day.Date);
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Duties</li></ol>
+        <h1 class="page-title">Duties</h1>
+        <p class="page-sub">Each duty runs on its own schedule. Statuses are calculated from the school clock (Cairo) and the attendance recorded at every coverage point.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/duties/departments?date=@date">@Ui.Icon("layers")By department</a>
+        <a class="btn btn--secondary" href="/duties/audit?from=@date&to=@date">@Ui.Icon("clipboard-check")Duty audit</a>
+    </div>
+</div>
+
+<partial name="~/Views/Attendance/_SessionDayNav.cshtml" model="Model.Day.Date" />
+
+<div id="duty-board" data-duty-live aria-live="polite">
+    <partial name="_HubBoard" model="Model" />
+</div>
+
+@section Scripts {
+    <script src="~/js/duties.js" asp-append-version="true"></script>
+}

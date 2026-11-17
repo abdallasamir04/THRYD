@@ -1,0 +1,267 @@
+/*
+ * THRYD selection controls (js/thryd-ui.js): dropdowns, searchable dropdowns, multi-selects, date, time and
+ * date-time pickers. Every colour, radius and shadow comes from the tokens below, which build on the platform
+ * tokens in app.css, so the light / dark theme switch restyles every popup with no extra rule.
+ */
+
+/* ---------- Tokens ---------- */
+:root {
+    --th-pop-bg: var(--color-surface-raised);
+    --th-pop-border: var(--color-border);
+    --th-pop-radius: 14px;
+    --th-pop-shadow: 0 2px 6px rgb(var(--shadow-rgb) / 0.06), 0 16px 36px rgb(var(--shadow-rgb) / 0.14);
+    --th-option-radius: 9px;
+    --th-option-hover: var(--color-surface-soft);
+    --th-option-selected-bg: var(--tint-primary);
+    --th-option-selected-hover: rgb(109 40 217 / 0.13);
+    --th-option-selected-ink: var(--color-primary-ink);
+    --th-accent: var(--color-primary);
+    --th-on-accent: var(--color-on-brand);
+    --th-ring: rgb(109 40 217 / 0.14);
+    --th-well: var(--color-surface-soft);
+    --th-scrollbar: var(--color-border-strong);
+    --th-motion: 0.14s;
+}
+:root[data-theme="dark"] {
+    --th-pop-bg: #1b2539;
+    --th-pop-border: #314061;
+    --th-pop-shadow: 0 2px 8px rgb(0 0 0 / 0.35), 0 20px 48px rgb(0 0 0 / 0.5);
+    --th-option-hover: rgb(157 178 255 / 0.08);
+    --th-option-selected-bg: rgb(120 145 255 / 0.16);
+    --th-option-selected-hover: rgb(120 145 255 / 0.22);
+    --th-ring: rgb(120 145 255 / 0.2);
+    --th-well: #151d2e;
+    --th-scrollbar: #45547a;
+}
+
+/* ---------- Native fallbacks (data-native fields, no JavaScript) ---------- */
+/* The browser's own option list follows the theme instead of staying white in dark mode. */
+select option, select optgroup { background-color: var(--color-input-bg); color: var(--color-text); }
+
+/* ---------- Dropdown: the select stays the field, only its popup is THRYD ---------- */
+.th-select { cursor: pointer; }
+.th-select:disabled { cursor: not-allowed; opacity: 0.6; background-color: var(--color-surface-soft); }
+.th-select[aria-expanded="true"] { border-color: var(--color-primary); box-shadow: 0 0 0 4px var(--th-ring); }
+
+/* ---------- Trigger button (date, time, date-time, multi-select) ---------- */
+/* The native field stays in the form (name, value, validation) but is not shown. */
+.th-native {
+    position: absolute !important; width: 1px !important; height: 1px !important; min-height: 0 !important;
+    margin: 0 !important; padding: 0 !important; border: 0 !important; opacity: 0 !important;
+    overflow: hidden !important; clip-path: inset(50%) !important; pointer-events: none !important; white-space: nowrap;
+}
+.th-trigger {
+    display: flex; align-items: center; gap: 9px; text-align: start; cursor: pointer;
+    font-variant-numeric: tabular-nums; line-height: 1.35;
+}
+.th-trigger:hover:not(:disabled) { border-color: var(--color-text-faint); }
+.th-trigger__icon { flex: none; width: 17px; height: 17px; color: var(--color-primary-ink); }
+.th-trigger__value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); }
+.th-trigger__value.is-placeholder { color: var(--color-placeholder); }
+.th-trigger__chevron { flex: none; width: 16px; height: 16px; margin-inline-start: auto; color: var(--color-text-faint); transition: transform var(--th-motion) var(--ease); }
+.th-trigger[aria-expanded="true"] { border-color: var(--color-primary); box-shadow: 0 0 0 4px var(--th-ring); }
+.th-trigger[aria-expanded="true"] .th-trigger__chevron { transform: rotate(180deg); }
+/* Date and time fields: the calendar / clock icon already says what opens, so the full value gets the room. */
+.th-trigger--date .th-trigger__chevron, .th-trigger--time .th-trigger__chevron, .th-trigger--datetime .th-trigger__chevron { display: none; }
+.th-trigger:disabled { cursor: not-allowed; opacity: 0.6; background-color: var(--color-surface-soft); }
+.th-trigger.is-readonly { cursor: default; background-color: var(--color-surface-soft); }
+.th-trigger.is-invalid, .th-trigger.is-invalid:focus { border-color: var(--color-error); box-shadow: 0 0 0 4px rgb(211 47 47 / 0.1); }
+
+/* ---------- Popup surface ---------- */
+.th-pop {
+    position: fixed; inset: auto; z-index: 1000; margin: 0;
+    display: flex; flex-direction: column; box-sizing: border-box;
+    max-width: min(420px, calc(100vw - 16px)); padding: 6px;
+    border: 1px solid var(--th-pop-border); border-radius: var(--th-pop-radius);
+    background: var(--th-pop-bg); color: var(--color-text); box-shadow: var(--th-pop-shadow);
+    font-family: var(--font-sans); font-size: 0.875rem; line-height: 1.4; text-align: start;
+    overflow: hidden;
+    opacity: 0; transform: translateY(-4px) scale(0.985); transform-origin: top center;
+    transition: opacity var(--th-motion) ease, transform var(--th-motion) var(--ease);
+}
+.th-pop[data-side="top"] { transform-origin: bottom center; transform: translateY(4px) scale(0.985); }
+.th-pop.is-open { opacity: 1; transform: none; }
+.th-pop.is-closing { pointer-events: none; }
+.th-pop[popover]:not(:popover-open) { display: none; }
+.th-pop .icon { flex: none; }
+.th-pop :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 1px; border-radius: 8px; }
+
+/* Thin themed scrollbars in every popup. */
+.th-pop, .th-pop * { scrollbar-width: thin; scrollbar-color: var(--th-scrollbar) transparent; }
+.th-pop ::-webkit-scrollbar { width: 10px; height: 10px; }
+.th-pop ::-webkit-scrollbar-track { background: transparent; }
+.th-pop ::-webkit-scrollbar-thumb { background: var(--th-scrollbar); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+
+/* ---------- Option list (dropdown, searchable, multi) ---------- */
+.th-search { position: relative; display: flex; align-items: center; flex: none; margin: 2px 2px 6px; }
+.th-search > .icon { position: absolute; inset-inline-start: 11px; width: 15px; height: 15px; color: var(--color-text-faint); pointer-events: none; }
+.th-search__input {
+    width: 100%; min-height: 36px; padding: 7px 10px; padding-inline-start: 34px;
+    border: 1px solid var(--color-input-border); border-radius: 9px;
+    background: var(--color-input-bg); color: var(--color-text); font: inherit; font-size: 0.85rem;
+    transition: border-color var(--th-motion), box-shadow var(--th-motion);
+}
+.th-search__input::placeholder { color: var(--color-placeholder); }
+.th-search__input:focus, .th-search__input:focus-visible { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--th-ring); border-radius: 9px; }
+
+.th-list {
+    position: relative; flex: 1 1 auto; min-height: 0; max-height: 296px; overflow-y: auto; overscroll-behavior: contain;
+    margin: 0; padding: 2px; list-style: none; outline: none;
+}
+.th-list:focus-visible { outline: none; }
+.th-option {
+    display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 7px 10px;
+    border-radius: var(--th-option-radius); color: var(--color-text); font-weight: 600; cursor: pointer; user-select: none;
+    transition: background-color 0.1s ease, color 0.1s ease;
+}
+.th-option + .th-option { margin-top: 1px; }
+.th-option.is-active { background: var(--th-option-hover); }
+.th-option[aria-selected="true"] { background: var(--th-option-selected-bg); color: var(--th-option-selected-ink); }
+.th-option[aria-selected="true"].is-active { background: var(--th-option-selected-hover); }
+.th-option[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; background: transparent; box-shadow: none; }
+.th-option__text { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.th-option__label { overflow-wrap: anywhere; }
+.th-option__note { color: var(--color-text-muted); font-size: 0.75rem; font-weight: 600; overflow-wrap: anywhere; }
+.th-option[aria-selected="true"] .th-option__note { color: inherit; opacity: 0.8; }
+.th-option__tick { display: grid; place-items: center; flex: none; color: var(--th-option-selected-ink); visibility: hidden; }
+.th-option__tick .icon { width: 16px; height: 16px; stroke-width: 2.5; }
+.th-option[aria-selected="true"] .th-option__tick { visibility: visible; }
+.th-option mark { padding: 0 1px; border-radius: 3px; background: var(--tint-primary); color: var(--color-primary-ink); font-weight: 800; }
+.th-group {
+    padding: 10px 10px 4px; color: var(--color-text-faint);
+    font-size: 0.68rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; cursor: default;
+}
+.th-group:first-child { padding-top: 4px; }
+.th-empty { display: flex; align-items: center; gap: 8px; margin: 0; padding: 14px 10px; color: var(--color-text-muted); font-size: 0.84rem; font-weight: 600; }
+.th-empty .icon { width: 16px; height: 16px; color: var(--color-text-faint); }
+
+/* Multi-select */
+.th-multi-bar {
+    display: flex; align-items: center; gap: 6px; flex: none; margin: 0 2px 4px; padding: 2px 4px 8px;
+    border-bottom: 1px solid var(--color-border-subtle); font-size: 0.78rem;
+}
+.th-multi-bar__count { margin-inline-end: auto; color: var(--color-text-muted); font-weight: 700; }
+.th-link { padding: 3px 6px; border: 0; border-radius: 6px; background: none; color: var(--color-primary-ink); font: inherit; font-weight: 700; cursor: pointer; }
+.th-link:hover { background: var(--tint-primary); }
+.th-pop--multi .th-option[aria-selected="true"] { background: transparent; color: var(--color-text); }
+.th-pop--multi .th-option[aria-selected="true"].is-active, .th-pop--multi .th-option.is-active { background: var(--th-option-hover); }
+.th-check {
+    display: grid; place-items: center; flex: none; width: 18px; height: 18px;
+    border: 1.5px solid var(--color-border-strong); border-radius: 5px; background: var(--color-input-bg);
+    transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+.th-check .icon { width: 12px; height: 12px; stroke-width: 3; color: var(--th-on-accent); opacity: 0; }
+.th-option[aria-selected="true"] .th-check { background: var(--th-accent); border-color: var(--th-accent); }
+.th-option[aria-selected="true"] .th-check .icon { opacity: 1; }
+.th-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; margin-top: 6px; padding: 8px 4px 2px; border-top: 1px solid var(--color-border-subtle); }
+
+/* ---------- Calendar ---------- */
+.th-pop--cal { width: 308px; padding: 12px; overflow-y: auto; }
+.th-cal__head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.th-iconbtn {
+    display: grid; place-items: center; flex: none; width: 34px; height: 34px; padding: 0;
+    border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text-muted);
+    cursor: pointer; transition: background-color var(--th-motion), color var(--th-motion), border-color var(--th-motion);
+}
+.th-iconbtn:hover:not(:disabled) { background: var(--th-option-hover); color: var(--color-primary-ink); border-color: var(--color-border-strong); }
+.th-iconbtn:disabled { opacity: 0.35; cursor: default; }
+.th-iconbtn .icon { width: 17px; height: 17px; }
+[dir="rtl"] .th-pop .th-flip { transform: scaleX(-1); }
+.th-cal__title {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 1 1 auto; min-height: 34px; padding: 0 8px;
+    border: 0; border-radius: 10px; background: transparent; color: var(--color-text-strong);
+    font: inherit; font-size: 0.92rem; font-weight: 800; cursor: pointer; transition: background-color var(--th-motion);
+}
+.th-cal__title:hover:not([aria-disabled="true"]) { background: var(--th-option-hover); }
+.th-cal__title[aria-disabled="true"] { cursor: default; }
+.th-cal__title .icon { width: 14px; height: 14px; color: var(--color-text-faint); }
+.th-cal__body { animation-duration: 0.18s; animation-timing-function: var(--ease); }
+.th-cal__body.is-next { animation-name: th-slide-next; }
+.th-cal__body.is-prev { animation-name: th-slide-prev; }
+.th-cal__body.is-zoom { animation-name: th-zoom; }
+@keyframes th-slide-next { from { opacity: 0; transform: translateX(12px); } }
+@keyframes th-slide-prev { from { opacity: 0; transform: translateX(-12px); } }
+@keyframes th-zoom { from { opacity: 0; transform: scale(0.96); } }
+[dir="rtl"] .th-cal__body.is-next { animation-name: th-slide-prev; }
+[dir="rtl"] .th-cal__body.is-prev { animation-name: th-slide-next; }
+.th-cal__grid { display: grid; gap: 2px; }
+.th-cal__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.th-cal__row > [role="gridcell"] { display: block; }
+.th-cal__dow { padding: 2px 0 6px; text-align: center; color: var(--color-text-faint); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.th-cal__day, .th-cal__cell {
+    display: grid; place-items: center; width: 100%; padding: 0; border: 0; border-radius: 10px;
+    background: transparent; color: var(--color-text); font: inherit; font-weight: 600; font-variant-numeric: tabular-nums;
+    cursor: pointer; transition: background-color 0.1s ease, color 0.1s ease;
+}
+.th-cal__day { height: 36px; font-size: 0.84rem; }
+.th-cal__day:hover:not(:disabled):not(.is-selected), .th-cal__cell:hover:not(:disabled):not(.is-selected) { background: var(--th-option-hover); color: var(--color-primary-ink); }
+.th-cal__day.is-outside { color: var(--color-text-faint); font-weight: 500; }
+.th-cal__day.is-weekend:not(.is-selected):not(.is-outside) { color: var(--color-text-muted); }
+.th-cal__day.is-today:not(.is-selected), .th-cal__cell.is-today:not(.is-selected) { color: var(--color-primary-ink); font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--th-accent); }
+.th-cal__day.is-selected, .th-cal__cell.is-selected { background: var(--th-accent); color: var(--th-on-accent); font-weight: 800; }
+.th-cal__day:disabled, .th-cal__cell:disabled { opacity: 0.32; cursor: not-allowed; text-decoration: line-through; }
+.th-cal__cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 2px 0; }
+.th-cal__cell { height: 48px; font-size: 0.86rem; }
+.th-cal__foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none;
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border-subtle);
+}
+.th-foot__group { display: flex; gap: 4px; }
+.th-pop .btn--sm { min-height: 32px; padding: 5px 12px; }
+.th-pop .th-clear { color: var(--color-text-muted); }
+.th-pop .th-clear:hover { background: var(--color-error-soft); color: var(--color-error-ink); }
+
+/* ---------- Time ---------- */
+.th-pop--time { width: 276px; padding: 12px; overflow-y: auto; }
+.th-time__head { display: flex; align-items: baseline; justify-content: center; margin-bottom: 10px; padding: 6px 0 10px; border-bottom: 1px solid var(--color-border-subtle); }
+.th-time__now { color: var(--color-text-strong); font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.th-time__now.is-empty { color: var(--color-placeholder); font-size: 1rem; font-weight: 700; }
+.th-time__cols { display: grid; grid-template-columns: 1fr 1fr 0.9fr; gap: 6px; }
+.th-time__colwrap { display: flex; flex-direction: column; min-width: 0; }
+.th-time__colhead { min-height: 20px; padding-bottom: 4px; text-align: center; color: var(--color-text-faint); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+.th-time__col {
+    display: flex; flex-direction: column; gap: 2px; max-height: 204px; overflow-y: auto; overscroll-behavior: contain;
+    position: relative; padding: 4px; border: 1px solid var(--color-border-subtle); border-radius: 12px; background: var(--th-well);
+}
+.th-time__colwrap--period .th-time__col { max-height: none; }
+.th-time__opt {
+    flex: none; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent;
+    color: var(--color-text); font: inherit; font-size: 0.88rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    cursor: pointer; transition: background-color 0.1s ease, color 0.1s ease;
+}
+.th-time__opt:hover:not(:disabled):not(.is-selected) { background: var(--th-pop-bg); color: var(--color-primary-ink); }
+.th-time__opt.is-selected { background: var(--th-accent); color: var(--th-on-accent); }
+.th-time__opt:disabled { opacity: 0.32; cursor: not-allowed; }
+.th-time__quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.th-chip {
+    padding: 4px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-pill);
+    background: var(--th-pop-bg); color: var(--color-text-muted); font: inherit; font-size: 0.75rem; font-weight: 700; cursor: pointer;
+    transition: border-color var(--th-motion), color var(--th-motion);
+}
+.th-chip:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary-ink); }
+.th-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---------- Date-time ---------- */
+.th-pop--datetime { padding: 12px; overflow-y: auto; max-width: min(560px, calc(100vw - 16px)); }
+.th-dt { display: flex; gap: 14px; }
+.th-dt > .th-cal { width: 284px; flex: none; }
+.th-dt__time { display: flex; flex-direction: column; width: 210px; padding-inline-start: 14px; border-inline-start: 1px solid var(--color-border-subtle); }
+.th-dt__label { margin: 0 0 8px; min-height: 34px; display: flex; align-items: center; justify-content: center; color: var(--color-text-strong); font-size: 0.92rem; font-weight: 800; }
+@media (max-width: 600px) {
+    .th-dt { flex-direction: column; }
+    .th-dt > .th-cal { width: 100%; }
+    .th-dt__time { width: 100%; padding: 12px 0 0; border-inline-start: 0; border-top: 1px solid var(--color-border-subtle); }
+    .th-dt__label { min-height: 0; }
+}
+
+/* ---------- Small screens ---------- */
+@media (max-width: 380px) {
+    .th-pop--cal, .th-pop--time { width: calc(100vw - 16px); }
+    .th-cal__day { height: 34px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .th-pop, .th-pop[data-side="top"] { transition: none; transform: none; }
+    .th-cal__body { animation: none !important; }
+    .th-trigger__chevron { transition: none; }
+}
