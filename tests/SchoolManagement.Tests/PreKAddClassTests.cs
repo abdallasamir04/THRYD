@@ -62,16 +62,10 @@ public sealed partial class PreKAddClassTests(DbFixture fx)
                 return r;
             }
 
-            // A section already used in Pre-K (a bare "PreK" is A) is refused as a duplicate; nothing is created.
-            if (taken.Count > 0)
-            {
-                var count = names.Count;
-                Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.SendAsync(Post(taken[0]))).StatusCode);
-                await using var db = fx.NewContext();
-                Assert.Equal(count, await db.Classes.CountAsync());
-            }
-
-            var saved = await client.SendAsync(Post(null));
+            // The form has no Section field: a section posted anyway (even one already used in Pre-K) is ignored, and the
+            // class gets the next free letter, so no duplicate can be made.
+            Assert.DoesNotContain("name=\"Section\"", form);
+            var saved = await client.SendAsync(Post(taken.Count > 0 ? taken[0] : "A"));
             var body = await saved.Content.ReadAsStringAsync();
             Assert.True(saved.StatusCode == HttpStatusCode.OK, body);
             Assert.True(JsonDocument.Parse(body).RootElement.GetProperty("success").GetBoolean());

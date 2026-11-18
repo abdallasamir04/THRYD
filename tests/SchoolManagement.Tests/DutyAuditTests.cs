@@ -143,6 +143,54 @@ public class DutyAuditTests(DbFixture fx)
     }
 
     [Fact]
+    public async Task Staff_Duty_Records_table_and_report_show_no_ratings_but_keep_the_counts()
+    {
+        // A staff member with one evaluated duty (rated 4): the rating exists, but the table and its PDF do not show it.
+        var (primary, name) = await fx.NewTeacherAsync();
+        var (supervisor, _) = await fx.NewTeacherAsync();
+        var id = await NewDutyAsync(Input(primary, AttendanceStatus.Present));
+        await using (var db = fx.NewContext())
+        {
+            var row = (await DbFixture.Duties(db).StaffAsync(id)).Single(r => r.StaffId == primary);
+            Assert.True((await DbFixture.StaffDuty(db).AddFeedbackAsync(new(row.Id, 4, "On time", null, null, false, supervisor, null))).Succeeded);
+            Assert.Equal(4.0, (await DbFixture.StaffDuty(db).ProfileAsync(primary))!.Summary.AverageRating); // the rating is kept
+        }
+
+        var client = fx.Factory.CreateClient();
+        var url = "/duties/audit/staff-records?search=" + Uri.EscapeDataString(name);
+        var ajax = new HttpRequestMessage(HttpMethod.Get, url);
+        ajax.Headers.Add("X-Requested-With", "XMLHttpRequest");
+        foreach (var html in new[] { await client.GetStringAsync(url), await (await client.SendAsync(ajax)).Content.ReadAsStringAsync() })
+        {
+            var table = html[html.IndexOf("<table", StringComparison.Ordinal)..(html.IndexOf("</table>", StringComparison.Ordinal) + 8)];
+            Assert.DoesNotContain("Average rating", table);
+            Assert.DoesNotContain("Not rated", table);
+            Assert.DoesNotContain("stars", table);
+            Assert.DoesNotContain("4.0", table);
+            Assert.DoesNotContain("(1)", table);
+            // The other columns, the person and the row link stay: 5 headers + the hidden "Open" header.
+            Assert.Equal(["Staff member", "Assigned", "Covered", "Not covered", "Pending / in progress"],
+                System.Text.RegularExpressions.Regex.Matches(table, "<th scope=\"col\"[^>]*>([^<]+)</th>").Select(m => m.Groups[1].Value));
+            Assert.Contains($"href=\"/staff/{primary}\" aria-label=\"Open ", table);
+            Assert.Contains("<td data-label=\"Assigned\" class=\"num\">1</td>", table);
+            Assert.Contains("<td data-label=\"Covered\" class=\"num is-ok\">1</td>", table);
+        }
+
+        // The table's PDF (Download Report) matches: the same five columns, no rating.
+        var pdf = await client.GetAsync("/staff/duty-records/pdf?search=" + Uri.EscapeDataString(name));
+        Assert.Equal("application/pdf", pdf.Content.Headers.ContentType?.MediaType);
+        using var doc = UglyToad.PdfPig.PdfDocument.Open(await pdf.Content.ReadAsByteArrayAsync());
+        var text = string.Concat(doc.GetPages().Select(p => p.Text)).Replace(" ", "");
+        Assert.Contains("Pending/inprogress", text);
+        Assert.Contains(name.Replace(" ", ""), text);
+        Assert.DoesNotContain("Averagerating", text);
+        Assert.DoesNotContain("rated", text);
+
+        // Ratings stay on the staff profile, which is not this table.
+        Assert.Contains("Average rating", await client.GetStringAsync($"/staff/{primary}"));
+    }
+
+    [Fact]
     public async Task Future_duties_cannot_be_evaluated()
     {
         var (primary, _) = await fx.NewTeacherAsync();

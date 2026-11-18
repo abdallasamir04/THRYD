@@ -104,10 +104,10 @@ public partial class HttpTests
         Assert.Contains("<a href=\"/staff/academic\">Academic Staff</a>", deptManagement); // breadcrumb back
 
         var management = await client.GetStringAsync("/management");
-        // School Leadership (members + positions in one card) and Tasks.
-        Assert.Equal(2, Regex.Matches(management, "class=\"hub-card ").Count);
-        foreach (var href in new[] { "/management/leadership", "/management/tasks" })
-            Assert.Contains($"href=\"{href}\"", management);
+        // School Leadership only (members + positions in one card); tasks are reached from School Leadership.
+        Assert.Single(Regex.Matches(management, "class=\"hub-card "));
+        Assert.Contains("href=\"/management/leadership\"", management);
+        Assert.DoesNotContain("href=\"/management/tasks\"", management);
         Assert.DoesNotContain("href=\"/management/members\"", management);
         Assert.DoesNotContain("href=\"/management/positions\"", management);
 

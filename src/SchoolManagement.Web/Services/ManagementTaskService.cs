@@ -140,6 +140,12 @@ public sealed class TaskInput
     public DateOnly? DueDate { get; set; }
     public TimeOnly? DueTime { get; set; }
 
+    /// <summary>
+    /// New tasks created from Academic Departments: the department the task is for. The executor must be a member of it
+    /// (a task's department is its executor's department, as on the Tasks page's department filter). Ignored by edits.
+    /// </summary>
+    public int? DepartmentId { get; set; }
+
     /// <summary>Uploaded files (staging keys) to attach on save.</summary>
     public IReadOnlyList<Guid> AttachmentKeys { get; set; } = [];
 
@@ -160,6 +166,9 @@ public interface IManagementTaskService
     Task<TaskTabCounts> TabCountsAsync(TaskListQuery query, CancellationToken ct = default);
     Task<TaskRow?> GetAsync(int id, CancellationToken ct = default);
     Task<ServiceResult> CreateAsync(TaskInput input, CancellationToken ct = default);
+
+    /// <summary>The checks <see cref="CreateAsync"/> makes, without saving (Import / Export → Tasks preview).</summary>
+    Task<ServiceResult> ValidateNewAsync(TaskInput input, CancellationToken ct = default);
     Task<ServiceResult> UpdateAsync(int id, TaskInput input, CancellationToken ct = default);
     Task<ServiceResult> SetStatusAsync(int id, ManagementTaskStatus status, CancellationToken ct = default);
     Task<ServiceResult> DeleteAsync(int id, CancellationToken ct = default);
@@ -259,6 +268,9 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
         await tx.CommitAsync(ct);
         return ServiceResult.Ok(task.Id);
     }
+
+    public async Task<ServiceResult> ValidateNewAsync(TaskInput input, CancellationToken ct = default) =>
+        (await ValidateAsync(input, null, ct)).Result;
 
     public async Task<ServiceResult> UpdateAsync(int id, TaskInput input, CancellationToken ct = default)
     {
@@ -498,6 +510,16 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
             // A new assignee must still be on staff (contract not ended); an existing assignment is kept as it is.
             else if (existing?.AssignedToId != executorId && await ContractEndedAsync(executorId, ct) is { } ended)
                 result.AddError("AssignedToId", $"{executor}'s contract ended on {ended.ToString("d MMM yyyy", CultureInfo.InvariantCulture)}. Choose a current staff member.");
+        }
+        // A task created for a department: the department must exist and the executor must be one of its members. Checked
+        // here, against the database, whatever the browser sent.
+        if (existing is null && input.DepartmentId is { } deptId)
+        {
+            var dept = await db.Departments.AsNoTracking().Where(d => d.Id == deptId).Select(d => d.Name).FirstOrDefaultAsync(ct);
+            if (dept is null) result.AddError("DepartmentId", "Choose a department from the list.");
+            else if (input.AssignedToId is { } assignee && executor.Length > 0
+                     && !await db.StaffMembers.AsNoTracking().AnyAsync(s => s.Id == assignee && s.DepartmentId == deptId, ct))
+                result.AddError("AssignedToId", $"{executor} is not a member of the {dept} department. Choose a member of this department.");
         }
         if (input.ReviewerId is { } reviewerId)
         {

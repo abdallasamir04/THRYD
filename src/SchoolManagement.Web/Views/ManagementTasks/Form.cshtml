@@ -36,7 +36,9 @@
             <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "clipboard-check", "icon--lg")</span>
             <div>
                 <h2 class="modal__title">@heading</h2>
-                <p class="modal__sub">Created by the Management Team; anyone on the staff can carry it out or review it. Not part of teacher workload.</p>
+                <p class="modal__sub">@(Model.DepartmentLocked ? $"A task for the {Model.DepartmentName} department, carried out by one of its members. Listed on the Tasks page with every other task. Not part of teacher workload."
+                    : Model.DepartmentMode ? "A task for an academic department, carried out by one of its members. Listed on the Tasks page with every other task. Not part of teacher workload."
+                    : "Created by the Management Team; anyone on the staff can carry it out or review it. Not part of teacher workload.")</p>
             </div>
             <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
         </div>
@@ -85,6 +87,36 @@
             @* ---------------------------------------------------------------- B. Assignment *@
             <fieldset class="task-section">
                 <legend class="task-section__title"><span class="task-section__step">2</span>Assignment</legend>
+                @if (Model.DepartmentMode)
+                {
+                    @* Add Task from Academic Departments: the department first; Assigned to then lists only its active members. *@
+                    <input type="hidden" name="DepartmentMode" value="true" />
+                    <div class="field task-department">
+                        <label class="label" for="DepartmentId">Academic department <span class="req" aria-hidden="true">*</span></label>
+                        @if (Model.DepartmentLocked)
+                        {
+                            <input type="hidden" name="DepartmentLocked" value="true" />
+                            <input type="hidden" name="DepartmentId" value="@Model.DepartmentId" />
+                            <select class="select" id="DepartmentId" disabled aria-describedby="dept-hint" data-no-search>
+                                <option selected>@Model.DepartmentName</option>
+                            </select>
+                            <p class="hint" id="dept-hint">@Ui.Icon("lock", "icon--sm") Set by the department page. Only members of @Model.DepartmentName can be assigned.</p>
+                        }
+                        else
+                        {
+                            <select class="select" id="DepartmentId" name="DepartmentId" required data-task-department data-staff-url="/management/tasks/department-staff"
+                                    data-val="true" data-val-required="Choose a department." aria-describedby="dept-hint">
+                                <option value="">Choose a department…</option>
+                                @foreach (var d in Model.Departments)
+                                {
+                                    <option value="@d.Id" selected="@(Model.DepartmentId == d.Id)">@d.Name</option>
+                                }
+                            </select>
+                            <p class="hint" id="dept-hint">Assigned to lists the active members of the department you choose.</p>
+                        }
+                        <span asp-validation-for="DepartmentId" class="field-validation-error"></span>
+                    </div>
+                }
                 <div class="task-roles">
                     <div class="task-role task-role--creator">
                         <div class="task-role__head"><span class="task-role__tag">@Ui.Icon("pencil", "icon--sm")Created by</span><span class="task-role__flag">Automatic</span></div>
@@ -111,13 +143,19 @@
 
                     <div class="task-role task-role--executor field">
                         <div class="task-role__head"><label class="task-role__tag" for="AssignedToId">@Ui.Icon("user", "icon--sm")Assigned to</label><span class="task-role__flag is-required">Required</span></div>
-                        <select class="select" id="AssignedToId" name="AssignedToId" data-searchable data-search-notes required
-                                data-val="true" data-val-required="Choose who will carry out the task.">
-                            <option value="">Choose a staff member…</option>
-                            <partial name="_StaffOptions" model="(Model.Staff, Model.AssignedToId)" />
+                        @{
+                            var assignees = Model.Assignees;
+                            var waiting = Model.DepartmentMode && Model.DepartmentId is null;
+                            var noMembers = Model.DepartmentMode && !waiting && !assignees.Any(s => s.IsActive || s.Id == Model.AssignedToId);
+                        }
+                        <select class="select" id="AssignedToId" name="AssignedToId" data-searchable data-search-notes required data-task-assignee
+                                data-val="true" data-val-required="Choose who will carry out the task." disabled="@(waiting || noMembers)">
+                            <option value="">@(waiting ? "Choose a department first…" : noMembers ? "No active staff in this department" : "Choose a staff member…")</option>
+                            <partial name="_StaffOptions" model="(assignees, Model.AssignedToId)" />
                         </select>
+                        <p class="hint task-assignee-loading" data-assignee-loading hidden role="status"><span class="spinner" aria-hidden="true"></span> Loading the department's staff…</p>
                         <span asp-validation-for="AssignedToId" class="field-validation-error"></span>
-                        <p class="hint">Responsible for doing the task. Any staff member.</p>
+                        <p class="hint" data-assignee-hint>@(Model.DepartmentMode ? "Responsible for doing the task. Active members of the department only." : "Responsible for doing the task. Any staff member.")</p>
                     </div>
 
                     <div class="task-role task-role--reviewer field">

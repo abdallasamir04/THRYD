@@ -8,7 +8,7 @@ using SchoolManagement.Web.ViewModels;
 namespace SchoolManagement.Tests;
 
 /// <summary>
-/// Default class capacity (20, never a limit) and the dashboard's Students by class rings: blue occupied up to the
+/// Default class capacity (20, never a limit) and the dashboard's Students by class stacked columns: blue occupied up to the
 /// capacity, yellow seats left, red students over it, with totals summed per class (one class never offsets another).
 /// </summary>
 [Collection("db")]
@@ -61,7 +61,7 @@ public sealed class DashboardCapacityTests(DbFixture fx)
     }
 
     [Fact]
-    public async Task Dashboard_shows_a_ring_per_class_with_real_enrolment_capacity_and_totals()
+    public async Task Dashboard_shows_a_stacked_column_per_class_with_real_enrolment_capacity_and_totals()
     {
         int full = 0, over = 0;
         try
@@ -81,16 +81,21 @@ public sealed class DashboardCapacityTests(DbFixture fx)
 
             var html = WebUtility.HtmlDecode(await fx.Factory.CreateClient().GetStringAsync("/"));
             Assert.Contains("Students by class", html);
-            Assert.DoesNotContain("dist__bar", html);                       // the bar chart is gone
+            Assert.DoesNotContain("dist__bar", html);   // neither the old bar chart…
+            Assert.DoesNotContain("cap-ring", html);    // …nor the rings / class cards
+            Assert.DoesNotContain("cap-class", html);
+            Assert.Contains("js/dashboard-chart.js", html);
             foreach (var key in new[] { "Occupied", "Available", "Over capacity" }) Assert.Contains($"</i>{key}</span>", html);
 
             await using (var db = fx.NewContext())
             {
-                // Active classes, plus inactive classes that still have students — one ring each.
-                var shown = await db.Classes.AsNoTracking().Where(c => c.IsActive || c.Students.Any())
+                // Active classes, plus inactive classes that still have students — one column each, in the Classes order.
+                var shown = await db.Classes.AsNoTracking().Where(c => c.IsActive || c.Students.Any()).OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
                     .Select(c => new ClassDistribution(c.Id, c.Name, c.IsActive, c.Students.Count, c.Capacity)).ToListAsync();
-                Assert.Equal(shown.Count, Regex.Matches(html, "<a class=\"cap-class ").Count);
-                foreach (var c in shown) Assert.Contains($"href=\"/students?classId={c.ClassId}\"", html);
+                Assert.Equal(shown.Count, Regex.Matches(html, "<li class=\"cap-col ").Count);
+                var order = Regex.Matches(html, "class=\"cap-col__link\" href=\"/students\\?classId=(\\d+)\"").Select(m => int.Parse(m.Groups[1].Value)).ToList();
+                Assert.Equal(shown.Select(c => c.ClassId), order);
+                Assert.Contains($"--cols:{shown.Count}", html);
 
                 var t = CapacityTotals.Of(shown);
                 string Total(string label) => Regex.Match(html, $"cap-totals__value num\">([\\d,]+)</span><span class=\"cap-totals__label\">{label}<").Groups[1].Value.Replace(",", "");
@@ -98,41 +103,48 @@ public sealed class DashboardCapacityTests(DbFixture fx)
                     (int.Parse(Total("Total students")), int.Parse(Total("Total capacity")), int.Parse(Total("Available seats")), int.Parse(Total("Over capacity"))));
             }
 
-            // The full class and the over-capacity class, with their real numbers and the three segments.
-            string Card(int id)
+            // The full class and the over-capacity class: real numbers, the segments, the tooltip and the column heights.
+            string Column(int id)
             {
                 var at = html.IndexOf($"href=\"/students?classId={id}\"", StringComparison.Ordinal);
-                var start = html.LastIndexOf("<a class=\"cap-class ", at, StringComparison.Ordinal);
-                return html[start..html.IndexOf("</a>", at, StringComparison.Ordinal)];
+                var start = html.LastIndexOf("<li class=\"cap-col ", at, StringComparison.Ordinal);
+                return html[start..(html.IndexOf("</li>", at, StringComparison.Ordinal) + 5)];
             }
-            var fullCard = Card(full);
-            Assert.Contains("cap-class--full", fullCard);
-            Assert.Contains("<strong class=\"num\">3</strong><small class=\"num\">/ 3</small>", fullCard);
-            Assert.Contains(">Full<", fullCard);
-            Assert.Contains("cap-ring__seg--occupied", fullCard);
-            Assert.DoesNotContain("cap-ring__seg--available", fullCard);   // no seats left: no yellow
-            Assert.DoesNotContain("cap-ring__seg--over", fullCard);
+            string Tip(string column, string row) => Regex.Match(column, $"</i>{Regex.Escape(row)}</dt><dd class=\"num\">(\\d+)</dd>").Groups[1].Value;
+            double Height(string column) => double.Parse(Regex.Match(column, "cap-col__stack\" style=\"--h:([\\d.]+)\"").Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
 
-            var overCard = Card(over);
-            Assert.Contains("cap-class--over", overCard);
-            Assert.Contains("<strong class=\"num\">5</strong><small class=\"num\">/ 3</small>", overCard); // not capped at 3
-            Assert.Contains(">+2 over capacity<", overCard);
-            Assert.Contains("cap-ring__seg--over", overCard);
-            Assert.DoesNotContain("cap-ring__seg--available", overCard);
-            // Blue 3 and red 2 of a ring measured against 5 students: 60% and 40% of the circumference.
-            var ring = 2 * Math.PI * 42;
-            Assert.Contains($"stroke-dasharray=\"{Math.Round(3 * ring / 5, 3).ToString(System.Globalization.CultureInfo.InvariantCulture)} ", overCard);
-            Assert.Contains($"stroke-dasharray=\"{Math.Round(2 * ring / 5, 3).ToString(System.Globalization.CultureInfo.InvariantCulture)} ", overCard);
+            var fullCol = Column(full);
+            Assert.Contains("cap-col--full", fullCol);
+            Assert.Contains("<span class=\"cap-col__value num\">3</span>", fullCol);
+            Assert.Contains("cap-seg--occupied\" style=\"flex-grow:3\"", fullCol);
+            Assert.DoesNotContain("cap-seg--available", fullCol);   // no seats left: no yellow
+            Assert.DoesNotContain("cap-seg--over", fullCol);
+            Assert.Equal(("3", "3", "0", "0"), (Tip(fullCol, "Enrolled students"), Tip(fullCol, "Total capacity"), Tip(fullCol, "Available seats"), Tip(fullCol, "Over capacity")));
+            Assert.Contains("<span class=\"num\">100%</span> of capacity used", fullCol);
 
-            // Changing a capacity changes the ring: the over class at 10 has 5 seats available.
+            var overCol = Column(over);
+            Assert.Contains("cap-col--over", overCol);
+            Assert.Contains("<span class=\"cap-col__value num\">5</span>", overCol); // not capped at 3
+            Assert.Contains("cap-seg--occupied\" style=\"flex-grow:3\"", overCol); // blue up to the capacity…
+            Assert.Contains("cap-seg--over\" style=\"flex-grow:2\"", overCol);     // …red for the 2 beyond it
+            Assert.DoesNotContain("cap-seg--available", overCol);
+            Assert.Equal(("5", "3", "0", "2"), (Tip(overCol, "Enrolled students"), Tip(overCol, "Total capacity"), Tip(overCol, "Available seats"), Tip(overCol, "Over capacity")));
+            Assert.Contains("<span class=\"num\">167%</span> of capacity used", overCol);
+            Assert.Contains("5 of 3 students, 2 over capacity, 167% of capacity used", overCol); // the column's accessible name
+            Assert.Equal(5 / 3.0, Height(overCol) / Height(fullCol), 2); // one shared scale: 5 students vs 3
+
+            // Changing a capacity changes the column: the over class at 10 has 5 blue and 5 yellow, and stands 10 high.
             await using (var db = fx.NewContext())
                 Assert.True((await DbFixture.Classes(db).UpdateAsync(over, (await db.Classes.FindAsync(over))!.Name, null, 10, true)).Succeeded);
             html = WebUtility.HtmlDecode(await fx.Factory.CreateClient().GetStringAsync("/"));
-            overCard = Card(over);
-            Assert.Contains("<strong class=\"num\">5</strong><small class=\"num\">/ 10</small>", overCard);
-            Assert.Contains(">5 seats available<", overCard);
-            Assert.Contains("cap-ring__seg--available", overCard);
-            Assert.DoesNotContain("cap-ring__seg--over", overCard);
+            overCol = Column(over);
+            fullCol = Column(full);
+            Assert.Contains("cap-col--open", overCol);
+            Assert.Contains("cap-seg--occupied\" style=\"flex-grow:5\"", overCol);
+            Assert.Contains("cap-seg--available\" style=\"flex-grow:5\"", overCol);
+            Assert.DoesNotContain("cap-seg--over", overCol);
+            Assert.Equal("5", Tip(overCol, "Available seats"));
+            Assert.Equal(10 / 3.0, Height(overCol) / Height(fullCol), 2);
         }
         finally
         {

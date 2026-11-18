@@ -251,7 +251,7 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
 
         var names = await db.Classes.AsNoTracking().Select(c => c.Name).ToListAsync(ct);
         var sec = typed ?? ClassNumbering.NextSection(names, code!, grade);
-        if (sec is null) return ServiceResult.Fail("Section", "Every automatic section letter is used in this grade. Enter a section.");
+        if (sec is null) return ServiceResult.Fail("Section", "Every section letter (A to ZZZ) is already used in this grade.");
         return await AddNumberedClassAsync(tx, $"{code}{grade}{sec}", capacity, isActive, ct);
     }
 
@@ -277,7 +277,7 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
 
         var names = await db.Classes.AsNoTracking().Select(c => c.Name).ToListAsync(ct);
         var sec = typed ?? ClassNumbering.NextSection(names, ClassStages.PreKCode, 0);
-        if (sec is null) return ServiceResult.Fail("Section", "Every automatic section letter is used in Pre-K. Enter a section.");
+        if (sec is null) return ServiceResult.Fail("Section", "Every section letter (A to ZZZ) is already used in Pre-K.");
         // "PreK" already is section A: PreKA would be the same class under another name.
         var taken = names.FirstOrDefault(n => ClassNumbering.PreKSection(n) == sec);
         if (taken is not null) return DuplicateName(taken);

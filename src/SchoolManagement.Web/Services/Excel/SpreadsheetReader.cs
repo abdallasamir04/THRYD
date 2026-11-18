@@ -4,11 +4,16 @@ using ClosedXML.Excel;
 
 namespace SchoolManagement.Web.Services.Excel;
 
-/// <summary>One row as read from the file. RowNumber is the row number the user sees in Excel (1-based).</summary>
-public sealed record SheetRow(int RowNumber, string[] Cells, bool[] IsNumber)
+/// <summary>
+/// One row as read from the file. RowNumber is the row number the user sees in Excel (1-based). <paramref name="Iso"/>:
+/// for .xlsx date / time cells only, the value as yyyy-MM-dd, yyyy-MM-ddTHH:mm or HH:mm (the displayed text in
+/// <paramref name="Cells"/> depends on the cell's format); null for every other cell and for CSV files.
+/// </summary>
+public sealed record SheetRow(int RowNumber, string[] Cells, bool[] IsNumber, string?[]? Iso = null)
 {
     public string Cell(int column) => column >= 0 && column < Cells.Length ? Cells[column] : "";
     public bool CellIsNumber(int column) => column >= 0 && column < IsNumber.Length && IsNumber[column];
+    public string? IsoValue(int column) => Iso is not null && column >= 0 && column < Iso.Length ? Iso[column] : null;
     public bool IsEmpty => Cells.All(string.IsNullOrWhiteSpace);
 }
 
@@ -66,12 +71,14 @@ public static class SpreadsheetReader
                 {
                     var cells = new string[lastCol];
                     var numbers = new bool[lastCol];
+                    string?[]? iso = null;
                     for (var c = 1; c <= lastCol; c++)
                     {
                         var cell = ws.Cell(r, c);
                         (cells[c - 1], numbers[c - 1]) = CellText(cell);
+                        if (IsoOf(cell) is { } d) (iso ??= new string?[lastCol])[c - 1] = d;
                     }
-                    var row = new SheetRow(r, cells, numbers);
+                    var row = new SheetRow(r, cells, numbers, iso);
                     if (!row.IsEmpty) rows.Add(row);
                 }
 
@@ -80,6 +87,27 @@ public static class SpreadsheetReader
 
             if (sheets.Count == 0) throw new SpreadsheetReadException("The workbook has no data.");
             return sheets;
+        }
+    }
+
+    /// <summary>A date / time cell's value in a fixed format, whatever its display format; null for any other cell.</summary>
+    private static string? IsoOf(IXLCell cell)
+    {
+        try
+        {
+            var value = cell.HasFormula ? cell.CachedValue : cell.Value;
+            return value.Type switch
+            {
+                XLDataType.DateTime when value.GetDateTime() is var d => d.TimeOfDay == TimeSpan.Zero
+                    ? d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : d.ToString("yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture),
+                XLDataType.TimeSpan when value.GetTimeSpan() is var t && t >= TimeSpan.Zero && t < TimeSpan.FromDays(1) =>
+                    $"{t.Hours:00}:{t.Minutes:00}",
+                _ => null,
+            };
+        }
+        catch
+        {
+            return null;
         }
     }
 

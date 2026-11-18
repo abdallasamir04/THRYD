@@ -33,7 +33,7 @@
                 <h2 class="modal__title">@heading</h2>
                 <p class="modal__sub">@(Model.IsEdit ? $"{Model.StudentCount} student(s) are in this class. Renaming keeps them in it."
                     : Model.IsGroupMode ? $"Adding to {Model.GroupLink?.Title}. Choose the grade; the section letter is assigned for you."
-                    : "Choose a stage and section; the class number is assigned for you.")</p>
+                    : "Choose the grade; the section letter is assigned for you.")</p>
             </div>
             <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
         </div>
@@ -53,42 +53,33 @@
                             }
                         </select>
                         <span asp-validation-for="GradeNumber" class="field-validation-error"></span>
-                    </div>
-                    <div class="field">
-                        <label class="label" asp-for="Section">Section</label>
-                        <input class="input" asp-for="Section" maxlength="3" placeholder="Automatic"
-                               pattern="[A-Za-z]{1,3}" title="1–3 letters, e.g. C" style="text-transform:uppercase" />
-                        <span asp-validation-for="Section" class="field-validation-error"></span>
-                        @* Duplicate class names are reported on Name, which this form has no field for. *@
+                        @* Numbering errors (duplicate name, no letter left) have no field of their own: shown with the grade. *@
+                        @Html.ValidationMessage("Section", new { @class = "field-validation-error" })
                         <span asp-validation-for="Name" class="field-validation-error"></span>
-                        <span class="hint">Leave empty to use the next letter shown beside the grade.</span>
                     </div>
                 }
-                else if (!Model.IsEdit)
+                else if (Model.IsAllGradesMode)
                 {
-                    var allSections = Model.Sections.Values.SelectMany(s => s).Distinct().OrderBy(s => s.Length).ThenBy(s => s).ToList();
+                    @* Every grade of every stage, grouped by stage, in the Classes order; the value is "group:grade". *@
                     <div class="field">
-                        <label class="label" asp-for="GradeLevel">Stage <span class="req" aria-hidden="true">*</span></label>
-                        <select class="select" asp-for="GradeLevel" data-autofocus required>
-                            @foreach (var (code, label) in ClassNumbering.Stages)
+                        <label class="label" asp-for="GradeKey">Grade <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" asp-for="GradeKey" data-autofocus required data-val="true" data-val-required="Choose a grade.">
+                            <option value="">Choose a grade…</option>
+                            @foreach (var (stage, grades) in Model.AllGradeOptions)
                             {
-                                <option value="@code">@label</option>
+                                if (grades.Count == 0) { continue; }
+                                <optgroup label="@stage">
+                                    @foreach (var (key, label) in grades)
+                                    {
+                                        <option value="@key" selected="@(Model.GradeKey == key)">@label</option>
+                                    }
+                                </optgroup>
                             }
                         </select>
-                        <span asp-validation-for="GradeLevel" class="field-validation-error"></span>
-                    </div>
-                    <div class="field">
-                        <label class="label" asp-for="Section">Section <span class="req" aria-hidden="true">*</span></label>
-                        <input class="input" asp-for="Section" list="class-sections" maxlength="3" placeholder="e.g. A, or a new letter" required
-                               pattern="[A-Za-z]{1,3}" title="1–3 letters, e.g. A or C" style="text-transform:uppercase" />
-                        <datalist id="class-sections">
-                            @foreach (var s in allSections)
-                            {
-                                <option value="@s">Section @s</option>
-                            }
-                        </datalist>
-                        <span asp-validation-for="Section" class="field-validation-error"></span>
-                        <span class="hint">Pick an existing section or type a new one. A new section starts at 1.</span>
+                        <span asp-validation-for="GradeKey" class="field-validation-error"></span>
+                        @Html.ValidationMessage("GradeNumber", new { @class = "field-validation-error" })
+                        @Html.ValidationMessage("Section", new { @class = "field-validation-error" })
+                        <span asp-validation-for="Name" class="field-validation-error"></span>
                     </div>
                 }
                 else
@@ -117,20 +108,10 @@
                     }
                 </div>
             </div>
-            @if (Model.IsGroupMode)
+            @if (!Model.IsEdit)
             {
                 <p class="hint" style="margin-top:14px">
-                    The class name is the grade plus the next section letter of that grade (e.g. KG1A, KG1B → KG1C). Names are never repeated.
-                </p>
-            }
-            else if (!Model.IsEdit)
-            {
-                <p class="hint" style="margin-top:14px">
-                    The class number is calculated automatically for each stage and section (KG + next number + section, e.g. KG3A).
-                    @if (Model.NextNames.Count > 0)
-                    {
-                        <br /><text>Next in existing sections: @string.Join(", ", Model.NextNames)</text>
-                    }
+                    The class name is the grade plus the next section letter of that grade (e.g. KG1A, KG1B → KG1C; a grade without classes starts at A). Names are never repeated.
                 </p>
             }
             else

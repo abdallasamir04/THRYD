@@ -260,8 +260,9 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
     }
 
     /// <summary>
-    /// Add class. With <paramref name="group"/> (opened from a stage) the grade is chosen from that group and
-    /// the section letter is assigned automatically; without it, the original stage + section form.
+    /// Add class: only the grade is chosen; the server gives the class the next section letter of that grade (KG1A, KG1B
+    /// → KG1C; a grade without classes starts at A), each grade counted on its own. With <paramref name="group"/> (opened
+    /// from a stage) the grade list is that group's; without it (Classes → All classes) every grade of every stage.
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> Create(string? group, int? grade, CancellationToken ct)
@@ -275,8 +276,8 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
             return PageOrPartial("Form", grouped);
         }
 
-        var model = new ClassFormModel { GradeLevel = "KG" };
-        await FillNumberingAsync(model, ct);
+        var model = new ClassFormModel();
+        await FillAllGradesAsync(model, ct);
         return PageOrPartial("Form", model);
     }
 
@@ -284,63 +285,69 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
     public async Task<IActionResult> Create(ClassFormModel model, CancellationToken ct)
     {
         model.Id = null;
-        // The class name and number are never taken from the form: the server calculates them.
+        // The class name, number and section are never taken from the form: the server calculates them.
         ModelState.Remove(nameof(ClassFormModel.Name));
         ModelState.Remove(nameof(ClassFormModel.SortOrder));
 
-        if (!string.IsNullOrEmpty(model.Group))
+        // Every grade (no group): the chosen "group:grade" option picks the group and the grade.
+        var allGrades = string.IsNullOrEmpty(model.Group);
+        if (allGrades)
         {
-            if (ClassStages.FindGroup(model.Group) is not { } found || !found.Group.CanAdd) return NotFoundResult("Classes cannot be added to this group.");
-            var (stage, group) = found;
-            // The stage code comes from the group, never from the form, so a class cannot land in another stage.
-            model.GradeLevel = group.Code;
-            await FillGroupAsync(model, stage, group, ct);
-            if (model.GradeNumber is not { } grade || !model.GradeOptions.Any(o => o.Number == grade))
-                ModelState.AddModelError(nameof(ClassFormModel.GradeNumber), $"Choose a grade of {group.Title}.");
-            if (ModelState.IsValid)
+            if (ClassFormModel.ParseKey(model.GradeKey) is { } key && ClassStages.FindGroup(key.Group) is { Group.CanAdd: true })
+                (model.Group, model.GradeNumber) = key;
+            else
             {
-                var result = await classes.CreateInGradeAsync(group.Code, model.GradeNumber!.Value, model.Section, model.Capacity, model.IsActive, ct);
-                if (result.Succeeded)
-                {
-                    var created = await classes.GetAsync(result.EntityId!.Value, ct);
-                    return Saved($"Class {created?.Name} was added to {group.Title}.", stage.GroupHref(group));
-                }
-                AddErrors(result);
+                ModelState.AddModelError(nameof(ClassFormModel.GradeKey), "Choose a grade.");
+                await FillAllGradesAsync(model, ct);
+                return FormView("Form", model);
             }
-            return FormView("Form", model);
         }
 
+        if (ClassStages.FindGroup(model.Group) is not { } found || !found.Group.CanAdd) return NotFoundResult("Classes cannot be added to this group.");
+        var (stage, group) = found;
+        // The stage code comes from the group, never from the form, so a class cannot land in another stage.
+        model.GradeLevel = group.Code;
+        await FillGroupAsync(model, stage, group, ct);
+        if (model.GradeNumber is not { } grade || !model.GradeOptions.Any(o => o.Number == grade))
+            ModelState.AddModelError(allGrades ? nameof(ClassFormModel.GradeKey) : nameof(ClassFormModel.GradeNumber), allGrades ? "Choose a grade." : $"Choose a grade of {group.Title}.");
         if (ModelState.IsValid)
         {
-            var result = await classes.CreateInSectionAsync(model.GradeLevel ?? "", model.Section ?? "", model.Capacity, model.IsActive, ct);
+            // No section is passed: the service takes the grade's next letter under its numbering lock and refuses duplicates.
+            var result = await classes.CreateInGradeAsync(group.Code, model.GradeNumber!.Value, null, model.Capacity, model.IsActive, ct);
             if (result.Succeeded)
             {
                 var created = await classes.GetAsync(result.EntityId!.Value, ct);
-                return Saved($"Class {created?.Name} was added.");
+                return allGrades ? Saved($"Class {created?.Name} was added.") : Saved($"Class {created?.Name} was added to {group.Title}.", stage.GroupHref(group));
             }
             AddErrors(result);
         }
-        await FillNumberingAsync(model, ct);
+        if (allGrades)
+        {
+            model.Group = null;
+            await FillAllGradesAsync(model, ct);
+        }
         return FormView("Form", model);
     }
 
-    /// <summary>Returns the name the next class in a stage + section will get (used for the live preview).</summary>
-    [HttpGet]
-    public async Task<IActionResult> NextName(string stage, string section, CancellationToken ct) =>
-        Json(new { name = await classes.NextNameAsync(stage, section, ct) });
-
-    private async Task FillNumberingAsync(ClassFormModel model, CancellationToken ct)
+    /// <summary>Every grade of every stage group, with the name the next class of each grade will get.</summary>
+    private async Task FillAllGradesAsync(ClassFormModel model, CancellationToken ct)
     {
-        var sections = new Dictionary<string, IReadOnlyList<string>>();
-        var next = new List<string>();
-        foreach (var (code, _) in ClassNumbering.Stages)
+        var names = (await classes.ListAsync(null, null, ct)).Select(c => c.Name).ToList();
+        var stages = new List<(string, IReadOnlyList<(string, string)>)>();
+        foreach (var stage in ClassStages.All)
         {
-            sections[code] = await classes.SectionsAsync(code, ct);
-            foreach (var s in sections[code])
-                next.Add((await classes.NextNameAsync(code, s, ct))!);
+            var grades = new List<(string, string)>();
+            foreach (var group in stage.Groups.Where(g => g.CanAdd))
+                foreach (var n in ClassStages.AddableGrades(group, names))
+                {
+                    var grade = new ClassGrade(group.Code, n);
+                    var isNew = group.IsOpenEnded && !names.Any(x => ClassStages.GradeOf(x) == grade);
+                    var next = await classes.NextNameInGradeAsync(group.Code, n, ct);
+                    grades.Add((ClassFormModel.KeyOf(group.Slug, n), $"{grade.Label}{(isNew ? " (new grade)" : "")}{(next is null ? "" : $" — next class {next}")}"));
+                }
+            stages.Add((stage.Title, grades));
         }
-        model.Sections = sections;
-        model.NextNames = next;
+        model.AllGradeOptions = stages;
     }
 
     private async Task FillGroupAsync(ClassFormModel model, ClassStages.Stage stage, ClassStages.Group group, CancellationToken ct)

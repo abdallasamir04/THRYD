@@ -44,7 +44,10 @@ public class LeadershipTests(DbFixture fx)
         Assert.Contains("Manage school leadership members, positions, responsibilities, and appointment history in one place.", landing);
         Assert.DoesNotContain("Team Members", landing);
         Assert.DoesNotContain("Management Positions", landing);
-        Assert.Contains("href=\"/management/tasks\"", landing); // Tasks stays
+        // Only the School Leadership card: tasks are reached from School Leadership (All Tasks / Add Task).
+        Assert.Single(Regex.Matches(landing, "class=\"hub-card "));
+        Assert.Contains("class=\"hub hub--large hub--single\"", landing);
+        Assert.DoesNotContain("href=\"/management/tasks\"", landing);
 
         // The navigation path is unchanged: still Staff → Management Team, with Staff highlighted in the sidebar.
         var page = await client.GetStringAsync("/management/leadership");
@@ -61,6 +64,64 @@ public class LeadershipTests(DbFixture fx)
         Assert.Equal("/management/leadership#positions", positions.Headers.Location!.OriginalString);
         // Links of the former tabs land on the matching part of the one section.
         Assert.Equal("/management/leadership?status=vacant#positions", (await client.GetAsync("/management/leadership?tab=positions&status=vacant")).Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task Leadership_header_has_All_Tasks_and_Add_Task_together_and_Add_Task_creates_a_normal_task()
+    {
+        var client = NoRedirects();
+        var page = await client.GetStringAsync("/management/leadership");
+        var head = page[page.IndexOf("class=\"page-head__actions\"", StringComparison.Ordinal)..];
+        head = head[..head.IndexOf("<ul class=\"kpis", StringComparison.Ordinal)];
+
+        // Order: All Tasks, Add Task (together in one group), Download Report, Add Member.
+        int At(string s) => head.IndexOf(s, StringComparison.Ordinal);
+        var allTasks = At("href=\"/tasks\">");
+        var addTask = At("href=\"/management/tasks/create\" data-modal>");
+        var report = At("/management/members/pdf");
+        var addMember = At("href=\"/management/members/create\" data-modal>");
+        Assert.True(allTasks > 0 && allTasks < addTask && addTask < report && report < addMember, head);
+        var group = head[At("class=\"page-head__group\"")..report];
+        Assert.Contains("All Tasks", group);
+        Assert.Contains("Add Task", group);
+        Assert.Contains("Add Member", head);
+
+        // All Tasks opens the existing global Tasks page; Add Task opens the Tasks module's own form.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/tasks")).StatusCode);
+        var form = await client.GetStringAsync("/management/tasks/create");
+        foreach (var field in new[] { "name=\"Title\"", "name=\"AssignedToId\"", "name=\"Priority\"", "name=\"DueDate\"", "name=\"Description\"", "name=\"Status\"" })
+            Assert.Contains(field, form);
+
+        // Saving from School Leadership (the modal posts the same form): one normal task, listed on the global Tasks page once.
+        var (teacher, _) = await fx.NewTeacherAsync();
+        int tasksBefore, openBefore;
+        await using (var db = fx.NewContext())
+        {
+            tasksBefore = await db.ManagementTasks.CountAsync();
+            openBefore = (await new ManagementTaskService(db, new User()).CountsAsync(null)).Open;
+        }
+        var title = "Leadership task " + DbFixture.Unique();
+        var created = await PostFormAsync(client, "/management/tasks/create", "/management/tasks/create",
+            ("Title", title), ("Description", "From School Leadership."), ("Priority", "High"), ("Status", "ToDo"),
+            ("AssignedToId", teacher.ToString()), ("DueDate", SchoolWeek.Iso(SchoolWeek.Today.AddDays(2))));
+        Assert.Equal(HttpStatusCode.Redirect, created.StatusCode);
+        await using (var db = fx.NewContext())
+        {
+            Assert.Equal(tasksBefore + 1, await db.ManagementTasks.CountAsync());
+            var task = await db.ManagementTasks.SingleAsync(t => t.Title == title);
+            Assert.Equal(teacher, task.AssignedToId);
+            Assert.Equal((await new ManagementTaskService(db, new User()).CountsAsync(null)).Open, openBefore + 1);
+        }
+        var list = System.Net.WebUtility.HtmlDecode(await client.GetStringAsync("/tasks?search=" + Uri.EscapeDataString(title)));
+        Assert.Single(Regex.Matches(list, Regex.Escape(title) + "</a>"));
+
+        // The modal save answers with the normal success message.
+        var ajax = fx.Factory.CreateClient();
+        ajax.DefaultRequestHeaders.Add("X-Requested-With", "XMLHttpRequest");
+        var json = await (await PostFormAsync(ajax, "/management/tasks/create", "/management/tasks/create",
+            ("Title", title + " (2)"), ("Priority", "Low"), ("Status", "ToDo"), ("AssignedToId", teacher.ToString()))).Content.ReadAsStringAsync();
+        Assert.Contains("\"success\":true", json);
+        Assert.Contains("was created.", json);
     }
 
     [Fact]

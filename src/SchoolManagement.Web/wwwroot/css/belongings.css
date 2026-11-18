@@ -200,9 +200,14 @@
  * same with or without the sidebar: one line when there is room, then two rows, then a stacked phone layout.
  * ===================================================================================================== */
 .bl-board { container-type: inline-size; container-name: bl-board; }
+/* The narrowest a checklist cell may be: the longest label ("Lunch Box / Bag" with its not-checked dot) and its three
+   controls at full size. The breakpoints below switch layout before the cells would get narrower than this; if the
+   list is ever still too narrow (e.g. a much larger browser font), it scrolls sideways instead of clipping a cell. */
+.bl-board { --pb-cell: 7.25rem; }
+.bl-board .bl-list:has(> .pb-row) { overflow-x: auto; }
 
 .bl-row.pb-row {
-    grid-template-columns: 220px minmax(0, 1fr) 212px; gap: 10px 16px; align-items: center;
+    grid-template-columns: 220px minmax(auto, 1fr) 212px; gap: 10px 16px; align-items: center;
     min-height: 78px; padding: 10px 18px; border-inline-start-width: 3px; background: transparent;
 }
 .pb-row--done { border-inline-start-color: var(--color-success); }
@@ -221,7 +226,8 @@
 
 /* B. The checklist: one control group, five equal cells separated by hairlines. */
 .pb-items {
-    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; min-width: 0;
+    display: grid; grid-template-columns: repeat(5, minmax(var(--pb-cell), 1fr)); gap: 1px;
+    min-width: calc(5 * var(--pb-cell) + 6px); /* five cells, four hairlines, the border: never squeezed or clipped */
     border: 1px solid var(--color-border-subtle); border-radius: 12px; overflow: hidden; background: var(--color-border-subtle);
 }
 .pb-item { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 6px 7px 7px; background: var(--color-surface-soft); }
@@ -275,18 +281,20 @@
 
 .pb-notes { padding: 4px 0 2px; }
 
-/* Medium width: two rows — student and summary on top, the checklist below across the full width. */
-@container bl-board (max-width: 979px) {
-    .bl-row.pb-row { grid-template-columns: minmax(0, 1fr) 212px; }
+/* Medium width: two rows — student and summary on top, the checklist below across the full width. One line needs
+   220 + 5 cells + 212 px plus gaps and padding (about 1,090 px), so the switch happens below 1,100 px. */
+@container bl-board (max-width: 1099px) {
+    .bl-row.pb-row { grid-template-columns: minmax(auto, 1fr) 212px; }
     .pb-who { grid-column: 1; grid-row: 1; }
     .pb-side { grid-column: 2; grid-row: 1; }
     .pb-items { grid-column: 1 / -1; grid-row: 2; }
 }
-/* Phone width: stacked — student, checklist in two columns, then summary and actions. */
-@container bl-board (max-width: 560px) {
-    .bl-row.pb-row { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
+/* Phone width: stacked — student, checklist in two columns, then summary and actions. Used below 640 px, where the
+   five cells (about 625 px with padding) no longer fit side by side across the row. */
+@container bl-board (max-width: 639px) {
+    .bl-row.pb-row { grid-template-columns: minmax(auto, 1fr); padding: 12px 14px; }
     .pb-who, .pb-items, .pb-side { grid-column: 1; grid-row: auto; }
-    .pb-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pb-items { grid-template-columns: repeat(2, minmax(var(--pb-cell), 1fr)); min-width: calc(2 * var(--pb-cell) + 3px); }
     /* Five items in two columns: the last cell stays the same size; the empty one keeps the checklist background. */
     .pb-items::after { content: ""; background: var(--color-surface-soft); }
     .pb-seg__btn { height: 30px; font-size: 0.72rem; }

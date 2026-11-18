@@ -364,6 +364,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; }
 .page-head__text { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 760px; }
 .page-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+/* Related header actions kept side by side (e.g. School Leadership: All Tasks + Add Task). */
+.page-head__group { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .eyebrow { color: var(--color-primary-ink); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .page-title { font-size: clamp(1.6rem, 1.3rem + 0.9vw, 2.1rem); font-weight: 800; letter-spacing: -0.02em; }
 .page-sub { color: var(--color-text-muted); font-size: 0.9375rem; }
@@ -832,7 +834,7 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.78rem; color: var(--color-text-muted); font-weight: 600; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-/* ---- Dashboard: Students by class as capacity rings (blue occupied, yellow available, red over capacity) */
+/* ---- Dashboard: Students by class as stacked columns (blue occupied, yellow available, red over capacity) */
 :root { --cap-occupied: #5685ff; --cap-available: #eab746; --cap-over: #ef5555; }
 .legend .l-occupied { background: var(--cap-occupied); }
 .legend .l-available { background: var(--cap-available); }
@@ -844,33 +846,56 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
 .cap-totals--available { border-left: 3px solid var(--cap-available) !important; }
 .cap-totals--over { border-left: 3px solid var(--cap-over) !important; }
 .cap-totals--over:not(.is-zero) .cap-totals__value { color: var(--color-error-ink); }
-.cap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; margin: 0; padding: 16px 22px 22px; list-style: none; }
-.cap-class { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; padding: 12px 8px 10px; border: 1px solid var(--color-border); border-radius: 14px;
-    background: var(--color-surface-raised); color: var(--color-text); text-align: center; text-decoration: none; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
-.cap-class:hover { text-decoration: none; border-color: var(--color-border-strong); box-shadow: var(--shadow-card); transform: translateY(-1px); }
-.cap-class--over { border-color: color-mix(in srgb, var(--cap-over) 45%, var(--color-border)); }
-.cap-class.is-inactive { border-style: dashed; }
-.cap-class__name { font-size: 0.86rem; font-weight: 800; color: var(--color-text-strong); }
-.cap-ring { position: relative; display: grid; place-items: center; width: 92px; height: 92px; }
-.cap-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-.cap-ring__track { fill: none; stroke: var(--color-border-subtle); stroke-width: 10; }
-.cap-ring__seg { fill: none; stroke-width: 10; animation: cap-ring-in 0.7s ease-out both; }
-.cap-ring__seg--occupied { stroke: var(--cap-occupied); }
-.cap-ring__seg--available { stroke: var(--cap-available); }
-.cap-ring__seg--over { stroke: var(--cap-over); }
-@keyframes cap-ring-in { from { stroke-dasharray: 0 264; } }
-.cap-ring__center { position: relative; display: flex; flex-direction: column; align-items: center; line-height: 1.05; }
-.cap-ring__center strong { font-size: 1.3rem; font-weight: 800; color: var(--color-text-strong); }
-.cap-ring__center small { font-size: 0.72rem; font-weight: 700; color: var(--color-text-muted); }
-.cap-class__status { font-size: 0.74rem; font-weight: 800; color: var(--color-text-muted); }
-.cap-class--full .cap-class__status { color: var(--color-primary-ink); text-transform: uppercase; letter-spacing: 0.04em; }
-.cap-class--over .cap-class__status { color: var(--color-error-ink); text-transform: uppercase; letter-spacing: 0.02em; }
-.cap-class__meta { font-size: 0.7rem; font-weight: 600; color: var(--color-text-faint); }
-@media (prefers-reduced-motion: reduce) { .cap-ring__seg { animation: none; } .cap-class { transition: none; } .cap-class:hover { transform: none; } }
+/* Stacked columns, one per class. Fixed y-axis; the plot scrolls sideways when the classes need more room. */
+.cap-chart { --plot-h: 240px; --pad-top: 26px; --name-h: 32px; --col-min: 35px; --gap: 6px;
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 18px 22px 16px 14px; }
+.cap-chart__y { position: relative; width: 26px; height: var(--plot-h); margin-top: var(--pad-top); }
+.cap-chart__y span { position: absolute; right: 0; transform: translateY(50%); font-size: 0.7rem; font-weight: 600; line-height: 1; color: var(--color-text-faint); }
+.cap-chart__scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; border-radius: 10px; scrollbar-width: thin; }
+.cap-chart__scroll:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.cap-chart__inner { position: relative; min-width: calc(var(--cols) * (var(--col-min) + var(--gap))); }
+.cap-chart__grid { position: absolute; inset-inline: 0; top: var(--pad-top); height: var(--plot-h); pointer-events: none; }
+.cap-chart__line { position: absolute; inset-inline: 0; border-top: 1px dashed var(--color-border-subtle); }
+.cap-chart__line--base { border-top: 1px solid var(--color-border-strong); }
+.cap-chart__cols { position: relative; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: var(--gap); margin: 0; padding: 0; list-style: none; }
+.cap-col__link { display: flex; flex-direction: column; align-items: stretch; border-radius: 8px; color: var(--color-text); text-decoration: none; }
+.cap-col__link:hover { text-decoration: none; }
+.cap-col__link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -2px; }
+.cap-col__zone { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: calc(var(--pad-top) + var(--plot-h)); border-radius: 8px 8px 0 0; transition: background-color 0.15s; }
+.cap-col__link:hover .cap-col__zone, .cap-col__link:focus-visible .cap-col__zone { background: color-mix(in srgb, var(--cap-occupied) 9%, transparent); }
+.cap-col__value { margin-bottom: 4px; font-size: 0.74rem; font-weight: 800; line-height: 1; color: var(--color-text-strong); }
+.cap-col--over .cap-col__value { color: var(--color-error-ink); }
+.cap-col__stack { display: flex; flex-direction: column-reverse; height: calc(var(--plot-h) * var(--h, 0)); width: min(72%, 34px); border-radius: 6px 6px 0 0; overflow: hidden; transform-origin: bottom; animation: cap-col-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.cap-seg { flex-basis: 0; min-height: 2px; }
+.cap-seg + .cap-seg { box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.55); }
+.cap-seg--occupied { background: var(--cap-occupied); }
+.cap-seg--available { background: var(--cap-available); }
+.cap-seg--over { background: var(--cap-over); }
+@keyframes cap-col-in { from { transform: scaleY(0); } }
+.cap-col__name { display: flex; align-items: center; justify-content: center; height: var(--name-h); font-size: 0.72rem; font-weight: 700; white-space: nowrap; color: var(--color-text-muted); }
+.cap-col__link:hover .cap-col__name, .cap-col__link:focus-visible .cap-col__name { color: var(--color-text-strong); }
+.cap-col.is-inactive .cap-col__stack { opacity: 0.5; }
+.cap-col.is-inactive .cap-col__name { font-style: italic; text-decoration: underline dotted; text-underline-offset: 3px; }
+/* The tooltip (one element, placed by js/dashboard-chart.js, fixed so the scrolling plot never clips it). */
+.cap-tip { position: fixed; z-index: 60; min-width: 196px; max-width: 240px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px;
+    background: var(--color-surface-raised); box-shadow: var(--shadow-pop); color: var(--color-text); font-size: 0.78rem; pointer-events: none; }
+.cap-tip__title { margin: 0 0 6px; font-size: 0.86rem; font-weight: 800; color: var(--color-text-strong); }
+.cap-tip__rows { display: grid; gap: 3px; margin: 0; }
+.cap-tip__rows div { display: flex; justify-content: space-between; gap: 12px; }
+.cap-tip__rows dt { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-muted); font-weight: 600; }
+.cap-tip__rows dd { margin: 0; font-weight: 800; color: var(--color-text-strong); }
+.cap-tip__rows .is-over dd { color: var(--color-error-ink); }
+.cap-tip__rows i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.cap-tip .l-occupied { background: var(--cap-occupied); }
+.cap-tip .l-available { background: var(--cap-available); }
+.cap-tip .l-over { background: var(--cap-over); }
+.cap-tip .l-capacity { background: transparent; border: 1.5px solid var(--color-text-faint); }
+.cap-tip__foot { margin: 7px 0 0; padding-top: 6px; border-top: 1px solid var(--color-border-subtle); color: var(--color-text-muted); font-weight: 600; }
+.cap-tip__foot .num { font-weight: 800; color: var(--color-text-strong); }
+@media (prefers-reduced-motion: reduce) { .cap-col__stack { animation: none; } .cap-col__zone { transition: none; } }
 @media (max-width: 720px) {
     .cap-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px 14px 0; }
-    .cap-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; padding: 14px; }
-    .cap-ring { width: 80px; height: 80px; }
+    .cap-chart { --plot-h: 200px; --col-min: 38px; padding: 14px 14px 12px 8px; }
 }
 
 .list { margin: 0; padding: 0; list-style: none; }
@@ -926,7 +951,7 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
 .step.is-current { color: var(--color-primary-ink); }
 .step.is-current .step__n { border-color: var(--color-primary); background: var(--color-primary); color: #fff; box-shadow: 0 0 0 4px var(--tint-primary); }
 
-.kind-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.kind-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 14px; }
 .kind-tab {
     display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 16px;
     border: 2px solid var(--color-border); background: var(--color-surface); cursor: pointer; color: inherit; text-decoration: none;
@@ -1033,6 +1058,7 @@ a.summary-tile:hover { border-color: var(--color-border-strong); text-decoration
     .hero { padding: 22px 20px; }
     .page-head__actions { width: 100%; }
     .page-head__actions .btn { flex: 1; }
+    .page-head__group { flex: 1 1 100%; }
     .dl { grid-template-columns: minmax(0, 1fr); }
     .dl dt { border-bottom: 0; padding-bottom: 0; }
     .workspace { padding: 18px 14px; gap: 18px; }

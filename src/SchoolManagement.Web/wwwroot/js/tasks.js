@@ -190,11 +190,57 @@
         refresh();
     }
 
+    // ------------------------------------------------------------------ Add Task from Academic Departments
+    // [data-task-department]: choosing a department reloads Assigned to with that department's active members (from the
+    // server, which also re-checks the department and the membership on save). A choice that is no longer eligible is cleared.
+    function initDepartment(select) {
+        if (select._taskDept) return;
+        select._taskDept = true;
+        var form = select.closest("form");
+        var assignee = form && form.querySelector("[data-task-assignee]");
+        if (!assignee) return;
+        var loading = form.querySelector("[data-assignee-loading]");
+        var seq = 0;
+
+        function setOptions(placeholder, html, disabled) {
+            assignee.innerHTML = '<option value="">' + esc(placeholder) + "</option>" + (html || "");
+            assignee.disabled = disabled;
+            assignee.dispatchEvent(new Event("change", { bubbles: true }));
+            if (window.ThrydUI && ThrydUI.sync) ThrydUI.sync(assignee);
+        }
+
+        select.addEventListener("change", function () {
+            var id = select.value, mine = ++seq, previous = assignee.value;
+            if (!id) { setOptions("Choose a department first…", "", true); return; }
+            assignee.disabled = true;
+            assignee.setAttribute("aria-busy", "true");
+            if (loading) loading.hidden = false;
+            var url = select.getAttribute("data-staff-url") + "?departmentId=" + encodeURIComponent(id) + (previous ? "&selected=" + encodeURIComponent(previous) : "");
+            fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin" })
+                .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+                .then(function (html) {
+                    if (mine !== seq) return; // a later choice won
+                    var has = /<option\b/i.test(html);
+                    setOptions(has ? "Choose a staff member…" : "No active staff in this department", html, !has);
+                })
+                .catch(function () {
+                    if (mine !== seq) return;
+                    setOptions("The department's staff could not be loaded. Choose the department again.", "", true);
+                })
+                .then(function () {
+                    if (mine !== seq) return;
+                    assignee.removeAttribute("aria-busy");
+                    if (loading) loading.hidden = true;
+                });
+        });
+    }
+
     function init(root) {
         // Date / time fields: js/thryd-ui.js sets up every one (data-datepicker / data-timepicker are no longer needed).
         $$("[data-task-files]", root).forEach(initFiles);
         $$("form[data-task-form]", root).forEach(initSummary);
         if (root.matches && root.matches("form[data-task-form]")) initSummary(root);
+        $$("select[data-task-department]", root).forEach(initDepartment);
     }
 
     doc.addEventListener("app:enhance", function (e) { init(e.detail || doc); });

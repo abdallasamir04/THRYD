@@ -54,13 +54,31 @@ public class ManagementTasksController(IManagementTaskService tasks, ICurrentUse
         });
     }
 
+    /// <summary>
+    /// The Add Task form. From Academic Departments: <c>?by=department</c> (Departments page: choose a department, then one
+    /// of its members) or <c>?departmentId=</c> (a department's page: that department, fixed).
+    /// </summary>
     [HttpGet("create")]
-    public async Task<IActionResult> Create(int? memberId, CancellationToken ct)
+    public async Task<IActionResult> Create(int? memberId, int? departmentId, string? by, CancellationToken ct)
     {
-        var model = new TaskFormModel { AssignedToId = memberId };
+        var model = new TaskFormModel { AssignedToId = memberId, DepartmentMode = departmentId is not null || by == "department" };
         await FillAsync(model, null, ct);
-        if (model.AssignedToId is { } id && model.Staff.All(s => s.Id != id)) model.AssignedToId = null;
+        if (model.DepartmentMode && departmentId is { } dept && model.Departments.Any(d => d.Id == dept))
+            (model.DepartmentId, model.DepartmentLocked) = (dept, true);
+        if (model.AssignedToId is { } id && model.Assignees.All(s => s.Id != id)) model.AssignedToId = null;
         return PageOrPartial("Form", model);
+    }
+
+    /// <summary>
+    /// The executor options of a department (its active members), for the Add Task form when the department changes.
+    /// Display only: the save checks the department and the membership again.
+    /// </summary>
+    [HttpGet("department-staff")]
+    public async Task<IActionResult> DepartmentStaff(int departmentId, int? selected, CancellationToken ct)
+    {
+        if ((await tasks.DepartmentsAsync(ct)).All(d => d.Id != departmentId)) return NotFound();
+        var members = (await tasks.StaffAsync(ct)).Where(s => s.DepartmentId == departmentId).ToList();
+        return PartialView("_StaffOptions", ((IReadOnlyList<TaskStaffOption>)members, members.Any(s => s.Id == selected && s.IsActive) ? selected : null));
     }
 
     [HttpPost("create"), ValidateAntiForgeryToken]
@@ -68,6 +86,7 @@ public class ManagementTasksController(IManagementTaskService tasks, ICurrentUse
     {
         model.Id = null;
         model.RemoveAttachmentIds = [];
+        if (model.DepartmentMode && model.DepartmentId is null) ModelState.AddModelError(nameof(model.DepartmentId), "Choose a department.");
         if (ModelState.IsValid)
         {
             var result = await tasks.CreateAsync(model.ToInput(), ct);
@@ -177,6 +196,7 @@ public class ManagementTasksController(IManagementTaskService tasks, ICurrentUse
     private async Task FillAsync(TaskFormModel model, TaskRow? saved, CancellationToken ct)
     {
         model.Staff = await tasks.StaffAsync(ct);
+        if (model.DepartmentMode) model.Departments = await tasks.DepartmentsAsync(ct);
         model.Staged = await tasks.StagedAttachmentsAsync(model.AttachmentKeys, ct);
         model.AttachmentKeys = model.Staged.Select(s => s.Key).ToList(); // expired uploads drop out
         if (saved is not null)
@@ -217,7 +237,8 @@ public class ManagementTasksController(IManagementTaskService tasks, ICurrentUse
         var referer = Request.Headers.Referer.ToString();
         if (Uri.TryCreate(referer, UriKind.Absolute, out var uri) && uri.Host == Request.Host.Host
             && (uri.AbsolutePath.StartsWith("/management", StringComparison.OrdinalIgnoreCase)
-                || uri.AbsolutePath.TrimEnd('/').Equals(TasksController.Url, StringComparison.OrdinalIgnoreCase))
+                || uri.AbsolutePath.TrimEnd('/').Equals(TasksController.Url, StringComparison.OrdinalIgnoreCase)
+                || uri.AbsolutePath.StartsWith("/staff/departments", StringComparison.OrdinalIgnoreCase))
             && !uri.AbsolutePath.EndsWith("/edit", StringComparison.OrdinalIgnoreCase)
             && !uri.AbsolutePath.EndsWith("/create", StringComparison.OrdinalIgnoreCase))
             return LocalRedirect(uri.PathAndQuery);

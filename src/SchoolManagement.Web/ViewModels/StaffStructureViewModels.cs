@@ -328,6 +328,25 @@ public sealed class TaskFormModel
     [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
     public IReadOnlyList<TaskStaffOption> Staff { get; set; } = [];
 
+    /// <summary>
+    /// Add Task from Academic Departments: the form asks for a department and offers only its members as the executor
+    /// (the reviewer can still be anyone). <see cref="DepartmentLocked"/>: opened from a department's own page, which
+    /// fixes the department. The server checks the department and the executor's membership on every save.
+    /// </summary>
+    public bool DepartmentMode { get; set; }
+    public bool DepartmentLocked { get; set; }
+
+    [Display(Name = "Department")]
+    public int? DepartmentId { get; set; }
+
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
+    public IReadOnlyList<TaskDepartmentOption> Departments { get; set; } = [];
+
+    /// <summary>The executor options: every staff member, or in department mode only the chosen department's members.</summary>
+    public IReadOnlyList<TaskStaffOption> Assignees => DepartmentMode ? Staff.Where(s => DepartmentId is { } d && s.DepartmentId == d).ToList() : Staff;
+
+    public string? DepartmentName => Departments.FirstOrDefault(d => d.Id == DepartmentId)?.Name;
+
     /// <summary>Saved attachments (edit) and uploads waiting for this form, shown in the attachment list.</summary>
     [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
     public IReadOnlyList<TaskAttachmentView> Attachments { get; set; } = [];
@@ -349,7 +368,7 @@ public sealed class TaskFormModel
     public TaskInput ToInput() => new()
     {
         AssignedToId = AssignedToId, ReviewerId = ReviewerId, Title = Title, Description = Description, Notes = Notes,
-        Status = Status, Priority = Priority, DueDate = DueDate, DueTime = DueTime,
+        Status = Status, Priority = Priority, DueDate = DueDate, DueTime = DueTime, DepartmentId = DepartmentId,
         AttachmentKeys = AttachmentKeys, RemoveAttachmentIds = RemoveAttachmentIds,
     };
 }

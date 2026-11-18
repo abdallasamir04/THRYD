@@ -23,7 +23,8 @@ public interface IImportService
 /// Nothing is written before the user confirms; every row is validated again at that moment, and a
 /// row is never dropped without being reported (empty rows are the only rows not listed, and they are counted).
 /// </summary>
-public sealed class ImportService(SchoolDbContext db, IMemoryCache cache, ILogger<ImportService> logger) : IImportService
+/// <remarks>Tasks (ImportService.Tasks.cs) are checked and created by the Tasks module's own service.</remarks>
+public sealed partial class ImportService(SchoolDbContext db, IMemoryCache cache, ILogger<ImportService> logger, IManagementTaskService? tasks = null) : IImportService
 {
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(45);
     private static string CacheKey(Guid token) => $"import:{token:N}";
@@ -108,6 +109,7 @@ public sealed class ImportService(SchoolDbContext db, IMemoryCache cache, ILogge
     {
         var rows = ExtractRows(session);
         if (session.Kind == ImportKind.Students) await ValidateStudentsAsync(rows, ct);
+        else if (session.Kind == ImportKind.Tasks) await ValidateTasksAsync(rows, ct);
         else await ValidateTeachersAsync(rows, ct);
         return new ImportPreview { Kind = session.Kind, Rows = rows };
     }
@@ -121,7 +123,9 @@ public sealed class ImportService(SchoolDbContext db, IMemoryCache cache, ILogge
         var ready = preview.Rows.Where(r => r.Status == RowStatus.Ready).ToList();
         var imported = 0;
 
-        if (ready.Count > 0)
+        if (ready.Count > 0 && session.Kind == ImportKind.Tasks)
+            imported = await CreateTasksAsync(ready, ct); // one task at a time, through the Tasks module
+        else if (ready.Count > 0)
         {
             try
             {
@@ -212,9 +216,15 @@ public sealed class ImportService(SchoolDbContext db, IMemoryCache cache, ILogge
             {
                 var column = session.Mapping.GetValueOrDefault(field.Key);
                 var raw = column is null ? "" : row.Cell(column.Value);
-                values[field.Key] = field.Key == ImportDefinitions.ContactNumber
-                    ? TextNormalizer.CleanPhone(raw)
-                    : TextNormalizer.CleanText(raw);
+                values[field.Key] = field.Key switch
+                {
+                    ImportDefinitions.ContactNumber => TextNormalizer.CleanPhone(raw),
+                    // Tasks: a date / time cell is read in a fixed format, whatever its Excel display format.
+                    ImportDefinitions.DueDate or ImportDefinitions.DueTime when session.Kind == ImportKind.Tasks && column is { } c && row.IsoValue(c) is { } iso => iso,
+                    // Tasks: descriptions and notes keep their line breaks.
+                    ImportDefinitions.Description or ImportDefinitions.Notes when session.Kind == ImportKind.Tasks => CleanMultiline(raw),
+                    _ => TextNormalizer.CleanText(raw),
+                };
                 if (field.Key == ImportDefinitions.ContactNumber && column is not null && row.CellIsNumber(column.Value) && raw.Length > 0)
                     numericPhone = true;
             }

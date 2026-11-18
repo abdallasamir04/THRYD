@@ -19,7 +19,6 @@ else
                     <th scope="col" class="num">Covered</th>
                     <th scope="col" class="num">Not covered</th>
                     <th scope="col" class="num">Pending / in progress</th>
-                    <th scope="col">Average rating</th>
                     <th scope="col" class="col-actions"><span class="visually-hidden">Open</span></th>
                 </tr>
             </thead>
@@ -38,7 +37,6 @@ else
                         <td data-label="Covered" class="num is-ok">@s.Covered</td>
                         <td data-label="Not covered" class="num @(s.NotCovered > 0 ? "is-bad" : "")">@s.NotCovered</td>
                         <td data-label="Pending / in progress" class="num">@s.Open</td>
-                        <td data-label="Average rating"><partial name="_Stars" model="s.AverageRating" /> <span class="faint">@(s.EvaluatedAssignments == 0 ? "" : $"({s.EvaluatedAssignments})")</span></td>
                         <td class="col-actions"><a class="icon-btn icon-btn--primary" href="/staff/@r.Staff.Id" aria-label="Open @r.Staff.FullName">@Ui.Icon("arrow-right")</a></td>
                     </tr>
                 }

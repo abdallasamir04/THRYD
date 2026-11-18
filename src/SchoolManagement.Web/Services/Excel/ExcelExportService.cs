@@ -33,6 +33,16 @@ public interface IExcelExportService
 
     /// <summary>Staff Attendance over the filtered scope: summary, by staff member, every daily line and the corrections.</summary>
     byte[] StaffAttendance(StaffAttendanceHistory history, string scope, string schoolName);
+
+    /// <summary>All School Staff → Download Excel: Staff Directory (each person once), Management Team, Academic Staff, Administrative &amp; Support.</summary>
+    byte[] StaffDirectory(StaffDirectoryExport export, string schoolName);
+
+    /// <summary>Import / Export → Tasks → Download template: the task columns, with staff, department, priority and status pick lists.</summary>
+    byte[] TaskTemplate(IReadOnlyList<TaskStaffOption> staff, IReadOnlyList<TaskDepartmentOption> departments);
+
+    /// <summary>Import / Export → Tasks → Export: every task as an Excel workbook, or as CSV.</summary>
+    byte[] Tasks(IReadOnlyList<TaskRow> tasks);
+    byte[] TasksCsv(IReadOnlyList<TaskRow> tasks);
 }
 
 /// <summary>Builds every downloadable workbook. Contact numbers are always written as text.</summary>

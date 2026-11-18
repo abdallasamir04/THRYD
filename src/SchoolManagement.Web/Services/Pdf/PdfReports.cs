@@ -294,16 +294,16 @@ public static class PdfReports
                 RowNumbers = true,
                 Columns =
                 [
+                    // Same columns as the page's table (no rating column).
                     new("Staff member", 2.6f), new("Assigned", 1, PdfAlign.End), new("Covered", 1, PdfAlign.End), new("Not covered", 1, PdfAlign.End),
-                    new("Pending / in progress", 1.3f, PdfAlign.End), new("Average rating", 1.3f, PdfAlign.End),
+                    new("Pending / in progress", 1.3f, PdfAlign.End),
                 ],
                 Rows = rows.Select(r => R(
                     new PdfCell(r.Staff.FullName, r.Staff.JobTitle ?? r.Staff.StaffType, Strong: true),
                     PdfCell.Num(r.Summary.TotalAssigned),
                     new PdfCell(r.Summary.Covered.ToString(C), Tone: PdfTone.Success),
                     new PdfCell(r.Summary.NotCovered.ToString(C), Tone: r.Summary.NotCovered > 0 ? PdfTone.Error : PdfTone.Default),
-                    PdfCell.Num(r.Summary.Open),
-                    r.Summary.AverageRating is { } a ? new PdfCell($"{a.ToString("0.0", C)} / 5", $"{r.Summary.EvaluatedAssignments} rated") : "Not rated")).ToList(),
+                    PdfCell.Num(r.Summary.Open))).ToList(),
                 EmptyText = "No staff match this search.",
             },
         ],

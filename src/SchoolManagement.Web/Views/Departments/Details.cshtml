@@ -29,6 +29,8 @@
         <a class="btn btn--secondary" href="/staff/departments/@d.Id/subcategories">@Ui.Icon("layers")@(d.Rules is null ? "Subcategories" : $"Manage {d.Rules.Label.ToLowerInvariant()}s")</a>
         <a class="btn btn--secondary" href="/staff/departments/@d.Id/head" data-modal>@Ui.Icon("crown")@(d.Head is null ? "Assign HOD" : "Change HOD")</a>
         <a class="btn btn--secondary" href="/timetable/teachers?departmentId=@d.Id">@Ui.Icon("calendar")Timetables</a>
+        @* The Tasks module's Add Task form for this department: department fixed, only its members can be assigned. *@
+        <a class="btn btn--secondary" href="/management/tasks/create?departmentId=@d.Id" data-modal>@Ui.Icon("clipboard-check")Add Task</a>
         <a class="btn btn--primary" href="/staff/create?departmentId=@d.Id" data-modal>@Ui.Icon("user-plus")Add member</a>
     </div>
 </div>

@@ -5,7 +5,7 @@
     var s = Model.Session;
     var p = Model.Preview;
     var fields = ImportDefinitions.Fields(s.Kind);
-    var noun = s.Kind == ImportKind.Students ? "student" : "teacher";
+    var noun = ImportDefinitions.Noun(s.Kind);
     var readyLabel = $"{p.Ready} {noun}{(p.Ready == 1 ? "" : "s")}";
     var rows = Model.Filter switch
     {
@@ -92,6 +92,15 @@
                                 <td data-label="@f.Label" dir="@(f.Key == ImportDefinitions.ContactNumber ? "ltr" : "auto")">
                                     @if (v.Length == 0) { <span class="faint">—</span> }
                                     else if (f.Key == ImportDefinitions.Class && r.ClassName is not null) { <span class="badge badge--class">@r.ClassName</span> }
+                                    else if (s.Kind == ImportKind.Tasks && f.Key == ImportDefinitions.AssignedTo && r.AssigneeNote is { Length: > 0 } who)
+                                    {
+                                        @* The staff record the name was matched to. *@
+                                        @v<br /><span class="faint" style="font-size:0.78rem">@who</span>
+                                    }
+                                    else if (s.Kind == ImportKind.Tasks && (f.Key == ImportDefinitions.Description || f.Key == ImportDefinitions.Notes))
+                                    {
+                                        <span style="white-space:pre-line">@v</span>
+                                    }
                                     else { @v }
                                 </td>
                             }

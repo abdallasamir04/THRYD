@@ -7,6 +7,7 @@ public enum ImportKind
 {
     Students,
     Teachers,
+    Tasks,
 }
 
 public sealed record ImportField(string Key, string Label, bool Required, string Hint, IReadOnlyList<string> Synonyms)
@@ -46,9 +47,64 @@ public static class ImportDefinitions
              "رقم التواصل", "الهاتف", "رقم الهاتف", "الجوال", "رقم الجوال", "الموبايل", "رقم الموبايل", "التليفون", "تليفون", "واتساب"]),
     ];
 
-    public static IReadOnlyList<ImportField> Fields(ImportKind kind) => kind == ImportKind.Students ? StudentFields : TeacherFields;
+    // ---------- Tasks: the fields of the Add Task form (ManagementTask / TaskInput); attachments are not imported.
+    public const string TaskTitle = "TaskTitle";
+    public const string Description = "Description";
+    public const string AssignedTo = "AssignedTo";
+    public const string Department = "Department";
+    public const string Priority = "Priority";
+    public const string Status = "Status";
+    public const string DueDate = "DueDate";
+    public const string DueTime = "DueTime";
+    public const string Reviewer = "Reviewer";
+    public const string Notes = "Notes";
 
-    public static string Title(ImportKind kind) => kind == ImportKind.Students ? "Students" : "Teachers";
+    public static readonly IReadOnlyList<ImportField> TaskFields =
+    [
+        new(TaskTitle, "Task Title", true, "What has to be done, up to 200 characters",
+            ["Task Title", "Task", "Task Name", "Title", "Subject", "عنوان المهمة", "المهمة", "اسم المهمة", "العنوان"]),
+        new(Description, "Description", false, "Instructions; what \"done\" looks like",
+            ["Description", "Description / Instructions", "Instructions", "Details", "Task Description", "الوصف", "التفاصيل", "التعليمات", "وصف المهمة"]),
+        new(AssignedTo, "Assigned To", true, "A staff member's full name, as on the staff lists (never a student)",
+            ["Assigned To", "Assignee", "Assigned", "Assigned Staff Member", "Responsible", "Executor", "Staff Member", "Staff Name", "Employee",
+             "مسند إلى", "المسؤول", "المكلف", "الموظف", "اسم الموظف"]),
+        new(Department, "Department", false, "Optional; when given, the assignee must belong to this academic department",
+            ["Department", "Dept", "Academic Department", "القسم", "القسم الأكاديمي"]),
+        new(Priority, "Priority", false, "Low, Medium, High or Critical (empty: Medium)",
+            ["Priority", "Importance", "الأولوية", "الاهمية"]),
+        new(Status, "Status", false, "To Do, In Progress, Completed or Cancelled (empty: To Do)",
+            ["Status", "Task Status", "State", "الحالة", "حالة المهمة"]),
+        new(DueDate, "Due Date", false, "An Excel date, YYYY-MM-DD or DD/MM/YYYY; not in the past for open tasks",
+            ["Due Date", "Due", "Deadline", "Due On", "Due By", "تاريخ الاستحقاق", "الموعد النهائي", "تاريخ التسليم"]),
+        new(DueTime, "Due Time", false, "Optional, with a due date: 14:30 or 2:30 PM",
+            ["Due Time", "Deadline Time", "Time Due", "وقت الاستحقاق", "وقت التسليم"]),
+        new(Reviewer, "Reviewer", false, "Optional: the staff member the finished task is submitted to",
+            ["Reviewer", "Submitted To", "Submitted To / Reviewer", "Approver", "Reviewed By", "المراجع", "يسلم إلى", "تسلم إلى"]),
+        new(Notes, "Notes", false, "Optional progress notes",
+            ["Notes", "Note", "Comments", "Remarks", "ملاحظات", "ملاحظة"]),
+    ];
+
+    public static IReadOnlyList<ImportField> Fields(ImportKind kind) => kind switch
+    {
+        ImportKind.Students => StudentFields,
+        ImportKind.Tasks => TaskFields,
+        _ => TeacherFields,
+    };
+
+    public static string Title(ImportKind kind) => kind switch
+    {
+        ImportKind.Students => "Students",
+        ImportKind.Tasks => "Tasks",
+        _ => "Teachers",
+    };
+
+    /// <summary>"student", "teacher" or "task".</summary>
+    public static string Noun(ImportKind kind) => kind switch
+    {
+        ImportKind.Students => "student",
+        ImportKind.Tasks => "task",
+        _ => "teacher",
+    };
 }
 
 /// <summary>Uploaded file and the user's choices, kept in server memory between the import steps.</summary>
@@ -95,6 +151,10 @@ public sealed class PreviewRow
     /// <summary>Students: the matched class.</summary>
     public int? ClassId { get; set; }
     public string? ClassName { get; set; }
+
+    /// <summary>Tasks: the task to create (names matched to staff / department ids), and how the assignee was matched.</summary>
+    public TaskInput? Task { get; set; }
+    public string? AssigneeNote { get; set; }
 
     public string Value(string key) => Values.GetValueOrDefault(key) ?? "";
 }

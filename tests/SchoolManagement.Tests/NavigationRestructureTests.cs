@@ -241,17 +241,28 @@ public partial class HttpTests
         }
         Assert.Contains(Code(expected), await client.GetStringAsync("/classes/stages/kg/kg1"));
 
-        // Grades outside the group, duplicates (Pre-K section A is the existing "PreK") and invalid capacity are refused.
+        // Grades outside the group and invalid capacity are refused.
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/classes/create", token, new()
             { ["Group"] = "middle", ["GradeNumber"] = "10", ["Capacity"] = "25", ["IsActive"] = "true" })).StatusCode);
-        var duplicate = await PostAsync(client, "/classes/create", token, new()
-            { ["Group"] = "lower", ["GradeNumber"] = "1", ["Section"] = "a", ["Capacity"] = "25", ["IsActive"] = "true" });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, duplicate.StatusCode);
-        Assert.Contains("A class named \"G1A\" already exists.", WebUtility.HtmlDecode(await duplicate.Content.ReadAsStringAsync()));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/classes/create", token, new()
-            { ["Group"] = "prek", ["GradeNumber"] = "0", ["Section"] = "A", ["Capacity"] = "25", ["IsActive"] = "true" })).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/classes/create", token, new()
             { ["Group"] = "upper", ["GradeNumber"] = "4", ["Capacity"] = "0", ["IsActive"] = "true" })).StatusCode);
+        // The form has no Section field; a section posted anyway ("a" — G1A exists) is ignored: the next letter is used.
+        var nextG1 = $"G1{ClassNumbering.NextSection(await db.Classes.AsNoTracking().Select(c => c.Name).ToListAsync(), "G", 1)}";
+        Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, "/classes/create", token, new()
+            { ["Group"] = "lower", ["GradeNumber"] = "1", ["Section"] = "a", ["Capacity"] = "25", ["IsActive"] = "true" })).StatusCode);
+        await using (var check = fx.NewContext())
+        {
+            Assert.Equal(1, await check.Classes.CountAsync(c => c.Name == "G1A"));        // never a second G1A
+            Assert.Equal(1, await check.Classes.CountAsync(c => c.Name == nextG1));
+            await check.Classes.Where(c => c.Name == nextG1).ExecuteDeleteAsync();         // other tests check the class order
+        }
+        // Duplicate names stay impossible in the service too (a bare "PreK" is Pre-K section A).
+        await using (var direct = fx.NewContext())
+        {
+            var dup = await DbFixture.Classes(direct).CreateInGradeAsync("G", 1, "A", 25, true);
+            Assert.Contains("A class named \"G1A\" already exists.", dup.Errors.Select(e => e.Value));
+            Assert.False((await DbFixture.Classes(direct).CreateInGradeAsync("PREK", 0, "A", 25, true)).Succeeded);
+        }
 
         // High School can start a new grade; it appears under High School only.
         var high = await client.GetStringAsync("/classes/create?group=high");

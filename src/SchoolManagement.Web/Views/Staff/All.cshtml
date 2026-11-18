@@ -31,6 +31,11 @@
         <p class="page-sub">Everyone on the school's staff in one directory: academic staff, the Management Team, and administrative and support staff. Each person appears once with all their roles.</p>
     </div>
     <div class="page-head__actions">
+        @* Downloads of the staff shown (same search, category tab and filters): app.js adds the current query string on click. PDF = red icon, Excel = green icon. *@
+        <a class="btn btn--secondary btn--download dl-pdf" href="/staff/all/pdf@(Context.Request.QueryString)" data-download="/staff/all/pdf" download
+           title="The staff shown, as a PDF directory" aria-label="Download PDF">@Ui.Icon("file-pdf")Download PDF</a>
+        <a class="btn btn--secondary btn--download dl-xlsx" href="/staff/all/excel@(Context.Request.QueryString)" data-download="/staff/all/excel" download
+           title="The staff shown, as an Excel workbook (.xlsx)" aria-label="Download Excel">@Ui.Icon("sheet")Download Excel</a>
         <a class="btn btn--secondary" href="/staff">@Ui.Icon("arrow-left")Staff Management</a>
         <a class="btn btn--primary" href="/staff/create" data-modal>@Ui.Icon("user-plus")Add staff member</a>
     </div>

@@ -53,6 +53,7 @@ builder.Services.AddScoped<IPeriodService, PeriodService>();
 builder.Services.AddScoped<IActivityService, ActivityService>();
 builder.Services.AddScoped<IClassTeamService, ClassTeamService>();
 builder.Services.AddScoped<IStaffDirectoryService, StaffDirectoryService>();
+builder.Services.AddScoped<IStaffDirectoryExportService, StaffDirectoryExportService>();
 builder.Services.AddScoped<IStaffAttendanceService, StaffAttendanceService>();
 builder.Services.AddScoped<IStaffEmploymentService, StaffEmploymentService>();
 builder.Services.AddScoped<IClassRosterService, ClassRosterService>();

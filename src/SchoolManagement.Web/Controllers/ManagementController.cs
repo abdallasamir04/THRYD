@@ -13,26 +13,28 @@ public class ManagementController(IManagementService members, IManagementTaskSer
 {
     public const string LeadershipHref = "/management/leadership";
 
-    /// <summary>Management Team landing page: School Leadership and Tasks.</summary>
+    /// <summary>
+    /// Management Team landing page: the School Leadership card, full width. Tasks are reached from School Leadership
+    /// (All Tasks / Add Task), not from a card of their own.
+    /// </summary>
     [HttpGet("")]
     public async Task<IActionResult> Index(CancellationToken ct)
     {
         var all = await members.ListAsync(null, ct);
         var slots = await members.PositionsAsync(ct);
-        var counts = await tasks.CountsAsync(null, ct);
         var filled = slots.Count(s => s.Holder is not null);
         return View("~/Views/Staff/Hub.cshtml", new HubViewModel
         {
             Title = "Management Team",
             Subtitle = "School leadership: its members, the seven positions, and each member's tasks. Separate from academic staff.",
             Crumbs = [("Dashboard", "/"), ("Staff", "/staff"), ("Management Team", null)],
+            Large = true,
+            Variant = "single",
             Cards =
             [
                 new(LeadershipHref, "crown", "School Leadership",
                     "Manage school leadership members, positions, responsibilities, and appointment history in one place.",
                     $"{Ui.Plural(all.Count, "member", "members")} · {filled} of {slots.Count} positions filled", "violet"),
-                new("/management/tasks", "clipboard-check", "Tasks", "Individual tasks with priority, due date and status.",
-                    counts.Overdue > 0 ? $"{counts.Open} open · {counts.Overdue} overdue" : $"{counts.Open} open", counts.Overdue > 0 ? "rose" : "teal"),
             ],
         });
     }

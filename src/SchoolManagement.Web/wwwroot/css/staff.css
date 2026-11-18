@@ -338,6 +338,9 @@ tr.is-selected td { background: var(--tint-primary); }
 .hub-extra .chip { text-decoration: none; }
 /* Students landing page: three large cards in one row (one per row on narrow screens). */
 .hub--large.hub--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* One section only (Management Team → School Leadership): the card takes the full row, no empty half beside it. */
+.hub--large.hub--single { grid-template-columns: minmax(0, 1fr); }
+.hub--large.hub--single .hub-card { min-height: 0; }
 @media (max-width: 1100px) { .hub--large.hub--three { grid-template-columns: minmax(0, 1fr); } }
 
 /* Classes → stage pages: one card per group or grade, each with its class cards. */

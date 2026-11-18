@@ -61,6 +61,28 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
     public async Task<IActionResult> All([FromQuery] StaffDirectoryQuery query, CancellationToken ct) =>
         View("All", new StaffDirectoryViewModel { Query = query, Directory = await directory.LoadAsync(query, ct) });
 
+    /// <summary>
+    /// All School Staff → Download PDF: "All School Staff Directory" with exactly the staff the page shows for the same query
+    /// (search, category tab, department, job title, position / role), grouped like the page, each person once. Read-only.
+    /// </summary>
+    [HttpGet("all/pdf")]
+    public async Task<IActionResult> AllPdf([FromQuery] StaffDirectoryQuery query, [FromServices] IStaffDirectoryExportService export,
+        [FromServices] ISettingsService settings, CancellationToken ct)
+    {
+        var data = await export.LoadAsync(query, ct);
+        return await PdfFile(StaffDirectoryReports.Directory(data, (await settings.GetProfileAsync(ct)).SchoolName), ct); // THRYD_All_School_Staff_<date>.pdf
+    }
+
+    /// <summary>All School Staff → Download Excel: the same staff as the PDF (and the page), as a workbook. Read-only.</summary>
+    [HttpGet("all/excel")]
+    public async Task<IActionResult> AllExcel([FromQuery] StaffDirectoryQuery query, [FromServices] IStaffDirectoryExportService export,
+        [FromServices] ISettingsService settings, [FromServices] Services.Excel.IExcelExportService excel, CancellationToken ct)
+    {
+        var data = await export.LoadAsync(query, ct);
+        return File(excel.StaffDirectory(data, (await settings.GetProfileAsync(ct)).SchoolName),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", StaffDirectoryExport.FileName(SchoolTime.Today, "xlsx"));
+    }
+
     /// <summary>Staff Duty Records → Download Report (same search as the page).</summary>
     [HttpGet("duty-records/pdf")]
     public async Task<IActionResult> DutyRecordsPdf(string? search, CancellationToken ct) =>

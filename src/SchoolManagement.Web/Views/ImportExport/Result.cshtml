@@ -5,7 +5,12 @@
     var s = Model.Session;
     var r = Model.Result;
     var fields = ImportDefinitions.Fields(s.Kind);
-    var listUrl = s.Kind == ImportKind.Students ? "/students?sort=created&dir=desc" : "/teachers?sort=created&dir=desc";
+    var listUrl = s.Kind switch
+    {
+        ImportKind.Students => "/students?sort=created&dir=desc",
+        ImportKind.Tasks => "/tasks",
+        _ => "/teachers?sort=created&dir=desc",
+    };
 }
 
 <div class="page-head">

@@ -18,9 +18,13 @@
         <p class="page-sub">Leadership members, their positions and their responsibilities.</p>
     </div>
     <div class="page-head__actions">
-        <a class="btn btn--secondary" href="/management/tasks">@Ui.Icon("clipboard-check")All tasks</a>
+        @* Tasks: the global Tasks page and the Tasks module's own Add Task form (modal); one row of two on phones. *@
+        <div class="page-head__group" role="group" aria-label="Tasks">
+            <a class="btn btn--secondary" href="@SchoolManagement.Web.Controllers.TasksController.Url">@Ui.Icon("clipboard-check")All Tasks</a>
+            <a class="btn btn--secondary" href="/management/tasks/create" data-modal>@Ui.Icon("plus")Add Task</a>
+        </div>
         <partial name="_Download" model='DownloadLink.Report("/management/members/pdf")' />
-        <a class="btn btn--primary" href="/management/members/create" data-modal>@Ui.Icon("user-plus")Add member</a>
+        <a class="btn btn--primary" href="/management/members/create" data-modal>@Ui.Icon("user-plus")Add Member</a>
     </div>
 </div>
 

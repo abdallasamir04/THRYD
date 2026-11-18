@@ -3,6 +3,7 @@
     ViewData["Title"] = "Import / Export";
     ViewData["Nav"] = "ImportExport";
     var students = Model.Kind == ImportKind.Students;
+    var tasks = Model.Kind == ImportKind.Tasks;
     var fields = ImportDefinitions.Fields(Model.Kind);
 }
 
@@ -10,7 +11,7 @@
     <div class="page-head__text">
         <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Data</li><li>Import / Export</li></ol>
         <h1 class="page-title">Import / Export</h1>
-        <p class="page-sub">Bring students and teachers in from Excel, or download the current lists. Nothing is saved until you check the preview and confirm.</p>
+        <p class="page-sub">Bring students, teachers and tasks in from Excel, or download the current lists. Nothing is saved until you check the preview and confirm.</p>
     </div>
 </div>
 
@@ -21,9 +22,13 @@
         <span class="kind-tab__icon">@Ui.Icon("graduation-cap")</span>
         <span><span class="kind-tab__title">Students</span><br /><span class="kind-tab__meta">@Ui.Plural(Model.Students, "student", "students") now · Name and Class</span></span>
     </a>
-    <a class="kind-tab" href="/import-export?kind=Teachers" aria-current="@(!students ? "true" : null)">
+    <a class="kind-tab" href="/import-export?kind=Teachers" aria-current="@(Model.Kind == ImportKind.Teachers ? "true" : null)">
         <span class="kind-tab__icon">@Ui.Icon("presentation")</span>
         <span><span class="kind-tab__title">Teachers</span><br /><span class="kind-tab__meta">@Ui.Plural(Model.Teachers, "teacher", "teachers") now · Name, Job title, Contact</span></span>
+    </a>
+    <a class="kind-tab" href="/import-export?kind=Tasks" aria-current="@(tasks ? "true" : null)">
+        <span class="kind-tab__icon">@Ui.Icon("list-checks")</span>
+        <span><span class="kind-tab__title">Tasks</span><br /><span class="kind-tab__meta">@Ui.Plural(Model.Tasks, "task", "tasks") now (@Model.OpenTasks open) · Title, Assigned to, Priority, Due date</span></span>
     </a>
 </nav>
 
@@ -39,7 +44,7 @@
     <section class="card" aria-labelledby="upload-title">
         <div class="card__head">
             <div>
-                <h2 class="card__title" id="upload-title">@Ui.Icon("upload")Import @(students ? "students" : "teachers")</h2>
+                <h2 class="card__title" id="upload-title">@Ui.Icon("upload")Import @ImportDefinitions.Title(Model.Kind).ToLowerInvariant()</h2>
                 <p class="card__sub">Excel (.xlsx) or CSV, up to 10 MB and @Ui.Count(SchoolManagement.Web.Services.Excel.SpreadsheetReader.MaxRows) rows.</p>
             </div>
             <a class="btn btn--secondary btn--sm" href="/import-export/template/@Model.Kind">@Ui.Icon("download", "icon--sm")Download template</a>
@@ -71,12 +76,37 @@
                     <li>@Ui.Icon("check")<span><strong>@f.Label</strong>@(f.Required ? " (required)" : " (optional)") — @f.Hint</span></li>
                 }
                 <li>@Ui.Icon("check")<span>Column names can differ (English or Arabic); you match them in the next step.</span></li>
+                @if (tasks)
+                {
+                    <li>@Ui.Icon("check")<span>Tasks go to staff members only — never students — and follow the same rules as Add Task. They appear on the Tasks page.</span></li>
+                    <li>@Ui.Icon("check")<span>A task with the same title, assignee and due date as an existing one is skipped as a duplicate; nothing is overwritten.</span></li>
+                }
                 <li>@Ui.Icon("check")<span>Duplicates are skipped and invalid rows are listed with their row number — nothing is dropped silently.</span></li>
             </ul>
         </div>
     </section>
 </div>
 
+@if (tasks)
+{
+    @* Export Tasks: every task from the Tasks module (all statuses), with the template's column names. *@
+    <section class="card" aria-labelledby="export-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="export-title">@Ui.Icon("download")Export tasks</h2>
+                <p class="card__sub">All @Ui.Plural(Model.Tasks, "task", "tasks") from the Tasks page (every status): title, description, assigned to, department, priority, status, due date and time, reviewer, notes, created and completed dates. For a filtered list, use “Download Report” on the Tasks page.</p>
+            </div>
+        </div>
+        <div class="quick">
+            <a href="/import-export/tasks/export?format=xlsx" download><span class="q-icon">@Ui.Icon("sheet")</span>All tasks — Excel (.xlsx)</a>
+            <a href="/import-export/tasks/export?format=csv" download><span class="q-icon">@Ui.Icon("file-text")</span>All tasks — CSV (.csv)</a>
+            <a href="/import-export/template/Tasks"><span class="q-icon">@Ui.Icon("download")</span>Tasks import template</a>
+            <a href="/tasks"><span class="q-icon">@Ui.Icon("list-checks")</span>Open the Tasks page</a>
+        </div>
+    </section>
+}
+else
+{
 <section class="card" aria-labelledby="export-title">
     <div class="card__head">
         <div>
@@ -91,3 +121,4 @@
         <a href="/import-export/template/@(students ? "Teachers" : "Students")"><span class="q-icon">@Ui.Icon("sheet")</span>@(students ? "Teachers" : "Students") import template</a>
     </div>
 </section>
+}

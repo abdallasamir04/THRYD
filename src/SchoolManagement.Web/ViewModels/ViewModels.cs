@@ -133,8 +133,7 @@ public sealed class ClassFormModel
     [Display(Name = "Grade / Class Level")]
     public string? GradeLevel { get; set; }
 
-    [Display(Name = "Section")]
-    public string? Section { get; set; }
+    // No Section: Add Class only asks for the grade; the next section letter of that grade is assigned on the server.
 
     [Display(Name = "Class capacity")]
     [Range(1, 1000, ErrorMessage = "Enter a capacity between 1 and 1,000.")]
@@ -150,10 +149,20 @@ public sealed class ClassFormModel
     public int StudentCount { get; set; }
     public bool IsEdit => Id is > 0;
 
-    /// <summary>Existing sections per stage (KG / G), offered as suggestions; a new section can be typed.</summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<string>> Sections { get; set; } = new Dictionary<string, IReadOnlyList<string>>();
-    /// <summary>Preview of the next class name per stage + existing section, e.g. KG3A.</summary>
-    public IReadOnlyList<string> NextNames { get; set; } = [];
+    /// <summary>
+    /// Add Class opened without a group (Classes → All classes): one Grade list over every stage group, each option
+    /// "group:grade" (e.g. "kg1:1", "prek:0"), with the name the next class of that grade will get.
+    /// </summary>
+    [Display(Name = "Grade")]
+    public string? GradeKey { get; set; }
+
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
+    public IReadOnlyList<(string Stage, IReadOnlyList<(string Key, string Label)> Grades)> AllGradeOptions { get; set; } = [];
+
+    public static string KeyOf(string group, int grade) => $"{group}:{grade}";
+
+    public static (string Group, int Grade)? ParseKey(string? key) =>
+        key?.Split(':') is [var g, var n] && g.Length > 0 && int.TryParse(n, out var grade) ? (g, grade) : null;
 
     /// <summary>
     /// Set when the form is opened from a stage group (Classes → KG Stages → KG1 → Add class): the grade is
@@ -174,6 +183,9 @@ public sealed class ClassFormModel
     [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
     public (string Title, string Href)? GroupLink { get; set; }
     public bool IsGroupMode => !IsEdit && !string.IsNullOrEmpty(Group);
+
+    /// <summary>Add Class over every grade (opened without a group).</summary>
+    public bool IsAllGradesMode => !IsEdit && string.IsNullOrEmpty(Group);
 }
 
 // ---------- Classes → stages ----------
@@ -247,6 +259,10 @@ public sealed class ImportExportViewModel
     public required int Students { get; init; }
     public required int Teachers { get; init; }
     public required int ActiveClasses { get; init; }
+
+    /// <summary>Every task (all statuses), and the open ones, from the Tasks module.</summary>
+    public int Tasks { get; init; }
+    public int OpenTasks { get; init; }
     public ImportKind Kind { get; init; } = ImportKind.Students;
     public string? Error { get; init; }
 }

@@ -12,20 +12,35 @@ public class ImportExportController(
     IImportService imports,
     IExcelExportService excel,
     IClassService classes,
-    IDashboardService dashboard) : AppController
+    IDashboardService dashboard,
+    IManagementTaskService tasks) : AppController
 {
     [HttpGet("")]
     public async Task<IActionResult> Index(ImportKind kind = ImportKind.Students, CancellationToken ct = default)
     {
         var data = await dashboard.GetAsync(ct);
+        var taskCounts = await tasks.CountsAsync(null, ct);
         return View(new ImportExportViewModel
         {
             Students = data.TotalStudents,
             Teachers = data.TotalTeachers,
             ActiveClasses = data.ActiveClasses,
-            Kind = kind,
+            Tasks = taskCounts.Total,
+            OpenTasks = taskCounts.Open,
+            Kind = Enum.IsDefined(kind) ? kind : ImportKind.Students,
             Error = TempData["ImportError"] as string,
         });
+    }
+
+    /// <summary>Import / Export → Tasks → Export: every task (all statuses) from the Tasks module, as .xlsx or .csv. Read-only.</summary>
+    [HttpGet("tasks/export")]
+    public async Task<IActionResult> ExportTasks(string? format, CancellationToken ct)
+    {
+        var rows = await tasks.ListAllAsync(new TaskListQuery(), ct);
+        var name = $"THRYD_Tasks_{SchoolTime.Today:yyyy-MM-dd}";
+        return format == "csv"
+            ? File(excel.TasksCsv(rows), "text/csv; charset=utf-8", name + ".csv")
+            : File(excel.Tasks(rows), StudentsController.ExcelContentType, name + ".xlsx");
     }
 
     /// <summary>
@@ -38,9 +53,12 @@ public class ImportExportController(
     [HttpGet("template/{kind}")]
     public async Task<IActionResult> Template(ImportKind kind, CancellationToken ct)
     {
-        var bytes = kind == ImportKind.Students
-            ? excel.StudentTemplate(await classes.OptionsAsync(null, ct))
-            : excel.TeacherTemplate();
+        var bytes = kind switch
+        {
+            ImportKind.Students => excel.StudentTemplate(await classes.OptionsAsync(null, ct)),
+            ImportKind.Tasks => excel.TaskTemplate(await tasks.StaffAsync(ct), await tasks.DepartmentsAsync(ct)),
+            _ => excel.TeacherTemplate(),
+        };
         return File(bytes, StudentsController.ExcelContentType, $"{kind.ToString().ToLowerInvariant()}-import-template.xlsx");
     }
 
@@ -121,7 +139,7 @@ public class ImportExportController(
             var result = await imports.CommitAsync(session, ct);
             Toast(result.Imported == 0
                 ? "Nothing was imported. See the rows below."
-                : $"{result.Imported} {(session.Kind == ImportKind.Students ? "student" : "teacher")}{(result.Imported == 1 ? "" : "s")} imported.",
+                : $"{result.Imported} {ImportDefinitions.Noun(session.Kind)}{(result.Imported == 1 ? "" : "s")} imported.",
                 result.Imported == 0 ? "warning" : "success");
         }
         finally

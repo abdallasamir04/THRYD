@@ -164,9 +164,11 @@
 </div>
 
     @*
-        Students by class: one ring per class (active classes, plus inactive classes that still have students). The ring is
-        the larger of enrolment and capacity: blue = students up to the capacity, yellow = seats left, red = students over it.
-        Each class opens its student list, as the bar chart did.
+        Students by class: one stacked column per class (active classes, plus inactive classes that still have students), in
+        the Classes order (Pre-K, KG1A … G10B). A column is as tall as the larger of enrolment and capacity: blue = students
+        up to the capacity, yellow = seats left, red = students over it (never capped). The y-axis stays put while the
+        columns scroll sideways on narrow screens. Each column opens the class's student list; js/dashboard-chart.js shows
+        the details (cap-col__tip) as a tooltip on hover and keyboard focus.
     *@
     <section class="card" aria-labelledby="dist-title">
         <div class="card__head">
@@ -199,40 +201,68 @@
                 <li class="cap-totals--available"><span class="cap-totals__value num">@seats.Available.ToString("N0", inv)</span><span class="cap-totals__label">Available seats</span></li>
                 <li class="cap-totals--over @(seats.Over == 0 ? "is-zero" : "")"><span class="cap-totals__value num">@seats.Over.ToString("N0", inv)</span><span class="cap-totals__label">Over capacity</span></li>
             </ul>
-            <ul class="cap-grid">
-                @foreach (var x in shown)
-                {
-                    // Segments on a ring of circumference C, measured against max(enrolled, capacity).
-                    const double r = 42, C = 2 * Math.PI * r;
-                    var scale = Math.Max(1, Math.Max(x.Count, x.Capacity));
-                    double Len(int n) => n * C / scale;
-                    var segments = new (string Css, int N)[] { ("occupied", x.Occupied), ("available", x.Available), ("over", x.Over) };
-                    var state = x.Over > 0 ? "over" : x.IsFull ? "full" : "open";
-                    var status = x.Over > 0 ? $"+{x.Over} over capacity" : x.IsFull ? "Full" : $"{x.Available} {(x.Available == 1 ? "seat" : "seats")} available";
-                    var label = $"{x.Name}: {x.Count} of {x.Capacity} students, " + (x.Over > 0 ? $"{x.Over} over capacity" : x.IsFull ? "full" : $"{x.Available} seats available") + $", {x.Utilization}% used{(x.IsActive ? "" : ", inactive class")}";
-                    <li>
-                        <a class="cap-class cap-class--@state @(x.IsActive ? "" : "is-inactive")" href="/students?classId=@x.ClassId" aria-label="@label" title="@label">
-                            <span class="cap-class__name">@x.Name</span>
-                            <span class="cap-ring">
-                                <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-                                    <circle class="cap-ring__track" cx="50" cy="50" r="42" />
-                                    @{ double start = 0; }
-                                    @foreach (var (css, n) in segments)
-                                    {
-                                        if (n == 0) { continue; }
-                                        var len = Len(n);
-                                        <circle class="cap-ring__seg cap-ring__seg--@css" cx="50" cy="50" r="42"
-                                                stroke-dasharray="@len.ToString("0.###", inv) @C.ToString("0.###", inv)" stroke-dashoffset="@((-start).ToString("0.###", inv))" />
-                                        start += len;
-                                    }
-                                </svg>
-                                <span class="cap-ring__center"><strong class="num">@x.Count</strong><small class="num">/ @x.Capacity</small></span>
-                            </span>
-                            <span class="cap-class__status">@status</span>
-                            <span class="cap-class__meta num">@x.Utilization% used@(x.IsActive ? "" : " · inactive")</span>
-                        </a>
-                    </li>
-                }
-            </ul>
+            // One shared scale: the tallest column (enrolment or capacity) rounded up to a tidy step, ≤ 6 gridlines.
+            var peak = Math.Max(1, shown.Max(x => Math.Max(x.Count, x.Capacity)));
+            var step = new[] { 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000 }.FirstOrDefault(s => peak <= s * 6, 1000);
+            var top = (int)Math.Ceiling(peak / (double)step) * step;
+            string Pct(double v) => (v * 100).ToString("0.###", inv) + "%";
+            var ticks = Enumerable.Range(0, top / step + 1).Select(i => i * step).ToList();
+            <div class="cap-chart" data-cap-chart style="--cols:@shown.Count">
+                <div class="cap-chart__y" aria-hidden="true">
+                    @foreach (var t in ticks)
+                    {
+                        <span class="num" style="bottom:@Pct(t / (double)top)">@t</span>
+                    }
+                </div>
+                <div class="cap-chart__scroll" tabindex="0" role="region" aria-label="Students by class chart (scrolls sideways)">
+                    <div class="cap-chart__inner">
+                        <div class="cap-chart__grid" aria-hidden="true">
+                            @foreach (var t in ticks)
+                            {
+                                <span class="cap-chart__line @(t == 0 ? "cap-chart__line--base" : "")" style="bottom:@Pct(t / (double)top)"></span>
+                            }
+                        </div>
+                        <ol class="cap-chart__cols">
+                            @foreach (var x in shown)
+                            {
+                                var state = x.Over > 0 ? "over" : x.IsFull ? "full" : "open";
+                                var height = Math.Max(x.Count, x.Capacity) / (double)top;
+                                var label = $"{x.Name}: {x.Count} of {x.Capacity} students, " + (x.Over > 0 ? $"{x.Over} over capacity" : x.IsFull ? "full" : $"{x.Available} {(x.Available == 1 ? "seat" : "seats")} available") + $", {x.Utilization}% of capacity used{(x.IsActive ? "" : ", inactive class")}. Opens the class's students.";
+                                // Bottom to top: occupied (blue), over capacity (red), available (yellow); a class has red or yellow, never both.
+                                var segments = new (string Css, int N)[] { ("occupied", x.Occupied), ("over", x.Over), ("available", x.Available) };
+                                <li class="cap-col cap-col--@state @(x.IsActive ? "" : "is-inactive")">
+                                    <a class="cap-col__link" href="/students?classId=@x.ClassId" aria-label="@label" data-cap-col>
+                                        <span class="cap-col__zone">
+                                            <span class="cap-col__value num">@x.Count</span>
+                                            <span class="cap-col__stack" style="--h:@height.ToString("0.#####", inv)">
+                                                @foreach (var (css, n) in segments)
+                                                {
+                                                    if (n == 0) { continue; }
+                                                    <span class="cap-seg cap-seg--@css" style="flex-grow:@n" data-n="@n"></span>
+                                                }
+                                            </span>
+                                        </span>
+                                        <span class="cap-col__name">@x.Name</span>
+                                    </a>
+                                    <div class="cap-col__tip" hidden>
+                                        <p class="cap-tip__title">@x.Name@(x.IsActive ? "" : " · inactive class")</p>
+                                        <dl class="cap-tip__rows">
+                                            <div><dt><i class="l-occupied"></i>Enrolled students</dt><dd class="num">@x.Count</dd></div>
+                                            <div><dt><i class="l-capacity"></i>Total capacity</dt><dd class="num">@x.Capacity</dd></div>
+                                            <div><dt><i class="l-available"></i>Available seats</dt><dd class="num">@x.Available</dd></div>
+                                            <div class="@(x.Over > 0 ? "is-over" : "")"><dt><i class="l-over"></i>Over capacity</dt><dd class="num">@x.Over</dd></div>
+                                        </dl>
+                                        <p class="cap-tip__foot"><span class="num">@x.Utilization%</span> of capacity used</p>
+                                    </div>
+                                </li>
+                            }
+                        </ol>
+                    </div>
+                </div>
+            </div>
         }
     </section>
+
+@section Scripts {
+    <script src="~/js/dashboard-chart.js" asp-append-version="true"></script>
+}
