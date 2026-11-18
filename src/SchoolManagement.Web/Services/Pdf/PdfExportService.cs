@@ -9,7 +9,7 @@ namespace SchoolManagement.Web.Services.Pdf;
 
 public interface IPdfExportService
 {
-    /// <summary>Renders a report as a branded, landscape A4 PDF (always a light, printable document).</summary>
+    /// <summary>Renders a report as a branded A4 PDF, landscape unless the report asks for portrait (always light and printable).</summary>
     Task<byte[]> RenderAsync(PdfReport report, CancellationToken ct = default);
 }
 
@@ -41,26 +41,49 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
         _ = Setup.Value;
         var profile = await settings.GetProfileAsync(ct);
         var exported = SchoolTime.Now; // "Exported" in school time (Africa/Cairo)
-        var document = Document.Create(container => container.Page(page =>
+        void Frame(PageDescriptor page, string? subtitle)
         {
-            page.Size(PageSizes.A4.Landscape());
-            page.MarginHorizontal(30);
+            page.Size(report.Portrait ? PageSizes.A4 : PageSizes.A4.Landscape());
+            page.MarginHorizontal(report.Portrait ? 34 : 30);
             page.MarginTop(24);
             page.MarginBottom(20);
             page.PageColor(Colors.White);
             page.DefaultTextStyle(x => x.FontFamily(FontStack).FontSize(8.5f).FontColor(Ink).LineHeight(1.25f));
-            page.Header().Element(c => Header(c, report, profile, exported));
-            page.Content().PaddingTop(10).Column(col =>
+            page.Header().Element(c => Header(c, report, profile, exported, subtitle));
+            page.Footer().Element(c => Footer(c, profile, exported, report.FooterNote, report.FooterShowsYear, report.Portrait));
+        }
+
+        var document = Document.Create(container =>
+        {
+            if (report.Pages is { Count: > 0 } pages)
             {
-                col.Spacing(14);
-                foreach (var section in report.Sections)
+                // One dedicated page per entry: ScaleToFit shrinks an entry that is taller than the page, so it is never split.
+                foreach (var entry in pages)
+                    container.Page(page =>
+                    {
+                        Frame(page, entry.Subtitle);
+                        page.Content().PaddingTop(10).ScaleToFit().Column(col =>
+                        {
+                            col.Spacing(12);
+                            foreach (var section in entry.Sections) col.Item().Element(c => Section(c, section));
+                        });
+                    });
+                return;
+            }
+            container.Page(page =>
+            {
+                Frame(page, report.Subtitle);
+                page.Content().PaddingTop(10).Column(col =>
                 {
-                    if (section.PageBreakBefore) col.Item().PageBreak();
-                    col.Item().Element(c => Section(c, section));
-                }
+                    col.Spacing(14);
+                    foreach (var section in report.Sections)
+                    {
+                        if (section.PageBreakBefore) col.Item().PageBreak();
+                        col.Item().Element(c => Section(c, section));
+                    }
+                });
             });
-            page.Footer().Element(c => Footer(c, profile, exported, report.FooterNote));
-        }));
+        });
         document.WithMetadata(new DocumentMetadata
         {
             Title = report.Subtitle is null ? report.Title : $"{report.Title} — {report.Subtitle}",
@@ -98,8 +121,9 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
 
     // ------------------------------------------------------------------ header and footer
 
-    private void Header(IContainer container, PdfReport report, SchoolProfile profile, DateTime exported)
+    private void Header(IContainer container, PdfReport report, SchoolProfile profile, DateTime exported, string? subtitle)
     {
+        var compact = report.CompactHeader;
         var meta = new List<PdfMeta>();
         if (report.ShowAcademicYear && !string.IsNullOrWhiteSpace(profile.AcademicYear)) meta.Add(new("Academic Year", profile.AcademicYear));
         meta.AddRange(report.Meta.Where(m => !string.IsNullOrWhiteSpace(m.Value)));
@@ -113,17 +137,17 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
                 var logo = Logo();
                 if (logo is not null)
                     // 640×123 px logo: 30 pt high is about 156 pt wide (FitArea keeps the aspect ratio in any case).
-                    row.ConstantItem(170).AlignLeft().AlignMiddle().Height(30).Image(logo).FitArea();
+                    row.ConstantItem(compact ? 130 : 170).AlignLeft().AlignMiddle().Height(compact ? 23 : 30).Image(logo).FitArea();
                 else
                     row.ConstantItem(170).AlignMiddle().Text(t => t.Span("THRYD").FontSize(20).ExtraBold().FontColor(Brand));
 
                 row.RelativeItem().AlignRight().AlignMiddle().Column(title =>
                 {
                     if (!string.IsNullOrWhiteSpace(report.Eyebrow))
-                        title.Item().Text(t => { t.AlignRight(); t.Span(Iso(report.Eyebrow)).FontSize(11).Bold().FontColor(Ink); });
-                    title.Item().Text(t => { t.AlignRight(); t.Span(Iso(report.Title)).FontSize(17).ExtraBold().FontColor(Ink); });
-                    if (!string.IsNullOrWhiteSpace(report.Subtitle))
-                        title.Item().Text(t => { t.AlignRight(); t.Span(Iso(report.Subtitle)).FontSize(10.5f).Bold().FontColor(Brand); });
+                        title.Item().Text(t => { t.AlignRight(); t.Span(Iso(report.Eyebrow)).FontSize(compact ? 9.5f : 11).Bold().FontColor(Ink); });
+                    title.Item().Text(t => { t.AlignRight(); t.Span(Iso(report.Title)).FontSize(compact ? 13.5f : 17).ExtraBold().FontColor(Ink); });
+                    if (!string.IsNullOrWhiteSpace(subtitle))
+                        title.Item().Text(t => { t.AlignRight(); t.Span(Iso(subtitle)).FontSize(compact ? 10 : 10.5f).Bold().FontColor(Brand); });
                 });
             });
 
@@ -148,23 +172,29 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
         });
     }
 
-    private static void Footer(IContainer container, SchoolProfile profile, DateTime exported, string? note) =>
+    private static void Footer(IContainer container, SchoolProfile profile, DateTime exported, string? note, bool showYear, bool portrait = false) =>
         container.PaddingTop(8).BorderTop(0.6f).BorderColor(Border).PaddingTop(5).Column(col =>
         {
             if (!string.IsNullOrWhiteSpace(note))
                 col.Item().PaddingBottom(4).Text(t => { t.AlignCenter(); t.Span(Iso(note)).FontSize(7.5f).SemiBold().FontColor(Ink); });
-            col.Item().Row(row => FooterRow(row, profile, exported));
+            col.Item().Row(row => FooterRow(row, profile, exported, showYear, portrait));
         });
 
-    private static void FooterRow(RowDescriptor row, SchoolProfile profile, DateTime exported)
+    private static void FooterRow(RowDescriptor row, SchoolProfile profile, DateTime exported, bool showYear, bool portrait = false)
         {
             row.RelativeItem().Text(t =>
             {
                 t.Span("THRYD").FontSize(7.5f).ExtraBold().FontColor(Brand);
-                t.Span("  ·  The AI-Powered School Operating System  ·  ").FontSize(7.5f).FontColor(Muted);
+                // The narrower portrait page keeps the footer on one line: the school name without the tagline.
+                t.Span(portrait ? "  ·  " : "  ·  The AI-Powered School Operating System  ·  ").FontSize(7.5f).FontColor(Muted);
                 t.Span(Iso(profile.SchoolName)).FontSize(7.5f).FontColor(Muted);
             });
-            row.AutoItem().Text(t => t.Span("Exported " + exported.ToString("d MMM yyyy, HH:mm", CultureInfo.InvariantCulture)).FontSize(7.5f).FontColor(Muted));
+            row.AutoItem().Text(t =>
+            {
+                if (showYear && !string.IsNullOrWhiteSpace(profile.AcademicYear))
+                    t.Span("Academic Year " + profile.AcademicYear + "  ·  ").FontSize(7.5f).FontColor(Muted);
+                t.Span("Exported " + exported.ToString("d MMM yyyy, HH:mm", CultureInfo.InvariantCulture)).FontSize(7.5f).FontColor(Muted);
+            });
             row.RelativeItem().Text(t =>
             {
                 t.AlignRight();
@@ -216,7 +246,7 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
         {
             t.ColumnsDefinition(c =>
             {
-                for (var i = 0; i < perRow; i++) { c.ConstantColumn(118); c.RelativeColumn(); }
+                for (var i = 0; i < perRow; i++) { c.ConstantColumn(fields.LabelWidth); c.RelativeColumn(); }
             });
             var used = 0;
             foreach (var f in fields.Items)
@@ -280,29 +310,32 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
 
         container.Table(t =>
         {
+            var roomy = table.Comfortable;
+            var tight = !roomy && table.Compact;
             t.ColumnsDefinition(c =>
             {
-                if (table.RowNumbers) c.ConstantColumn(26);
+                if (table.RowNumbers) c.ConstantColumn(roomy ? 34 : 26);
                 foreach (var column in table.Columns) c.RelativeColumn(column.Width);
             });
 
             t.Header(h =>
             {
-                if (table.RowNumbers) HeaderCell(h.Cell(), "#", PdfAlign.End);
-                foreach (var column in table.Columns) HeaderCell(h.Cell(), column.Header, column.Align);
+                if (table.RowNumbers) HeaderCell(h.Cell(), "#", roomy ? PdfAlign.Center : PdfAlign.End, roomy);
+                foreach (var column in table.Columns) HeaderCell(h.Cell(), column.Header, column.Align, roomy);
             });
 
             for (var r = 0; r < table.Rows.Count; r++)
             {
                 var background = r % 2 == 1 ? Zebra : "#FFFFFF";
                 var row = table.Rows[r];
+                // Serial number of the row (1, 2, 3… in English digits), never a database id.
                 if (table.RowNumbers)
-                    BodyCell(t.Cell(), background).Element(c => CellText(c, new PdfCell((r + 1).ToString(CultureInfo.InvariantCulture), Tone: PdfTone.Muted), PdfAlign.End));
+                    BodyCell(t.Cell(), background, roomy, tight).Element(c => CellText(c, new PdfCell((r + 1).ToString(CultureInfo.InvariantCulture), Tone: PdfTone.Muted), roomy ? PdfAlign.Center : PdfAlign.End, roomy));
                 for (var i = 0; i < table.Columns.Count; i++)
                 {
                     var cell = i < row.Count ? row[i] : new PdfCell("—");
                     var align = table.Columns[i].Align;
-                    BodyCell(t.Cell(), background).Element(c => CellText(c, cell, align));
+                    BodyCell(t.Cell(), background, roomy, tight).Element(c => CellText(c, cell, align, roomy));
                 }
             }
 
@@ -319,18 +352,18 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
         });
     }
 
-    private static void HeaderCell(IContainer cell, string text, PdfAlign align) =>
-        cell.Background(BrandDeep).PaddingVertical(5).PaddingHorizontal(5).AlignMiddle()
-            .Text(t => { Align(t, align); t.Span(text).FontSize(7.5f).Bold().FontColor(Colors.White); });
+    private static void HeaderCell(IContainer cell, string text, PdfAlign align, bool roomy = false) =>
+        cell.Background(BrandDeep).PaddingVertical(roomy ? 6 : 5).PaddingHorizontal(roomy ? 8 : 5).AlignMiddle()
+            .Text(t => { Align(t, align); t.Span(text).FontSize(roomy ? 9 : 7.5f).Bold().FontColor(Colors.White); });
 
     // ShowEntire: a cell's lines are never split between two pages (the row moves to the next page instead).
-    private static IContainer BodyCell(IContainer cell, string background) =>
-        cell.Background(background).BorderBottom(0.5f).BorderColor(Border).PaddingVertical(4).PaddingHorizontal(5).ShowEntire();
+    private static IContainer BodyCell(IContainer cell, string background, bool roomy = false, bool tight = false) =>
+        cell.Background(background).BorderBottom(0.5f).BorderColor(Border).PaddingVertical(roomy ? 5 : tight ? 1.5f : 4).PaddingHorizontal(roomy ? 8 : 5).ShowEntire();
 
     private static IContainer FooterCell(IContainer cell) =>
         cell.Background(BrandSoft).BorderTop(1).BorderColor(Brand).PaddingVertical(5).PaddingHorizontal(5);
 
-    private static void CellText(IContainer container, PdfCell cell, PdfAlign align) =>
+    private static void CellText(IContainer container, PdfCell cell, PdfAlign align, bool roomy = false) =>
         container.Column(col =>
         {
             if (cell.Badge && cell.Text.Length > 0)
@@ -346,6 +379,7 @@ public sealed class PdfExportService(ISettingsService settings, IWebHostEnvironm
                 {
                     Align(t, align);
                     var span = t.Span(Iso(cell.Text)).FontColor(cell.Tone == PdfTone.Default ? Ink : Strong(cell.Tone));
+                    if (roomy) span.FontSize(10.5f);
                     if (cell.Strong) span.Bold();
                 });
             }

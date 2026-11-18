@@ -17,7 +17,7 @@
             <div>
                 <h1 class="page-title" dir="auto">@m.FullName</h1>
                 <p class="page-sub">
-                    <span class="badge @(m.Position is null ? "badge--neutral" : "badge--primary")">@Ui.Icon(m.Position is { } p ? ManagementPositions.Icon(p) : "briefcase")@m.PositionName</span>
+                    <span class="badge @(m.HasPosition ? "badge--primary" : "badge--neutral")">@Ui.Icon(m.Position is { } p ? ManagementPositions.Icon(p) : "briefcase")@m.PositionName</span>
                     <span>School Leadership</span>
                 </p>
             </div>
@@ -62,7 +62,7 @@
             <div class="card__head"><h2 class="card__title" id="info-title">@Ui.Icon("user")Profile</h2></div>
             <div class="card__body">
                 <dl class="dl" style="font-size:0.875rem">
-                    <dt>Position</dt><dd>@if (m.Position is { } cp) { <a href="@ManagementPositions.Href(cp)">@m.PositionName</a> } else { <span class="faint">@m.PositionName</span> }</dd>
+                    <dt>Position</dt><dd>@if (m.Position is { } cp) { <a href="@ManagementPositions.Href(cp)">@m.PositionName</a> } else if (m.HasPosition) { @m.PositionName } else { <span class="faint">@m.PositionName</span> }</dd>
                     <dt>Contact</dt>
                     <dd>@if (!string.IsNullOrEmpty(m.ContactNumber)) { <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@m.ContactNumber</a> } else { <span class="faint">Not set</span> }</dd>
                     <dt>Email</dt>

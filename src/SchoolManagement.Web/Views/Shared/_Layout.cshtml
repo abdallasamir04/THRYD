@@ -40,6 +40,7 @@
         {
             ("MorningDuty", "/duties", "Duties", "shield-check", null),
             ("DutyAudit", "/duties/audit", "Duty Audit", "clipboard-check", null),
+            ("Tasks", "/tasks", "Tasks", "list-checks", null),
         }),
         ("Data", new (string, string?, string, string, int?)[]
         {
@@ -86,7 +87,6 @@
                     @* THRYD logo: transparent copies of E:\noo\logo.jpeg, one for each theme. *@
                     <img class="brand__logo brand__logo--light" src="~/img/logo-light.png" asp-append-version="true" alt="THRYD" width="640" height="123" />
                     <img class="brand__logo brand__logo--dark" src="~/img/logo-dark.png" asp-append-version="true" alt="THRYD" width="640" height="123" />
-                    <span class="brand__tagline">The AI-Powered School Operating System</span>
                 </a>
                 <button class="icon-btn sidebar__close" type="button" data-nav-close aria-label="Close navigation">@Ui.Icon("x")</button>
             </div>

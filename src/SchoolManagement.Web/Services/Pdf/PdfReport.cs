@@ -41,7 +41,19 @@ public sealed class PdfTable : PdfSection
     public IReadOnlyList<PdfCell>? Footer { get; init; }
     public bool RowNumbers { get; init; }
     public string EmptyText { get; init; } = "No records to show.";
+
+    /// <summary>Larger text and roomier rows, for printed lists that are read on paper (e.g. a class's students).</summary>
+    public bool Comfortable { get; init; }
+
+    /// <summary>Tighter rows, so a long list fits its page with less scaling (ignored with <see cref="Comfortable"/>).</summary>
+    public bool Compact { get; init; }
 }
+
+/// <summary>
+/// One page of a <see cref="PdfReport.Pages"/> report: printed on exactly one page of its own, with its own subtitle in
+/// the header. Content longer than the page is scaled down to fit, never split onto a second page.
+/// </summary>
+public sealed record PdfPage(string? Subtitle, IReadOnlyList<PdfSection> Sections);
 
 /// <summary>A row of summary figures (totals shown above a table).</summary>
 public sealed class PdfSummary : PdfSection
@@ -58,6 +70,9 @@ public sealed class PdfFields : PdfSection
 
     /// <summary>Pairs per row (each pair = a label cell and a value cell).</summary>
     public int Columns { get; init; } = 2;
+
+    /// <summary>Width of the label cells in points (narrower leaves more room for values on a portrait page).</summary>
+    public float LabelWidth { get; init; } = 118;
 }
 
 /// <summary>One field. <paramref name="Wide"/> spans the whole row (long text).</summary>
@@ -114,6 +129,18 @@ public sealed class PdfReport
 
     /// <summary>An extra footer line on every page, e.g. a confidentiality notice.</summary>
     public string? FooterNote { get; init; }
+
+    /// <summary>A4 portrait instead of the default A4 landscape.</summary>
+    public bool Portrait { get; init; }
+
+    /// <summary>When set, each entry is one dedicated page (and <see cref="Sections"/> is not used).</summary>
+    public IReadOnlyList<PdfPage>? Pages { get; init; }
+
+    /// <summary>A smaller logo and title, leaving more of every page to the content.</summary>
+    public bool CompactHeader { get; init; }
+
+    /// <summary>The academic year in the footer of every page, next to the export date.</summary>
+    public bool FooterShowsYear { get; init; }
 
     public string FileName => PdfFileName.From(FileNameParts);
 }

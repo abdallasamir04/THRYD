@@ -55,6 +55,9 @@ public sealed class DepartmentMemberQuery
     public bool HasFilters => !string.IsNullOrWhiteSpace(Search) || !string.IsNullOrWhiteSpace(Subcategory);
 }
 
+/// <summary>An academic staff member who can be named HOD of a new department, with the department they would leave.</summary>
+public sealed record HodCandidate(int Id, string FullName, string? JobTitle, string? CurrentDepartment);
+
 public interface IDepartmentService
 {
     Task<IReadOnlyList<DepartmentCard>> ListAsync(DepartmentListQuery query, CancellationToken ct = default);
@@ -64,6 +67,13 @@ public interface IDepartmentService
     Task<ServiceResult> UpdateAsync(int id, string? description, CancellationToken ct = default);
     Task<ServiceResult> UpdateAsync(int id, string? description, string? subcategoryLabel, string? subjectLabel, CancellationToken ct = default);
     Task<ServiceResult> CreateAsync(string? name, string? description, string? subcategoryLabel, string? subjectLabel, CancellationToken ct = default);
+    /// <summary>Academic staff who can be named HOD of a new department: not Management Team, not already a current HOD.</summary>
+    Task<IReadOnlyList<HodCandidate>> NewDepartmentHodCandidatesAsync(CancellationToken ct = default);
+    /// <summary>
+    /// Add Department: the department (name only) and, optionally, its HOD in one step. The chosen teacher joins the new
+    /// department (subcategory and subject cleared, as when removed from the old one) and is appointed from today.
+    /// </summary>
+    Task<ServiceResult> CreateWithHeadAsync(string? name, int? headTeacherId, CancellationToken ct = default);
     Task<IReadOnlyList<HeadHistoryRow>> RecentHeadChangesAsync(int take, CancellationToken ct = default);
     Task<IReadOnlyList<SubcategoryItem>> SubcategoriesAsync(int departmentId, CancellationToken ct = default);
     Task<SubcategoryItem?> GetSubcategoryAsync(int id, CancellationToken ct = default);
@@ -337,6 +347,56 @@ public sealed class DepartmentService(SchoolDbContext db, ICurrentUser currentUs
         if (clean.Length > DepartmentSubcategory.NameMaxLength) return ServiceResult.Fail("Name", $"Use {DepartmentSubcategory.NameMaxLength} characters or fewer.");
         if (!TextNormalizer.ContainsLetter(clean)) return ServiceResult.Fail("Name", "The name must contain letters.");
         return ServiceResult.Ok();
+    }
+
+    public async Task<IReadOnlyList<HodCandidate>> NewDepartmentHodCandidatesAsync(CancellationToken ct = default) =>
+        await db.Teachers.AsNoTracking()
+            .Where(t => !db.DepartmentHeads.Any(h => h.TeacherId == t.Id && h.IsCurrent))
+            .OrderBy(t => t.FullName)
+            .Select(t => new HodCandidate(t.Id, t.FullName, t.JobTitle, t.Department != null ? t.Department.Name : null))
+            .ToListAsync(ct);
+
+    public async Task<ServiceResult> CreateWithHeadAsync(string? name, int? headTeacherId, CancellationToken ct = default)
+    {
+        if (headTeacherId is null) return await CreateAsync(name, null, null, null, ct);
+
+        // The HOD rules of AssignHeadAsync: academic staff only (never Management Team), and one department at a time.
+        if (await db.ManagementMembers.AnyAsync(m => m.Id == headTeacherId, ct))
+            return ServiceResult.Fail("HeadTeacherId", "Management Team members cannot be assigned as an academic Head of Department.");
+        var teacher = await db.Teachers.FirstOrDefaultAsync(t => t.Id == headTeacherId, ct);
+        if (teacher is null) return ServiceResult.Fail("HeadTeacherId", "Choose an academic staff member from the list.");
+        var heads = await db.DepartmentHeads.AsNoTracking().Where(h => h.TeacherId == teacher.Id && h.IsCurrent)
+            .Select(h => h.Department.Name).FirstOrDefaultAsync(ct);
+        if (heads is not null)
+            return ServiceResult.Fail("HeadTeacherId", $"{teacher.FullName} is already the Head of {heads}. Choose someone who is not an HOD.");
+
+        // All or nothing: the department, the move and the appointment.
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var created = await CreateAsync(name, null, null, null, ct);
+        if (!created.Succeeded) return created;
+        var departmentId = created.EntityId!.Value;
+        (teacher.DepartmentId, teacher.Subcategory, teacher.Subject) = (departmentId, null, null);
+        db.DepartmentHeads.Add(new DepartmentHeadAssignment
+        {
+            DepartmentId = departmentId,
+            TeacherId = teacher.Id,
+            IsCurrent = true,
+            StartDate = SchoolWeek.Today,
+            AssignedAt = DateTime.UtcNow,
+            AssignedBy = currentUser.Name,
+            Note = "Appointed when the department was created",
+        });
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            db.ChangeTracker.Clear();
+            return ServiceResult.Fail("HeadTeacherId", "The Head of Department was changed by someone else at the same time. Reload the page and try again.");
+        }
+        return ServiceResult.Ok(departmentId);
     }
 
     public async Task<ServiceResult> AssignHeadAsync(int departmentId, int? teacherId, DateOnly? startDate, string? note, CancellationToken ct = default)

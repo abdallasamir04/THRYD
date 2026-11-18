@@ -6,12 +6,14 @@
 *@
 @{
     var q = Model.Query;
+    string? Iso(DateOnly? d) => d is { } x ? SchoolWeek.Iso(x) : null;
 }
-<div class="task-filters">
+<div class="task-filters@(Model.IsGlobal ? " task-filters--global" : "")">
     @if (!Model.ForMember)
     {
         <form class="task-filters__group" action="@Model.BaseUrl" method="get" aria-label="Filter by people and department">
-            @foreach (var (key, value) in new[] { ("search", q.Search), ("status", q.Status), ("priority", q.Priority), ("due", q.Due), ("mine", q.Mine), ("sort", q.Sort == "due" ? null : q.Sort) })
+            @foreach (var (key, value) in new[] { ("search", q.Search), ("status", q.Status), ("priority", q.Priority), ("due", q.Due), ("mine", q.Mine), ("sort", q.Sort == "due" ? null : q.Sort),
+                         ("tab", q.Tab), ("dueFrom", Iso(q.DueFrom)), ("dueTo", Iso(q.DueTo)) })
             {
                 if (!string.IsNullOrWhiteSpace(value)) { <input type="hidden" name="@key" value="@value" /> }
             }
@@ -46,13 +48,27 @@
                     }
                 </select>
             </div>
+            @if (Model.IsGlobal)
+            {
+                <div class="task-filter">
+                    <label class="task-filter__label" for="f-category">@Ui.Icon("users", "icon--sm")Staff category</label>
+                    <select class="select" id="f-category" name="category" data-autosubmit>
+                        <option value="">All staff</option>
+                        @foreach (var c in StaffCategories.All)
+                        {
+                            <option value="@StaffCategories.Slug(c)" selected="@(q.Category == StaffCategories.Slug(c))">@StaffCategories.Name(c)</option>
+                        }
+                    </select>
+                </div>
+            }
             <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
         </form>
     }
     <form class="task-filters__group task-filters__group--list" action="@Model.BaseUrl" method="get" role="search" data-list-filter="#task-list">
         @if (!Model.ForMember)
         {
-            @foreach (var (key, value) in new[] { ("memberId", q.MemberId?.ToString()), ("reviewerId", q.ReviewerId?.ToString()), ("department", q.Department), ("mine", q.Mine) })
+            @foreach (var (key, value) in new[] { ("memberId", q.MemberId?.ToString()), ("reviewerId", q.ReviewerId?.ToString()), ("department", q.Department), ("mine", q.Mine),
+                         ("category", q.Category), ("tab", q.Tab) })
             {
                 if (!string.IsNullOrWhiteSpace(value)) { <input type="hidden" name="@key" value="@value" /> }
             }
@@ -98,13 +114,25 @@
                 <option value="none" selected="@(q.Due == "none")">No due date</option>
             </select>
         </div>
+        @if (Model.IsGlobal)
+        {
+            <div class="task-filter">
+                <label class="task-filter__label" for="f-due-from">Due from</label>
+                <input class="input picker" type="date" id="f-due-from" name="dueFrom" value="@Iso(q.DueFrom)" data-empty-text="Any date" />
+            </div>
+            <div class="task-filter">
+                <label class="task-filter__label" for="f-due-to">Due to</label>
+                <input class="input picker" type="date" id="f-due-to" name="dueTo" value="@Iso(q.DueTo)" data-empty-text="Any date" />
+            </div>
+        }
         <div class="task-filter">
             <label class="task-filter__label" for="f-sort">Sort by</label>
             <select class="select" id="f-sort" name="sort">
                 <option value="due" selected="@(q.Sort == "due")">Due date</option>
                 <option value="priority" selected="@(q.Sort == "priority")">Priority</option>
                 <option value="status" selected="@(q.Sort == "status")">Status</option>
-                <option value="created" selected="@(q.Sort == "created")">Newest</option>
+                <option value="created" selected="@(q.Sort == "created")">Newest first</option>
+                <option value="oldest" selected="@(q.Sort == "oldest")">Oldest first</option>
                 <option value="title" selected="@(q.Sort == "title")">Title A–Z</option>
             </select>
         </div>

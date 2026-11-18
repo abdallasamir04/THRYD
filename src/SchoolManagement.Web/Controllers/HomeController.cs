@@ -10,14 +10,13 @@ public class HomeController(
     IDashboardService dashboard,
     ISettingsService settings,
     IDutyService duties,
-    IStaffDutyService staffDuty,
     IArrivalService arrivals,
+    IStaffAttendanceService staffAttendance,
     IActivityService activities) : AppController
 {
     public async Task<IActionResult> Index(CancellationToken ct)
     {
         var today = SchoolWeek.Today;
-        var (average, rated) = await staffDuty.AverageRatingAsync(ct);
         // Section-level coverage for today (school timezone), read per request: fully covered sections ÷ sections.
         // Morning / Midday / Dismissal = the duty cards of each type (DutyComponents), each covered when every duty in it
         // dated today is Covered; Activities = each activity scheduled today (P.E. counts once), covered when every one
@@ -38,9 +37,8 @@ public class HomeController(
             {
                 Date = today,
                 DutyStatus = await duties.StatusCountsAsync(today, ct),
-                AverageRating = average,
-                RatedAssignments = rated,
                 Arrivals = await arrivals.DaySummaryAsync(today, ct),
+                Staff = await staffAttendance.TodayAsync(today, ct),
                 Coverage = coverage,
             },
         };

@@ -5,4 +5,4 @@
     current query string on click, so filters changed in place are exported too.
 *@
 <a class="btn btn--secondary@(Model.Small ? " btn--sm" : "") btn--download" href="@(Model.Path + Context.Request.QueryString)" data-download="@Model.Path"
-   title="@Model.Label as a PDF (landscape)" download>@Ui.Icon("file-pdf", Model.Small ? "icon--sm" : null)@Model.Label</a>
+   title="@Model.Label as a PDF (@(Model.Portrait ? "portrait" : "landscape"))" download>@Ui.Icon("file-pdf", Model.Small ? "icon--sm" : null)@Model.Label</a>

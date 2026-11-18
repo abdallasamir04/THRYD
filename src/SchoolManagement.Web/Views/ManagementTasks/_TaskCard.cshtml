@@ -58,6 +58,7 @@
 
     <div class="task-card__due">
         <span class="due-chip @dueTone">@Ui.Icon(done ? "check-circle" : cancelled ? "x-circle" : "calendar")@(done && t.CompletedAt is { } ca ? "Completed " + Ui.Date(ca) : cancelled ? "Cancelled" : TaskLabels.Due(t.DueDate, t.DueTime))</span>
+        <span class="task-card__created" title="Created @Ui.DateTime(t.CreatedAt)@(t.CreatorName is { } cn ? " by " + cn : "")">Created @Ui.Date(t.CreatedAt)@(t.CreatorName is { } by ? " · " + by : "")</span>
     </div>
 
     <div class="task-card__foot">

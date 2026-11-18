@@ -24,6 +24,15 @@ public interface IExcelExportService
 
     /// <summary>Academic Belongings over the filtered scope: summary, by class / subject / teacher / quarter, trends, every student-lesson record.</summary>
     byte[] BelongingsAcademic(AcademicHistory history, string schoolName);
+
+    /// <summary>Classes → Download Summary Excel: Overview, Stage Summary and Class Summary sheets.</summary>
+    byte[] ClassesSummary(ClassRoster roster, string schoolName, string? academicYear);
+
+    /// <summary>Classes → Download Students Excel: a Class Index sheet and one sheet per class (# and Student Name only).</summary>
+    byte[] ClassesStudents(ClassRoster roster, string schoolName, string? academicYear);
+
+    /// <summary>Staff Attendance over the filtered scope: summary, by staff member, every daily line and the corrections.</summary>
+    byte[] StaffAttendance(StaffAttendanceHistory history, string scope, string schoolName);
 }
 
 /// <summary>Builds every downloadable workbook. Contact numbers are always written as text.</summary>

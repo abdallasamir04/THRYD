@@ -1,0 +1,32 @@
+@model PositionOptions
+@*
+    The options of a Position dropdown (Add Staff, Management Team member form). Values: see PositionChoices.
+    Each position has one holder: a position held by someone else is listed with the holder's name but cannot be chosen.
+*@
+@{
+    var selected = Model.Selected ?? "";
+}
+<option value="">No position yet</option>
+<optgroup label="Leadership positions">
+    @foreach (var p in ManagementPositions.All)
+    {
+        var key = p.ToString();
+        var held = Model.Holders.TryGetValue(p, out var holder);
+        <option value="@key" selected="@string.Equals(selected, key, StringComparison.OrdinalIgnoreCase)" disabled="@(held && !string.Equals(selected, key, StringComparison.OrdinalIgnoreCase))">@ManagementPositions.Name(p)@(held ? $" — held by {holder}" : "")</option>
+    }
+</optgroup>
+@if (Model.Custom.Count > 0)
+{
+    <optgroup label="Other positions">
+        @foreach (var c in Model.Custom)
+        {
+            var key = PositionChoices.Custom(c.Id);
+            var held = c.Holder is not null;
+            <option value="@key" selected="@(selected == key)" disabled="@(held && selected != key)">@c.Title@(held ? $" — held by {c.Holder}" : "")</option>
+        }
+    </optgroup>
+}
+@if (Model.AllowNew)
+{
+    <option value="@PositionChoices.New" selected="@(selected == PositionChoices.New)">+ Add New Position</option>
+}

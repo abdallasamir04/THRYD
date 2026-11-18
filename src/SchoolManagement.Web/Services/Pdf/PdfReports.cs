@@ -559,41 +559,6 @@ public static class PdfReports
         FileNameParts = ["Student List", className],
     };
 
-    public static PdfReport Classes(IReadOnlyList<ClassRow> rows, string? search, string? status) => new()
-    {
-        Title = "Classes Report",
-        Subtitle = status switch { "active" => "Active classes", "inactive" => "Inactive classes", _ => "All classes" },
-        Meta =
-        [
-            new("Search", string.IsNullOrWhiteSpace(search) ? null : search.Trim()),
-            new("Classes", rows.Count.ToString(C)),
-            new("Students placed", rows.Sum(r => r.StudentCount).ToString(C)),
-        ],
-        Sections =
-        [
-            new PdfTable
-            {
-                Columns = [new("Class", 1), new("Enrolled", 0.9f, PdfAlign.End), new("Capacity", 0.9f, PdfAlign.End), new("Capacity status", 1.2f), new("Status", 1), new("Display order", 0.9f, PdfAlign.End), new("Last updated", 1.2f)],
-                Rows = rows.Select(c =>
-                {
-                    var full = c.StudentCount >= c.Capacity;
-                    var near = !full && (c.StudentCount >= c.Capacity - 3 || c.StudentCount >= (int)(c.Capacity * 0.85));
-                    return R(
-                        new PdfCell(c.Name, Strong: true),
-                        PdfCell.Num(c.StudentCount),
-                        PdfCell.Num(c.Capacity),
-                        full ? PdfCell.Status("Full", PdfTone.Error) : near ? PdfCell.Status("Near capacity", PdfTone.Warning) : PdfCell.Status("Available", PdfTone.Success),
-                        c.IsActive ? PdfCell.Status("Active", PdfTone.Success) : PdfCell.Status("Inactive", PdfTone.Muted),
-                        PdfCell.Num(c.SortOrder),
-                        Ui.Date(c.UpdatedAt));
-                }).ToList(),
-                Footer = ["Total", rows.Sum(r => r.StudentCount).ToString(C), rows.Sum(r => r.Capacity).ToString(C), "", "", "", ""],
-                EmptyText = "No classes match these filters.",
-            },
-        ],
-        FileNameParts = ["Classes Report", status],
-    };
-
     // ================================================================== management team
 
     public static PdfReport ManagementMembers(IReadOnlyList<ManagementMemberRow> rows, string? search, string? position) => new()
@@ -614,7 +579,7 @@ public static class PdfReports
                 ],
                 Rows = rows.Select(m => R(
                     new PdfCell(m.FullName, Strong: true),
-                    m.Position is null ? new PdfCell(m.PositionName, Tone: PdfTone.Muted) : m.PositionName,
+                    !m.HasPosition ? new PdfCell(m.PositionName, Tone: PdfTone.Muted) : m.PositionName,
                     m.ContactNumber,
                     m.Email,
                     m.AppointedOn?.ToString("d MMM yyyy", C),

@@ -1,8 +1,9 @@
 @model StaffDirectoryViewModel
 @*
-    Staff → All School Staff: the whole workforce in one directory. One card per staff record (each person once), with
-    their category, roles (leadership position, Head of Department, KG class teaching team) and contact. Cards open the
-    person's existing profile. Counts are of all staff, whatever the filters.
+    Staff → All School Staff: the whole workforce in one directory, grouped by staff category (Management Team, Academic
+    Staff, Administrative & Support Staff). One full-width row per staff record (each person once): name, job title or
+    position, department and roles (Head of Department, KG class teaching team), contact and actions. Names open the
+    person's existing profile. The tiles count all staff; the category bar counts the staff matching the other filters.
 *@
 @{
     ViewData["Title"] = "All School Staff";
@@ -17,6 +18,9 @@
     roleOptions.AddRange(ManagementPositions.All.Select(p => (p.ToString(), ManagementPositions.Name(p))));
     string? RoleName(string? value) => roleOptions.FirstOrDefault(r => r.Value == value).Label;
     string CategoryIcon(StaffCategory c) => c switch { StaffCategory.Academic => "graduation-cap", StaffCategory.Management => "crown", _ => "briefcase" };
+    StaffCategory[] GroupOrder = [StaffCategory.Management, StaffCategory.Academic, StaffCategory.Support];
+    string GroupName(StaffCategory c) => c switch { StaffCategory.Management => "Management Team", StaffCategory.Academic => "Academic Staff", _ => "Administrative & Support Staff" };
+    string ShortName(StaffCategory c) => c switch { StaffCategory.Management => "Management", StaffCategory.Academic => "Academic", _ => "Administrative & Support" };
 }
 <span data-refresh-on-save hidden></span>
 
@@ -101,6 +105,15 @@
         <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
     </form>
 
+    @* Category bar: counts of the staff matching the other filters; choosing one keeps search and filters. *@
+    <nav class="segmented dir-cats" aria-label="Staff category">
+        <a href="@Link("category", null)" aria-current="@(StaffCategories.Parse(q.Category) is null ? "true" : "false")">@Ui.Icon("users", "icon--sm")All Staff <span class="count num">@d.Matching.Values.Sum()</span></a>
+        @foreach (var c in GroupOrder)
+        {
+            <a href="@Link("category", StaffCategories.Slug(c))" aria-current="@(StaffCategories.Parse(q.Category) == c ? "true" : "false")">@Ui.Icon(CategoryIcon(c), "icon--sm")@ShortName(c) <span class="count num">@d.Matching[c]</span></a>
+        }
+    </nav>
+
     <div class="results-bar">
         <div class="results-bar__info">
             <span><strong class="num">@d.Staff.Count</strong> @(q.HasFilters ? $"of {k.Total} staff match" : d.Staff.Count == 1 ? "staff member" : "staff members")</span>
@@ -151,57 +164,83 @@
     }
     else
     {
-        <div class="leader-grid dir-grid">
-            @foreach (var s in d.Staff)
+        @* One section per staff category (Management Team, Academic, Administrative & support), each person once, as a full-width row. *@
+        <div class="dir-groups">
+            @foreach (var c in GroupOrder)
             {
-                var tone = Ui.Tone(s.FullName);
-                <article class="leader-card leader-card--@tone dir-card" aria-labelledby="sd-@s.Id">
-                    <div class="leader-card__head">
-                        <span class="avatar avatar--lg avatar--@tone" aria-hidden="true">@Ui.Initials(s.FullName)</span>
-                        <div class="leader-card__who">
-                            <h3 class="leader-card__name" id="sd-@s.Id" dir="auto"><a class="stretched" href="@s.ProfileHref" title="Open the profile of @s.FullName">@s.FullName</a></h3>
-                            <span class="leader-card__since" title="@(s.JobTitle ?? "No job title")">@Ui.Icon("briefcase", "icon--sm")<span class="dir-card__ellipsis">@(s.JobTitle ?? "No job title")</span></span>
-                            <span class="leader-card__since">@Ui.Icon("layers", "icon--sm")<span class="dir-card__ellipsis">@(s.Department ?? (s.IsManagement ? "Management Team" : "No department"))</span></span>
-                        </div>
+                var people = d.Staff.Where(s => s.Category == c).ToList();
+                if (people.Count == 0) { continue; }
+                var slug = StaffCategories.Slug(c);
+                <section class="dir-group dir-group--@slug" aria-labelledby="dg-@slug">
+                    <header class="dir-group__head">
+                        <span class="dir-group__icon">@Ui.Icon(CategoryIcon(c))</span>
+                        <h2 class="dir-group__title" id="dg-@slug">@GroupName(c)</h2>
+                        <span class="dir-group__count num">@Ui.Plural(people.Count, "member", "members")</span>
+                    </header>
+                    <div class="dir-rows">
+                        @foreach (var s in people)
+                        {
+                            var tone = Ui.Tone(s.FullName);
+                            var noPosition = s.IsManagement && s.Position is null && (s.JobTitle is null || s.JobTitle == "Management Team");
+                            var title = noPosition ? null : s.JobTitle;
+                            // The position is already in the Position column; other roles (HOD, KG teaching team) sit with the department.
+                            var roles = s.Roles.Where(r => !string.Equals(r.Label, title, StringComparison.OrdinalIgnoreCase)).ToList();
+                            <article class="dir-row" aria-labelledby="sd-@s.Id">
+                                <div class="dir-row__who">
+                                    <span class="avatar avatar--@tone" aria-hidden="true">@Ui.Initials(s.FullName)</span>
+                                    <div class="dir-row__id">
+                                        <h3 class="dir-row__name" id="sd-@s.Id" dir="auto"><a class="stretched" href="@s.ProfileHref" title="Open the profile of @s.FullName">@s.FullName</a></h3>
+                                        <span class="dir-badge dir-badge--@slug">@Ui.Icon(CategoryIcon(c), "icon--sm")@StaffCategories.Name(c)</span>
+                                    </div>
+                                </div>
+                                <div class="dir-row__field dir-row__field--job">
+                                    <span class="dir-row__label">@(s.IsManagement ? "Position" : "Job title")</span>
+                                    <span class="dir-row__value@(title is null ? " is-empty" : "")" title="@(title ?? "")">@(title ?? (s.IsManagement ? "No position yet" : "Not set"))</span>
+                                </div>
+                                <div class="dir-row__field dir-row__field--dept">
+                                    <span class="dir-row__label">@(roles.Count > 0 ? "Department / role" : "Department")</span>
+                                    <span class="dir-row__value@(s.Department is null && !s.IsManagement ? " is-empty" : "")">@(s.Department ?? (s.IsManagement ? "Management Team" : "No department"))</span>
+                                    @if (roles.Count > 0)
+                                    {
+                                        <span class="dir-row__roles">
+                                            @foreach (var r in roles)
+                                            {
+                                                <span class="dir-badge dir-badge--@r.Tone" title="@r.Label">@Ui.Icon(r.Icon, "icon--sm")<span>@r.Label</span></span>
+                                            }
+                                        </span>
+                                    }
+                                </div>
+                                <div class="dir-row__field dir-row__field--contact">
+                                    <span class="dir-row__label">Contact</span>
+                                    @if (!string.IsNullOrEmpty(s.ContactNumber))
+                                    {
+                                        <a class="dir-row__contact" href="tel:@s.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")<span>@s.ContactNumber</span></a>
+                                    }
+                                    else if (!string.IsNullOrEmpty(s.Email))
+                                    {
+                                        <a class="dir-row__contact" href="mailto:@s.Email" dir="ltr">@Ui.Icon("send", "icon--sm")<span>@s.Email</span></a>
+                                    }
+                                    else
+                                    {
+                                        <span class="dir-row__contact is-empty">@Ui.Icon("phone", "icon--sm")<span>No phone</span></span>
+                                    }
+                                </div>
+                                <div class="row-actions dir-row__actions">
+                                    @if (s.Teaches)
+                                    {
+                                        <a class="icon-btn icon-btn--primary" href="/timetable/teachers/@s.Id" title="Timetable" aria-label="Timetable of @s.FullName">@Ui.Icon("calendar")</a>
+                                        <a class="icon-btn icon-btn--primary" href="/workload/teacher/@s.Id" title="Workload" aria-label="Workload of @s.FullName">@Ui.Icon("chart")</a>
+                                    }
+                                    else
+                                    {
+                                        <a class="icon-btn icon-btn--primary" href="/management/tasks/create?memberId=@s.Id" data-modal title="New task" aria-label="New task for @s.FullName">@Ui.Icon("plus")</a>
+                                    }
+                                    <a class="icon-btn icon-btn--primary" href="@s.EditHref" data-modal title="Edit" aria-label="Edit @s.FullName">@Ui.Icon("pencil")</a>
+                                </div>
+                            </article>
+                        }
                     </div>
-                    <div class="dir-card__badges">
-                        @* A Management Team member's position badge already says so; the category badge is for everyone else. *@
-                        @if (!(s.IsManagement && s.Position is not null))
-                        {
-                            <span class="dir-badge dir-badge--@StaffCategories.Slug(s.Category)">@Ui.Icon(CategoryIcon(s.Category), "icon--sm")@StaffCategories.Name(s.Category)</span>
-                        }
-                        @foreach (var r in s.Roles)
-                        {
-                            <span class="dir-badge dir-badge--@r.Tone" title="@r.Label">@Ui.Icon(r.Icon, "icon--sm")<span>@r.Label</span></span>
-                        }
-                    </div>
-                    <div class="leader-card__foot">
-                        @if (!string.IsNullOrEmpty(s.ContactNumber))
-                        {
-                            <a class="leader-card__contact" href="tel:@s.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")<span>@s.ContactNumber</span></a>
-                        }
-                        else if (!string.IsNullOrEmpty(s.Email))
-                        {
-                            <a class="leader-card__contact" href="mailto:@s.Email" dir="ltr">@Ui.Icon("send", "icon--sm")<span>@s.Email</span></a>
-                        }
-                        else
-                        {
-                            <span class="leader-card__contact is-empty">@Ui.Icon("phone", "icon--sm")<span>No phone</span></span>
-                        }
-                        <div class="row-actions">
-                            @if (s.Teaches)
-                            {
-                                <a class="icon-btn icon-btn--primary" href="/timetable/teachers/@s.Id" title="Timetable" aria-label="Timetable of @s.FullName">@Ui.Icon("calendar")</a>
-                                <a class="icon-btn icon-btn--primary" href="/workload/teacher/@s.Id" title="Workload" aria-label="Workload of @s.FullName">@Ui.Icon("chart")</a>
-                            }
-                            else
-                            {
-                                <a class="icon-btn icon-btn--primary" href="/management/tasks/create?memberId=@s.Id" data-modal title="New task" aria-label="New task for @s.FullName">@Ui.Icon("plus")</a>
-                            }
-                            <a class="icon-btn icon-btn--primary" href="@s.EditHref" data-modal title="Edit" aria-label="Edit @s.FullName">@Ui.Icon("pencil")</a>
-                        </div>
-                    </div>
-                </article>
+                </section>
             }
         </div>
     }

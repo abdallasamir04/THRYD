@@ -18,6 +18,7 @@
         <p class="page-sub">Tasks the Management Team assigns to any staff member, with a reviewer, deadline and files. Separate from academic staff workload.</p>
     </div>
     <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/tasks">@Ui.Icon("list-checks")All school tasks</a>
         <a class="btn btn--secondary" href="/management/leadership">@Ui.Icon("crown")School Leadership</a>
         <partial name="_Download" model='DownloadLink.Report("/management/tasks/pdf")' />
         <a class="btn btn--primary" href="/management/tasks/create@(q.MemberId is { } mid ? $"?memberId={mid}" : "")" data-modal>@Ui.Icon("plus")New task</a>

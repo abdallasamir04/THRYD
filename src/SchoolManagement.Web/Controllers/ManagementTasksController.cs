@@ -132,9 +132,9 @@ public class ManagementTasksController(IManagementTaskService tasks, ICurrentUse
         var task = await tasks.GetAsync(id, ct);
         var result = await tasks.DeleteAsync(id, ct);
         if (!result.Succeeded) return Failure(result.Errors[0].Value, 404);
-        if (IsAjax) return AjaxSuccess($"Task \"{task?.Title}\" was deleted.", IsDetailsReferer(id) ? "/management/tasks" : null);
+        if (IsAjax) return AjaxSuccess($"Task \"{task?.Title}\" was deleted.", IsDetailsReferer(id) ? TasksController.Url : null);
         Toast($"Task \"{task?.Title}\" was deleted.");
-        return IsDetailsReferer(id) ? Redirect("/management/tasks") : RedirectBack();
+        return IsDetailsReferer(id) ? Redirect(TasksController.Url) : RedirectBack();
     }
 
     /// <summary>
@@ -211,12 +211,13 @@ public class ManagementTasksController(IManagementTaskService tasks, ICurrentUse
         return RedirectBack();
     }
 
-    /// <summary>Non-AJAX posts return to the page they came from (Tasks page or a member profile), only within this site.</summary>
+    /// <summary>Non-AJAX posts return to the page they came from (a Tasks page or a member profile), only within this site.</summary>
     private IActionResult RedirectBack()
     {
         var referer = Request.Headers.Referer.ToString();
         if (Uri.TryCreate(referer, UriKind.Absolute, out var uri) && uri.Host == Request.Host.Host
-            && uri.AbsolutePath.StartsWith("/management", StringComparison.OrdinalIgnoreCase)
+            && (uri.AbsolutePath.StartsWith("/management", StringComparison.OrdinalIgnoreCase)
+                || uri.AbsolutePath.TrimEnd('/').Equals(TasksController.Url, StringComparison.OrdinalIgnoreCase))
             && !uri.AbsolutePath.EndsWith("/edit", StringComparison.OrdinalIgnoreCase)
             && !uri.AbsolutePath.EndsWith("/create", StringComparison.OrdinalIgnoreCase))
             return LocalRedirect(uri.PathAndQuery);

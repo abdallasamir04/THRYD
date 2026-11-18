@@ -101,7 +101,7 @@ public class ManagementController(IManagementService members, IManagementTaskSer
 
     private static IReadOnlyList<ManagementMemberRow> Filter(IEnumerable<ManagementMemberRow> list, string? position)
     {
-        if (position == "none") list = list.Where(m => m.Position is null);
+        if (position == "none") list = list.Where(m => !m.HasPosition);
         else if (Enum.TryParse<ManagementPosition>(position, out var p)) list = list.Where(m => m.Position == p);
         return list.ToList();
     }
@@ -152,6 +152,8 @@ public class ManagementController(IManagementService members, IManagementTaskSer
         var model = new ManagementMemberFormModel { Position = position is { } p && Enum.IsDefined(p) ? p : null };
         model.Holders = await members.PositionHoldersAsync(null, ct);
         if (model.Position is { } held && model.Holders.ContainsKey(held)) model.Position = null;
+        model.PositionChoice = PositionChoices.Of(model.Position, null);
+        model.CustomPositions = await members.CustomPositionsAsync(null, ct);
         return PageOrPartial("MemberForm", model);
     }
 
@@ -159,13 +161,17 @@ public class ManagementController(IManagementService members, IManagementTaskSer
     public async Task<IActionResult> Create(ManagementMemberFormModel model, CancellationToken ct)
     {
         model.Id = null;
-        if (ModelState.IsValid)
+        var input = model.ToInput();
+        if (input is null) ModelState.AddModelError(nameof(model.Position), "Choose a position from the list.");
+        if (ModelState.IsValid && input is not null)
         {
-            var result = await members.CreateAsync(model.ToInput(), ct);
+            var result = await members.CreateAsync(input, ct);
             if (result.Succeeded) return Saved($"{model.FullName.Trim()} was added to the Management Team.", $"/management/members/{result.EntityId}");
             AddErrors(result);
         }
         model.Holders = await members.PositionHoldersAsync(null, ct);
+        model.CustomPositions = await members.CustomPositionsAsync(null, ct);
+        model.PositionChoice ??= PositionChoices.Of(model.Position, null);
         return FormView("MemberForm", model);
     }
 
@@ -204,10 +210,12 @@ public class ManagementController(IManagementService members, IManagementTaskSer
             Id = m.Id,
             FullName = m.FullName,
             Position = m.Position,
+            PositionChoice = PositionChoices.Of(m.Position, m.CustomPositionId),
             ContactNumber = m.ContactNumber,
             Email = m.Email,
             AppointedOn = m.AppointedOn,
             Holders = await members.PositionHoldersAsync(id, ct),
+            CustomPositions = await members.CustomPositionsAsync(id, ct),
         });
     }
 
@@ -215,13 +223,17 @@ public class ManagementController(IManagementService members, IManagementTaskSer
     public async Task<IActionResult> Edit(int id, ManagementMemberFormModel model, CancellationToken ct)
     {
         model.Id = id;
-        if (ModelState.IsValid)
+        var input = model.ToInput();
+        if (input is null) ModelState.AddModelError(nameof(model.Position), "Choose a position from the list.");
+        if (ModelState.IsValid && input is not null)
         {
-            var result = await members.UpdateAsync(id, model.ToInput(), ct);
+            var result = await members.UpdateAsync(id, input, ct);
             if (result.Succeeded) return Saved($"{model.FullName.Trim()} was updated.", null);
             AddErrors(result);
         }
         model.Holders = await members.PositionHoldersAsync(id, ct);
+        model.CustomPositions = await members.CustomPositionsAsync(id, ct);
+        model.PositionChoice ??= PositionChoices.Of(model.Position, null);
         return FormView("MemberForm", model);
     }
 

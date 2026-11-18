@@ -189,7 +189,6 @@ public class PdfExportTests(DbFixture fx)
             ("/staff/departments/heads", "/staff/departments/heads/pdf"),
             ("/staff/members", "/staff/members/pdf"),
             ("/students", "/students/pdf"),
-            ("/classes", "/classes/pdf"),
             ("/management/leadership", "/management/members/pdf"),
             ("/management/tasks", "/management/tasks/pdf"),
             ("/pe", "/pe/pdf"),
@@ -203,6 +202,12 @@ public class PdfExportTests(DbFixture fx)
             Assert.EndsWith(".pdf", pdf.FileName);
             Has(pdf, "THRYD", "Exported", "Page 1 of");
         }
+
+        // The classes summary (Classes → Download Summary) is the one A4 portrait report among these buttons.
+        Assert.Contains("data-download=\"/classes/pdf\"", await client.GetStringAsync("/classes"));
+        var summary = await DownloadAsync(client, "/classes/pdf");
+        Assert.False(summary.Landscape);
+        Has(summary, "THRYD", "Classes Summary", "Academic stages", "Exported", "Page 1 of");
 
         // Filters carry over: the staff list filtered by a search finds just that person.
         var only = await DownloadAsync(client, "/staff/members/pdf?search=" + Uri.EscapeDataString((await NameOfTeacherAsync(teacher))));

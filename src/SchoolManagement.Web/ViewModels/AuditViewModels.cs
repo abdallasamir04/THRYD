@@ -196,9 +196,10 @@ public sealed class OperationsIndicators
 {
     public required DateOnly Date { get; init; }
     public required IReadOnlyDictionary<DutyStatus, int> DutyStatus { get; init; }
-    public required double? AverageRating { get; init; }
-    public required int RatedAssignments { get; init; }
     public required ArrivalSummary Arrivals { get; init; }
+
+    /// <summary>Staff Attendance today: Present / Late / Absent records of the active staff (teachers and management).</summary>
+    public required StaffAttendanceToday Staff { get; init; }
 
     /// <summary>Coverage per section for the day: Morning, Midday, Dismissal (covered / total) and Activities (scheduled).</summary>
     public IReadOnlyList<DutyCoverage> Coverage { get; init; } = [];

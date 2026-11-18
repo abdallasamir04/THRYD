@@ -25,20 +25,29 @@ public class DepartmentsController(IDepartmentService departments, IPeService pe
         return IsAjax ? PartialView("_Grid", model) : View(model);
     }
 
-    /// <summary>Add department: a new academic department with its own name and details (no staff or HOD yet).</summary>
+    /// <summary>Add department: the name and, optionally, its HOD (an academic staff member who is not an HOD elsewhere).</summary>
     [HttpGet("create")]
-    public IActionResult Create() => PageOrPartial("Create", new DepartmentCreateModel());
+    public async Task<IActionResult> Create(CancellationToken ct) =>
+        PageOrPartial("Create", new DepartmentCreateModel { Candidates = await departments.NewDepartmentHodCandidatesAsync(ct) });
 
     [HttpPost("create"), ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(DepartmentCreateModel model, CancellationToken ct)
     {
         if (ModelState.IsValid)
         {
-            var result = await departments.CreateAsync(model.Name, model.Description, model.SubcategoryLabel, model.SubjectLabel, ct);
+            // The HOD's name is read before saving: once appointed, they are no longer a candidate.
+            var head = model.HeadTeacherId is { } hid ? (await departments.NewDepartmentHodCandidatesAsync(ct)).FirstOrDefault(c => c.Id == hid)?.FullName : null;
+            var result = await departments.CreateWithHeadAsync(model.Name, model.HeadTeacherId, ct);
             if (result.Succeeded)
-                return Saved($"{TextNormalizer.CleanText(model.Name)} was added. Open it to add members and assign an HOD.", result.EntityId!.Value, "/staff/departments");
+            {
+                var name = TextNormalizer.CleanText(model.Name);
+                return Saved(model.HeadTeacherId is null
+                    ? $"{name} was added. Open it to add members and assign an HOD."
+                    : $"{name} was added with {head} as HOD.", result.EntityId!.Value, "/staff/departments");
+            }
             AddErrors(result);
         }
+        model.Candidates = await departments.NewDepartmentHodCandidatesAsync(ct);
         return FormView("Create", model);
     }
 

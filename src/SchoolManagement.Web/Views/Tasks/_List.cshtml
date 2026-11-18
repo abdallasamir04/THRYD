@@ -1,0 +1,18 @@
+@model TaskIndexViewModel
+@*
+    The tabs (counts follow the current filters; a task is in at most one of Overdue / Due Today / Upcoming / Completed)
+    and the task list. Reloaded in place when a filter changes, so the counts stay in step.
+*@
+@{
+    var q = Model.Query;
+    var tabs = Model.Tabs!;
+}
+<nav class="task-tabs" aria-label="Task tabs">
+    @foreach (var (key, label, icon) in TaskTabs.All)
+    {
+        var n = tabs.Of(key);
+        <a href="@Context.Request.WithQuery(("tab", key), ("page", null))" aria-current="@(q.Tab == key ? "true" : "false")"
+           class="@(key == "overdue" && n > 0 ? "is-alert" : "")">@Ui.Icon(icon, "icon--sm")@label <span class="count num">@n</span></a>
+    }
+</nav>
+<partial name="~/Views/ManagementTasks/_TaskList.cshtml" model="Model" />

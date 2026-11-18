@@ -7,7 +7,7 @@ namespace SchoolManagement.Web.Services;
 
 public sealed record ClassRow(int Id, string Name, int SortOrder, int Capacity, bool IsActive, int StudentCount, DateTime CreatedAt, DateTime UpdatedAt);
 
-public sealed record ClassOption(int Id, string Name, bool IsActive, int StudentCount = 0, int Capacity = 25);
+public sealed record ClassOption(int Id, string Name, bool IsActive, int StudentCount = 0, int Capacity = SchoolClass.DefaultCapacity);
 
 public interface IClassService
 {
@@ -81,16 +81,30 @@ public static class ClassNumbering
             .DefaultIfEmpty(0).Max() + 1;
 
     /// <summary>
+    /// The section of a Pre-K class: the letters after "PreK" ("PreKB" → B); a bare "PreK" is section A.
+    /// Null for names that are not Pre-K (ClassStages.GradeOf decides).
+    /// </summary>
+    public static string? PreKSection(string? name)
+    {
+        if (ClassStages.GradeOf(name) is not { Code: ClassStages.PreKCode }) return null;
+        var clean = TextNormalizer.CleanText(name).ToUpperInvariant().Replace(" ", "").Replace("-", "");
+        return clean.Length == ClassStages.PreKCode.Length ? "A" : clean[ClassStages.PreKCode.Length..];
+    }
+
+    /// <summary>A Pre-K class name: "PreK" + section, like KG1A for Kindergarten.</summary>
+    public static string PreKName(string section) => "PreK" + section;
+
+    /// <summary>
     /// Next section of a grade: the letter after the grade's highest section (A, B → C; Z → AA), or A for a
-    /// grade without classes. Null when the three-letter limit is used up (ZZZ).
+    /// grade without classes. Null when the three-letter limit is used up (ZZZ). Pre-K (stage PREK) counts its
+    /// sections the same way, with a bare "PreK" as A.
     /// </summary>
     public static string? NextSection(IEnumerable<string> existingNames, string stage, int grade)
     {
-        var highest = existingNames.Select(Parse)
-            .Where(p => p is { } x && x.Stage == stage && x.Number == grade)
-            .Select(p => p!.Value.Section)
-            .OrderBy(s => s.Length).ThenBy(s => s, StringComparer.Ordinal)
-            .LastOrDefault();
+        var sections = stage == ClassStages.PreKCode
+            ? existingNames.Select(PreKSection).OfType<string>()
+            : existingNames.Select(Parse).Where(p => p is { } x && x.Stage == stage && x.Number == grade).Select(p => p!.Value.Section);
+        var highest = sections.OrderBy(s => s.Length).ThenBy(s => s, StringComparer.Ordinal).LastOrDefault();
         if (highest is null) return "A";
 
         var chars = highest.ToCharArray();
@@ -144,7 +158,7 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
     }
 
     public Task<ServiceResult> CreateAsync(string name, int? sortOrder, bool isActive, CancellationToken ct = default) =>
-        CreateAsync(name, sortOrder, 25, isActive, ct);
+        CreateAsync(name, sortOrder, SchoolClass.DefaultCapacity, isActive, ct);
 
     public async Task<ServiceResult> CreateAsync(string name, int? sortOrder, int capacity, bool isActive, CancellationToken ct = default)
     {
@@ -206,6 +220,11 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
 
     public async Task<string?> NextNameInGradeAsync(string stage, int grade, CancellationToken ct = default)
     {
+        if (IsPreK(stage))
+        {
+            var all = await db.Classes.AsNoTracking().Select(c => c.Name).ToListAsync(ct);
+            return ClassNumbering.NextSection(all, ClassStages.PreKCode, 0) is { } next ? ClassNumbering.PreKName(next) : null;
+        }
         var code = ClassNumbering.NormalizeStage(stage);
         if (code is null || grade is < 1 or > 999) return null;
         var names = await db.Classes.AsNoTracking().Select(c => c.Name).ToListAsync(ct);
@@ -214,6 +233,7 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
 
     public async Task<ServiceResult> CreateInGradeAsync(string stage, int grade, string? section, int capacity, bool isActive, CancellationToken ct = default)
     {
+        if (IsPreK(stage)) return await CreatePreKAsync(section, capacity, isActive, ct);
         var result = ServiceResult.Ok();
         var code = ClassNumbering.NormalizeStage(stage);
         var typed = string.IsNullOrWhiteSpace(section) ? null : ClassNumbering.NormalizeSection(section);
@@ -233,6 +253,35 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
         var sec = typed ?? ClassNumbering.NextSection(names, code!, grade);
         if (sec is null) return ServiceResult.Fail("Section", "Every automatic section letter is used in this grade. Enter a section.");
         return await AddNumberedClassAsync(tx, $"{code}{grade}{sec}", capacity, isActive, ct);
+    }
+
+    private static bool IsPreK(string? stage) =>
+        string.Equals(TextNormalizer.CleanText(stage).Replace("-", ""), ClassStages.PreKCode, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A Pre-K class: "PreK" + the next section letter (a bare "PreK" is A, so the next is PreKB), or the section typed.
+    /// Same rules, lock and duplicate check as the KG / Grade classes.
+    /// </summary>
+    private async Task<ServiceResult> CreatePreKAsync(string? section, int capacity, bool isActive, CancellationToken ct)
+    {
+        var result = ServiceResult.Ok();
+        var typed = string.IsNullOrWhiteSpace(section) ? null : ClassNumbering.NormalizeSection(section);
+        if (!string.IsNullOrWhiteSpace(section) && typed is null)
+            result.AddError("Section", "Enter a section of 1–3 letters (A–Z), e.g. C, or leave it empty for the next letter.");
+        if (capacity is < 1 or > 1000) result.AddError("Capacity", "Enter a capacity between 1 and 1,000.");
+        if (!result.Succeeded) return result;
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlRawAsync(
+            "EXEC sp_getapplock @Resource = N'classes:numbering', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000", ct);
+
+        var names = await db.Classes.AsNoTracking().Select(c => c.Name).ToListAsync(ct);
+        var sec = typed ?? ClassNumbering.NextSection(names, ClassStages.PreKCode, 0);
+        if (sec is null) return ServiceResult.Fail("Section", "Every automatic section letter is used in Pre-K. Enter a section.");
+        // "PreK" already is section A: PreKA would be the same class under another name.
+        var taken = names.FirstOrDefault(n => ClassNumbering.PreKSection(n) == sec);
+        if (taken is not null) return DuplicateName(taken);
+        return await AddNumberedClassAsync(tx, ClassNumbering.PreKName(sec), capacity, isActive, ct);
     }
 
     /// <summary>Inserts a class whose name was calculated under the numbering lock, then commits.</summary>
@@ -255,7 +304,7 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
     }
 
     public Task<ServiceResult> UpdateAsync(int id, string name, int? sortOrder, bool isActive, CancellationToken ct = default) =>
-        UpdateAsync(id, name, sortOrder, 25, isActive, ct);
+        UpdateAsync(id, name, sortOrder, SchoolClass.DefaultCapacity, isActive, ct);
 
     public async Task<ServiceResult> UpdateAsync(int id, string name, int? sortOrder, int capacity, bool isActive, CancellationToken ct = default)
     {
@@ -379,7 +428,7 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
     private static (int Stage, int Number, string Tail) SortKey(string name)
     {
         var clean = TextNormalizer.CleanText(name).ToUpperInvariant().Replace(" ", "").Replace("-", "");
-        if (clean == "PREK") return (0, 0, "");
+        if (ClassNumbering.PreKSection(clean) is { } prek) return (0, 0, clean == "PREK" ? "" : prek);
         if (ClassNumbering.Parse(clean) is { } p) return (p.Stage == "KG" ? 1 : 2, p.Number, p.Section);
         return (3, 0, clean);
     }

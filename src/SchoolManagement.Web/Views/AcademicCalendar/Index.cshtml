@@ -1,7 +1,8 @@
 @model SchoolCalendarIndexModel
 @*
-    School Calendar (formerly Academic Calendar): the year's teachers' calendar, quarter by quarter and month by
-    month, as printed by the school. Below it, the academic years and their 8-week quarters (unchanged).
+    School Calendar (formerly Academic Calendar): the year's teachers' calendar as one continuous run of months, side by
+    side in date order, as printed by the school. The first and last day of every quarter are highlighted on their dates
+    and listed under their month. Below it, the academic years and their 8-week quarters (unchanged).
 *@
 @{
     ViewData["Title"] = "School Calendar";
@@ -23,7 +24,7 @@
         <p class="page-sub">
             @if (cal.YearName is not null)
             {
-                <text>@Model.SchoolName — @cal.YearName.Replace("-", "/") Academic Year Teachers’ Calendar, quarter by quarter. Select a date or an event to see or change it.</text>
+                <text>@Model.SchoolName — @cal.YearName.Replace("-", "/") Academic Year Teachers’ Calendar, month by month. Select a date or an event to see or change it.</text>
             }
             else
             {
@@ -72,51 +73,28 @@
     <p class="notice notice--warning sc-confirm-note">@Ui.Icon("alert-circle")<span><strong>@cal.ToConfirm @(cal.ToConfirm == 1 ? "entry needs" : "entries need") the school’s confirmation</strong> (marked “To confirm”): the printed date or wording is not clear. Open one to set its date.</span></p>
 }
 
-@if (cal.YearId is not null && cal.Quarters.Count > 0)
+@if (cal.YearId is not null)
 {
-    <nav class="sc-qnav" aria-label="Quarters">
-        @foreach (var q in cal.Quarters)
-        {
-            <a class="sc-qnav__link sc-q@(q.Number)" href="#q@(q.Number)">
-                <strong>Q@(q.Number)</strong>
-                <span>@(q.Start is null ? "Dates not set" : $"{q.Start.Value.ToString("d MMM", c)} – {q.End!.Value.ToString("d MMM", c)}")</span>
-            </a>
-        }
-    </nav>
-
-    @foreach (var q in cal.Quarters)
+    @if (cal.Months.Count == 0)
     {
-        <section class="sc-quarter sc-q@(q.Number)" id="q@(q.Number)" aria-labelledby="q@(q.Number)-title">
-            <header class="sc-quarter__head">
-                <span class="sc-quarter__badge" aria-hidden="true">Q@(q.Number)</span>
-                <div class="sc-quarter__text">
-                    <h2 class="sc-quarter__title" id="q@(q.Number)-title">Quarter @q.Number</h2>
-                    <p class="sc-quarter__dates">@(q.Start is null ? "School calendar dates not set" : $"Starts {q.Start.Value.ToString("dddd d MMMM yyyy", c)} · ends {q.End!.Value.ToString("dddd d MMMM yyyy", c)}")</p>
-                </div>
-                <a class="btn btn--secondary btn--sm" href="/school-calendar/quarters/@q.Id/edit" data-modal>@Ui.Icon("pencil", "icon--sm")Quarter dates</a>
-            </header>
-            @if (q.Months.Count == 0)
+        <div class="card empty empty--boxed sc-nomonths"><span class="empty__icon">@Ui.Icon("calendar")</span><p class="empty__title">No quarter dates yet</p><p class="empty__text">Set the first and last day of each quarter in “Academic years and 8-week quarters” below to show the year’s months here.</p></div>
+    }
+    else
+    {
+        <div class="sc-months">
+            @foreach (var m in cal.Months)
             {
-                <div class="empty"><span class="empty__icon">@Ui.Icon("calendar")</span><p class="empty__title">No school calendar dates yet</p><p class="empty__text">Set the first and last day of @q.Name as printed in the school calendar to show its months here.</p></div>
+                <partial name="_Month" model="(m, cal.YearId!.Value)" />
             }
-            else
-            {
-                <div class="sc-months">
-                    @foreach (var m in q.Months)
-                    {
-                        <partial name="_Month" model="(m, cal.YearId!.Value, q.Number)" />
-                    }
-                </div>
-            }
-        </section>
+        </div>
     }
 
     @if (cal.Unplaced.Count > 0)
     {
         <section class="card sc-unplaced" aria-labelledby="sc-unplaced-title">
-            <div class="card__head"><h2 class="card__title" id="sc-unplaced-title">@Ui.Icon("inbox")Outside the quarters or hidden</h2><span class="badge badge--neutral">@cal.Unplaced.Count</span></div>
+            <div class="card__head"><h2 class="card__title" id="sc-unplaced-title">@Ui.Icon("inbox")Outside the calendar months or hidden</h2><span class="badge badge--neutral">@cal.Unplaced.Count</span></div>
             <div class="card__body">
-                <p class="hint">These entries are hidden, or their month is outside every quarter’s school calendar dates. Nothing is left out of the calendar without being listed here.</p>
+                <p class="hint">These entries are hidden, or their month is outside the year’s quarter dates. Nothing is left out of the calendar without being listed here.</p>
                 <ol class="sc-events">
                     @foreach (var r in cal.Unplaced)
                     {
@@ -135,7 +113,7 @@
         @Ui.Icon("chevron-down", "sc-admin__chevron")
     </summary>
     <div class="card__body sc-admin__body">
-        <p class="hint">Each academic year has four quarters of exactly 8 school weeks (Sunday–Thursday), worked out from each quarter’s start and end dates. The school calendar above groups its months by the quarters’ own printed dates, set in the same form.</p>
+        <p class="hint">Each academic year has four quarters of exactly 8 school weeks (Sunday–Thursday), worked out from each quarter’s start and end dates. The school calendar above marks the start and end of every quarter using the quarters’ own printed dates, set in the same form.</p>
         <form class="bl-year-form" action="/school-calendar/years" method="post" data-ajax-form data-loading>
             @Html.AntiForgeryToken()
             <input class="input" name="Name" maxlength="50" required placeholder="e.g. 2026–2027" aria-label="Academic year name" />

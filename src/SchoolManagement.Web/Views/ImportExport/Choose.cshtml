@@ -1,0 +1,48 @@
+@*
+    Dashboard → Import from Excel: what to import (dialog, or a page without JavaScript). Each option opens the existing
+    import of that kind on Import / Export: template, upload, column mapping, preview, duplicate checks and the report.
+    Staff records are imported with the staff (teacher) import.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Import from Excel"; ViewData["Nav"] = "ImportExport"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <div class="modal__head">
+        <span class="modal__icon">@Ui.Icon("upload", "icon--lg")</span>
+        <div>
+            <h2 class="modal__title">Import from Excel</h2>
+            <p class="modal__sub">Choose what you want to import.</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+    <div class="modal__body">
+        <ul class="import-choice" aria-label="What to import">
+            <li>
+                <a class="import-choice__option" href="/import-export?kind=Students" data-autofocus>
+                    <span class="import-choice__icon">@Ui.Icon("graduation-cap", "icon--lg")</span>
+                    <span class="import-choice__text">
+                        <strong class="import-choice__title">Students</strong>
+                        <span class="import-choice__desc">Import student records.</span>
+                    </span>
+                    @Ui.Icon("chevron-right", "import-choice__go")
+                </a>
+            </li>
+            <li>
+                <a class="import-choice__option import-choice__option--staff" href="/import-export?kind=Teachers">
+                    <span class="import-choice__icon">@Ui.Icon("users", "icon--lg")</span>
+                    <span class="import-choice__text">
+                        <strong class="import-choice__title">Staff</strong>
+                        <span class="import-choice__desc">Import staff records.</span>
+                    </span>
+                    @Ui.Icon("chevron-right", "import-choice__go")
+                </a>
+            </li>
+        </ul>
+    </div>
+    <div class="modal__foot">
+        @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+        else { <a class="btn btn--secondary" href="/">Cancel</a> }
+    </div>
+</div>

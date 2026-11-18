@@ -450,6 +450,7 @@ public partial class HttpTests
             Assert.Equal(HttpStatusCode.UnprocessableEntity, duplicate.StatusCode);
             Assert.Contains("A department named \"Math\" already exists.", WebUtility.HtmlDecode(await duplicate.Content.ReadAsStringAsync()));
 
+            // Only the name (and an optional HOD) come from Add Department; stray description / label values are ignored.
             Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, "/staff/departments/create", token, new()
             {
                 ["Name"] = "  " + name + " ", ["Description"] = "Maps, places and people", ["SubcategoryLabel"] = "Strand",
@@ -461,7 +462,7 @@ public partial class HttpTests
             {
                 var d = await db.Departments.AsNoTracking().SingleAsync(x => x.Name == name);
                 id = d.Id;
-                Assert.Equal((TextNormalizer.NameKey(name), "Maps, places and people", "Strand"), (d.NormalizedName, d.Description, d.SubcategoryLabel));
+                Assert.Equal((TextNormalizer.NameKey(name), (string?)null, (string?)null), (d.NormalizedName, d.Description, d.SubcategoryLabel));
                 Assert.True(d.SortOrder > 15); // listed after the existing departments
                 // Nothing is created for it: no staff, HOD, subcategories or timetable sessions.
                 Assert.False(await db.StaffMembers.AnyAsync(s => s.DepartmentId == id));
@@ -486,6 +487,91 @@ public partial class HttpTests
             // Other tests count the fifteen existing departments.
             await using var db = fx.NewContext();
             await db.Departments.Where(d => d.Name.StartsWith("Geography ")).ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Add_department_has_only_name_and_optional_HOD_and_saves_the_chosen_HOD()
+    {
+        var client = fx.Factory.CreateClient();
+        var stamp = DbFixture.Unique();
+        int teacher, sitting, manager;
+        string teacherName = "HOD Candidate " + stamp;
+        await using (var db = fx.NewContext())
+        {
+            // A Geography teacher who heads nothing, the current HOD of department 12, and a Management Team member.
+            var t = await DbFixture.Teachers(db).CreateAsync(teacherName, "Geography Teacher", null, 12, null, null);
+            Assert.True(t.Succeeded);
+            teacher = t.EntityId!.Value;
+            // A sitting HOD of a temporary department of this test.
+            var temp = await DbFixture.Departments(db).CreateAsync("Geography Sitting " + stamp, null, null, null);
+            var st = await DbFixture.Teachers(db).CreateAsync("Sitting HOD " + stamp, "Geography Teacher", null, temp.EntityId!.Value, null, null);
+            sitting = st.EntityId!.Value;
+            Assert.True((await DbFixture.Departments(db).AssignHeadAsync(temp.EntityId!.Value, sitting, SchoolWeek.Today, null)).Succeeded);
+            var m = await DbFixture.Management(db).CreateAsync(new SchoolManagement.Web.Services.ManagementMemberInput { FullName = "Manager " + stamp });
+            manager = m.EntityId!.Value;
+        }
+        var nameA = "Geography Plain " + stamp;
+        var nameB = "Geography Headed " + stamp;
+        try
+        {
+            // The form: Department Name and HOD (Optional) only; candidates exclude current HODs and the Management Team.
+            var form = WebUtility.HtmlDecode(await client.GetStringAsync("/staff/departments/create"));
+            Assert.Contains("Department Name", form);
+            Assert.Contains("placeholder=\"e.g. Mathematics\"", form);
+            Assert.Contains("HOD (Optional)", form);
+            Assert.Contains("<option value=\"\">No HOD assigned</option>", form);
+            foreach (var gone in new[] { "name=\"Description\"", "name=\"SubcategoryLabel\"", "name=\"SubjectLabel\"" }) Assert.DoesNotContain(gone, form);
+            Assert.Contains($"<option value=\"{teacher}\"", form);
+            Assert.DoesNotContain($"<option value=\"{sitting}\"", form);
+            Assert.DoesNotContain($"<option value=\"{manager}\"", form);
+            var token = TokenPattern().Match(form).Groups[1].Value;
+
+            // Required and unique names.
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/staff/departments/create", token, new() { ["Name"] = "" })).StatusCode);
+            var duplicate = await PostAsync(client, "/staff/departments/create", token, new() { ["Name"] = "MATH", ["HeadTeacherId"] = teacher.ToString() });
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, duplicate.StatusCode);
+            Assert.Contains("A department named \"Math\" already exists.", WebUtility.HtmlDecode(await duplicate.Content.ReadAsStringAsync()));
+
+            // A current HOD or a Management Team member is refused, and nothing is created.
+            foreach (var who in new[] { sitting, manager })
+                Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/staff/departments/create", token, new() { ["Name"] = nameB, ["HeadTeacherId"] = who.ToString() })).StatusCode);
+            await using (var db = fx.NewContext()) Assert.False(await db.Departments.AnyAsync(d => d.Name == nameB));
+
+            // Without an HOD.
+            Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, "/staff/departments/create", token, new() { ["Name"] = nameA, ["HeadTeacherId"] = "" })).StatusCode);
+            // With an HOD: the teacher moves into the new department and is its current HOD from today.
+            var ok = await PostAsync(client, "/staff/departments/create", token, new() { ["Name"] = nameB, ["HeadTeacherId"] = teacher.ToString() });
+            Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+            Assert.Contains($"{nameB} was added with {teacherName} as HOD.", WebUtility.HtmlDecode(await ok.Content.ReadAsStringAsync()));
+
+            await using (var db = fx.NewContext())
+            {
+                var a = await db.Departments.AsNoTracking().SingleAsync(d => d.Name == nameA);
+                Assert.False(await db.DepartmentHeads.AnyAsync(h => h.DepartmentId == a.Id));
+                var b = await db.Departments.AsNoTracking().SingleAsync(d => d.Name == nameB);
+                var head = await db.DepartmentHeads.AsNoTracking().SingleAsync(h => h.DepartmentId == b.Id);
+                Assert.Equal((teacher, true, SchoolWeek.Today), (head.TeacherId, head.IsCurrent, head.StartDate));
+                var moved = await db.Teachers.AsNoTracking().SingleAsync(t => t.Id == teacher);
+                Assert.Equal((b.Id, (string?)null, (string?)null), (moved.DepartmentId!.Value, moved.Subcategory, moved.Subject));
+                Assert.Equal(1, await db.StaffMembers.CountAsync(s => s.FullName == teacherName)); // no new or duplicate staff record
+
+                // Shown on the department page, and the teacher is no longer offered (one department at a time).
+                var details = WebUtility.HtmlDecode(await client.GetStringAsync($"/staff/departments/{b.Id}"));
+                Assert.Contains(teacherName, details);
+                Assert.DoesNotContain("No HOD assigned.", details);
+                Assert.Contains("No HOD assigned.", WebUtility.HtmlDecode(await client.GetStringAsync($"/staff/departments/{a.Id}")));
+                Assert.DoesNotContain($"<option value=\"{teacher}\"", await client.GetStringAsync("/staff/departments/create"));
+            }
+        }
+        finally
+        {
+            // Other tests count the fifteen existing departments.
+            await using var db = fx.NewContext();
+            var ids = await db.Departments.Where(d => d.Name == nameA || d.Name == nameB || d.Name == "Geography Sitting " + stamp).Select(d => d.Id).ToListAsync();
+            await db.DepartmentHeads.Where(h => ids.Contains(h.DepartmentId)).ExecuteDeleteAsync();
+            await db.StaffMembers.Where(s => s.Id == teacher || s.Id == manager || s.Id == sitting).ExecuteDeleteAsync();
+            await db.Departments.Where(d => ids.Contains(d.Id)).ExecuteDeleteAsync();
         }
     }
 

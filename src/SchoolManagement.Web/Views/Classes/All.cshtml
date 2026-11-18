@@ -17,7 +17,7 @@
     </div>
     <div class="page-head__actions">
         <a class="btn btn--secondary" href="/classes">@Ui.Icon("layers")Stages</a>
-        <partial name="_Download" model='DownloadLink.Report("/classes/pdf")' />
+        <partial name="_Download" model='new DownloadLink("/classes/pdf", "Download Report", Portrait: true)' />
         <a class="btn btn--primary" href="/classes/create" data-modal>@Ui.Icon("plus")Add class</a>
     </div>
 </div>

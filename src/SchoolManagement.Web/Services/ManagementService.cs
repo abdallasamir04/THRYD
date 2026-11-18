@@ -7,22 +7,31 @@ using SchoolManagement.Web.Entities;
 namespace SchoolManagement.Web.Services;
 
 public sealed record ManagementMemberRow(int Id, string FullName, ManagementPosition? Position, string? ContactNumber, string? Email,
-    DateOnly? AppointedOn, DateTime CreatedAt, int OpenTasks, int OverdueTasks, int CompletedTasks)
+    DateOnly? AppointedOn, DateTime CreatedAt, int OpenTasks, int OverdueTasks, int CompletedTasks, int? CustomPositionId, string? CustomPosition)
 {
-    public string PositionName => ManagementPositions.Name(Position);
+    /// <summary>The leadership position's name, the custom position's title, or "No position assigned".</summary>
+    public string PositionName => Position is { } p ? ManagementPositions.Name(p) : CustomPosition ?? ManagementPositions.Name((ManagementPosition?)null);
+    public bool HasPosition => Position is not null || CustomPosition is not null;
 }
+
+/// <summary>A school-added Management Team position and its holder (null = vacant).</summary>
+public sealed record CustomPositionOption(int Id, string Title, string? Holder);
 
 public sealed record PositionSlot(ManagementPosition Position, ManagementMemberRow? Holder, DateOnly? Since = null);
 
 public sealed record PositionHistoryRow(int Id, ManagementPosition Position, int MemberId, string MemberName, DateOnly StartDate, DateOnly? EndDate,
     bool IsCurrent, string? EndReason, string? AssignedBy, DateTime AssignedAt);
 
-public sealed record ManagementMemberOption(int Id, string FullName, ManagementPosition? Position);
+public sealed record ManagementMemberOption(int Id, string FullName, ManagementPosition? Position, string? CustomPosition);
 
 public sealed class ManagementMemberInput
 {
     public string FullName { get; set; } = "";
     public ManagementPosition? Position { get; set; }
+    /// <summary>An existing school-added position (instead of <see cref="Position"/>).</summary>
+    public int? CustomPositionId { get; set; }
+    /// <summary>Not null: create this position and give it to the member (instead of the two above).</summary>
+    public string? NewPositionTitle { get; set; }
     public string? ContactNumber { get; set; }
     public string? Email { get; set; }
     public DateOnly? AppointedOn { get; set; }
@@ -36,6 +45,8 @@ public interface IManagementService
     Task<ManagementMemberRow?> GetAsync(int id, CancellationToken ct = default);
     Task<IReadOnlyList<ManagementMemberOption>> OptionsAsync(CancellationToken ct = default);
     Task<IReadOnlyDictionary<ManagementPosition, string>> PositionHoldersAsync(int? exceptMemberId, CancellationToken ct = default);
+    /// <summary>The school-added positions by title, with their holder other than <paramref name="exceptMemberId"/>.</summary>
+    Task<IReadOnlyList<CustomPositionOption>> CustomPositionsAsync(int? exceptMemberId, CancellationToken ct = default);
     Task<ServiceResult> CreateAsync(ManagementMemberInput input, CancellationToken ct = default);
     Task<ServiceResult> UpdateAsync(int id, ManagementMemberInput input, CancellationToken ct = default);
     Task<ServiceResult> DeleteAsync(int id, CancellationToken ct = default);
@@ -60,8 +71,9 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
         var term = TextNormalizer.NameKey(search);
         if (term.Length > 0) query = query.Where(m => m.NormalizedName.Contains(term));
         var rows = await Project(query).ToListAsync(ct);
-        // Position order (Director first), then members without a position by name.
-        return rows.OrderBy(r => r.Position is null).ThenBy(r => r.Position).ThenBy(r => r.FullName).ToList();
+        // Position order (Director first), then school-added positions by title, then members without a position by name.
+        return rows.OrderBy(r => r.Position is null).ThenBy(r => r.Position).ThenBy(r => r.CustomPosition is null).ThenBy(r => r.CustomPosition)
+            .ThenBy(r => r.FullName).ToList();
     }
 
     public async Task<IReadOnlyList<PositionSlot>> PositionsAsync(CancellationToken ct = default)
@@ -127,6 +139,7 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
             row.EndReason = endReason.Length > ManagementPositionAssignment.ReasonMaxLength ? endReason[..ManagementPositionAssignment.ReasonMaxLength] : endReason;
         }
         member.Position = newPosition;
+        if (newPosition is not null) member.CustomPositionId = null; // one position at a time
         member.JobTitle = newPosition is { } p ? ManagementPositions.Name(p) : "Management Team";
         await db.SaveChangesAsync(ct);
         if (newPosition is { } pos)
@@ -144,12 +157,19 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
         Project(db.ManagementMembers.AsNoTracking().Where(m => m.Id == id)).FirstOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<ManagementMemberOption>> OptionsAsync(CancellationToken ct = default) =>
-        (await db.ManagementMembers.AsNoTracking().Select(m => new ManagementMemberOption(m.Id, m.FullName, m.Position)).ToListAsync(ct))
+        (await db.ManagementMembers.AsNoTracking()
+            .Select(m => new ManagementMemberOption(m.Id, m.FullName, m.Position, m.CustomPosition != null ? m.CustomPosition.Title : null)).ToListAsync(ct))
             .OrderBy(m => m.Position is null).ThenBy(m => m.Position).ThenBy(m => m.FullName).ToList();
 
     public async Task<IReadOnlyDictionary<ManagementPosition, string>> PositionHoldersAsync(int? exceptMemberId, CancellationToken ct = default) =>
         await db.ManagementMembers.AsNoTracking().Where(m => m.Position != null && m.Id != exceptMemberId)
             .ToDictionaryAsync(m => m.Position!.Value, m => m.FullName, ct);
+
+    public async Task<IReadOnlyList<CustomPositionOption>> CustomPositionsAsync(int? exceptMemberId, CancellationToken ct = default) =>
+        await db.ManagementCustomPositions.AsNoTracking().OrderBy(p => p.Title)
+            .Select(p => new CustomPositionOption(p.Id, p.Title,
+                db.ManagementMembers.Where(m => m.CustomPositionId == p.Id && m.Id != exceptMemberId).Select(m => m.FullName).FirstOrDefault()))
+            .ToListAsync(ct);
 
     public async Task<ServiceResult> CreateAsync(ManagementMemberInput input, CancellationToken ct = default)
     {
@@ -160,6 +180,10 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
         var position = entity.Position;
         entity.Position = null; // recorded below together with its history row
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+        // A school-added position: an existing one, or a new one created in the same save (all or nothing).
+        if (NewCustomPosition(input) is { } created) (entity.CustomPosition, entity.JobTitle) = (created, created.Title);
+        else if (input.CustomPositionId is { } cid)
+            (entity.CustomPositionId, entity.JobTitle) = (cid, await db.ManagementCustomPositions.Where(p => p.Id == cid).Select(p => p.Title).FirstAsync(ct));
         db.ManagementMembers.Add(entity);
         var saved = await TrySaveAsync(ct);
         if (saved is not null) return saved;
@@ -182,27 +206,38 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
         if (entity is null) return ServiceResult.Fail("", "This Management Team member no longer exists.");
         var check = await ValidateAsync(input, id, ct);
         if (!check.Succeeded) return check;
-        var oldPosition = entity.Position;
+        var (oldPosition, oldCustom, oldTitle) = (entity.Position, entity.CustomPositionId, entity.JobTitle);
         Apply(entity, input);
         var newPosition = entity.Position;
-        entity.Position = oldPosition;
-        entity.JobTitle = oldPosition is { } op ? ManagementPositions.Name(op) : "Management Team";
+        (entity.Position, entity.CustomPositionId, entity.JobTitle) = (oldPosition, oldCustom, oldTitle);
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var saved = await TrySaveAsync(ct);
         if (saved is not null) return saved;
-        if (oldPosition != newPosition)
+        var created = NewCustomPosition(input);
+        var newTitle = created?.Title ?? (input.CustomPositionId is { } cid
+            ? await db.ManagementCustomPositions.Where(p => p.Id == cid).Select(p => p.Title).FirstAsync(ct) : null);
+        try
         {
-            try
+            if (newPosition is { } np)
             {
-                await ChangePositionAsync(entity, newPosition, SchoolWeek.Today,
-                    newPosition is { } np ? $"Moved to {ManagementPositions.Name(np)}" : "Position removed", ct);
+                // A leadership position (its history row is recorded; a custom position is left).
+                if (np != oldPosition) await ChangePositionAsync(entity, np, SchoolWeek.Today, $"Moved to {ManagementPositions.Name(np)}", ct);
             }
-            catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+            else
             {
-                db.ChangeTracker.Clear();
-                return ServiceResult.Fail("Position", "This position was just given to someone else. Reload and try again.");
+                if (oldPosition is not null)
+                    await ChangePositionAsync(entity, null, SchoolWeek.Today, newTitle is null ? "Position removed" : $"Moved to {newTitle}", ct);
+                if (created is not null) entity.CustomPosition = created;
+                else entity.CustomPositionId = input.CustomPositionId;
+                entity.JobTitle = newTitle ?? "Management Team";
+                if (created is not null || input.CustomPositionId != oldCustom) await db.SaveChangesAsync(ct);
             }
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            db.ChangeTracker.Clear();
+            return ServiceResult.Fail("Position", "This position was just given to someone else. Reload and try again.");
         }
         await tx.CommitAsync(ct);
         return ServiceResult.Ok(id);
@@ -249,6 +284,15 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
         else if (!TextNormalizer.ContainsLetter(name)) result.AddError("FullName", "The name must contain letters.");
 
         if (input.Position is { } p && !Enum.IsDefined(p)) result.AddError("Position", "Choose a position from the list.");
+        var newTitle = TextNormalizer.CleanText(input.NewPositionTitle);
+        if (new[] { input.Position is not null, input.CustomPositionId is not null, input.NewPositionTitle is not null }.Count(x => x) > 1)
+            result.AddError("Position", "Choose one position: an existing one or a new one.");
+        else if (input.NewPositionTitle is not null)
+        {
+            if (newTitle.Length == 0) result.AddError("NewPositionTitle", "Enter the new position title.");
+            else if (newTitle.Length > ManagementCustomPosition.TitleMaxLength) result.AddError("NewPositionTitle", $"Use {ManagementCustomPosition.TitleMaxLength} characters or fewer.");
+            else if (!TextNormalizer.ContainsLetter(newTitle)) result.AddError("NewPositionTitle", "The position title must contain letters.");
+        }
 
         var phone = TextNormalizer.CleanPhone(input.ContactNumber);
         if (phone.Length > StaffMember.ContactMaxLength) result.AddError("ContactNumber", $"Use {StaffMember.ContactMaxLength} characters or fewer.");
@@ -270,11 +314,38 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
             if (holder is not null)
                 return ServiceResult.Fail("Position", $"{holder} already holds the {ManagementPositions.Name(pos)} position. Change their position first.");
         }
+        if (input.CustomPositionId is { } cid)
+        {
+            var title = await db.ManagementCustomPositions.AsNoTracking().Where(x => x.Id == cid).Select(x => x.Title).FirstOrDefaultAsync(ct);
+            if (title is null) return ServiceResult.Fail("Position", "Choose a position from the list.");
+            var holder = await db.ManagementMembers.AsNoTracking().Where(m => m.CustomPositionId == cid && m.Id != exceptId).Select(m => m.FullName).FirstOrDefaultAsync(ct);
+            if (holder is not null)
+                return ServiceResult.Fail("Position", $"{holder} already holds the {title} position. Change their position first.");
+        }
+        if (input.NewPositionTitle is not null)
+        {
+            // Unique ignoring case and spacing, among the leadership positions and the school-added ones.
+            var key = TextNormalizer.NameKey(newTitle);
+            var leadership = ManagementPositions.All.Cast<ManagementPosition?>().FirstOrDefault(x => TextNormalizer.NameKey(ManagementPositions.Name(x!.Value)) == key);
+            if (leadership is { } lp)
+                return ServiceResult.Fail("NewPositionTitle", $"\"{ManagementPositions.Name(lp)}\" is already a leadership position. Choose it from the Position list.");
+            var existing = await db.ManagementCustomPositions.AsNoTracking().Where(x => x.NormalizedTitle == key).Select(x => x.Title).FirstOrDefaultAsync(ct);
+            if (existing is not null)
+                return ServiceResult.Fail("NewPositionTitle", $"A position named \"{existing}\" already exists. Choose it from the Position list.");
+        }
 
         var duplicate = await FindDuplicateAsync(name, phone, exceptId, ct);
         if (duplicate is not null)
             return ServiceResult.Fail("FullName", $"\"{duplicate.FullName}\" is already on the Management Team{(duplicate.ContactNumber is null ? "" : $" ({duplicate.ContactNumber})")}. Edit that record instead.");
         return result;
+    }
+
+    /// <summary>The position to create for <see cref="ManagementMemberInput.NewPositionTitle"/> (validated before).</summary>
+    private ManagementCustomPosition? NewCustomPosition(ManagementMemberInput input)
+    {
+        if (input.NewPositionTitle is null) return null;
+        var title = TextNormalizer.CleanText(input.NewPositionTitle);
+        return new ManagementCustomPosition { Title = title, NormalizedTitle = TextNormalizer.NameKey(title), CreatedAt = DateTime.UtcNow, CreatedBy = currentUser?.Name };
     }
 
     private static bool IsEmail(string value) =>
@@ -306,7 +377,8 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
             db.ManagementTasks.Count(t => t.AssignedToId == m.Id && t.Status != ManagementTaskStatus.Completed && t.Status != ManagementTaskStatus.Cancelled),
             db.ManagementTasks.Count(t => t.AssignedToId == m.Id && t.Status != ManagementTaskStatus.Completed && t.Status != ManagementTaskStatus.Cancelled && t.DueDate != null
                 && (t.DueDate < today || (t.DueDate == today && t.DueTime != null && t.DueTime < time))),
-            db.ManagementTasks.Count(t => t.AssignedToId == m.Id && t.Status == ManagementTaskStatus.Completed)));
+            db.ManagementTasks.Count(t => t.AssignedToId == m.Id && t.Status == ManagementTaskStatus.Completed),
+            m.CustomPositionId, m.CustomPosition != null ? m.CustomPosition.Title : null));
     }
 
     /// <summary>Saves; a unique-index clash (two people saving the same position or name at once) becomes a form error.</summary>

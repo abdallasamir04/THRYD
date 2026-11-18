@@ -22,6 +22,7 @@ wwwroot\js\duties.js
 wwwroot\js\incidents.js
 wwwroot\js\operations.js
 wwwroot\js\school-clock.js
+wwwroot\js\staff-attendance.js
 wwwroot\js\staff.js
 wwwroot\js\tasks.js
 wwwroot\js\theme-init.js
@@ -80,3 +81,4 @@ E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\tasks.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\school-calendar.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\belongings.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\belongings.js
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\staff-attendance.js

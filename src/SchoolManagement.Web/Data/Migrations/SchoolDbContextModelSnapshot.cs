@@ -1968,6 +1968,40 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.ToTable("IncidentTimelineStudents", (string)null);
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.ManagementCustomPosition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NormalizedTitle")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedTitle")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ManagementCustomPositions_Title");
+
+                    b.ToTable("ManagementCustomPositions", (string)null);
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.ManagementPositionAssignment", b =>
                 {
                     b.Property<int>("Id")
@@ -2506,7 +2540,7 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Property<int>("Capacity")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
-                        .HasDefaultValue(25);
+                        .HasDefaultValue(20);
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -2545,7 +2579,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 1,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "PreK",
@@ -2556,7 +2590,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 2,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "KG1A",
@@ -2567,7 +2601,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 3,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "KG1B",
@@ -2578,7 +2612,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 4,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "KG2A",
@@ -2589,7 +2623,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 5,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "KG2B",
@@ -2600,7 +2634,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 6,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G1A",
@@ -2611,7 +2645,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 7,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G1B",
@@ -2622,7 +2656,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 8,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G2A",
@@ -2633,7 +2667,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 9,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G2B",
@@ -2644,7 +2678,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 10,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G3A",
@@ -2655,7 +2689,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 11,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G3B",
@@ -2666,7 +2700,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 12,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G4A",
@@ -2677,7 +2711,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 13,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G4B",
@@ -2688,7 +2722,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 14,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G5A",
@@ -2699,7 +2733,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 15,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G5B",
@@ -2710,7 +2744,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 16,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G6A",
@@ -2721,7 +2755,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 17,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G6B",
@@ -2732,7 +2766,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 18,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G7A",
@@ -2743,7 +2777,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 19,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G7B",
@@ -2754,7 +2788,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 20,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G8A",
@@ -2765,7 +2799,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 21,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G8B",
@@ -2776,7 +2810,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 22,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G9A",
@@ -2787,7 +2821,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 23,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G9B",
@@ -2798,7 +2832,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 24,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G10A",
@@ -2809,7 +2843,7 @@ namespace SchoolManagement.Web.Data.Migrations
                         new
                         {
                             Id = 25,
-                            Capacity = 25,
+                            Capacity = 20,
                             CreatedAt = new DateTime(2026, 11, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             Name = "G10B",
@@ -2993,6 +3027,99 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.ToTable("SessionCancellations", (string)null);
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffAttendanceCorrection", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("After")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Before")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CorrectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CorrectedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("StaffAttendanceRecordId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffAttendanceRecordId", "CorrectedAt");
+
+                    b.ToTable("StaffAttendanceCorrections", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffAttendanceRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<TimeOnly?>("ArrivalTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("RecordedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("StaffMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date");
+
+                    b.HasIndex("StaffMemberId", "Date")
+                        .IsUnique()
+                        .HasDatabaseName("UX_StaffAttendance_StaffDay");
+
+                    b.ToTable("StaffAttendanceRecords", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StaffAttendance_ArrivalTime", "([Status] = 3 AND [ArrivalTime] IS NULL) OR ([Status] IN (1, 2) AND [ArrivalTime] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_StaffAttendance_Status", "[Status] BETWEEN 1 AND 3");
+                        });
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.StaffDutyFeedback", b =>
                 {
                     b.Property<int>("Id")
@@ -3061,10 +3188,19 @@ namespace SchoolManagement.Web.Data.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(30)");
 
+                    b.Property<DateOnly?>("ContractEndDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ContractStartDate")
+                        .HasColumnType("date");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int?>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("EmploymentType")
                         .HasColumnType("int");
 
                     b.Property<string>("FullName")
@@ -3089,6 +3225,18 @@ namespace SchoolManagement.Web.Data.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<DateOnly?>("ProbationEndDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ProbationLength")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("ProbationStartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ProbationUnit")
+                        .HasColumnType("int");
+
                     b.Property<string>("StaffType")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -3105,6 +3253,15 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<TimeOnly?>("WorkEnd")
+                        .HasColumnType("time");
+
+                    b.Property<TimeOnly?>("WorkStart")
+                        .HasColumnType("time");
+
+                    b.Property<int?>("WorkingHoursType")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAt");
@@ -3118,12 +3275,38 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     b.ToTable("StaffMembers", null, t =>
                         {
+                            t.HasCheckConstraint("CK_StaffMembers_ContractDates", "[ContractEndDate] IS NULL OR [ContractStartDate] IS NULL OR [ContractEndDate] >= [ContractStartDate]");
+
                             t.HasCheckConstraint("CK_StaffMembers_ManagementHasNoDepartment", "[StaffType] <> 'Management' OR ([DepartmentId] IS NULL AND [Subcategory] IS NULL AND [Subject] IS NULL)");
+
+                            t.HasCheckConstraint("CK_StaffMembers_OnePosition", "[Position] IS NULL OR [CustomPositionId] IS NULL");
+
+                            t.HasCheckConstraint("CK_StaffMembers_Probation", "[ProbationLength] IS NULL OR ([ProbationLength] BETWEEN 0 AND 104 AND [ProbationUnit] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_StaffMembers_ProbationDates", "[ProbationEndDate] IS NULL OR ([ProbationStartDate] IS NOT NULL AND [ProbationEndDate] >= [ProbationStartDate])");
+
+                            t.HasCheckConstraint("CK_StaffMembers_WorkHours", "[WorkStart] IS NULL OR [WorkEnd] IS NULL OR [WorkEnd] > [WorkStart]");
                         });
 
                     b.HasDiscriminator<string>("StaffType").HasValue("StaffMember");
 
                     b.UseTphMappingStrategy();
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffWorkingDay", b =>
+                {
+                    b.Property<int>("StaffMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("int");
+
+                    b.HasKey("StaffMemberId", "Day");
+
+                    b.ToTable("StaffWorkingDays", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StaffWorkingDays_Day", "[Day] BETWEEN 0 AND 6");
+                        });
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.Student", b =>
@@ -3765,12 +3948,20 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Property<DateOnly?>("AppointedOn")
                         .HasColumnType("date");
 
+                    b.Property<int?>("CustomPositionId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Email")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
                     b.Property<int?>("Position")
                         .HasColumnType("int");
+
+                    b.HasIndex("CustomPositionId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_StaffMembers_CustomPosition")
+                        .HasFilter("[CustomPositionId] IS NOT NULL");
 
                     b.HasIndex("Position")
                         .IsUnique()
@@ -3779,7 +3970,17 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     b.ToTable(t =>
                         {
+                            t.HasCheckConstraint("CK_StaffMembers_ContractDates", "[ContractEndDate] IS NULL OR [ContractStartDate] IS NULL OR [ContractEndDate] >= [ContractStartDate]");
+
                             t.HasCheckConstraint("CK_StaffMembers_ManagementHasNoDepartment", "[StaffType] <> 'Management' OR ([DepartmentId] IS NULL AND [Subcategory] IS NULL AND [Subject] IS NULL)");
+
+                            t.HasCheckConstraint("CK_StaffMembers_OnePosition", "[Position] IS NULL OR [CustomPositionId] IS NULL");
+
+                            t.HasCheckConstraint("CK_StaffMembers_Probation", "[ProbationLength] IS NULL OR ([ProbationLength] BETWEEN 0 AND 104 AND [ProbationUnit] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_StaffMembers_ProbationDates", "[ProbationEndDate] IS NULL OR ([ProbationStartDate] IS NOT NULL AND [ProbationEndDate] >= [ProbationStartDate])");
+
+                            t.HasCheckConstraint("CK_StaffMembers_WorkHours", "[WorkStart] IS NULL OR [WorkEnd] IS NULL OR [WorkEnd] > [WorkStart]");
                         });
 
                     b.HasDiscriminator().HasValue("Management");
@@ -3791,7 +3992,17 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     b.ToTable(t =>
                         {
+                            t.HasCheckConstraint("CK_StaffMembers_ContractDates", "[ContractEndDate] IS NULL OR [ContractStartDate] IS NULL OR [ContractEndDate] >= [ContractStartDate]");
+
                             t.HasCheckConstraint("CK_StaffMembers_ManagementHasNoDepartment", "[StaffType] <> 'Management' OR ([DepartmentId] IS NULL AND [Subcategory] IS NULL AND [Subject] IS NULL)");
+
+                            t.HasCheckConstraint("CK_StaffMembers_OnePosition", "[Position] IS NULL OR [CustomPositionId] IS NULL");
+
+                            t.HasCheckConstraint("CK_StaffMembers_Probation", "[ProbationLength] IS NULL OR ([ProbationLength] BETWEEN 0 AND 104 AND [ProbationUnit] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_StaffMembers_ProbationDates", "[ProbationEndDate] IS NULL OR ([ProbationStartDate] IS NOT NULL AND [ProbationEndDate] >= [ProbationStartDate])");
+
+                            t.HasCheckConstraint("CK_StaffMembers_WorkHours", "[WorkStart] IS NULL OR [WorkEnd] IS NULL OR [WorkEnd] > [WorkStart]");
                         });
 
                     b.HasDiscriminator().HasValue("Teacher");
@@ -4434,6 +4645,28 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("Session");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffAttendanceCorrection", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.StaffAttendanceRecord", "Record")
+                        .WithMany("Corrections")
+                        .HasForeignKey("StaffAttendanceRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Record");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffAttendanceRecord", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "StaffMember")
+                        .WithMany()
+                        .HasForeignKey("StaffMemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("StaffMember");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.StaffDutyFeedback", b =>
                 {
                     b.HasOne("SchoolManagement.Web.Entities.DutyStaffAssignment", "DutyStaffAssignment")
@@ -4461,6 +4694,17 @@ namespace SchoolManagement.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffWorkingDay", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "StaffMember")
+                        .WithMany("WorkingDays")
+                        .HasForeignKey("StaffMemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StaffMember");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.Student", b =>
@@ -4643,6 +4887,16 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("Teacher");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.ManagementMember", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.ManagementCustomPosition", "CustomPosition")
+                        .WithMany()
+                        .HasForeignKey("CustomPositionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CustomPosition");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.AcademicYear", b =>
                 {
                     b.Navigation("Quarters");
@@ -4734,6 +4988,16 @@ namespace SchoolManagement.Web.Data.Migrations
             modelBuilder.Entity("SchoolManagement.Web.Entities.SessionAttendanceRecord", b =>
                 {
                     b.Navigation("Corrections");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffAttendanceRecord", b =>
+                {
+                    b.Navigation("Corrections");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffMember", b =>
+                {
+                    b.Navigation("WorkingDays");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.StudentArrivalRecord", b =>

@@ -1,0 +1,17 @@
+@model (IReadOnlyList<TaskStaffOption> Staff, int? Selected)
+@*
+    The people a task can be given to or submitted to: every staff record (Management Team, academic, administrative and
+    support staff), grouped by staff category. Each person is one staff record, listed once; students are never staff.
+    Staff whose contract has ended are left out, unless already chosen on this task.
+*@
+@foreach (var c in StaffCategories.All)
+{
+    var people = Model.Staff.Where(s => s.Category == c && (s.IsActive || s.Id == Model.Selected)).ToList();
+    if (people.Count == 0) { continue; }
+    <optgroup label="@StaffCategories.Name(c)">
+        @foreach (var s in people)
+        {
+            <option value="@s.Id" selected="@(Model.Selected == s.Id)" data-note="@s.Note">@s.FullName</option>
+        }
+    </optgroup>
+}

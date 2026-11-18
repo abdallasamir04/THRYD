@@ -10,7 +10,7 @@ namespace SchoolManagement.Tests;
 [Collection("db")]
 public class StaffDirectoryTests(DbFixture fx)
 {
-    private static readonly Regex Card = new("<article class=\"leader-card leader-card--\\w+ dir-card\" aria-labelledby=\"sd-(\\d+)\"");
+    private static readonly Regex Card = new("<article class=\"dir-row\" aria-labelledby=\"sd-(\\d+)\"");
 
     private static List<int> Cards(string html) => Card.Matches(html).Select(m => int.Parse(m.Groups[1].Value)).ToList();
 
@@ -99,5 +99,80 @@ public class StaffDirectoryTests(DbFixture fx)
             Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(url)).StatusCode);
         var after = (await db.StaffMembers.CountAsync(), await db.WorkloadAssignments.CountAsync(), await db.TimetableAssignments.CountAsync(), await db.DepartmentHeads.CountAsync());
         Assert.Equal(before, after);
+    }
+
+    /// <summary>The ids of the rows inside one category section (dg-management, dg-academic, dg-support).</summary>
+    private static List<int> Section(string html, string slug)
+    {
+        var start = html.IndexOf($"id=\"dg-{slug}\"", StringComparison.Ordinal);
+        if (start < 0) return [];
+        var end = html.IndexOf("</section>", start, StringComparison.Ordinal);
+        return Cards(html[start..end]);
+    }
+
+    [Fact]
+    public async Task Staff_are_grouped_by_category_in_full_width_rows_with_a_category_bar()
+    {
+        var (teacher, teacherName) = await fx.NewTeacherAsync("Math Teacher");
+        var (librarian, librarianName) = await fx.NewTeacherAsync("Librarian");
+        int manager;
+        var stamp = DbFixture.Unique();
+        await using (var db = fx.NewContext())
+            manager = (await DbFixture.Management(db).CreateAsync(new ManagementMemberInput { FullName = "Grouped Leader " + stamp })).EntityId!.Value;
+        var client = fx.Factory.CreateClient();
+        var page = await client.GetStringAsync("/staff/all");
+
+        // The old card grid is gone; three sections in order, each with its header and count.
+        Assert.DoesNotContain("dir-card", page);
+        Assert.DoesNotContain("leader-grid", page);
+        int At(string slug) => page.IndexOf($"id=\"dg-{slug}\"", StringComparison.Ordinal);
+        Assert.True(At("management") > 0 && At("management") < At("academic") && At("academic") < At("support"));
+        foreach (var title in new[] { ">Management Team</h2>", ">Academic Staff</h2>", ">Administrative &amp; Support Staff</h2>" }) Assert.Contains(title, page);
+
+        await using (var db = fx.NewContext())
+        {
+            var managers = await db.ManagementMembers.Select(m => m.Id).ToListAsync();
+            var management = Section(page, "management");
+            var academic = Section(page, "academic");
+            var support = Section(page, "support");
+            // Every staff record exactly once across the sections; no Academic / Management mixing.
+            Assert.Equal(managers.Order(), management.Order());
+            Assert.Empty(academic.Intersect(managers));
+            Assert.Empty(support.Intersect(managers));
+            var all = management.Concat(academic).Concat(support).ToList();
+            Assert.Equal(await db.StaffMembers.CountAsync(), all.Count);
+            Assert.Equal(all.Count, all.Distinct().Count());
+            Assert.Contains(teacher, academic);
+            Assert.Contains(librarian, support);
+            Assert.Contains($">{Web.Common.Ui.Plural(management.Count, "member", "members")}</span>", page);
+            Assert.Contains($">{Web.Common.Ui.Plural(academic.Count, "member", "members")}</span>", page);
+
+            // The category bar: All Staff and each category with its count.
+            Assert.Matches($"aria-label=\"Staff category\">.*?All Staff <span class=\"count num\">{all.Count}</span>", Regex.Replace(page, "\\s+", " "));
+            Assert.Contains($"Management <span class=\"count num\">{management.Count}</span>", page);
+            Assert.Contains($"Academic <span class=\"count num\">{academic.Count}</span>", page);
+        }
+
+        // One row: name (profile link) on the left, then job title, department, contact and the existing actions.
+        var row = page[page.IndexOf($"aria-labelledby=\"sd-{teacher}\"", StringComparison.Ordinal)..];
+        row = row[..row.IndexOf("</article>", StringComparison.Ordinal)];
+        string[] order = [$"href=\"/staff/{teacher}\"", ">Job title<", ">Math Teacher<", ">Department<", ">Contact<", $"href=\"/staff/edit/{teacher}\""];
+        var positions = order.Select(x => row.IndexOf(x, StringComparison.Ordinal)).ToList();
+        Assert.True(positions.All(i => i > 0) && positions.SequenceEqual(positions.Order()), string.Join(",", positions));
+        var managerRow = page[page.IndexOf($"aria-labelledby=\"sd-{manager}\"", StringComparison.Ordinal)..];
+        Assert.Contains(">Position<", managerRow[..managerRow.IndexOf("</article>", StringComparison.Ordinal)]);
+        Assert.Contains($"href=\"/management/members/{manager}/edit\" data-modal", managerRow);
+
+        // A category keeps the search; empty sections are hidden; the bar counts follow the search.
+        var searched = await client.GetStringAsync($"/staff/all?category=academic&search={Uri.EscapeDataString(teacherName)}");
+        Assert.Equal([teacher], Cards(searched));
+        Assert.Equal(-1, searched.IndexOf("id=\"dg-management\"", StringComparison.Ordinal));
+        Assert.Equal(-1, searched.IndexOf("id=\"dg-support\"", StringComparison.Ordinal));
+        Assert.Contains($"href=\"/staff/all?category=management&amp;search={Uri.EscapeDataString(teacherName)}\"", searched);
+        Assert.Contains("Academic <span class=\"count num\">1</span>", searched);
+        Assert.Contains("Management <span class=\"count num\">0</span>", searched);
+        var none = await client.GetStringAsync($"/staff/all?category=management&search={Uri.EscapeDataString(librarianName)}");
+        Assert.Empty(Cards(none));
+        Assert.Contains("No staff match", none);
     }
 }

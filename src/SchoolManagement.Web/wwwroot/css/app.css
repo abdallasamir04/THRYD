@@ -829,24 +829,49 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
 .progress-bar.is-done { opacity: 0; width: 100%; transition: width 0.2s, opacity 0.4s 0.2s; }
 
 /* ---------- Dashboard ---------- */
-.dist { padding: 18px 22px 20px; }
-.dist__chart { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(26px, 1fr); align-items: end; gap: 8px; height: 230px; padding: 10px 4px 0; border-bottom: 1px solid var(--color-border); background-image: linear-gradient(var(--chart-grid) 1px, transparent 1px); background-size: 100% 25%; background-position: bottom; overflow-x: auto; }
-.dist__col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; min-width: 26px; text-decoration: none; color: inherit; }
-.dist__col:hover { text-decoration: none; }
-.dist__val { font-size: 0.72rem; font-weight: 800; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
-.dist__bar { width: 100%; max-width: 34px; min-height: 3px; border-radius: 8px 8px 3px 3px; background: linear-gradient(180deg, #8b5cf6 0%, var(--color-primary) 100%); transition: filter 0.15s, transform 0.15s; transform-origin: bottom; }
-:root[data-theme="dark"] .dist__bar { background: linear-gradient(180deg, #7c95ff 0%, #4f6ef0 100%); }
-.dist__col:hover .dist__bar { filter: brightness(1.12); }
-.dist__bar--empty { background: var(--color-border) !important; }
-.dist__bar--inactive { background: repeating-linear-gradient(45deg, var(--color-border-strong), var(--color-border-strong) 4px, var(--color-border) 4px, var(--color-border) 8px) !important; }
-.dist__labels { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(26px, 1fr); gap: 8px; padding: 8px 4px 0; overflow: hidden; }
-.dist__label { font-size: 0.68rem; font-weight: 800; color: var(--color-text-muted); text-align: center; white-space: nowrap; }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.78rem; color: var(--color-text-muted); font-weight: 600; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-.legend .l-filled { background: var(--color-primary); }
-.legend .l-empty { background: var(--color-border); }
-.legend .l-inactive { background: repeating-linear-gradient(45deg, var(--color-border-strong), var(--color-border-strong) 2px, var(--color-border) 2px, var(--color-border) 4px); }
+/* ---- Dashboard: Students by class as capacity rings (blue occupied, yellow available, red over capacity) */
+:root { --cap-occupied: #5685ff; --cap-available: #eab746; --cap-over: #ef5555; }
+.legend .l-occupied { background: var(--cap-occupied); }
+.legend .l-available { background: var(--cap-available); }
+.legend .l-over { background: var(--cap-over); }
+.cap-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 16px 22px 0; list-style: none; }
+.cap-totals li { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-soft); }
+.cap-totals__value { font-size: 1.25rem; font-weight: 800; color: var(--color-text-strong); line-height: 1.2; }
+.cap-totals__label { font-size: 0.74rem; font-weight: 700; color: var(--color-text-muted); }
+.cap-totals--available { border-left: 3px solid var(--cap-available) !important; }
+.cap-totals--over { border-left: 3px solid var(--cap-over) !important; }
+.cap-totals--over:not(.is-zero) .cap-totals__value { color: var(--color-error-ink); }
+.cap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; margin: 0; padding: 16px 22px 22px; list-style: none; }
+.cap-class { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; padding: 12px 8px 10px; border: 1px solid var(--color-border); border-radius: 14px;
+    background: var(--color-surface-raised); color: var(--color-text); text-align: center; text-decoration: none; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
+.cap-class:hover { text-decoration: none; border-color: var(--color-border-strong); box-shadow: var(--shadow-card); transform: translateY(-1px); }
+.cap-class--over { border-color: color-mix(in srgb, var(--cap-over) 45%, var(--color-border)); }
+.cap-class.is-inactive { border-style: dashed; }
+.cap-class__name { font-size: 0.86rem; font-weight: 800; color: var(--color-text-strong); }
+.cap-ring { position: relative; display: grid; place-items: center; width: 92px; height: 92px; }
+.cap-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.cap-ring__track { fill: none; stroke: var(--color-border-subtle); stroke-width: 10; }
+.cap-ring__seg { fill: none; stroke-width: 10; animation: cap-ring-in 0.7s ease-out both; }
+.cap-ring__seg--occupied { stroke: var(--cap-occupied); }
+.cap-ring__seg--available { stroke: var(--cap-available); }
+.cap-ring__seg--over { stroke: var(--cap-over); }
+@keyframes cap-ring-in { from { stroke-dasharray: 0 264; } }
+.cap-ring__center { position: relative; display: flex; flex-direction: column; align-items: center; line-height: 1.05; }
+.cap-ring__center strong { font-size: 1.3rem; font-weight: 800; color: var(--color-text-strong); }
+.cap-ring__center small { font-size: 0.72rem; font-weight: 700; color: var(--color-text-muted); }
+.cap-class__status { font-size: 0.74rem; font-weight: 800; color: var(--color-text-muted); }
+.cap-class--full .cap-class__status { color: var(--color-primary-ink); text-transform: uppercase; letter-spacing: 0.04em; }
+.cap-class--over .cap-class__status { color: var(--color-error-ink); text-transform: uppercase; letter-spacing: 0.02em; }
+.cap-class__meta { font-size: 0.7rem; font-weight: 600; color: var(--color-text-faint); }
+@media (prefers-reduced-motion: reduce) { .cap-ring__seg { animation: none; } .cap-class { transition: none; } .cap-class:hover { transform: none; } }
+@media (max-width: 720px) {
+    .cap-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px 14px 0; }
+    .cap-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; padding: 14px; }
+    .cap-ring { width: 80px; height: 80px; }
+}
 
 .list { margin: 0; padding: 0; list-style: none; }
 .list__item { display: flex; align-items: center; gap: 12px; padding: 12px 22px; border-bottom: 1px solid var(--color-border-subtle); }
@@ -1040,4 +1065,80 @@ a.summary-tile:hover { border-color: var(--color-border-strong); text-decoration
     .topbar__actions { flex: none; gap: 8px; }
     .topbar__actions .chip--brand { display: none; }
     .trail__group, .trail__sep { display: none; }
+}
+
+/* ---------- Dashboard: arrivals, Import from Excel, Today's operations beside Quick actions ---------- */
+/* The Live Data bar and the Import button share one grid column, so the button is exactly as wide as the bar. */
+.hero__live { display: inline-grid; grid-template-columns: minmax(0, auto); gap: 12px; margin-top: 12px; max-width: 100%; }
+.hero__live .live { margin: 0; }
+.hero__import { width: 100%; justify-content: center; }
+/* Two arrival cards in the space of the original three. */
+.hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 520px) { .hero__live { display: grid; width: 100%; } }
+
+/* Today's operations (left) and Quick actions (right). On wide screens the operations section is a subgrid of .dash-main:
+   its six parts (Duty summary label + cards, Student attendance label + cards, Staff attendance label + cards) sit on the
+   dashboard's own rows, and Quick actions spans from the Duty summary cards' row to the Staff attendance cards' row —
+   the same grid lines on both sides, no fixed heights or offsets. Its six buttons share the height in three equal rows. */
+.dash-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); gap: 12px 20px; }
+.dash-main__head { grid-column: 1; grid-row: 1; }
+.dash-main > .ops > .ops__group:first-child { margin-top: 0; }
+.dash-quick .quick a { padding: 8px 12px; line-height: 1.25; }
+@media (min-width: 901px) {
+    .dash-main > .ops { grid-column: 1; grid-row: 2 / span 6; display: grid; grid-template-rows: subgrid; row-gap: 12px; }
+    .dash-main > .dash-quick { grid-column: 2; grid-row: 3 / span 5; display: flex; flex-direction: column; }
+    .dash-quick .quick { flex: 1 1 auto; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 16px 16px; }
+    /* Tall, narrow buttons: icon above the label, both centred, so every label stays on one line. */
+    .dash-quick .quick a { flex-direction: column; justify-content: center; gap: 8px; padding: 10px 8px; text-align: center; text-wrap: balance; }
+}
+@media (max-width: 900px) {
+    .dash-main { grid-template-columns: minmax(0, 1fr); }
+    .dash-main > .dash-quick { margin-top: 8px; }
+}
+/* Phones: still two columns while they fit (the generic .quick turns to one column at 720px); one column below 360px. */
+@media (max-width: 720px) { .dash-quick .quick { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px; } }
+@media (max-width: 360px) { .dash-quick .quick { grid-template-columns: minmax(0, 1fr); } }
+
+/* Three rows of three tiles, grouped: duties, student attendance, staff attendance. */
+.ops .ops__grid.ops__grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ops .ops__grid--3 .ops-tile { min-height: 104px; }
+.ops__group { margin: 4px 0 -4px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); }
+.ops__group span { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--color-text-faint); }
+@media (max-width: 560px) { .ops .ops__grid.ops__grid--3 { grid-template-columns: minmax(0, 1fr); } .ops .ops__grid--3 .ops-tile { min-height: 0; } }
+/* Duty coverage: Covered and Not covered side by side in one tile, each with its own link. */
+.ops .ops-tile.ops-tile--split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; align-content: start; }
+.ops-split { display: flex; flex-direction: column; gap: 4px; min-width: 0; border-radius: 8px; color: inherit; text-decoration: none; }
+.ops-split:hover { text-decoration: none; }
+.ops-split:hover .ops-tile__label { color: var(--color-text); }
+.ops-split:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.ops-split--ok .ops-tile__value { color: var(--color-success-ink); }
+.ops-split--bad .ops-tile__value { color: var(--color-error-ink); }
+.ops-split .ops-tile__label i { display: inline-block; width: 8px; height: 8px; margin-inline-end: 5px; border-radius: 50%; vertical-align: 1px; }
+.ops-split--ok i { background: var(--color-success); }
+.ops-split--bad i { background: var(--color-error); }
+
+/* Import from Excel → Students or Staff (dialog). */
+.import-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.import-choice__option {
+    display: flex; align-items: center; gap: 14px; height: 100%; padding: 18px; border: 1px solid var(--color-border); border-radius: 16px;
+    background: var(--color-surface); color: inherit; text-decoration: none; transition: border-color 0.15s, background-color 0.15s, transform 0.15s;
+}
+.import-choice__option:hover { border-color: var(--color-primary); background: var(--tint-hover); transform: translateY(-1px); text-decoration: none; }
+.import-choice__option:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.import-choice__icon { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 14px; background: var(--tint-primary); color: var(--color-primary-ink); }
+.import-choice__option--staff .import-choice__icon { background: var(--color-secondary-soft); color: var(--color-secondary-ink); }
+.import-choice__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.import-choice__title { font-size: 1rem; color: var(--color-text-strong); }
+.import-choice__desc { font-size: 0.84rem; color: var(--color-text-muted); }
+.import-choice__go { margin-inline-start: auto; color: var(--color-text-faint); }
+@media (max-width: 560px) { .import-choice { grid-template-columns: minmax(0, 1fr); } }
+
+/* Classes page: the four report downloads (PDF = red icon, Excel = green icon). Two by two on phones. */
+.class-downloads { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn--download.dl-pdf .icon { color: var(--color-error-ink); }
+.btn--download.dl-xlsx .icon { color: var(--color-success-ink); }
+@media (max-width: 720px) {
+    .class-downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+    .class-downloads .btn { justify-content: center; min-width: 0; }
+    .class-downloads .dl-verb { display: none; }
 }

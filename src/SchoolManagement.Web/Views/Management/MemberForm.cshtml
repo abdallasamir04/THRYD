@@ -39,13 +39,8 @@
             </div>
             <div class="field">
                 <label class="label" for="Position">Position</label>
-                <select class="select" id="Position" name="Position">
-                    <option value="">No position yet</option>
-                    @foreach (var p in ManagementPositions.All)
-                    {
-                        var held = Model.Holders.TryGetValue(p, out var holder);
-                        <option value="@p" selected="@(Model.Position == p)" disabled="@(held && Model.Position != p)">@ManagementPositions.Name(p)@(held ? $" — held by {holder}" : "")</option>
-                    }
+                <select class="select" id="Position" name="PositionChoice" data-searchable>
+                    <partial name="_PositionOptions" model="new PositionOptions(Model.PositionChoice, Model.Holders, Model.CustomPositions, false)" />
                 </select>
                 <span asp-validation-for="Position" class="field-validation-error"></span>
                 <p class="hint">Each position has one holder. Positions held by someone else are shown but cannot be chosen.</p>

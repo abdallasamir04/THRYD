@@ -1,0 +1,84 @@
+@model SchoolManagement.Web.Controllers.StaffAttendanceForm
+@*
+    Correct a saved staff attendance record (attendance itself is only recorded with one click, until the cutoff). Any status
+    can be set; Present / Late need the actual arrival time. The reason, the record before and after, when and who are kept in
+    StaffAttendanceCorrections. Absent never has an arrival time.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var r = Model.Row!;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var day = SchoolWeek.ParseDayOrToday(Model.Date);
+    var heading = Model.IsCorrection ? "Correct attendance" : "Record attendance";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Staff"; }
+    string Badge(StaffAttendanceStatus? s) => s switch
+    {
+        StaffAttendanceStatus.Present => "badge--success", StaffAttendanceStatus.Late => "badge--warning", StaffAttendanceStatus.Absent => "badge--error", _ => "badge--neutral",
+    };
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/staff/attendance/record" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents" data-sta-form>
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="StaffId" value="@Model.StaffId" />
+        <input type="hidden" name="Date" value="@SchoolWeek.Iso(day)" />
+        <div class="modal__head">
+            <span class="modal__icon@(Model.IsCorrection ? " modal__icon--warning" : "")">@Ui.Icon(Model.IsCorrection ? "pencil" : "clock", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">@heading — @r.Name</h2>
+                <p class="modal__sub">@r.Group · @day.ToString("dddd d MMM yyyy", inv)</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            @if (Model.IsCorrection)
+            {
+                <div class="sa-current">
+                    <span class="sa-current__label">Currently</span>
+                    <span class="badge badge--dot @Badge(r.Status)">@StaffAttendanceStatuses.Label(r.Status)</span>
+                    @if (r.ArrivalTime is { } t) { <span class="num">@Arrivals.Time(t)</span> }
+                    <span class="sa-current__by">Recorded by @(r.RecordedBy ?? "—")@(r.UpdatedAt is { } at ? $" · {SchoolTime.Current.ToLocal(at):d MMM, h:mm tt}" : "")@(r.Corrections > 0 ? $" · corrected {r.Corrections}× before" : "")</span>
+                </div>
+            }
+            <fieldset class="field">
+                <legend class="label">Status <span class="req" aria-hidden="true">*</span></legend>
+                <div class="seg-toggle sa-outcome" data-sta-outcome>
+                    @foreach (var s in StaffAttendanceStatuses.All)
+                    {
+                        <label><input type="radio" name="Status" value="@s" checked="@(Model.Status == s)" /><span>@StaffAttendanceStatuses.Label(s)</span></label>
+                    }
+                </div>
+                <span asp-validation-for="Status" class="field-validation-error"></span>
+                <span class="hint">@(Model.ExpectedStart is { } st ? $"Normally Present by {Arrivals.Time(st)} and Late after it, until the {Arrivals.Time(StaffAttendanceOptions.DefaultCutoff)} cutoff." : "")A correction can set any status (for example an excused late arrival); the reason is kept. Absent has no arrival time.</span>
+            </fieldset>
+            <div class="field" data-sta-time-field style="max-width:280px">
+                <label class="label" for="Arrival">Actual arrival time <span class="req" aria-hidden="true">*</span></label>
+                <input class="input picker" type="time" id="Arrival" name="Arrival" value="@Model.Arrival" data-timepicker data-empty-text="Choose the time" />
+                <span asp-validation-for="Arrival" class="field-validation-error"></span>
+                <span class="hint">The time the staff member actually arrived (school time, Cairo).</span>
+            </div>
+            @if (Model.IsCorrection)
+            {
+                <div class="field">
+                    <label class="label" asp-for="Reason">Reason for the correction <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" asp-for="Reason" maxlength="300" dir="auto" placeholder="e.g. Recorded for the wrong person; arrival time entered late" />
+                    <span asp-validation-for="Reason" class="field-validation-error"></span>
+                    <span class="hint">The previous record, your reason, the time and your name are kept in the correction history.</span>
+                </div>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/staff/attendance?date=@SchoolWeek.Iso(day)">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsCorrection ? "Save correction" : "Save")</button>
+        </div>
+    </form>
+</div>

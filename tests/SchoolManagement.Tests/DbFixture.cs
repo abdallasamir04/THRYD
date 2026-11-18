@@ -29,6 +29,7 @@ public sealed class DbFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Attendance__AlertSweep", "false");
         // Automatic finalization would record other tests' unrecorded students as absent.
         Environment.SetEnvironmentVariable("Attendance__AutoFinalize", "false");
+        Environment.SetEnvironmentVariable("StaffAttendance__AutoFinalize", "false");
         // Task attachments of the test run go to a temporary folder, never the development App_Data.
         Environment.SetEnvironmentVariable("Storage__TaskAttachments", AttachmentRoot);
         await using (var db = NewContext()) await db.Database.EnsureDeletedAsync();

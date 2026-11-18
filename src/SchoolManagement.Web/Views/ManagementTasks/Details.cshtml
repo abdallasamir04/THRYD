@@ -6,7 +6,7 @@
 @{
     var t = Model.Task;
     ViewData["Title"] = t.Title;
-    ViewData["Nav"] = "ManagementTasks";
+    ViewData["Nav"] = "Tasks";
     var c = System.Globalization.CultureInfo.InvariantCulture;
     var done = t.Status == ManagementTaskStatus.Completed;
     var cancelled = t.Status == ManagementTaskStatus.Cancelled;
@@ -15,7 +15,7 @@
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/tasks">Tasks</a></li><li><span aria-current="page">Task #@t.Id</span></li></ol>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/tasks">Tasks</a></li><li><span aria-current="page">Task #@t.Id</span></li></ol>
         <h1 class="page-title" dir="auto">@t.Title</h1>
         <p class="page-sub task-detail__badges">
             <span class="task-status task-status--@TaskLabels.StatusSlug(t.Status)">@TaskLabels.Status(t.Status)</span>

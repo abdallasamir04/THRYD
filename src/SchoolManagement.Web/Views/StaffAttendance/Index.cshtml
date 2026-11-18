@@ -1,0 +1,187 @@
+@model StaffAttendanceDay
+@*
+    Staff → Staff Attendance (daily). Every active staff member expected on the date (academic, management, administrative &
+    support; inside their contract dates; part-time staff on their working days). staff-attendance.js:
+      [data-sta-mark]   one click today, until the cutoff (09:30 included): Present / Late at the server's time, or Absent.
+                        Saved at once, no dialog and no time entry. The server refuses any click after the cutoff.
+      [data-sta-count]  summary figures, updated from each response (counts from the database)
+      [data-closes-at]  the page reloads when the school clock passes the cutoff, showing the day closed
+      [data-sta-search] / [data-sta-category] / [data-sta-dept] / [data-sta-filter]  search, category, department and status filters in place
+    After the cutoff staff with no record are Absent (stored automatically, never over a saved record). Before it, no record
+    means Not Recorded. A saved record changes only through Correct (reason + before / after kept).
+*@
+@{
+    ViewData["Title"] = "Staff Attendance";
+    ViewData["Nav"] = "Staff";
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var date = SchoolWeek.Iso(Model.Date);
+    var k = Model.Counts;
+    var status = ViewData["Status"] as string;
+    var dept = ViewData["Department"] as string;
+    var category = ViewData["Category"] as string;
+    var search = ViewData["Search"] as string;
+    static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : parts.Length == 1 ? parts[0][..1].ToUpperInvariant() : $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+    string Badge(StaffAttendanceStatus? s) => s switch
+    {
+        StaffAttendanceStatus.Present => "badge--success", StaffAttendanceStatus.Late => "badge--warning", StaffAttendanceStatus.Absent => "badge--error", _ => "badge--neutral",
+    };
+    string Pressed(string? value) => (status ?? "all") == value ? "true" : "false";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head sa-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li>Staff Attendance</li></ol>
+        <h1 class="page-title">Staff Attendance</h1>
+        <p class="page-sub">Every active staff member — academic staff, the Management Team, and administrative &amp; support staff. Attendance is recorded with one click until @Arrivals.Time(Model.Cutoff).</p>
+    </div>
+</div>
+
+<nav class="segmented sa-tabs" aria-label="Staff Attendance">
+    <a href="/staff/attendance" aria-current="true">@Ui.Icon("check-circle", "icon--sm")Daily Attendance</a>
+    <a href="/staff/attendance/history">@Ui.Icon("chart", "icon--sm")History &amp; Reports</a>
+</nav>
+
+<section class="sa-today" aria-label="Day">
+    <div class="sa-today__date">
+        <span class="sa-today__icon">@Ui.Icon("calendar")</span>
+        <div>
+            <span class="sa-today__eyebrow">@(Model.IsToday ? "Today" : "Past day")</span>
+            <strong class="sa-today__day">@Model.Date.ToString("dddd, d MMMM yyyy", inv)</strong>
+        </div>
+    </div>
+    @if (Model.IsToday)
+    {
+        <div class="sa-today__clock" title="School time (Cairo)">@Ui.Icon("clock")<span data-att-clock>@Arrivals.Time(TimeOnly.FromDateTime(SchoolTime.Current.Now))</span><small>Cairo</small></div>
+    }
+    <span class="sa-rule" title="Late applies after the start time: the person's own start time (Working Hours) when set, otherwise the school start time. After the cutoff, staff with no attendance are Absent.">@Ui.Icon("lock", "icon--sm")Cutoff @Arrivals.Time(Model.Cutoff)@(Model.SchoolStart is { } st ? $" · Late after {Arrivals.Time(st)}" : "")</span>
+    <div class="sa-today__nav">
+        <a class="icon-btn icon-btn--bordered" href="/staff/attendance?date=@SchoolWeek.Iso(Model.Date.AddDays(-1))" aria-label="Previous day" title="Previous day">@Ui.Icon("chevron-left")</a>
+        <form method="get" action="/staff/attendance" class="sa-today__picker">
+            <label class="visually-hidden" for="sta-date">Go to date</label>
+            <input class="input picker" type="date" id="sta-date" name="date" value="@date" max="@SchoolWeek.Iso(Model.Today)" data-datepicker data-autosubmit data-empty-text="Choose a date" />
+        </form>
+        @if (!Model.IsToday)
+        {
+            <a class="icon-btn icon-btn--bordered" href="/staff/attendance?date=@SchoolWeek.Iso(Model.Date.AddDays(1))" aria-label="Next day" title="Next day">@Ui.Icon("chevron-right")</a>
+            <a class="btn btn--primary btn--sm" href="/staff/attendance">Back to today</a>
+        }
+    </div>
+</section>
+
+@if (!Model.IsSchoolDay)
+{
+    <div class="notice sa-notice">@Ui.Icon("info")<div class="notice__body"><strong>@(Model.Holiday is null ? "Not a school day (weekend)." : $"School holiday: {Model.Holiday}.")</strong>No staff attendance is taken on this day, and it never counts in attendance reports.</div></div>
+}
+else
+{
+    @if (Model.ClosedToday)
+    {
+        <div class="notice notice--warning sa-notice" role="status">@Ui.Icon("lock")<div class="notice__body"><strong>Staff attendance closed at @Arrivals.Time(Model.Cutoff).</strong>@(Model.AutomaticAbsences ? "Staff with no attendance by then are Absent." : "Staff with no attendance stay Not Recorded (automatic absences are off).") A saved record can still be changed with Correct — a reason is required and the change is kept in the history.</div></div>
+    }
+    <div class="sa-board sta-board" data-sta-board data-date="@date" data-today="@(Model.IsToday ? "true" : "false")"
+         data-closes-at="@(Model.RecordingOpen ? Model.Cutoff.AddMinutes(1).ToString("HH:mm:ss", inv) : null)">
+        @Html.AntiForgeryToken()
+        <ul class="sa-tiles" aria-label="Staff attendance summary">
+            <li class="sa-tile"><span class="sa-tile__value num" data-sta-count="expected">@k.Expected</span><span class="sa-tile__label">Active staff</span></li>
+            <li class="sa-tile sa-tile--present"><span class="sa-tile__value num" data-sta-count="present">@k.Present</span><span class="sa-tile__label">Present</span></li>
+            <li class="sa-tile sa-tile--late"><span class="sa-tile__value num" data-sta-count="late">@k.Late</span><span class="sa-tile__label">Late</span></li>
+            <li class="sa-tile sa-tile--absent"><span class="sa-tile__value num" data-sta-count="absent">@k.Absent</span><span class="sa-tile__label">Absent</span></li>
+            <li class="sa-tile sa-tile--none"><span class="sa-tile__value num" data-sta-count="none">@k.NotRecorded</span><span class="sa-tile__label">Not Recorded</span></li>
+        </ul>
+
+        <section class="card sa-register" aria-label="Staff register">
+            <div class="sa-toolbar">
+                <div class="sa-search">
+                    @Ui.Icon("search")
+                    <label class="visually-hidden" for="sta-search">Search staff</label>
+                    <input class="input" type="search" id="sta-search" placeholder="Search by name…" autocomplete="off" value="@search" data-sta-search />
+                </div>
+                <div class="sta-dept">
+                    <label class="visually-hidden" for="sta-category">Staff category</label>
+                    <select class="select" id="sta-category" data-sta-category>
+                        <option value="">All categories</option>
+                        @foreach (var c in StaffCategories.All)
+                        {
+                            <option value="@StaffCategories.Slug(c)" selected="@(StaffCategories.Slug(c) == category)">@StaffCategories.Name(c)</option>
+                        }
+                    </select>
+                </div>
+                <div class="sta-dept">
+                    <label class="visually-hidden" for="sta-dept">Department</label>
+                    <select class="select" id="sta-dept" data-sta-dept>
+                        <option value="">All departments</option>
+                        @foreach (var (value, label) in Model.Departments)
+                        {
+                            <option value="@value" selected="@(value == dept)">@label</option>
+                        }
+                    </select>
+                </div>
+                <div class="segmented sa-filter" role="group" aria-label="Show">
+                    <button type="button" data-sta-filter="all" aria-pressed="@Pressed("all")">All</button>
+                    <button type="button" data-sta-filter="none" aria-pressed="@Pressed("none")">Not Recorded <span class="count" data-sta-count="none">@k.NotRecorded</span></button>
+                    <button type="button" data-sta-filter="present" aria-pressed="@Pressed("present")">Present <span class="count" data-sta-count="present">@k.Present</span></button>
+                    <button type="button" data-sta-filter="late" aria-pressed="@Pressed("late")">Late <span class="count" data-sta-count="late">@k.Late</span></button>
+                    <button type="button" data-sta-filter="absent" aria-pressed="@Pressed("absent")">Absent <span class="count" data-sta-count="absent">@k.Absent</span></button>
+                </div>
+            </div>
+            @if (Model.RecordingOpen)
+            {
+                <p class="sa-hint">@Ui.Icon("info", "icon--sm")<span>One click saves at once: <strong>Present</strong> or <strong>Late</strong> with the current school time as the arrival time, or <strong>Absent</strong>. Recording closes after <strong>@Arrivals.Time(Model.Cutoff)</strong>; anyone not recorded by then is Absent.</span></p>
+            }
+            else
+            {
+                <p class="sa-hint">@Ui.Icon("info", "icon--sm")<span>Recording is closed for this day. A saved record is changed with <strong>Correct</strong> — a reason is required and the earlier record is kept in the history.</span></p>
+            }
+
+            <ol class="sa-list" data-sta-list>
+                @foreach (var r in Model.Rows)
+                {
+                    var slug = StaffAttendanceStatuses.Slug(r.Status);
+                    var meta = string.Join(" · ", new[] { r.Group, r.JobTitle }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                    var automatic = r.RecordedBy == StaffAttendanceService.AutomaticRecorder && r.Corrections == 0;
+                    <li class="sa-row sta-row sa-row--@slug" data-sta-row data-staff="@r.StaffId" data-name="@r.Name" data-status="@slug" data-dept="@r.DepartmentKey" data-category="@StaffCategories.Slug(r.Category)"
+                        data-search="@r.Name.ToLowerInvariant()" data-start="@(r.ExpectedStart?.ToString("HH:mm:ss", inv) ?? (Model.SchoolStart?.ToString("HH:mm:ss", inv)))">
+                        <div class="sa-row__main">
+                            <span class="sa-avatar" aria-hidden="true">@Initials(r.Name)</span>
+                            <span class="sa-row__who"><a href="@(r.IsManagement ? $"/management/members/{r.StaffId}" : $"/staff/{r.StaffId}")" dir="auto"><strong>@r.Name</strong></a><span class="sa-row__meta">@meta@(r.ExpectedStart is { } own ? $" · starts {Arrivals.Time(own)}" : "")</span></span>
+                        </div>
+                        <span class="sa-row__time num" data-sta-time>@(r.ArrivalTime is { } t ? Arrivals.Time(t) : "—")</span>
+                        <span class="sa-row__status">
+                            <span class="badge badge--dot @Badge(r.Status)" data-sta-status>@StaffAttendanceStatuses.Label(r.Status)</span>
+                            <span class="sa-row__note" data-sta-note>@if (r.Corrections > 0) { @Ui.Icon("pencil", "icon--sm")<text>Corrected</text> } else if (automatic) { @Ui.Icon("lock", "icon--sm")<text>No attendance by @Arrivals.Time(Model.Cutoff)</text> } else if (r.RecordedBy is { } by) { <text>by @by</text> }</span>
+                        </span>
+                        <span class="sa-row__actions" data-sta-actions>
+                            @if (r.RecordId is not null)
+                            {
+                                <a class="btn btn--ghost btn--sm" href="/staff/attendance/record?staffId=@r.StaffId&date=@date" data-modal>@Ui.Icon("pencil")Correct</a>
+                            }
+                            else if (Model.RecordingOpen)
+                            {
+                                <button type="button" class="btn btn--sm sta-btn sta-btn--present" data-sta-mark="Present">@Ui.Icon("check")Present</button>
+                                <button type="button" class="btn btn--sm sta-btn sta-btn--late" data-sta-mark="Late">@Ui.Icon("clock")Late</button>
+                                <button type="button" class="btn btn--sm sta-btn sta-btn--absent" data-sta-mark="Absent">@Ui.Icon("x-circle")Absent</button>
+                            }
+                            else
+                            {
+                                <span class="sa-locked" aria-disabled="true" title="Staff attendance closed at @Arrivals.Time(Model.Cutoff)">@Ui.Icon("lock", "icon--sm")Closed</span>
+                            }
+                        </span>
+                    </li>
+                }
+            </ol>
+            <div class="empty sa-empty" data-sta-empty @(Model.Rows.Count == 0 ? "" : "hidden")>
+                @Ui.Icon("users")
+                <p>@(Model.Rows.Count == 0 ? "No staff members are expected on this date." : "No staff members match.")</p>
+            </div>
+        </section>
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/staff-attendance.js" asp-append-version="true"></script>
+}

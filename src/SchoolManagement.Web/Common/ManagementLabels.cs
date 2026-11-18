@@ -45,6 +45,43 @@ public static class ManagementPositions
     };
 }
 
+/// <summary>
+/// Values of the Position dropdowns (Add Staff, Management Team member form): "" none, a leadership position's name
+/// (e.g. "Sqam"), "custom-12" for a school-added position, and "new" for + Add New Position.
+/// </summary>
+public static class PositionChoices
+{
+    public const string New = "new";
+    private const string CustomPrefix = "custom-";
+
+    public static string Custom(int id) => CustomPrefix + id.ToString(CultureInfo.InvariantCulture);
+
+    public static string Of(ManagementPosition? position, int? customPositionId) =>
+        position is { } p ? p.ToString() : customPositionId is { } c ? Custom(c) : "";
+
+    /// <summary>
+    /// Puts the chosen position on <paramref name="input"/>. A null <paramref name="choice"/> (forms posting the
+    /// leadership position directly, or "No position") keeps <paramref name="legacy"/>. False when the value is not one
+    /// the form offers.
+    /// </summary>
+    public static bool Apply(string? choice, ManagementPosition? legacy, string? newTitle, Services.ManagementMemberInput input)
+    {
+        (input.Position, input.CustomPositionId, input.NewPositionTitle) = (null, null, null);
+        var v = choice?.Trim() ?? "";
+        if (v.Length == 0) { input.Position = legacy is { } l && Enum.IsDefined(l) ? l : null; return legacy is null || input.Position is not null; }
+        if (v == New) { input.NewPositionTitle = newTitle ?? ""; return true; }
+        if (v.StartsWith(CustomPrefix, StringComparison.Ordinal))
+        {
+            if (!int.TryParse(v[CustomPrefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var id) || id <= 0) return false;
+            input.CustomPositionId = id;
+            return true;
+        }
+        if (int.TryParse(v, out _) || !Enum.TryParse<ManagementPosition>(v, true, out var p) || !Enum.IsDefined(p)) return false;
+        input.Position = p;
+        return true;
+    }
+}
+
 public static class TaskLabels
 {
     /// <summary>Statuses offered for a task. On Hold is only offered to a task that already has it.</summary>

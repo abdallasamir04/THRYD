@@ -138,7 +138,7 @@ public sealed class ClassFormModel
 
     [Display(Name = "Class capacity")]
     [Range(1, 1000, ErrorMessage = "Enter a capacity between 1 and 1,000.")]
-    public int Capacity { get; set; } = 25;
+    public int Capacity { get; set; } = SchoolClass.DefaultCapacity;
 
     [Display(Name = "Display order")]
     [Range(0, 1_000_000, ErrorMessage = "Enter a number from 0 to 1,000,000.")]

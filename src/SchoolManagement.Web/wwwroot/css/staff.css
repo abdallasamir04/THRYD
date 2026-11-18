@@ -12,17 +12,8 @@
 .nav__section--nested { margin-top: 2px; margin-inline-start: 10px; padding-inline-start: 6px; border-inline-start: 1px solid var(--color-border-subtle); }
 .nav__section--nested .nav__summary { text-transform: none; letter-spacing: 0; font-size: 0.78rem; color: var(--color-text-muted); }
 
-/* ---------- THRYD logo (sidebar): the light or dark copy follows the theme ---------- */
-.brand--logo { flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-width: 0; padding: 6px 0; container-type: inline-size; }
-/* Tagline as real text (sharp at any resolution). Its size follows the sidebar width so it always fits on one line. */
-.brand__tagline {
-    display: flex; align-items: center; justify-content: center; gap: 0.7em; max-width: 100%;
-    font-family: var(--font-sans); font-size: min(0.53rem, 3.42cqi); font-weight: 700; line-height: 1;
-    letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
-    color: var(--color-text-muted); -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
-}
-/* The short cyan rules either side, as in the original artwork. */
-.brand__tagline::before, .brand__tagline::after { content: ""; width: 1em; height: 1.5px; border-radius: 1px; background: #22d3ee; flex: none; }
+/* ---------- THRYD logo (sidebar): the light or dark copy follows the theme, centred in the header ---------- */
+.brand--logo { flex: 1; flex-direction: column; align-items: center; justify-content: center; min-width: 0; padding: 8px 0; }
 .brand__logo { display: block; width: 186px; max-width: 100%; height: auto; }
 .brand__logo--dark { display: none; }
 :root[data-theme="dark"] .brand__logo--dark { display: block; }
@@ -642,15 +633,9 @@ a.tt-cell:focus-visible { outline: 3px solid var(--color-focus); outline-offset:
 .class-team__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 @media (max-width: 640px) { .team-summary { gap: 8px 14px; } .team-summary__go { display: none; } .class-team__tools { width: 100%; } .class-team__year, .class-team__year .select { width: 100%; } }
 
-/* ---------------------------------------------------------------- School Leadership (members + positions) */
-.leadership-table .person__meta { white-space: normal; }
-.leadership-table tr.is-vacant td:first-child .position-card__icon { background: var(--color-warning-soft); color: var(--color-warning-ink); }
-.leadership-table .row-actions { justify-content: flex-end; flex-wrap: nowrap; }
+/* ---------------------------------------------------------------- School Leadership */
 .position-card__icon--lg { width: 48px; height: 48px; border-radius: 14px; flex: none; }
 .position-card__icon--lg .icon { width: 24px; height: 24px; }
-@media (max-width: 720px) {
-    .leadership-table .row-actions { justify-content: flex-start; }
-}
 
 /* ---------------------------------------------------------------- Management Team tasks: form, people, files, pickers */
 .task-status--cancelled { background: var(--color-surface-sunken); color: var(--color-text-faint); }
@@ -686,7 +671,7 @@ a.tt-cell:focus-visible { outline: 3px solid var(--color-focus); outline-offset:
 .task-card__person a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.84rem; font-weight: 700; color: var(--color-text-strong); text-decoration: none; }
 .task-card__person a:hover { color: var(--color-primary-ink); }
 .task-card__role { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-faint); font-size: 0.74rem; }
-.task-card__due { display: flex; align-items: center; min-height: 20px; }
+.task-card__due { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; min-height: 20px; }
 .task-card__foot { flex-wrap: nowrap; }
 .task-card__foot .row-actions { flex: none; gap: 2px; }
 .task-card__ago { margin-inline-end: 4px; color: var(--color-text-faint); font-size: 0.72rem; white-space: nowrap; }
@@ -710,6 +695,21 @@ a.tt-cell:focus-visible { outline: 3px solid var(--color-focus); outline-offset:
 }
 @container (max-width: 290px) {
     .task-filters__group--list { grid-template-columns: minmax(0, 1fr); }
+}
+/* Tasks page (Daily Operations): four people filters in one row; search + six list filters in two full rows. */
+.task-filters--global .task-filters__group:not(.task-filters__group--list) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.task-filters--global .task-filters__group--list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.task-filters--global .task-filter--search { grid-column: span 2; }
+@container (max-width: 920px) {
+    .task-filters--global .task-filters__group:not(.task-filters__group--list) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .task-filters--global .task-filter--search { grid-column: 1 / -1; }
+}
+@container (max-width: 620px) {
+    .task-filters--global .task-filters__group:not(.task-filters__group--list) { grid-template-columns: minmax(0, 1fr); }
+    .task-filters--global .task-filters__group--list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 290px) {
+    .task-filters--global .task-filters__group--list { grid-template-columns: minmax(0, 1fr); }
 }
 .task-views__who { margin: 0; }
 
@@ -784,28 +784,13 @@ dialog.modal--xl { width: min(1000px, calc(100vw - 24px)); }
     .task-file .row-actions { width: 100%; justify-content: flex-end; }
 }
 
-/* ---------------------------------------------------------------- School Leadership: one section (members + positions) */
+/* ---------------------------------------------------------------- School Leadership: one section (members) */
 .leadership { overflow: visible; }
 .leadership__part { padding: 4px 22px 22px; scroll-margin-top: 90px; }
-.leadership__part--positions { border-top: 1px solid var(--color-border-subtle); padding-top: 20px; }
 .leadership__part-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin-bottom: 14px; }
 .leadership__part-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1rem; font-weight: 800; color: var(--color-text-strong); }
 .leadership__part-title > .icon { width: 18px; height: 18px; color: var(--color-primary-ink); }
 .leadership__tally { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 99px; background: var(--tint-primary); color: var(--color-primary-ink); font-size: 0.74rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.leadership__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.leadership__search { width: 240px; max-width: 100%; }
-.leadership__select { width: 230px; max-width: 100%; }
-.leadership__note { margin: -4px 0 14px; }
-.leadership__table { border: 1px solid var(--color-border); border-radius: 14px; overflow: hidden; }
-.leadership__table .table { margin: 0; }
-.leadership__history { margin-top: 16px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); overflow: hidden; }
-.leadership__history > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; cursor: pointer; font-weight: 800; color: var(--color-text-strong); list-style: none; }
-.leadership__history > summary::-webkit-details-marker { display: none; }
-.leadership__history > summary::after { content: ""; width: 8px; height: 8px; margin-inline-start: auto; border-right: 2px solid var(--color-text-faint); border-bottom: 2px solid var(--color-text-faint); transform: rotate(45deg); transition: transform .15s; }
-.leadership__history[open] > summary::after { transform: rotate(-135deg); }
-.leadership__history > summary .icon { color: var(--color-primary-ink); }
-.leadership__history > summary .hint { margin: 0; font-weight: 500; }
-.leadership__history[open] > summary { border-bottom: 1px solid var(--color-border-subtle); }
 
 /* Member cards: avatar + name + start date, a position badge, three task counts, then phone and actions. */
 .leader-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 238px), 1fr)); gap: 16px; }
@@ -857,8 +842,6 @@ a.leader-card__position:hover { background: var(--color-primary-soft); text-deco
 @media (prefers-reduced-motion: reduce) { .leader-card { transition: none; } .leader-card:hover { transform: none; } }
 @media (max-width: 720px) {
     .leadership__part { padding: 4px 14px 16px; }
-    .leadership__filters, .leadership__search, .leadership__select { width: 100%; }
-    .leadership__filters .btn { flex: 1; }
 }
 
 /* ---- Tasks page: view switch next to "Working as" note; small screens */
@@ -883,15 +866,46 @@ a.leader-card__position:hover { background: var(--color-primary-soft); text-deco
 .dir-filter__label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; font-weight: 800; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dir-filter__label .icon { width: 13px; height: 13px; flex: none; }
 .dir-filter .th-trigger, .dir-filter .select, .dir-filter .input, .dir-filter .input-icon { width: 100%; min-width: 0; }
-.dir-grid { padding: 18px; }
-.dir-card .leader-card__who { flex: 1; gap: 2px; }
-.dir-card .leader-card__since { display: flex; max-width: 100%; min-width: 0; overflow: hidden; }
-.dir-card__ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Phone first: the action icons are compact so a full number fits beside three of them. */
-.dir-card .leader-card__foot .icon-btn { width: 30px; height: 30px; border-radius: 9px; }
-.dir-card .leader-card__foot .icon-btn .icon { width: 16px; height: 16px; }
-.dir-card .leader-card__contact { font-size: 0.78rem; flex: 1 1 auto; }
-.dir-card__badges { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; margin-bottom: auto; }
+/* Category bar, then one section per category: a header bar and full-width rows (identity | job | department | contact | actions). */
+.dir-cats { margin: 14px 18px 0; max-width: calc(100% - 36px); overflow-x: auto; scrollbar-width: none; }
+.dir-cats a { white-space: nowrap; }
+.dir-cats .count { display: inline-grid; place-items: center; min-width: 22px; height: 20px; margin-left: 2px; padding: 0 7px; border-radius: 99px; background: var(--color-surface-soft); color: var(--color-text-muted); font-size: 0.72rem; }
+.dir-cats a[aria-current="true"] .count { background: var(--tint-primary); color: var(--color-primary-ink); }
+.dir-groups { display: flex; flex-direction: column; gap: 22px; padding: 18px; }
+.dir-group { --group: var(--color-primary); --group-ink: var(--color-primary-ink); --group-soft: var(--tint-primary); display: flex; flex-direction: column; gap: 8px; }
+.dir-group--management { --group: var(--color-secondary); --group-ink: var(--color-secondary-ink); --group-soft: var(--color-secondary-soft); }
+.dir-group--support { --group: var(--color-attention); --group-ink: var(--color-attention-ink); --group-soft: var(--color-attention-soft); }
+.dir-group__head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--group-soft); border-left: 4px solid var(--group); }
+.dir-group__icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--color-surface); color: var(--group-ink); flex: none; }
+.dir-group__icon .icon { width: 17px; height: 17px; }
+.dir-group__title { margin: 0; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--group-ink); }
+.dir-group__count { margin-left: auto; padding: 2px 10px; border-radius: 99px; background: var(--color-surface); color: var(--group-ink); font-size: 0.76rem; font-weight: 800; white-space: nowrap; }
+.dir-rows { display: flex; flex-direction: column; gap: 8px; }
+.dir-row { position: relative; display: grid; grid-template-columns: minmax(220px, 1.7fr) minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1fr) auto;
+    grid-template-areas: "who job dept contact actions"; align-items: center; gap: 10px 18px; padding: 12px 14px; border: 1px solid var(--color-border);
+    border-radius: 14px; background: var(--color-surface-raised); transition: border-color 0.15s, box-shadow 0.15s; }
+.dir-row:hover { border-color: var(--color-border-strong); box-shadow: var(--shadow-card); }
+.dir-row:focus-within { border-color: var(--group); }
+.dir-row__who { grid-area: who; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dir-row__id { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.dir-row__name { margin: 0; max-width: 100%; font-size: 0.95rem; font-weight: 800; color: var(--color-text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dir-row__name a { color: inherit; text-decoration: none; }
+.dir-row__name a:hover { color: var(--color-primary-ink); }
+.dir-row__field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dir-row__field--job { grid-area: job; }
+.dir-row__field--dept { grid-area: dept; }
+.dir-row__field--contact { grid-area: contact; }
+.dir-row__label { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-faint); }
+.dir-row__value { font-size: 0.86rem; font-weight: 700; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dir-row__value.is-empty { color: var(--color-text-faint); font-weight: 600; }
+.dir-row__roles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.dir-row__contact { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; color: var(--color-text-muted); font-size: 0.82rem; font-weight: 600; text-decoration: none; font-variant-numeric: tabular-nums; }
+.dir-row__contact span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dir-row__contact .icon { width: 14px; height: 14px; flex: none; color: var(--group-ink); }
+.dir-row__contact:hover { color: var(--color-primary-ink); }
+.dir-row__contact.is-empty { color: var(--color-text-faint); }
+.dir-row__actions { grid-area: actions; position: relative; z-index: 1; flex-wrap: nowrap; gap: 2px; }
+@media (prefers-reduced-motion: reduce) { .dir-row { transition: none; } }
 .dir-badge { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 9px; border-radius: 99px; font-size: 0.72rem; font-weight: 800; line-height: 1.35;
     background: var(--color-surface-soft); color: var(--color-text-muted); }
 .dir-badge .icon { width: 12px; height: 12px; flex: none; }
@@ -903,12 +917,110 @@ a.leader-card__position:hover { background: var(--color-primary-soft); text-deco
 @media (max-width: 1100px) {
     .dir-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dir-filter--search { grid-column: 1 / -1; }
+    /* Tablet: name and actions on top, the three details below. */
+    .dir-row { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; grid-template-areas: "who who who actions" "job dept contact contact"; }
 }
 @media (max-width: 720px) {
     .dir-filters { padding: 14px; }
-    .dir-grid { padding: 14px; }
+    .dir-groups { padding: 14px; gap: 18px; }
+    .dir-cats { margin: 12px 14px 0; max-width: calc(100% - 28px); }
     .dir-summary > li:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+    /* Phone: name on top with the actions; job and department side by side; contact below. */
+    .dir-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; grid-template-areas: "who who actions" "job dept dept" "contact contact contact"; padding: 12px; gap: 10px 12px; }
+    /* The category bar as an even 2 x 2 grid instead of a sideways scroll. */
+    .segmented.dir-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+    .dir-cats a { justify-content: center; white-space: normal; text-align: center; }
 }
 @media (max-width: 420px) {
     .dir-filters { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------------------------------------------------------------- Staff Attendance (Views/StaffAttendance) */
+/* Reuses the School Attendance register (.sa-*, operations.css); only the staff-specific pieces are here. */
+.sta-dept { flex: 0 1 220px; min-width: 170px; }
+.sta-row .sa-row__actions { flex-wrap: nowrap; }
+.sta-btn { border: 1px solid transparent; font-weight: 700; }
+.sta-btn--present { background: var(--color-success-soft); color: var(--color-success-ink); border-color: color-mix(in srgb, var(--color-success) 30%, transparent); }
+.sta-btn--late { background: var(--color-warning-soft); color: var(--color-warning-ink); border-color: color-mix(in srgb, var(--color-warning) 30%, transparent); }
+.sta-btn--absent { background: var(--color-error-soft); color: var(--color-error-ink); border-color: color-mix(in srgb, var(--color-error) 30%, transparent); }
+.sta-btn--present:hover:not(:disabled) { background: var(--color-success); color: #fff; }
+.sta-btn--late:hover:not(:disabled) { background: var(--color-warning); color: #fff; }
+.sta-btn--absent:hover:not(:disabled) { background: var(--color-error); color: #fff; }
+.sta-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sta-scope { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 18px 0 14px; font-size: 0.88rem; color: var(--color-text-muted); }
+.sta-scope strong { color: var(--color-text-strong); }
+.sta-tiles { margin-bottom: 20px; }
+.sta-section { margin-bottom: 20px; overflow: hidden; }
+.sta-periods { flex-wrap: wrap; }
+.sa-hist-form .field[hidden] { display: none; }
+@media (max-width: 860px) {
+    .sta-dept { flex: 1 1 100%; }
+    .sta-row .sa-row__actions { flex-wrap: wrap; }
+}
+
+/* ---------------------------------------------------------------- Add Staff Member (Views/Staff/Create.cshtml) */
+.sf { display: flex; flex-direction: column; gap: 0; }
+.sf-section { display: flex; flex-direction: column; gap: 14px; padding: 18px 0; border-top: 1px solid var(--color-border-subtle); }
+.sf-section:first-of-type { border-top: 0; padding-top: 4px; }
+.sf-section__title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--color-text-strong); }
+.sf-step { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--tint-primary); color: var(--color-primary-ink); font-size: 0.76rem; font-weight: 800; flex: none; }
+.sf [hidden] { display: none !important; }
+
+/* Category: two selectable cards. */
+.sf-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sf-cat { position: relative; display: block; cursor: pointer; }
+.sf-cat input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.sf-cat__box {
+    display: flex; align-items: flex-start; gap: 12px; height: 100%; padding: 14px 16px; border-radius: 14px; border: 1.5px solid var(--color-border);
+    background: var(--color-surface-raised); transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+.sf-cat:hover .sf-cat__box { border-color: var(--color-border-strong); }
+.sf-cat input:checked + .sf-cat__box { border-color: var(--color-primary); background: var(--tint-primary); box-shadow: var(--shadow-card); }
+.sf-cat input:focus-visible + .sf-cat__box { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.sf-cat__icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--color-surface-soft); color: var(--color-primary-ink); flex: none; }
+.sf-cat input:checked + .sf-cat__box .sf-cat__icon { background: var(--color-primary); color: #fff; }
+.sf-cat__text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.sf-cat__text strong { color: var(--color-text-strong); font-size: 0.92rem; }
+.sf-cat__text small { color: var(--color-text-muted); font-size: 0.78rem; line-height: 1.4; }
+.sf-cat__check { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--color-border-strong); color: transparent; flex: none; }
+.sf-cat input:checked + .sf-cat__box .sf-cat__check { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+
+.sf-pick-first { display: flex; align-items: center; gap: 6px; margin: 0; }
+.sf-narrow { max-width: 300px; }
+.sf-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 18px; align-items: start; }
+.sf-grid-3__note { margin: 0; align-self: center; }
+/* Probation Period Dates: revealed under the 30 / 60 / 90-day choice. */
+.sf-subpanel { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface-soft); }
+.sf-subpanel__title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 0.86rem; font-weight: 800; color: var(--color-text-strong); }
+.sf-subpanel__title .icon { width: 16px; height: 16px; color: var(--color-primary-ink); }
+.sf-readonly, .sf-readonly:focus { background: var(--color-surface-raised); color: var(--color-text-strong); font-weight: 700; cursor: default; box-shadow: none; }
+.sf-toggle { align-self: flex-start; flex-wrap: wrap; }
+.sf-toggle span { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.86rem; }
+.sf-toggle input:checked + span { color: var(--color-primary-ink); }
+.sf-days { border: 0; margin: 0; padding: 0; min-width: 0; }
+.sf-days .day-picks { margin-top: 4px; }
+
+@media (max-width: 720px) {
+    .sf-grid-3 { grid-template-columns: minmax(0, 1fr); }
+    .sf .form-grid--2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+    .sf-cats { grid-template-columns: minmax(0, 1fr); }
+    .sf-narrow { max-width: none; }
+    /* Probation: four choices as an even 2 x 2 grid instead of a wrapped row. */
+    .seg-toggle.sf-probation-toggle { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-self: stretch; }
+    .seg-toggle.sf-probation-toggle span { display: flex; justify-content: center; }
+}
+
+/* ---------------------------------------------------------------- Tasks (Daily Operations): tabs and created line */
+.task-tabs { display: flex; gap: 4px; padding: 12px 18px 0; border-bottom: 1px solid var(--color-border-subtle); overflow-x: auto; scrollbar-width: thin; }
+.task-tabs a { display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px 11px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--color-text-muted); font-size: 0.86rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.task-tabs a:hover { color: var(--color-text-strong); }
+.task-tabs a[aria-current="true"] { color: var(--color-primary-ink); border-bottom-color: var(--color-primary); }
+.task-tabs .count { min-width: 22px; height: 20px; padding: 0 7px; display: inline-grid; place-items: center; border-radius: 99px; background: var(--color-surface-soft); color: var(--color-text-muted); font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+.task-tabs a[aria-current="true"] .count { background: var(--tint-primary); color: var(--color-primary-ink); }
+.task-tabs a.is-alert .count { background: var(--color-error-soft); color: var(--color-error-ink); }
+.task-card__created { color: var(--color-text-faint); font-size: 0.76rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 720px) { .task-tabs { padding: 10px 12px 0; } }

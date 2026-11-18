@@ -4,11 +4,29 @@ using SchoolManagement.Web.Entities;
 
 namespace SchoolManagement.Web.Services;
 
-public sealed record ClassDistribution(int ClassId, string Name, bool IsActive, int Count);
+/// <summary>
+/// One class on the dashboard: its enrolled students and its own configured capacity. The ring splits into Occupied
+/// (students up to the capacity), Available (seats left) and Over (students beyond the capacity); never capped.
+/// </summary>
+public sealed record ClassDistribution(int ClassId, string Name, bool IsActive, int Count, int Capacity = SchoolClass.DefaultCapacity)
+{
+    public int Occupied => Math.Min(Count, Capacity);
+    public int Available => Math.Max(0, Capacity - Count);
+    public int Over => Math.Max(0, Count - Capacity);
+    public bool IsFull => Capacity > 0 && Count == Capacity;
+    /// <summary>Enrolled as a share of capacity (may exceed 100).</summary>
+    public int Utilization => Capacity <= 0 ? 0 : (int)Math.Round(Count * 100.0 / Capacity, MidpointRounding.AwayFromZero);
+}
 
-public sealed record RecentStudent(int Id, string FullName, string ClassName, DateTime CreatedAt);
-
-public sealed record RecentTeacher(int Id, string FullName, string? JobTitle, DateTime CreatedAt);
+/// <summary>Totals of the classes shown. Available and Over are summed per class, so one class's free seats never offset another's excess.</summary>
+public sealed record CapacityTotals(int Students, int Capacity, int Available, int Over)
+{
+    public static CapacityTotals Of(IEnumerable<ClassDistribution> classes)
+    {
+        var list = classes.ToList();
+        return new(list.Sum(c => c.Count), list.Sum(c => c.Capacity), list.Sum(c => c.Available), list.Sum(c => c.Over));
+    }
+}
 
 public sealed class DashboardData
 {
@@ -19,10 +37,7 @@ public sealed class DashboardData
     public int StudentsInInactiveClasses { get; init; }
     public int ClassesWithoutStudents { get; init; }
     public int TeachersWithoutContact { get; init; }
-    public IReadOnlyList<RecentStudent> RecentStudents { get; init; } = [];
-    public IReadOnlyList<RecentTeacher> RecentTeachers { get; init; } = [];
     public IReadOnlyList<ClassDistribution> Distribution { get; init; } = [];
-    public IReadOnlyList<JobTitleCount> TeachersByJobTitle { get; init; } = [];
     public DateTime GeneratedAtUtc { get; init; }
 }
 
@@ -46,37 +61,20 @@ public sealed class DashboardService(SchoolDbContext db) : IDashboardService
     {
         var distribution = await db.Classes.AsNoTracking()
             .OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
-            .Select(c => new ClassDistribution(c.Id, c.Name, c.IsActive, c.Students.Count))
-            .ToListAsync(ct);
-
-        var recentStudents = await db.Students.AsNoTracking()
-            .OrderByDescending(s => s.CreatedAt).ThenByDescending(s => s.Id).Take(6)
-            .Select(s => new RecentStudent(s.Id, s.FullName, s.SchoolClass.Name, s.CreatedAt))
-            .ToListAsync(ct);
-
-        var recentTeachers = await db.Teachers.AsNoTracking()
-            .OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id).Take(6)
-            .Select(t => new RecentTeacher(t.Id, t.FullName, t.JobTitle, t.CreatedAt))
-            .ToListAsync(ct);
-
-        var byTitle = await db.Teachers.AsNoTracking()
-            .GroupBy(t => t.JobTitle ?? "")
-            .Select(g => new JobTitleCount(g.Key, g.Count()))
+            .Select(c => new ClassDistribution(c.Id, c.Name, c.IsActive, c.Students.Count, c.Capacity))
             .ToListAsync(ct);
 
         return new DashboardData
         {
             TotalStudents = distribution.Sum(d => d.Count),
             TotalTeachers = await db.Teachers.CountAsync(ct),
+            // All staff records (teachers and management members); staff have no inactive state.
             TotalClasses = distribution.Count,
             ActiveClasses = distribution.Count(d => d.IsActive),
             StudentsInInactiveClasses = distribution.Where(d => !d.IsActive).Sum(d => d.Count),
             ClassesWithoutStudents = distribution.Count(d => d.IsActive && d.Count == 0),
             TeachersWithoutContact = await db.Teachers.CountAsync(t => t.NormalizedContact == "", ct),
-            RecentStudents = recentStudents,
-            RecentTeachers = recentTeachers,
             Distribution = distribution,
-            TeachersByJobTitle = byTitle.OrderByDescending(x => x.Count).ThenBy(x => x.JobTitle).ToList(),
             GeneratedAtUtc = DateTime.UtcNow,
         };
     }

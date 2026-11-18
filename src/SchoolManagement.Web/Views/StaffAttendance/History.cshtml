@@ -1,0 +1,231 @@
+@model SchoolManagement.Web.Controllers.StaffAttendanceHistoryPage
+@*
+    Staff Attendance · History & Reports. Filters: period (one date, date range, month, academic year), staff member,
+    department and status. Lines are the expected staff-days of the period: a saved record, or Not Recorded (never Absent).
+    PDF and Excel use the same filters and include every matching line (not only this page).
+*@
+@{
+    var q = Model.Query;
+    var h = Model.History;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var qs = q.ToQuery();
+    var today = SchoolWeek.Iso(SchoolWeek.Today);
+    var period = q.Period ?? "month";
+    ViewData["Title"] = "Staff Attendance · History & Reports";
+    ViewData["Nav"] = "Staff";
+    string Badge(StaffAttendanceStatus? s) => s switch
+    {
+        StaffAttendanceStatus.Present => "badge--success", StaffAttendanceStatus.Late => "badge--warning", StaffAttendanceStatus.Absent => "badge--error", _ => "badge--neutral",
+    };
+    var pageHref = "/staff/attendance/history" + (qs.Length == 0 ? "" : qs);
+    var p = h.Page;
+}
+
+<div class="page-head sa-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/attendance">Staff Attendance</a></li><li>History &amp; Reports</li></ol>
+        <h1 class="page-title">Staff Attendance <span class="faint">· History &amp; Reports</span></h1>
+        <p class="page-sub">Recorded staff attendance by period, staff member, department and status. Not Recorded days are listed separately and never counted as Absent.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/staff/attendance/history/excel@(qs)">@Ui.Icon("sheet")Download Excel</a>
+        <a class="btn btn--primary" href="/staff/attendance/history/pdf@(qs)">@Ui.Icon("file-pdf")Download PDF</a>
+    </div>
+</div>
+
+<nav class="segmented sa-tabs" aria-label="Staff Attendance">
+    <a href="/staff/attendance">@Ui.Icon("check-circle", "icon--sm")Daily Attendance</a>
+    <a href="/staff/attendance/history" aria-current="true">@Ui.Icon("chart", "icon--sm")History &amp; Reports</a>
+</nav>
+
+<form class="card sa-hist-form" method="get" action="/staff/attendance/history" data-sta-hist aria-label="Report">
+    <div class="field">
+        <span class="label" id="sh-period-label">Period</span>
+        <div class="seg-toggle seg-toggle--sm sta-periods" role="radiogroup" aria-labelledby="sh-period-label">
+            <label><input type="radio" name="period" value="day" checked="@(period == "day")" /><span>One date</span></label>
+            <label><input type="radio" name="period" value="range" checked="@(period == "range")" /><span>Date range</span></label>
+            <label><input type="radio" name="period" value="month" checked="@(period == "month")" /><span>Month</span></label>
+            <label><input type="radio" name="period" value="year" checked="@(period == "year")" /><span>Academic year</span></label>
+        </div>
+    </div>
+    <div class="sa-hist-form__fields">
+        <div class="field" data-sta-period="day">
+            <label class="label" for="sh-date">Date</label>
+            <input class="input picker" type="date" id="sh-date" name="date" value="@SchoolWeek.Iso(q.Date ?? SchoolWeek.Today)" max="@today" data-datepicker data-empty-text="Today" />
+        </div>
+        <div class="field" data-sta-period="range">
+            <label class="label" for="sh-from">From</label>
+            <input class="input picker" type="date" id="sh-from" name="from" value="@(period == "range" ? SchoolWeek.Iso(h.From) : null)" max="@today" data-datepicker data-empty-text="First day" />
+        </div>
+        <div class="field" data-sta-period="range">
+            <label class="label" for="sh-to">To</label>
+            <input class="input picker" type="date" id="sh-to" name="to" value="@(period == "range" ? SchoolWeek.Iso(h.To) : null)" max="@today" data-datepicker data-empty-text="Last day" />
+        </div>
+        <div class="field" data-sta-period="month">
+            <label class="label" for="sh-month">Month</label>
+            <select class="select" id="sh-month" name="month">
+                @foreach (var (value, label) in h.Months)
+                {
+                    <option value="@value" selected="@(value == q.Month)">@label</option>
+                }
+            </select>
+        </div>
+        <div class="field" data-sta-period="year">
+            <label class="label" for="sh-year">Academic year</label>
+            <select class="select" id="sh-year" name="yearId">
+                @foreach (var y in h.Years)
+                {
+                    <option value="@y.Id" selected="@(y.Id == q.YearId || (q.YearId is null && y.Quarters.Any(x => x.StartDate <= SchoolWeek.Today && x.EndDate >= SchoolWeek.Today)))">@y.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="sh-staff">Staff member</label>
+            <select class="select" id="sh-staff" name="staffId" data-searchable data-search-notes>
+                <option value="">All staff</option>
+                @foreach (var s in h.Staff)
+                {
+                    <option value="@s.Id" selected="@(q.StaffId == s.Id)" data-note="@s.Group">@s.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="sh-category">Staff category</label>
+            <select class="select" id="sh-category" name="category">
+                <option value="">All categories</option>
+                @foreach (var c in StaffCategories.All)
+                {
+                    <option value="@StaffCategories.Slug(c)" selected="@(StaffCategories.Slug(c) == q.Category)">@StaffCategories.Name(c)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="sh-dept">Department</label>
+            <select class="select" id="sh-dept" name="department">
+                <option value="">All departments</option>
+                @foreach (var (value, label) in h.Departments)
+                {
+                    <option value="@value" selected="@(value == q.Department)">@label</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="label" for="sh-status">Status</label>
+            <select class="select" id="sh-status" name="status">
+                <option value="">All statuses</option>
+                <option value="present" selected="@(q.Status == "present")">Present</option>
+                <option value="late" selected="@(q.Status == "late")">Late</option>
+                <option value="absent" selected="@(q.Status == "absent")">Absent</option>
+                <option value="none" selected="@(q.Status == "none")">Not Recorded</option>
+            </select>
+        </div>
+        <div class="sa-hist-form__go">
+            <button class="btn btn--primary" type="submit">@Ui.Icon("search")Show report</button>
+        </div>
+    </div>
+</form>
+
+<p class="sta-scope">@Ui.Icon("calendar", "icon--sm")<strong>@Model.Scope</strong> · @h.PeriodLabel · @SchoolManagement.Web.Services.Pdf.StaffAttendanceReports.Dates(h.From, h.To) · @Ui.Plural(h.SchoolDays, "school day", "school days")</p>
+
+<ul class="sa-tiles sta-tiles" aria-label="Summary">
+    <li class="sa-tile"><span class="sa-tile__value num">@h.Totals.Expected</span><span class="sa-tile__label">Expected staff-days</span></li>
+    <li class="sa-tile sa-tile--present"><span class="sa-tile__value num">@h.Totals.Present</span><span class="sa-tile__label">Present</span></li>
+    <li class="sa-tile sa-tile--late"><span class="sa-tile__value num">@h.Totals.Late</span><span class="sa-tile__label">Late</span></li>
+    <li class="sa-tile sa-tile--absent"><span class="sa-tile__value num">@h.Totals.Absent</span><span class="sa-tile__label">Absent</span></li>
+    <li class="sa-tile sa-tile--none"><span class="sa-tile__value num">@h.Totals.NotRecorded</span><span class="sa-tile__label">Not Recorded</span></li>
+</ul>
+
+<section class="card sta-section" aria-labelledby="sh-by-staff">
+    <div class="card__head"><h2 class="card__title" id="sh-by-staff">@Ui.Icon("users")By staff member</h2><span class="hint">Attendance % = (Present + Late) ÷ recorded days</span></div>
+    @if (h.ByStaff.Count == 0)
+    {
+        <div class="empty">@Ui.Icon("users")<p>No staff members were expected in this period.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table sa-table">
+                <thead><tr><th>Staff member</th><th>Department</th><th class="num">Expected</th><th class="num">Present</th><th class="num">Late</th><th class="num">Absent</th><th class="num">Not Recorded</th><th class="num">Attendance %</th></tr></thead>
+                <tbody>
+                    @foreach (var s in h.ByStaff)
+                    {
+                        <tr>
+                            <td data-label="Staff member"><a href="/staff/attendance/history@(new StaffAttendanceQuery { Period = q.Period, Date = q.Date, From = q.From, To = q.To, Month = q.Month, YearId = q.YearId, StaffId = s.StaffId }.ToQuery())" dir="auto"><strong>@s.Name</strong></a></td>
+                            <td data-label="Department">@s.Group</td>
+                            <td data-label="Expected" class="num">@s.Counts.Expected</td>
+                            <td data-label="Present" class="num sa-n--present">@s.Counts.Present</td>
+                            <td data-label="Late" class="num sa-n--late">@s.Counts.Late</td>
+                            <td data-label="Absent" class="num sa-n--absent">@s.Counts.Absent</td>
+                            <td data-label="Not Recorded" class="num muted">@s.Counts.NotRecorded</td>
+                            <td data-label="Attendance %" class="num"><strong>@SchoolManagement.Web.Services.Pdf.StaffAttendanceReports.Percent(s.Percent)</strong></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="card sta-section" aria-labelledby="sh-lines">
+    <div class="card__head"><h2 class="card__title" id="sh-lines">@Ui.Icon("list")Daily records</h2><span class="hint">Newest first</span></div>
+    @if (p.TotalCount == 0)
+    {
+        <div class="empty">@Ui.Icon("inbox")<p>No staff attendance matches these filters.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table sa-table">
+                <thead><tr><th>Date</th><th>Staff member</th><th>Department</th><th>Status</th><th>Arrival</th><th>Recorded by</th><th>Correction</th></tr></thead>
+                <tbody>
+                    @foreach (var l in p.Items)
+                    {
+                        <tr>
+                            <td data-label="Date" class="num">@l.Date.ToString("ddd d MMM yyyy", inv)</td>
+                            <td data-label="Staff member" dir="auto"><strong>@l.Name</strong></td>
+                            <td data-label="Department">@l.Group</td>
+                            <td data-label="Status"><span class="badge badge--dot @Badge(l.Status)">@StaffAttendanceStatuses.Label(l.Status)</span></td>
+                            <td data-label="Arrival" class="num">@(l.ArrivalTime is { } t ? Arrivals.Time(t) : "—")</td>
+                            <td data-label="Recorded by">@(l.RecordedBy ?? "—")</td>
+                            <td data-label="Correction">@if (l.Corrections > 0) { <span class="sa-corr">@Ui.Icon("pencil", "icon--sm")Corrected @(l.Corrections)×</span> } else { <span class="muted">—</span> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <partial name="~/Views/Belongings/_HistoryPager.cshtml" model="(p.Page, p.TotalPages, p.FirstItem, p.LastItem, p.TotalCount, pageHref)" />
+    }
+</section>
+
+<section class="card sta-section" aria-labelledby="sh-corr">
+    <div class="card__head"><h2 class="card__title" id="sh-corr">@Ui.Icon("pencil")Correction history</h2><span class="hint">Every correction is kept with its reason</span></div>
+    @if (h.Corrections.Count == 0)
+    {
+        <div class="empty">@Ui.Icon("check-circle")<p>No corrections in this period.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table sa-table">
+                <thead><tr><th>Date</th><th>Staff member</th><th>Before</th><th>After</th><th>Reason</th><th>Corrected</th></tr></thead>
+                <tbody>
+                    @foreach (var c in h.Corrections)
+                    {
+                        <tr>
+                            <td data-label="Date" class="num">@c.Date.ToString("d MMM yyyy", inv)</td>
+                            <td data-label="Staff member" dir="auto"><strong>@c.StaffName</strong></td>
+                            <td data-label="Before">@c.Before</td>
+                            <td data-label="After">@c.After</td>
+                            <td data-label="Reason" dir="auto">@(c.Reason ?? "—")</td>
+                            <td data-label="Corrected">@SchoolTime.Current.ToLocal(c.At).ToString("d MMM, h:mm tt", inv)@(c.By is null ? "" : $" · {c.By}")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <script src="~/js/staff-attendance.js" asp-append-version="true"></script>
+}

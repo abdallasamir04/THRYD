@@ -428,8 +428,100 @@
             .catch(function () { t.classList.remove("is-busy"); if (window.App) App.toast("No connection to the server. Nothing was moved.", "error"); });
     });
 
+    // ---------------------------------------------------------------- Add Staff Member (Views/Staff/Create.cshtml)
+    // Shows only the fields of the chosen category, employment type and working-hours type. Hidden fields are disabled,
+    // so they are neither validated nor sent (Fixed and Flexible each have their own start / end inputs).
+    function syncStaffCreate(form) {
+        function value(name) { var c = form.querySelector("[name=" + name + "]:checked"); return c ? c.value : ""; }
+        function show(nodes, on) {
+            nodes.forEach(function (n) {
+                n.hidden = !on;
+                $$("input, select, textarea", n).forEach(function (i) { i.disabled = !on; });
+            });
+        }
+        var cat = value("Category");
+        show($$("[data-sf-for=Academic]", form), cat === "Academic");
+        show($$("[data-sf-for=Management]", form), cat === "Management");
+        $$("[data-sf-for=none]", form).forEach(function (n) { n.hidden = !!cat; });
+        var type = value("EmploymentType");
+        show($$("[data-sf-type-for=FullTime]", form), type === "FullTime");
+        show($$("[data-sf-type-for=PartTime]", form), type === "PartTime");
+        var hours = value("WorkingHoursType");
+        show($$("[data-sf-hours-for=Fixed]", form), hours === "Fixed");
+        show($$("[data-sf-hours-for=Flexible]", form), hours === "Flexible");
+        // The contract cannot end before it starts: the end date picker starts at the start date.
+        var start = form.querySelector("[data-sf-start]"), end = form.querySelector("[data-sf-end]");
+        if (start && end) end.setAttribute("min", start.value || "1980-01-01");
+        // Management → + Add New Position: the title field (kept, but not sent, when another position is chosen).
+        var position = form.querySelector("[data-sf-position]");
+        show($$("[data-sf-new-position]", form), cat === "Management" && !!position && position.value === "new");
+        syncProbation(form, start, end);
+    }
+
+    var MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    function isoDate(value) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+        return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+    }
+    function longDate(d) { return d.getUTCDate() + " " + MONTH_ABBR[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
+
+    /**
+     * Probation: 30 / 60 / 90 days reveal the Probation Period Dates. The start follows the contract start until it is
+     * changed by hand; the end is start + days − 1 (both days counted), the same rule the server uses to save it.
+     */
+    function syncProbation(form, contractStart, contractEnd) {
+        var panel = form.querySelector("[data-sf-probation-dates]");
+        if (!panel) return;
+        var checked = form.querySelector("[data-sf-probation]:checked");
+        var days = checked && checked.value ? parseInt(checked.value, 10) : 0;
+        var startField = panel.querySelector("[data-sf-probation-start]");
+        var endField = panel.querySelector("[data-sf-probation-end]");
+        var summary = panel.querySelector("[data-sf-probation-summary]");
+        var warning = panel.querySelector("[data-sf-probation-warning]");
+        panel.hidden = !days;
+        startField.disabled = !days;
+        var cs = contractStart ? contractStart.value : "", ce = contractEnd ? contractEnd.value : "";
+        startField.setAttribute("min", cs || "1980-01-01");
+        if (ce) startField.setAttribute("max", ce); else startField.removeAttribute("max");
+        if (days && (startField.getAttribute("data-follow") !== "false" || !startField.value) && startField.value !== cs) {
+            startField.value = cs;
+            startField.setAttribute("data-follow", "true");
+            if (window.ThrydUI) window.ThrydUI.sync(startField);
+        }
+        var s = isoDate(startField.value);
+        var e = s && days ? new Date(s.getTime() + (days - 1) * 86400000) : null;
+        endField.value = e ? longDate(e) : "";
+        summary.textContent = e ? days + " days: " + longDate(s) + " – " + longDate(e) + " (both days included)."
+            : "Calculated from the start date: the start and end days are both included.";
+        var problem = "";
+        var c0 = isoDate(cs), c1 = isoDate(ce);
+        if (s && c0 && s < c0) problem = "The probation period cannot start before the contract start date.";
+        else if (e && c1 && e > c1) problem = "This probation period would end after the contract end date (" + longDate(c1) + "). Choose a shorter period or a later start.";
+        warning.textContent = problem;
+        warning.hidden = !problem || !days;
+    }
+
+    function initStaffCreate(form) {
+        if (form.hasAttribute("data-sf-ready")) return;
+        form.setAttribute("data-sf-ready", "");
+        form.addEventListener("change", function (e) {
+            // A probation start chosen by hand stops following the contract start (choosing the contract start again resumes it).
+            if (e.target.matches("[data-sf-probation-start]")) {
+                var cs = form.querySelector("[data-sf-start]");
+                e.target.setAttribute("data-follow", e.target.value && cs && e.target.value !== cs.value ? "false" : "true");
+            }
+            if (e.target.matches("[data-sf-category], [data-sf-type], [data-sf-hours], [data-sf-start], [data-sf-end], [data-sf-position], [data-sf-probation], [data-sf-probation-start]"))
+                syncStaffCreate(form);
+        });
+        // A start date that differs from the contract start (e.g. after a failed save) is kept as chosen.
+        var ps = form.querySelector("[data-sf-probation-start]"), cs = form.querySelector("[data-sf-start]");
+        if (ps && ps.value && cs && ps.value !== cs.value) ps.setAttribute("data-follow", "false");
+        syncStaffCreate(form);
+    }
+
     function init(root) {
         syncShowIf(root);
+        $$("form[data-staff-create]", root).forEach(initStaffCreate);
         $$("[data-dept-picker]", root).forEach(initDeptPicker);
         $$("form[data-assign-period]", root).forEach(initAssignPeriod);
         $$("form[data-teacher-picker] [data-ap-teacher]", root).forEach(showTeacherInfo);

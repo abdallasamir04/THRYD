@@ -28,6 +28,13 @@ public class ImportExportController(
         });
     }
 
+    /// <summary>
+    /// Dashboard → Import from Excel: choose Students or Staff (dialog, or a page without JavaScript). Each choice opens
+    /// the existing import of that kind (template, upload, column mapping, preview, duplicates, report) — never a second one.
+    /// </summary>
+    [HttpGet("choose")]
+    public IActionResult Choose() => PageOrPartial("Choose", null!);
+
     [HttpGet("template/{kind}")]
     public async Task<IActionResult> Template(ImportKind kind, CancellationToken ct)
     {

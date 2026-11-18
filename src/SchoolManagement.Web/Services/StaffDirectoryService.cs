@@ -38,6 +38,15 @@ public static class StaffCategories
     };
 
     public static StaffCategory? Parse(string? slug) => All.Cast<StaffCategory?>().FirstOrDefault(c => Slug(c!.Value) == slug);
+
+    /// <summary>
+    /// By job title: a teaching title (or none yet) is academic, any other title is administrative / support, even when the
+    /// person also has some lessons or workload hours. Management Team records are always Management.
+    /// </summary>
+    public static StaffCategory Of(bool isManagement, string? jobTitle) =>
+        isManagement ? StaffCategory.Management
+        : string.IsNullOrWhiteSpace(jobTitle) || jobTitle.Contains("teacher", StringComparison.OrdinalIgnoreCase) ? StaffCategory.Academic
+        : StaffCategory.Support;
 }
 
 /// <summary>A role a staff member holds: a leadership position, Head of Department, or KG class teaching team.</summary>
@@ -75,8 +84,10 @@ public sealed class StaffDirectoryQuery
 
 public sealed record StaffDirectoryCounts(int Total, int Academic, int Management, int Support, int WithoutDepartment, int Heads);
 
+/// <param name="Matching">Staff per category matching every filter except the category (the category bar's counts).</param>
 public sealed record StaffDirectory(IReadOnlyList<StaffDirectoryEntry> Staff, IReadOnlyList<StaffDirectoryEntry> All, StaffDirectoryCounts Counts,
-    IReadOnlyList<(int Id, string Name)> Departments, IReadOnlyList<string> JobTitles, string? AcademicYear);
+    IReadOnlyList<(int Id, string Name)> Departments, IReadOnlyList<string> JobTitles, string? AcademicYear,
+    IReadOnlyDictionary<StaffCategory, int> Matching);
 
 public interface IStaffDirectoryService
 {
@@ -84,7 +95,7 @@ public interface IStaffDirectoryService
 }
 
 /// <summary>
-/// Staff → All School Staff: one card per person. Every person is one <see cref="StaffMember"/> row (Management Team
+/// Staff → All School Staff: one row per person, grouped by staff category. Every person is one <see cref="StaffMember"/> row (Management Team
 /// members are the "Management" kind of the same table), so nobody appears twice; their roles come from the existing
 /// relationships (current HOD appointments, Management positions, the current year's KG class teaching teams). Read-only.
 /// </summary>
@@ -123,11 +134,8 @@ public sealed class StaffDirectoryService(SchoolDbContext db, IClassTeamService 
                 roles.Add(new(k.Role == ClassTeachingRole.HomeroomTeacher ? "kg-homeroom" : "kg-co",
                     $"{(k.Role == ClassTeachingRole.HomeroomTeacher ? "Homeroom" : "Co-Teacher")} · {k.Class}", "graduation-cap", "secondary"));
             var teaches = teaching.Contains(p.Id);
-            // By job title: a teaching title (or none yet) is academic, any other title is administrative / support,
-            // even when the person also has some lessons or workload hours (shown by the Timetable / Workload actions).
-            var category = p.IsManagement ? StaffCategory.Management
-                : string.IsNullOrWhiteSpace(p.JobTitle) || p.JobTitle.Contains("teacher", StringComparison.OrdinalIgnoreCase) ? StaffCategory.Academic
-                : StaffCategory.Support;
+            // Lessons or workload hours are shown by the Timetable / Workload actions; they do not change the category.
+            var category = StaffCategories.Of(p.IsManagement, p.JobTitle);
             return (Entry: new StaffDirectoryEntry(p.Id, p.FullName, p.JobTitle, p.DepartmentId, p.Department, p.ContactNumber, p.Email, category, p.Position, roles, teaches),
                 Key: p.NormalizedName);
         })
@@ -140,10 +148,13 @@ public sealed class StaffDirectoryService(SchoolDbContext db, IClassTeamService 
         if (term.Length > 0) list = list.Where(x => x.Key.Contains(term, StringComparison.Ordinal));
         if (q.Department == "none") list = list.Where(x => x.Entry.DepartmentId is null);
         else if (int.TryParse(q.Department, out var deptId)) list = list.Where(x => x.Entry.DepartmentId == deptId);
-        if (StaffCategories.Parse(q.Category) is { } cat) list = list.Where(x => x.Entry.Category == cat);
         if (q.JobTitle == "none") list = list.Where(x => string.IsNullOrWhiteSpace(x.Entry.JobTitle));
         else if (!string.IsNullOrWhiteSpace(q.JobTitle)) list = list.Where(x => string.Equals(x.Entry.JobTitle, q.JobTitle, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrWhiteSpace(q.Role)) list = list.Where(x => x.Entry.Roles.Any(r => r.Key == q.Role));
+        // The category bar counts what the other filters leave; the category itself is applied last.
+        var beforeCategory = list.ToList();
+        var matching = StaffCategories.All.ToDictionary(c => c, c => beforeCategory.Count(x => x.Entry.Category == c));
+        list = StaffCategories.Parse(q.Category) is { } cat ? beforeCategory.Where(x => x.Entry.Category == cat) : beforeCategory;
 
         var entries = all.Select(x => x.Entry).ToList();
         var counts = new StaffDirectoryCounts(
@@ -156,6 +167,6 @@ public sealed class StaffDirectoryService(SchoolDbContext db, IClassTeamService 
         var departments = await db.Departments.AsNoTracking().OrderBy(d => d.Name).Select(d => new { d.Id, d.Name }).ToListAsync(ct);
         var titles = entries.Where(e => !string.IsNullOrWhiteSpace(e.JobTitle)).Select(e => e.JobTitle!.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.CurrentCultureIgnoreCase).ToList();
-        return new StaffDirectory(list.Select(x => x.Entry).ToList(), entries, counts, departments.Select(d => (d.Id, d.Name)).ToList(), titles, year?.Name);
+        return new StaffDirectory(list.Select(x => x.Entry).ToList(), entries, counts, departments.Select(d => (d.Id, d.Name)).ToList(), titles, year?.Name, matching);
     }
 }

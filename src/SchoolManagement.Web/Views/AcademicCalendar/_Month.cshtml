@@ -1,28 +1,21 @@
-@model (CalendarMonth Month, int YearId, int Quarter)
+@model (CalendarMonth Month, int YearId)
 @*
-    One month of the School Calendar: the full Sunday–Saturday grid (Friday and Saturday shaded as printed,
-    coloured dates from the school's marks, the days of the other quarter dimmed in a transition month) and,
-    underneath, the month's event lines in the colours of the print. Dates and lines open details in the dialog.
+    One month of the School Calendar: the full Sunday–Saturday grid (Friday and Saturday shaded as printed, coloured dates
+    from the school's marks, quarter starts and ends highlighted with a small Q1–Q4 flag) and, underneath, the month's event
+    lines in the colours of the print together with its quarter milestones, in date order. Dates and lines open the dialog;
+    a milestone opens that quarter's dates.
 *@
 @{
     var m = Model.Month;
     var c = System.Globalization.CultureInfo.InvariantCulture;
-    var id = $"m-{m.Month:yyyy-MM}-q{Model.Quarter}";
+    var id = $"m-{m.Month:yyyy-MM}";
     string[] dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     string[] dowFull = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 }
-<article class="sc-month@(m.Partial ? " is-partial" : "")" aria-labelledby="@id">
+<article class="sc-month" id="@id" aria-labelledby="@id-title">
     <header class="sc-month__head">
-        <h3 class="sc-month__title" id="@id">@m.Month.ToString("MMMM", c) <span>@m.Month.Year</span></h3>
-        @if (m.Partial)
-        {
-            <span class="sc-month__part">@m.From.Day–@m.To.Day · Q@(Model.Quarter)</span>
-        }
+        <h3 class="sc-month__title" id="@id-title">@m.Month.ToString("MMMM", c) <span>@m.Month.Year</span></h3>
     </header>
-    @if (m.BoundaryNote is not null)
-    {
-        <p class="sc-month__boundary">@Ui.Icon("info", "icon--sm")<span>@m.BoundaryNote</span></p>
-    }
     <table class="sc-grid">
         <caption class="visually-hidden">@m.Month.ToString("MMMM yyyy", c)</caption>
         <thead>
@@ -45,23 +38,32 @@
                             <td class="sc-day is-blank@(i == 5 ? " sc-fri" : i == 6 ? " sc-sat" : "")" aria-hidden="true"></td>
                             continue;
                         }
-                        var cls = "sc-day" + (i == 5 ? " sc-fri" : i == 6 ? " sc-sat" : "") + (d.InQuarter ? "" : " is-other")
+                        var ms = d.Milestones;
+                        var cls = "sc-day" + (i == 5 ? " sc-fri" : i == 6 ? " sc-sat" : "")
                             + (d.Color != SchoolManagement.Web.Entities.CalendarColor.None ? " is-marked " + CalendarColors.Css(d.Color) : "")
-                            + (d.IsToday ? " is-today" : "") + (d.Events.Count > 0 ? " has-events" : "") + (d.QuarterStart is not null ? " is-qstart" : "");
-                        var label = d.Date.ToString("dddd d MMMM yyyy", c) + (d.QuarterStart is not null ? $", {d.QuarterStart}" : "")
-                            + (d.Events.Count > 0 ? ": " + string.Join("; ", d.Events) : "") + (d.InQuarter ? "" : " (other quarter)");
+                            + (d.IsToday ? " is-today" : "") + (d.Events.Count > 0 ? " has-events" : "")
+                            + (ms.Count > 0 ? " is-ms" + (ms.Any(x => x.IsStart) ? " is-ms-start" : "") + (ms.Any(x => !x.IsStart) ? " is-ms-end" : "") : "");
+                        var milestoneText = string.Join(", ", ms.Select(x => x.Label));
+                        var label = d.Date.ToString("dddd d MMMM yyyy", c) + (ms.Count > 0 ? $", {milestoneText}" : "")
+                            + (d.Events.Count > 0 ? ": " + string.Join("; ", d.Events) : "");
+                        var tip = string.Join(" · ", ms.Select(x => x.Label).Concat(d.Events));
                         <td class="@cls">
                             <a class="sc-day__btn" href="/school-calendar/days/@SchoolWeek.Iso(d.Date)?year=@Model.YearId" data-modal
-                               title="@(d.Events.Count > 0 ? string.Join(" · ", d.Events) : d.QuarterStart)" aria-label="@label">
+                               title="@(tip.Length > 0 ? tip : null)" aria-label="@label">
                                 <span class="sc-day__num">@d.Date.Day</span>
                                 @if (d.Events.Count > 0 && d.Color == SchoolManagement.Web.Entities.CalendarColor.None)
                                 {
                                     <span class="sc-day__dot" aria-hidden="true"></span>
                                 }
                             </a>
-                            @if (d.QuarterStart is not null)
+                            @if (ms.Count > 0)
                             {
-                                <span class="sc-day__flag" aria-hidden="true">Q@(d.QuarterStart[^1])</span>
+                                <span class="sc-day__flags" aria-hidden="true">
+                                    @foreach (var x in ms)
+                                    {
+                                        <span class="sc-day__flag @(x.IsStart ? "sc-day__flag--start" : "sc-day__flag--end")">@x.Short</span>
+                                    }
+                                </span>
                             }
                         </td>
                     }
@@ -70,12 +72,27 @@
         </tbody>
     </table>
 
-    <ol class="sc-events" aria-label="Events in @m.Month.ToString("MMMM yyyy", c)@(m.Partial ? $", quarter {Model.Quarter} part" : "")">
-        @foreach (var r in m.Rows)
+    <ol class="sc-events" aria-label="Events and quarter milestones in @m.Month.ToString("MMMM yyyy", c)">
+        @foreach (var item in m.Items)
         {
-            <partial name="_EventLine" model="r" />
+            if (item.Milestone is { } x)
+            {
+                <li class="sc-ev sc-ms @(x.IsStart ? "sc-ms--start" : "sc-ms--end")">
+                    <a class="sc-ev__link" href="/school-calendar/quarters/@x.QuarterId/edit" data-modal title="Change the dates of Quarter @x.Number">
+                        <span class="sc-ev__date">@x.Date.Day</span>
+                        <span class="sc-ev__body">
+                            <span class="sc-ev__title"><span class="sc-ms__tag">@x.Short</span>@x.Label</span>
+                            <span class="sc-ev__meta">Quarter @x.Number · @x.Start.ToString("d MMM", c) – @x.End.ToString("d MMM yyyy", c)</span>
+                        </span>
+                    </a>
+                </li>
+            }
+            else
+            {
+                <partial name="_EventLine" model="item.Row" />
+            }
         }
-        @if (m.Rows.Count == 0)
+        @if (m.Items.Count == 0)
         {
             <li class="sc-ev sc-ev--none">No events this month.</li>
         }

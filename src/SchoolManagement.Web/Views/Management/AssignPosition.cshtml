@@ -44,7 +44,7 @@
                     <option value="">@(Model.Current is null ? "Choose a member…" : "Nobody — leave the position vacant")</option>
                     @foreach (var m in Model.Members.Where(m => m.Id != Model.Current?.Id))
                     {
-                        <option value="@m.Id" selected="@(Model.MemberId == m.Id)" data-note="@(m.Position is { } p ? "now " + ManagementPositions.Name(p) : "no position")">@m.FullName</option>
+                        <option value="@m.Id" selected="@(Model.MemberId == m.Id)" data-note="@(m.Position is { } p ? "now " + ManagementPositions.Name(p) : m.CustomPosition is { } cpn ? "now " + cpn : "no position")">@m.FullName</option>
                     }
                 </select>
                 <span asp-validation-for="MemberId" class="field-validation-error"></span>

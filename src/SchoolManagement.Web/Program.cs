@@ -53,6 +53,9 @@ builder.Services.AddScoped<IPeriodService, PeriodService>();
 builder.Services.AddScoped<IActivityService, ActivityService>();
 builder.Services.AddScoped<IClassTeamService, ClassTeamService>();
 builder.Services.AddScoped<IStaffDirectoryService, StaffDirectoryService>();
+builder.Services.AddScoped<IStaffAttendanceService, StaffAttendanceService>();
+builder.Services.AddScoped<IStaffEmploymentService, StaffEmploymentService>();
+builder.Services.AddScoped<IClassRosterService, ClassRosterService>();
 builder.Services.AddScoped<IAttendanceReportService, AttendanceReportService>();
 builder.Services.AddScoped<IPeService, PeService>();
 builder.Services.AddScoped<IBelongingsService, BelongingsService>();
@@ -79,6 +82,13 @@ if (testDataCommand is null) builder.Services.AddHostedService<AttendanceAlertSw
 var automaticAbsences = builder.Configuration.GetValue("Attendance:AutoFinalize", true);
 builder.Services.AddSingleton(new AttendanceOptions(automaticAbsences));
 if (testDataCommand is null && automaticAbsences) builder.Services.AddHostedService<ArrivalFinalizer>();
+// Staff attendance closes after 09:30 (StaffAttendance:Cutoff, school time); staff with no record are then Absent and
+// StaffAttendanceFinalizer stores those records every minute (off with StaffAttendance:AutoFinalize=false, and in tests).
+var staffAutomaticAbsences = builder.Configuration.GetValue("StaffAttendance:AutoFinalize", true);
+var staffCutoff = TimeOnly.TryParseExact(builder.Configuration["StaffAttendance:Cutoff"], "HH:mm", System.Globalization.CultureInfo.InvariantCulture,
+    System.Globalization.DateTimeStyles.None, out var configuredCutoff) ? configuredCutoff : StaffAttendanceOptions.DefaultCutoff;
+builder.Services.AddSingleton(new StaffAttendanceOptions(staffAutomaticAbsences, staffCutoff));
+if (testDataCommand is null && staffAutomaticAbsences) builder.Services.AddHostedService<StaffAttendanceFinalizer>();
 // The arrival checklist saves rows as JSON; fetch() sends the antiforgery token in this header.
 builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 builder.Services.AddSingleton<IExcelExportService, ExcelExportService>();

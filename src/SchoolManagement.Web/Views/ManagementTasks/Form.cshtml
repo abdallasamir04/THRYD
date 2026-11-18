@@ -114,10 +114,7 @@
                         <select class="select" id="AssignedToId" name="AssignedToId" data-searchable data-search-notes required
                                 data-val="true" data-val-required="Choose who will carry out the task.">
                             <option value="">Choose a staff member…</option>
-                            @foreach (var s in Model.Staff)
-                            {
-                                <option value="@s.Id" selected="@(Model.AssignedToId == s.Id)" data-note="@s.Note">@s.FullName</option>
-                            }
+                            <partial name="_StaffOptions" model="(Model.Staff, Model.AssignedToId)" />
                         </select>
                         <span asp-validation-for="AssignedToId" class="field-validation-error"></span>
                         <p class="hint">Responsible for doing the task. Any staff member.</p>
@@ -127,10 +124,7 @@
                         <div class="task-role__head"><label class="task-role__tag" for="ReviewerId">@Ui.Icon("send", "icon--sm")Submitted to / Reviewer</label><span class="task-role__flag">Optional</span></div>
                         <select class="select" id="ReviewerId" name="ReviewerId" data-searchable data-search-notes>
                             <option value="">Nobody</option>
-                            @foreach (var s in Model.Staff)
-                            {
-                                <option value="@s.Id" selected="@(Model.ReviewerId == s.Id)" data-note="@s.Note">@s.FullName</option>
-                            }
+                            <partial name="_StaffOptions" model="(Model.Staff, Model.ReviewerId)" />
                         </select>
                         <span asp-validation-for="ReviewerId" class="field-validation-error"></span>
                         <p class="hint">Receives, reviews or approves the finished task.</p>

@@ -1,0 +1,72 @@
+@model TaskIndexViewModel
+@*
+    Daily Operations → Tasks: every task in the school (teachers, Management Team, administrative and support staff) in
+    one place. The same tasks, form, details, status changes and history as Management Team → Tasks (/management/tasks).
+    Totals at the top are school-wide; the tabs below count the tasks matching the current filters.
+*@
+@{
+    ViewData["Title"] = "Tasks";
+    ViewData["Nav"] = "Tasks";
+    var k = Model.Totals!;
+    var q = Model.Query;
+    string TabLink(string? tab) => Context.Request.WithQuery(("tab", tab), ("page", null));
+    string TabCurrent(string? tab) => q.Tab == tab ? "true" : "false";
+    string MineLink(string? mine) => Context.Request.WithQuery(("mine", mine), ("page", null));
+    string MineCurrent(string? mine) => (q.Mine ?? "") == (mine ?? "") ? "true" : "false";
+    var me = Model.MeId is { } meId ? Model.Staff.FirstOrDefault(s => s.Id == meId) : null;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Tasks</li></ol>
+        <h1 class="page-title">Tasks</h1>
+        <p class="page-sub">Every task in the school in one place: who carries it out, its priority, due date and status.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/management/tasks">@Ui.Icon("briefcase")Management Team tasks</a>
+        <partial name="_Download" model='DownloadLink.Report("/management/tasks/pdf")' />
+        <a class="btn btn--primary" href="/management/tasks/create" data-modal>@Ui.Icon("plus")Add Task</a>
+    </div>
+</div>
+
+@if (Model.Staff.Count == 0)
+{
+    <div class="notice notice--warning">@Ui.Icon("info")<div class="notice__body"><strong>No staff yet.</strong>Tasks are assigned to staff members. Add staff under <a href="/staff">Staff</a> first.</div></div>
+}
+
+<ul class="summary-tiles summary-tiles--5 task-summary" aria-label="Task totals for the whole school">
+    <li><a class="summary-tile" href="@TabLink(null)" aria-current="@TabCurrent(null)"><span class="summary-tile__value num">@k.All</span><span class="summary-tile__label">@Ui.Icon("list-checks", "icon--sm")Total Tasks</span></a></li>
+    <li><a class="summary-tile @(k.Overdue > 0 ? "summary-tile--bad" : "")" href="@TabLink("overdue")" aria-current="@TabCurrent("overdue")"><span class="summary-tile__value num">@k.Overdue</span><span class="summary-tile__label">@Ui.Icon("alert-circle", "icon--sm")Overdue</span></a></li>
+    <li><a class="summary-tile" href="@TabLink("today")" aria-current="@TabCurrent("today")"><span class="summary-tile__value num" style="color:var(--color-warning-ink)">@k.DueToday</span><span class="summary-tile__label">@Ui.Icon("clock", "icon--sm")Due Today</span></a></li>
+    <li><a class="summary-tile" href="@TabLink("upcoming")" aria-current="@TabCurrent("upcoming")"><span class="summary-tile__value num" style="color:var(--color-secondary-ink)">@k.Upcoming</span><span class="summary-tile__label">@Ui.Icon("calendar", "icon--sm")Upcoming</span></a></li>
+    <li><a class="summary-tile summary-tile--ok" href="@TabLink("completed")" aria-current="@TabCurrent("completed")"><span class="summary-tile__value num">@k.Completed</span><span class="summary-tile__label">@Ui.Icon("check-circle", "icon--sm")Completed</span></a></li>
+</ul>
+
+<div class="task-views-bar">
+    <nav class="segmented task-views" aria-label="Whose tasks">
+        <a href="@MineLink(null)" aria-current="@MineCurrent(null)">@Ui.Icon("list", "icon--sm")Everyone</a>
+        <a href="@MineLink("assigned")" aria-current="@MineCurrent("assigned")">@Ui.Icon("user", "icon--sm")Assigned to me</a>
+        <a href="@MineLink("created")" aria-current="@MineCurrent("created")">@Ui.Icon("pencil", "icon--sm")Created by me</a>
+        <a href="@MineLink("review")" aria-current="@MineCurrent("review")">@Ui.Icon("send", "icon--sm")Submitted to me</a>
+    </nav>
+    @if (!string.IsNullOrEmpty(q.Mine))
+    {
+        <p class="hint task-views__who">
+            @if (me is null)
+            {
+                <span>Nobody is set under “Working as”, so no task is “mine”. <a href="/settings#operator">Choose who you are working as</a>.</span>
+            }
+            else
+            {
+                <span>Showing tasks for <strong dir="auto">@me.FullName</strong> (“Working as”).</span>
+            }
+        </p>
+    }
+</div>
+
+<section class="card table-card" aria-label="Task list">
+    <partial name="~/Views/ManagementTasks/_Toolbar.cshtml" model="Model" />
+    <div id="task-list" data-ajax-list data-refresh-page aria-live="polite">
+        <partial name="_List" model="Model" />
+    </div>
+</section>

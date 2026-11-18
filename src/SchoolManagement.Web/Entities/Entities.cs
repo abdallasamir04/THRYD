@@ -11,6 +11,12 @@ public class SchoolClass : IAuditable
 {
     public const int NameMaxLength = 50;
 
+    /// <summary>
+    /// The standard class size for a new class (and the database default). A class's own capacity can be changed at any
+    /// time and is never a hard limit: a class may hold more students than its capacity (shown as over capacity).
+    /// </summary>
+    public const int DefaultCapacity = 20;
+
     public int Id { get; set; }
     public string Name { get; set; } = "";
 
@@ -18,7 +24,7 @@ public class SchoolClass : IAuditable
     public string NormalizedName { get; set; } = "";
 
     public int SortOrder { get; set; }
-    public int Capacity { get; set; } = 25;
+    public int Capacity { get; set; } = DefaultCapacity;
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -71,6 +77,26 @@ public abstract class StaffMember : IAuditable
 
     /// <summary>Second level under a subcategory where the department has one (Religion: Islamic → Religion / Quran).</summary>
     public string? Subject { get; set; }
+
+    // ---- Employment (all optional: staff added before these were kept stay valid with nothing set) ----
+    /// <summary>First day of the contract. Before it (and after <see cref="ContractEndDate"/>) the person is not active staff.</summary>
+    public DateOnly? ContractStartDate { get; set; }
+    /// <summary>Last day of the contract; null = ongoing.</summary>
+    public DateOnly? ContractEndDate { get; set; }
+    /// <summary>The initial trial period (e.g. 90 days), separate from the contract duration.</summary>
+    public int? ProbationLength { get; set; }
+    public ProbationUnit? ProbationUnit { get; set; }
+    /// <summary>First day of probation (defaults to the contract start date).</summary>
+    public DateOnly? ProbationStartDate { get; set; }
+    /// <summary>Last day of probation (start + length − 1 day, both days included).</summary>
+    public DateOnly? ProbationEndDate { get; set; }
+    public EmploymentType? EmploymentType { get; set; }
+    /// <summary>Part-time staff: the weekdays they work (full-time staff have none).</summary>
+    public ICollection<StaffWorkingDay> WorkingDays { get; set; } = new List<StaffWorkingDay>();
+    public WorkingHoursType? WorkingHoursType { get; set; }
+    /// <summary>Daily start time (fixed hours) or start of the agreed range (flexible hours, within 08:00–15:00).</summary>
+    public TimeOnly? WorkStart { get; set; }
+    public TimeOnly? WorkEnd { get; set; }
 
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

@@ -214,10 +214,50 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
         return View("Stage", GroupPage(s, g, await classes.ListAsync(null, null, ct)));
     }
 
-    /// <summary>Download Report: the classes matching the page's search and status.</summary>
+    /// <summary>
+    /// Classes page → Download Students: one A4 portrait page per class (active and inactive), with its information and
+    /// the numbered list of its enrolled students. Read-only.
+    /// </summary>
+    [HttpGet("/classes/students-report")]
+    public async Task<IActionResult> StudentsReport([FromServices] IClassRosterService roster, [FromServices] ISettingsService settings, CancellationToken ct) =>
+        await PdfFile(Services.Pdf.ClassRosterReports.Students(await roster.LoadAsync(ct), (await settings.GetProfileAsync(ct)).SchoolName), ct);
+
+    private const string XlsxType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    /// <summary>Classes page → Download Summary Excel: the same data and rules as the summary PDF, as a workbook. Read-only.</summary>
+    [HttpGet("/classes/summary-excel")]
+    public async Task<IActionResult> SummaryExcel([FromServices] IClassRosterService roster, [FromServices] ISettingsService settings,
+        [FromServices] Services.Excel.IExcelExportService excel, CancellationToken ct)
+    {
+        var data = await roster.LoadAsync(ct);
+        var profile = await settings.GetProfileAsync(ct);
+        return File(excel.ClassesSummary(data, profile.SchoolName, profile.AcademicYear), XlsxType,
+            Services.Pdf.PdfFileName.From(["Classes Summary", data.YearName]).Replace(".pdf", ".xlsx"));
+    }
+
+    /// <summary>Classes page → Download Students Excel: a Class Index and one worksheet per class with its students. Read-only.</summary>
+    [HttpGet("/classes/students-excel")]
+    public async Task<IActionResult> StudentsExcel([FromServices] IClassRosterService roster, [FromServices] ISettingsService settings,
+        [FromServices] Services.Excel.IExcelExportService excel, CancellationToken ct)
+    {
+        var data = await roster.LoadAsync(ct);
+        var profile = await settings.GetProfileAsync(ct);
+        return File(excel.ClassesStudents(data, profile.SchoolName, profile.AcademicYear), XlsxType,
+            Services.Pdf.PdfFileName.From(["Classes and Students Report", data.YearName]).Replace(".pdf", ".xlsx"));
+    }
+
+    /// <summary>
+    /// Classes page → Download Summary (All classes → Download Report): school statistics, the stage summary and the class
+    /// summary of the classes matching the page's search and status. A4 portrait.
+    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> Pdf(string? search, string? status, CancellationToken ct) =>
-        await PdfFile(Services.Pdf.PdfReports.Classes(await classes.ListAsync(search, status, ct), search, status), ct);
+    public async Task<IActionResult> Pdf(string? search, string? status, [FromServices] IClassRosterService roster, [FromServices] ISettingsService settings,
+        CancellationToken ct)
+    {
+        var matching = (await classes.ListAsync(search, status, ct)).Select(c => c.Id).ToHashSet();
+        return await PdfFile(Services.Pdf.ClassRosterReports.Summary((await roster.LoadAsync(ct)).Only(matching),
+            (await settings.GetProfileAsync(ct)).SchoolName, search, status), ct);
+    }
 
     /// <summary>
     /// Add class. With <paramref name="group"/> (opened from a stage) the grade is chosen from that group and
@@ -310,7 +350,7 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
         foreach (var n in ClassStages.AddableGrades(group, names))
         {
             var isNew = group.IsOpenEnded && !names.Any(x => ClassStages.GradeOf(x) == new ClassGrade(group.Code, n));
-            options.Add((n, $"{group.Code}{n}{(isNew ? " (new grade)" : "")}", await classes.NextNameInGradeAsync(group.Code, n, ct)));
+            options.Add((n, $"{new ClassGrade(group.Code, n).Label}{(isNew ? " (new grade)" : "")}", await classes.NextNameInGradeAsync(group.Code, n, ct)));
         }
         model.GradeOptions = options;
         model.StageLink = stage.Layout == StageLayout.Single ? null : (stage.Title, stage.Href);
@@ -418,7 +458,7 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
     private static string Meta(IReadOnlyCollection<ClassRow> rows) =>
         $"{Ui.Plural(rows.Count, "class", "classes")} · {Ui.Plural(rows.Sum(c => c.StudentCount), "student", "students")}";
 
-    /// <summary>A group's page: one block of class cards per grade (Pre-K is a single block without Add class).</summary>
+    /// <summary>A group's page: one block of class cards per grade (Pre-K is a single block; Add class is in the page head).</summary>
     private static ClassStagePageViewModel GroupPage(ClassStages.Stage s, ClassStages.Group g, IReadOnlyList<ClassRow> all)
     {
         var rows = InGroup(all, g);
@@ -442,7 +482,7 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
             AddHref = g.CanAdd ? AddHref(g) : null,
             Note = g.IsOpenEnded
                 ? "To start a new grade (for example G11), choose it in Add class. Its classes then appear here under High School."
-                : g.IsPreK ? "Pre-K classes do not use the KG / Grade numbering, so they are edited from their class card rather than added here." : null,
+                : null,
         };
     }
 }

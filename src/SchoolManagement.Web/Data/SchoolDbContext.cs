@@ -10,6 +10,9 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
     public DbSet<StudentTransferHistory> StudentTransfers => Set<StudentTransferHistory>();
     public DbSet<StaffMember> StaffMembers => Set<StaffMember>();
     public DbSet<Teacher> Teachers => Set<Teacher>();
+    public DbSet<StaffWorkingDay> StaffWorkingDays => Set<StaffWorkingDay>();
+    public DbSet<StaffAttendanceRecord> StaffAttendance => Set<StaffAttendanceRecord>();
+    public DbSet<StaffAttendanceCorrection> StaffAttendanceCorrections => Set<StaffAttendanceCorrection>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<DutyAssignment> DutyAssignments => Set<DutyAssignment>();
@@ -28,6 +31,7 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
     public DbSet<StudentArrivalCorrection> StudentArrivalCorrections => Set<StudentArrivalCorrection>();
     public DbSet<DepartmentHeadAssignment> DepartmentHeads => Set<DepartmentHeadAssignment>();
     public DbSet<ManagementMember> ManagementMembers => Set<ManagementMember>();
+    public DbSet<ManagementCustomPosition> ManagementCustomPositions => Set<ManagementCustomPosition>();
     public DbSet<ManagementTask> ManagementTasks => Set<ManagementTask>();
     public DbSet<ManagementTaskHistory> ManagementTaskHistory => Set<ManagementTaskHistory>();
     public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
@@ -89,7 +93,7 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.Property(x => x.NormalizedName).HasMaxLength(SchoolClass.NameMaxLength).IsRequired();
             e.HasIndex(x => x.NormalizedName).IsUnique();
             e.HasIndex(x => x.SortOrder);
-            e.Property(x => x.Capacity).HasDefaultValue(25);
+            e.Property(x => x.Capacity).HasDefaultValue(SchoolClass.DefaultCapacity);
             e.Property(x => x.IsActive).HasDefaultValue(true);
             e.HasData(DefaultClasses.Seed());
         });
@@ -111,8 +115,17 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
         b.Entity<StaffMember>(e =>
         {
             // Management Team members are never members of an academic department.
-            e.ToTable("StaffMembers", t => t.HasCheckConstraint("CK_StaffMembers_ManagementHasNoDepartment",
-                $"[StaffType] <> '{ManagementType}' OR ([DepartmentId] IS NULL AND [Subcategory] IS NULL AND [Subject] IS NULL)"));
+            e.ToTable("StaffMembers", t =>
+            {
+                t.HasCheckConstraint("CK_StaffMembers_ManagementHasNoDepartment",
+                    $"[StaffType] <> '{ManagementType}' OR ([DepartmentId] IS NULL AND [Subcategory] IS NULL AND [Subject] IS NULL)");
+                t.HasCheckConstraint("CK_StaffMembers_ContractDates", "[ContractEndDate] IS NULL OR [ContractStartDate] IS NULL OR [ContractEndDate] >= [ContractStartDate]");
+                t.HasCheckConstraint("CK_StaffMembers_WorkHours", "[WorkStart] IS NULL OR [WorkEnd] IS NULL OR [WorkEnd] > [WorkStart]");
+                t.HasCheckConstraint("CK_StaffMembers_Probation", "[ProbationLength] IS NULL OR ([ProbationLength] BETWEEN 0 AND 104 AND [ProbationUnit] IS NOT NULL)");
+                t.HasCheckConstraint("CK_StaffMembers_ProbationDates", "[ProbationEndDate] IS NULL OR ([ProbationStartDate] IS NOT NULL AND [ProbationEndDate] >= [ProbationStartDate])");
+                // A Management Team member holds a leadership position or a custom position, never both.
+                t.HasCheckConstraint("CK_StaffMembers_OnePosition", "[Position] IS NULL OR [CustomPositionId] IS NULL");
+            });
             e.HasDiscriminator<string>("StaffType").HasValue<Teacher>(TeacherType).HasValue<ManagementMember>(ManagementType);
             e.Property("StaffType").HasMaxLength(30);
             e.Property(x => x.Subject).HasMaxLength(50);
@@ -123,11 +136,43 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.Property(x => x.NormalizedContact).HasMaxLength(StaffMember.ContactMaxLength).IsUnicode(false).HasDefaultValue("");
             e.Property(x => x.Subcategory).HasMaxLength(50);
             e.HasOne(x => x.Department).WithMany(d => d.StaffMembers).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
+            e.HasMany(x => x.WorkingDays).WithOne(d => d.StaffMember).HasForeignKey(d => d.StaffMemberId).OnDelete(DeleteBehavior.Cascade);
             // Backstop for duplicate prevention (the service also treats a missing number as a match).
             e.HasIndex("StaffType", nameof(StaffMember.NormalizedName), nameof(StaffMember.NormalizedContact)).IsUnique();
             e.HasIndex(x => x.DepartmentId);
             e.HasIndex(x => x.JobTitle);
             e.HasIndex(x => x.CreatedAt);
+        });
+        b.Entity<StaffWorkingDay>(e =>
+        {
+            e.ToTable("StaffWorkingDays", t => t.HasCheckConstraint("CK_StaffWorkingDays_Day", "[Day] BETWEEN 0 AND 6"));
+            e.HasKey(x => new { x.StaffMemberId, x.Day });
+        });
+        b.Entity<StaffAttendanceRecord>(e =>
+        {
+            e.ToTable("StaffAttendanceRecords", t =>
+            {
+                t.HasCheckConstraint("CK_StaffAttendance_Status", "[Status] BETWEEN 1 AND 3");
+                // Present / Late carry the arrival time actually recorded; Absent never has one.
+                t.HasCheckConstraint("CK_StaffAttendance_ArrivalTime", "([Status] = 3 AND [ArrivalTime] IS NULL) OR ([Status] IN (1, 2) AND [ArrivalTime] IS NOT NULL)");
+            });
+            e.Property(x => x.Notes).HasMaxLength(StaffAttendanceRecord.NotesMaxLength);
+            e.Property(x => x.RecordedBy).HasMaxLength(150);
+            e.Property(x => x.UpdatedBy).HasMaxLength(150);
+            // Attendance is history: a staff member with records is not deleted with them.
+            e.HasOne(x => x.StaffMember).WithMany().HasForeignKey(x => x.StaffMemberId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.StaffMemberId, x.Date }).IsUnique().HasDatabaseName("UX_StaffAttendance_StaffDay");
+            e.HasIndex(x => x.Date);
+        });
+        b.Entity<StaffAttendanceCorrection>(e =>
+        {
+            e.ToTable("StaffAttendanceCorrections");
+            e.Property(x => x.Before).HasMaxLength(StaffAttendanceCorrection.TextMaxLength).IsRequired();
+            e.Property(x => x.After).HasMaxLength(StaffAttendanceCorrection.TextMaxLength).IsRequired();
+            e.Property(x => x.Reason).HasMaxLength(StaffAttendanceCorrection.ReasonMaxLength);
+            e.Property(x => x.CorrectedBy).HasMaxLength(150);
+            e.HasOne(x => x.Record).WithMany(r => r.Corrections).HasForeignKey(x => x.StaffAttendanceRecordId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.StaffAttendanceRecordId, x.CorrectedAt });
         });
 
         b.Entity<Department>(e =>
@@ -281,6 +326,17 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.Property(x => x.Email).HasMaxLength(ManagementMember.EmailMaxLength);
             // One holder per Management Team position.
             e.HasIndex(x => x.Position).IsUnique().HasFilter("[Position] IS NOT NULL").HasDatabaseName("UX_StaffMembers_ManagementPosition");
+            e.HasOne(x => x.CustomPosition).WithMany().HasForeignKey(x => x.CustomPositionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.CustomPositionId).IsUnique().HasFilter("[CustomPositionId] IS NOT NULL").HasDatabaseName("UX_StaffMembers_CustomPosition");
+        });
+
+        b.Entity<ManagementCustomPosition>(e =>
+        {
+            e.ToTable("ManagementCustomPositions");
+            e.Property(x => x.Title).HasMaxLength(ManagementCustomPosition.TitleMaxLength).IsRequired();
+            e.Property(x => x.NormalizedTitle).HasMaxLength(ManagementCustomPosition.TitleMaxLength).IsRequired();
+            e.Property(x => x.CreatedBy).HasMaxLength(150);
+            e.HasIndex(x => x.NormalizedTitle).IsUnique().HasDatabaseName("UX_ManagementCustomPositions_Title");
         });
 
         b.Entity<ManagementTask>(e =>

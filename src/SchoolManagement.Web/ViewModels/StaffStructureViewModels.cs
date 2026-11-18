@@ -68,24 +68,18 @@ public sealed class DepartmentEditModel
 }
 
 /// <summary>Departments → Add department. The same details as Edit, plus the name (fixed after creation).</summary>
+/// <summary>Add Department: the name and, optionally, the HOD. Description and labels are edited later on the department's page.</summary>
 public sealed class DepartmentCreateModel
 {
-    [Display(Name = "Department name")]
+    [Display(Name = "Department Name")]
     [Required(ErrorMessage = "Enter the department name.")]
     [StringLength(Department.NameMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
     public string? Name { get; set; }
 
-    [Display(Name = "Description")]
-    [StringLength(Department.DescriptionMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
-    public string? Description { get; set; }
+    [Display(Name = "HOD (Optional)")]
+    public int? HeadTeacherId { get; set; }
 
-    [Display(Name = "Subcategory label")]
-    [StringLength(50, ErrorMessage = "Use {1} characters or fewer.")]
-    public string? SubcategoryLabel { get; set; }
-
-    [Display(Name = "Subject label")]
-    [StringLength(50, ErrorMessage = "Use {1} characters or fewer.")]
-    public string? SubjectLabel { get; set; }
+    public IReadOnlyList<HodCandidate> Candidates { get; set; } = [];
 }
 
 public sealed class HeadsViewModel
@@ -177,7 +171,7 @@ public sealed class LeadershipViewModel
 
     public int Filled => Positions.Count(p => p.Holder is not null);
     public int Vacant => Positions.Count - Filled;
-    public int Unpositioned => AllMembers.Count(m => m.Position is null);
+    public int Unpositioned => AllMembers.Count(m => !m.HasPosition);
 }
 
 /// <summary>School Leadership → one position: its holder, the holder's tasks and the position's appointment history.</summary>
@@ -220,6 +214,9 @@ public sealed class ManagementMemberFormModel
     [Display(Name = "Position")]
     public ManagementPosition? Position { get; set; }
 
+    /// <summary>The Position dropdown's value (see <see cref="PositionChoices"/>): a leadership or school-added position.</summary>
+    public string? PositionChoice { get; set; }
+
     [Display(Name = "Contact number")]
     [StringLength(StaffMember.ContactMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
     [RegularExpression(@"^\s*\+?[0-9٠-٩۰-۹][0-9٠-٩۰-۹ ()\-.]*[0-9٠-٩۰-۹]\s*$",
@@ -236,12 +233,15 @@ public sealed class ManagementMemberFormModel
 
     /// <summary>Positions already held by someone else (position → holder name).</summary>
     public IReadOnlyDictionary<ManagementPosition, string> Holders { get; set; } = new Dictionary<ManagementPosition, string>();
+    public IReadOnlyList<CustomPositionOption> CustomPositions { get; set; } = [];
     public bool IsEdit => Id is > 0;
 
-    public ManagementMemberInput ToInput() => new()
+    /// <summary>The input, or null when the chosen position is not one the form offers.</summary>
+    public ManagementMemberInput? ToInput()
     {
-        FullName = FullName, Position = Position, ContactNumber = ContactNumber, Email = Email, AppointedOn = AppointedOn,
-    };
+        var input = new ManagementMemberInput { FullName = FullName, ContactNumber = ContactNumber, Email = Email, AppointedOn = AppointedOn };
+        return PositionChoices.Apply(PositionChoice, Position, null, input) ? input : null;
+    }
 }
 
 public sealed class ManagementProfileViewModel
@@ -271,8 +271,15 @@ public sealed class TaskIndexViewModel
     /// <summary>The list's own URL (the Tasks page, or a member's profile) — used by filters, chips and paging.</summary>
     public string BaseUrl { get; init; } = "/management/tasks";
 
+    /// <summary>The central Tasks page (Daily Operations → Tasks): tabs, totals, staff category and due-date range.</summary>
+    public bool IsGlobal => BaseUrl == "/tasks";
+
+    /// <summary>Tasks page: tab totals with the current filters, and the school-wide totals shown at the top.</summary>
+    public TaskTabCounts? Tabs { get; init; }
+    public TaskTabCounts? Totals { get; init; }
+
     /// <summary>True on a member's profile: the member column and filter are not shown.</summary>
-    public bool ForMember => Query.MemberId is not null && BaseUrl != "/management/tasks";
+    public bool ForMember => Query.MemberId is not null && BaseUrl is not ("/management/tasks" or "/tasks");
 }
 
 /// <summary>New / edit task form: task information, assignment (creator, executor, reviewer), schedule, attachments, notes.</summary>
@@ -354,4 +361,94 @@ public sealed class TaskDetailsViewModel
     public required IReadOnlyList<TaskAttachmentView> Attachments { get; init; }
     public required IReadOnlyList<TaskHistoryRow> History { get; init; }
     public string? Remaining { get; init; }
+}
+
+/// <summary>The options of a Position dropdown: the seven leadership positions, the school-added ones and, optionally, + Add New Position.</summary>
+public sealed record PositionOptions(string? Selected, IReadOnlyDictionary<ManagementPosition, string> Holders, IReadOnlyList<CustomPositionOption> Custom, bool AllowNew);
+
+// ---------- Add Staff (one form for Academic staff and the Management Team) ----------
+
+public enum NewStaffCategory { Academic = 1, Management = 2 }
+
+/// <summary>
+/// Staff → Add Staff Member. Academic staff are saved through the existing teacher rules (department, subcategory,
+/// subject); Management Team members through the existing Management Team rules (position, email). Both then get their
+/// contract, probation, employment type and working hours (StaffEmploymentService). Only the chosen category's fields apply.
+/// </summary>
+public sealed class StaffCreateModel
+{
+    [Display(Name = "Staff category")]
+    [Required(ErrorMessage = "Choose Academic or Management.")]
+    public NewStaffCategory? Category { get; set; }
+
+    [Display(Name = "Full name")]
+    [Required(ErrorMessage = "Enter the staff member's full name.")]
+    [StringLength(StaffMember.NameMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    public string FullName { get; set; } = "";
+
+    [Display(Name = "Contact number")]
+    [StringLength(StaffMember.ContactMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    [RegularExpression(@"^\s*\+?[0-9٠-٩۰-۹][0-9٠-٩۰-۹ ()\-.]*[0-9٠-٩۰-۹]\s*$",
+        ErrorMessage = "Use digits, spaces or dashes, with an optional + at the start.")]
+    public string? ContactNumber { get; set; }
+
+    // Academic
+    public int? DepartmentId { get; set; }
+    [StringLength(50)] public string? Subcategory { get; set; }
+    [StringLength(50)] public string? Subject { get; set; }
+    [Display(Name = "Job title / Position")]
+    [StringLength(StaffMember.JobTitleMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    public string? JobTitle { get; set; }
+
+    // Management: a leadership position, a school-added one, or + Add New Position (PositionChoice, see PositionChoices).
+    public ManagementPosition? Position { get; set; }
+    public string? PositionChoice { get; set; }
+    [Display(Name = "New Position Title")]
+    [StringLength(ManagementCustomPosition.TitleMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    public string? NewPositionTitle { get; set; }
+    [Display(Name = "Email")]
+    [StringLength(ManagementMember.EmailMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+    public string? Email { get; set; }
+    public DateOnly? AppointedOn { get; set; }
+
+    // Contract
+    [Display(Name = "Contract start date")]
+    public DateOnly? ContractStartDate { get; set; }
+    [Display(Name = "Contract end date")]
+    public DateOnly? ContractEndDate { get; set; }
+    /// <summary>30, 60 or 90; empty = no probation period.</summary>
+    [Display(Name = "Probation period")]
+    public int? ProbationDays { get; set; }
+    /// <summary>Empty = the contract start date.</summary>
+    [Display(Name = "Probation start date")]
+    public DateOnly? ProbationStartDate { get; set; }
+
+    // Employment type and working hours
+    [Display(Name = "Employment type")]
+    public EmploymentType? EmploymentType { get; set; }
+    public List<DayOfWeek> WorkingDays { get; set; } = [];
+    [Display(Name = "Working hours")]
+    public WorkingHoursType? WorkingHoursType { get; set; }
+    /// <summary>"HH:mm".</summary>
+    public string? WorkStart { get; set; }
+    public string? WorkEnd { get; set; }
+
+    /// <summary>The form was opened as a page (not in the modal): after saving, go to the new profile.</summary>
+    public bool FullPage { get; set; }
+
+    // Options
+    public IReadOnlyList<Department> Departments { get; set; } = [];
+    public IReadOnlyList<JobTitleCount> JobTitleSuggestions { get; set; } = [];
+    public IReadOnlyDictionary<ManagementPosition, string> Holders { get; set; } = new Dictionary<ManagementPosition, string>();
+    public IReadOnlyList<CustomPositionOption> CustomPositions { get; set; } = [];
+
+    public static TimeOnly? Time(string? value) =>
+        TimeOnly.TryParseExact(value, ["HH:mm", "HH:mm:ss"], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var t) ? t : null;
+
+    public SchoolManagement.Web.Services.StaffEmploymentInput Employment() => new()
+    {
+        ContractStartDate = ContractStartDate, ContractEndDate = ContractEndDate, ProbationDays = ProbationDays, ProbationStartDate = ProbationStartDate,
+        EmploymentType = EmploymentType, WorkingDays = WorkingDays, WorkingHoursType = WorkingHoursType, WorkStart = Time(WorkStart), WorkEnd = Time(WorkEnd),
+    };
 }

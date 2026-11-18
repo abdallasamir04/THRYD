@@ -156,7 +156,8 @@ public partial class HttpTests
         // Add Class grades: bounded groups offer their range; High School offers its grades plus the next one.
         Assert.Equal([1, 2, 3], ClassStages.AddableGrades(ClassStages.FindGroup("lower")!.Value.Group, []));
         Assert.Equal([10, 11], ClassStages.AddableGrades(ClassStages.FindGroup("high")!.Value.Group, ["G10A", "G7A"]));
-        Assert.Empty(ClassStages.AddableGrades(ClassStages.FindGroup("prek")!.Value.Group, ["PreK"]));
+        // Pre-K has one "grade" (Pre-K itself); its classes are PreK + section (PreKB).
+        Assert.Equal([0], ClassStages.AddableGrades(ClassStages.FindGroup("prek")!.Value.Group, ["PreK"]));
     }
 
     // ---------- Classes: pages ----------
@@ -240,15 +241,15 @@ public partial class HttpTests
         }
         Assert.Contains(Code(expected), await client.GetStringAsync("/classes/stages/kg/kg1"));
 
-        // Grades outside the group, duplicates, Pre-K and invalid capacity are refused.
+        // Grades outside the group, duplicates (Pre-K section A is the existing "PreK") and invalid capacity are refused.
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/classes/create", token, new()
             { ["Group"] = "middle", ["GradeNumber"] = "10", ["Capacity"] = "25", ["IsActive"] = "true" })).StatusCode);
         var duplicate = await PostAsync(client, "/classes/create", token, new()
             { ["Group"] = "lower", ["GradeNumber"] = "1", ["Section"] = "a", ["Capacity"] = "25", ["IsActive"] = "true" });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, duplicate.StatusCode);
         Assert.Contains("A class named \"G1A\" already exists.", WebUtility.HtmlDecode(await duplicate.Content.ReadAsStringAsync()));
-        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync(client, "/classes/create", token, new()
-            { ["Group"] = "prek", ["GradeNumber"] = "0", ["Capacity"] = "25", ["IsActive"] = "true" })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/classes/create", token, new()
+            { ["Group"] = "prek", ["GradeNumber"] = "0", ["Section"] = "A", ["Capacity"] = "25", ["IsActive"] = "true" })).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(client, "/classes/create", token, new()
             { ["Group"] = "upper", ["GradeNumber"] = "4", ["Capacity"] = "0", ["IsActive"] = "true" })).StatusCode);
 

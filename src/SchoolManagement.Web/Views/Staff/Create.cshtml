@@ -1,0 +1,304 @@
+@model StaffCreateModel
+@inject ITeacherService TeacherRules
+@*
+    Add Staff Member — one form for Academic staff and Management Team members (staff.js shows only the fields of the
+    chosen category, employment type and working-hours type; hidden fields are disabled so they are not sent).
+      1 Staff category    Academic (teacher rules: department → subcategory → subject) or Management (position, email)
+      2 Staff information name and contact, then the category's own fields. Management: an existing position (leadership
+                          or school-added) or + Add New Position (New Position Title, created with the member)
+      3 Contract          start (required), end (optional = ongoing), probation (none / 30 / 60 / 90 days, then its
+                          start date — the contract start by default — and the calculated end date)
+      4 Employment type   Full Time (school week) or Part Time (chosen weekdays, saved per person)
+      5 Working hours     Fixed (start – end) or Flexible (start – end within 08:00–15:00)
+    The server checks the same rules (StaffEmploymentService) before anyone is created.
+*@
+@{
+    var allRules = await TeacherRules.SubcategoryRulesAsync();
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Add staff member"; ViewData["Nav"] = "Staff"; }
+    var selectedDept = Model.Departments.FirstOrDefault(d => d.Id == Model.DepartmentId);
+    var subRules = selectedDept is null ? null : allRules.GetValueOrDefault(selectedDept.Id);
+    var subjectOptions = subRules?.Find(Model.Subcategory)?.Subjects ?? [];
+    var cat = Model.Category;
+    string? Iso(DateOnly? d) => d is { } x ? SchoolWeek.Iso(x) : null;
+    var windowStart = StaffEmploymentService.WindowStart.ToString("HH:mm");
+    var windowEnd = StaffEmploymentService.WindowEnd.ToString("HH:mm");
+    var flexible = Model.WorkingHoursType == WorkingHoursType.Flexible;
+    var probationStart = Model.ProbationDays is null ? null : Model.ProbationStartDate ?? Model.ContractStartDate;
+    var probationEnd = probationStart is { } ps && Model.ProbationDays is { } pd ? StaffEmploymentService.ProbationEnd(ps, pd) : (DateOnly?)null;
+    var newPosition = Model.PositionChoice == PositionChoices.New;
+}
+
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/all">All School Staff</a></li><li>Add staff member</li></ol>
+            <h1 class="page-title">Add staff member</h1>
+        </div>
+    </div>
+}
+
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/staff/create" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents" data-staff-create>
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="FullPage" value="true" /> }
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("user-plus", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Add staff member</h2>
+                <p class="modal__sub">Academic staff and Management Team members, with their contract and working hours.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+
+        <div class="modal__body sf">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+            <section class="sf-section" aria-labelledby="sf-cat-title">
+                <h3 class="sf-section__title" id="sf-cat-title"><span class="sf-step">1</span>Staff category <span class="req" aria-hidden="true">*</span></h3>
+                <div class="sf-cats" role="radiogroup" aria-labelledby="sf-cat-title">
+                    <label class="sf-cat">
+                        <input type="radio" name="Category" value="Academic" checked="@(cat == NewStaffCategory.Academic)" data-sf-category
+                               data-val="true" data-val-required="Choose Academic or Management." />
+                        <span class="sf-cat__box">
+                            <span class="sf-cat__icon">@Ui.Icon("graduation-cap")</span>
+                            <span class="sf-cat__text"><strong>Academic</strong><small>Teachers and academic staff: department, subject and job title.</small></span>
+                            <span class="sf-cat__check" aria-hidden="true">@Ui.Icon("check", "icon--sm")</span>
+                        </span>
+                    </label>
+                    <label class="sf-cat">
+                        <input type="radio" name="Category" value="Management" checked="@(cat == NewStaffCategory.Management)" data-sf-category />
+                        <span class="sf-cat__box">
+                            <span class="sf-cat__icon">@Ui.Icon("briefcase")</span>
+                            <span class="sf-cat__text"><strong>Management</strong><small>Management Team: leadership, administration and student affairs.</small></span>
+                            <span class="sf-cat__check" aria-hidden="true">@Ui.Icon("check", "icon--sm")</span>
+                        </span>
+                    </label>
+                </div>
+                <span asp-validation-for="Category" class="field-validation-error"></span>
+            </section>
+
+            <section class="sf-section" aria-labelledby="sf-info-title">
+                <h3 class="sf-section__title" id="sf-info-title"><span class="sf-step">2</span>Staff information</h3>
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" asp-for="FullName">Full name <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input" asp-for="FullName" dir="auto" placeholder="e.g. Mona Adel Farouk" maxlength="150" data-autofocus />
+                        <span asp-validation-for="FullName" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="ContactNumber">Contact number</label>
+                        <input class="input" asp-for="ContactNumber" type="tel" inputmode="tel" dir="ltr" placeholder="010 1234 5678" maxlength="30" />
+                        <span asp-validation-for="ContactNumber" class="field-validation-error"></span>
+                    </div>
+                </div>
+
+                <p class="hint sf-pick-first" data-sf-for="none" hidden="@(cat is not null)">@Ui.Icon("info", "icon--sm")Choose Academic or Management to see the fields for that category.</p>
+
+                @* Academic: the existing teacher rules (DepartmentCatalog); staff.js swaps subcategory / subject options. *@
+                <div class="form-grid" data-sf-for="Academic" hidden="@(cat != NewStaffCategory.Academic)">
+                    <div class="form-grid form-grid--2" data-dept-picker>
+                        <div class="field">
+                            <label class="label" for="DepartmentId">Academic department</label>
+                            <select class="select" id="DepartmentId" name="DepartmentId" data-dept-select>
+                                <option value="">No department</option>
+                                @foreach (var d in Model.Departments)
+                                {
+                                    <option value="@d.Id" selected="@(Model.DepartmentId == d.Id)" data-subcats="@DepartmentCatalog.ClientJson(allRules.GetValueOrDefault(d.Id))">@d.Name</option>
+                                }
+                            </select>
+                            <span asp-validation-for="DepartmentId" class="field-validation-error"></span>
+                        </div>
+                        <div class="field" data-subcat-field hidden="@(subRules is null)">
+                            <label class="label" for="Subcategory"><span data-subcat-label>@(subRules?.Label ?? "Subcategory")</span> <span class="req" aria-hidden="true">*</span></label>
+                            <select class="select" id="Subcategory" name="Subcategory" data-subcat-select data-val="true" data-val-required="Choose an option for this department.">
+                                <option value="">Choose…</option>
+                                @foreach (var o in subRules?.Options ?? [])
+                                {
+                                    <option value="@o.Value" selected="@(string.Equals(Model.Subcategory, o.Value, StringComparison.OrdinalIgnoreCase))">@o.Value</option>
+                                }
+                            </select>
+                            <span asp-validation-for="Subcategory" class="field-validation-error"></span>
+                        </div>
+                        <div class="field" data-subject-field hidden="@(subjectOptions.Count == 0)">
+                            <label class="label" for="Subject"><span data-subject-label>@(subRules?.SubjectLabel ?? "Subject")</span> <span class="req" aria-hidden="true">*</span></label>
+                            <select class="select" id="Subject" name="Subject" data-subject-select data-val="true" data-val-required="Choose the subject.">
+                                <option value="">Choose…</option>
+                                @foreach (var s in subjectOptions)
+                                {
+                                    <option value="@s" selected="@(string.Equals(Model.Subject, s, StringComparison.OrdinalIgnoreCase) || subjectOptions.Count == 1)">@s</option>
+                                }
+                            </select>
+                            <span asp-validation-for="Subject" class="field-validation-error"></span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="JobTitle">Job title / Position</label>
+                        <input class="input" asp-for="JobTitle" dir="auto" list="sf-job-titles" placeholder="e.g. Math Teacher" maxlength="100" />
+                        <datalist id="sf-job-titles">
+                            @foreach (var j in Model.JobTitleSuggestions)
+                            {
+                                <option value="@j.JobTitle"></option>
+                            }
+                        </datalist>
+                        <span asp-validation-for="JobTitle" class="field-validation-error"></span>
+                    </div>
+                </div>
+
+                @* Management: the existing Management Team rules (one holder per position). *@
+                <div class="form-grid" data-sf-for="Management" hidden="@(cat != NewStaffCategory.Management)">
+                    <div class="form-grid form-grid--2">
+                        <div class="field">
+                            <label class="label" for="Position">Position</label>
+                            <select class="select" id="Position" name="PositionChoice" data-searchable data-sf-position>
+                                <partial name="_PositionOptions" model="new PositionOptions(Model.PositionChoice, Model.Holders, Model.CustomPositions, true)" />
+                            </select>
+                            <span asp-validation-for="Position" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label class="label" asp-for="Email">Email</label>
+                            <input class="input" asp-for="Email" type="email" dir="ltr" placeholder="name@school.edu.eg" maxlength="150" />
+                            <span asp-validation-for="Email" class="field-validation-error"></span>
+                        </div>
+                    </div>
+                    <div class="form-grid form-grid--2">
+                        @* + Add New Position: the title of a new Management Team position (not a department), created with the member. *@
+                        <div class="field" data-sf-new-position hidden="@(!newPosition)">
+                            <label class="label" for="NewPositionTitle">New Position Title <span class="req" aria-hidden="true">*</span></label>
+                            <input class="input" id="NewPositionTitle" name="NewPositionTitle" value="@Model.NewPositionTitle" dir="auto" maxlength="@ManagementCustomPosition.TitleMaxLength"
+                                   placeholder="e.g. Student Affairs Manager" data-val="true" data-val-required="Enter the new position title." disabled="@(!newPosition)" />
+                            <span asp-validation-for="NewPositionTitle" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="AppointedOn">Appointed to the position on</label>
+                            <input class="input picker" type="date" id="AppointedOn" name="AppointedOn" value="@Iso(Model.AppointedOn)" min="1980-01-01" max="@SchoolWeek.Iso(SchoolWeek.Today.AddYears(1))" data-empty-text="Today, when a position is chosen" />
+                            <span asp-validation-for="AppointedOn" class="field-validation-error"></span>
+                        </div>
+                    </div>
+                    <p class="hint" data-sf-new-position hidden="@(!newPosition)">The new position is added to the Management Team positions and given to this staff member. It is a job title, not a department.</p>
+                </div>
+            </section>
+
+            <section class="sf-section" aria-labelledby="sf-contract-title">
+                <h3 class="sf-section__title" id="sf-contract-title"><span class="sf-step">3</span>Contract information</h3>
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" for="ContractStartDate">Contract start date <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="date" id="ContractStartDate" name="ContractStartDate" value="@Iso(Model.ContractStartDate)" min="1980-01-01"
+                               data-val="true" data-val-required="Enter the contract start date." data-empty-text="Choose the date" data-sf-start />
+                        <span asp-validation-for="ContractStartDate" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="ContractEndDate">Contract end date</label>
+                        <input class="input picker" type="date" id="ContractEndDate" name="ContractEndDate" value="@Iso(Model.ContractEndDate)" min="@(Iso(Model.ContractStartDate) ?? "1980-01-01")"
+                               data-empty-text="Ongoing (no end date)" data-sf-end />
+                        <div class="picker-quick"><button type="button" data-date-quick="clear" data-target="#ContractEndDate">Ongoing</button></div>
+                        <span asp-validation-for="ContractEndDate" class="field-validation-error"></span>
+                    </div>
+                </div>
+                <div class="field">
+                    <span class="label" id="sf-probation-title">Probation period</span>
+                    <div class="seg-toggle sf-toggle sf-probation-toggle" role="radiogroup" aria-labelledby="sf-probation-title">
+                        <label><input type="radio" name="ProbationDays" value="" checked="@(Model.ProbationDays is null)" data-sf-probation /><span>No probation</span></label>
+                        @foreach (var days in StaffEmploymentService.ProbationPresets)
+                        {
+                            <label><input type="radio" name="ProbationDays" value="@days" checked="@(Model.ProbationDays == days)" data-sf-probation /><span>@days Days</span></label>
+                        }
+                    </div>
+                    <span asp-validation-for="ProbationDays" class="field-validation-error"></span>
+                    <span class="hint">The employee's initial trial period. It is separate from the contract duration.</span>
+                </div>
+                @* Shown once a duration is chosen: the start (the contract start by default) and the calculated last day. *@
+                <div class="sf-subpanel" data-sf-probation-dates hidden="@(Model.ProbationDays is null)">
+                    <h4 class="sf-subpanel__title">@Ui.Icon("calendar")Probation Period Dates</h4>
+                    <div class="sf-grid-3">
+                        <div class="field">
+                            <label class="label" for="ProbationStartDate">Probation Start Date</label>
+                            <input class="input picker" type="date" id="ProbationStartDate" name="ProbationStartDate" value="@Iso(probationStart)"
+                                   min="@(Iso(Model.ContractStartDate) ?? "1980-01-01")" max="@Iso(Model.ContractEndDate)" data-empty-text="Same as the contract start"
+                                   data-sf-probation-start disabled="@(Model.ProbationDays is null)" />
+                            <span asp-validation-for="ProbationStartDate" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="ProbationEndDate">Probation End Date</label>
+                            <input class="input sf-readonly" type="text" id="ProbationEndDate" value="@(probationEnd?.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture))"
+                                   placeholder="Choose the start date" readonly tabindex="-1" aria-describedby="sf-probation-summary" data-sf-probation-end />
+                        </div>
+                        <p class="hint sf-grid-3__note" id="sf-probation-summary" data-sf-probation-summary>Calculated from the start date: the start and end days are both included.</p>
+                    </div>
+                    <span class="field-validation-error" data-sf-probation-warning hidden></span>
+                </div>
+            </section>
+
+            <section class="sf-section" aria-labelledby="sf-type-title">
+                <h3 class="sf-section__title" id="sf-type-title"><span class="sf-step">4</span>Employment type <span class="req" aria-hidden="true">*</span></h3>
+                <div class="seg-toggle sf-toggle" role="radiogroup" aria-labelledby="sf-type-title">
+                    <label><input type="radio" name="EmploymentType" value="FullTime" checked="@(Model.EmploymentType == EmploymentType.FullTime)" data-sf-type
+                                  data-val="true" data-val-required="Choose Full Time or Part Time." /><span>@Ui.Icon("briefcase", "icon--sm")Full Time</span></label>
+                    <label><input type="radio" name="EmploymentType" value="PartTime" checked="@(Model.EmploymentType == EmploymentType.PartTime)" data-sf-type /><span>@Ui.Icon("clock", "icon--sm")Part Time</span></label>
+                </div>
+                <span asp-validation-for="EmploymentType" class="field-validation-error"></span>
+                <p class="hint" data-sf-type-for="FullTime" hidden="@(Model.EmploymentType != EmploymentType.FullTime)">Full-time staff follow the school week and the existing workload and timetable rules.</p>
+                <fieldset class="field sf-days" data-sf-type-for="PartTime" hidden="@(Model.EmploymentType != EmploymentType.PartTime)">
+                    <legend class="label">Working days <span class="req" aria-hidden="true">*</span></legend>
+                    <div class="day-picks">
+                        @foreach (var d in StaffEmploymentService.Week)
+                        {
+                            <label class="day-pick"><input type="checkbox" name="WorkingDays" value="@d" checked="@Model.WorkingDays.Contains(d)" /><span>@StaffEmploymentService.DayName(d)</span></label>
+                        }
+                    </div>
+                    <span asp-validation-for="WorkingDays" class="field-validation-error"></span>
+                    <span class="hint">Choose every weekday this person works. Staff attendance expects them only on these days.</span>
+                </fieldset>
+            </section>
+
+            <section class="sf-section" aria-labelledby="sf-hours-title">
+                <h3 class="sf-section__title" id="sf-hours-title"><span class="sf-step">5</span>Working hours <span class="req" aria-hidden="true">*</span></h3>
+                <div class="seg-toggle sf-toggle" role="radiogroup" aria-labelledby="sf-hours-title">
+                    <label><input type="radio" name="WorkingHoursType" value="Fixed" checked="@(Model.WorkingHoursType == WorkingHoursType.Fixed)" data-sf-hours
+                                  data-val="true" data-val-required="Choose Fixed Hours or Flexible Hours." /><span>@Ui.Icon("clock", "icon--sm")Fixed Hours</span></label>
+                    <label><input type="radio" name="WorkingHoursType" value="Flexible" checked="@flexible" data-sf-hours /><span>@Ui.Icon("arrow-up-down", "icon--sm")Flexible Hours</span></label>
+                </div>
+                <span asp-validation-for="WorkingHoursType" class="field-validation-error"></span>
+                <div class="sf-grid-3" data-sf-hours-for="Fixed" hidden="@(Model.WorkingHoursType != WorkingHoursType.Fixed)">
+                    <div class="field">
+                        <label class="label" for="WorkStartFixed">Start time <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="time" id="WorkStartFixed" name="WorkStart" value="@(flexible ? null : Model.WorkStart)" data-timepicker data-empty-text="Choose the time" />
+                    </div>
+                    <div class="field">
+                        <label class="label" for="WorkEndFixed">End time <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="time" id="WorkEndFixed" name="WorkEnd" value="@(flexible ? null : Model.WorkEnd)" data-timepicker data-empty-text="Choose the time" />
+                    </div>
+                    <p class="hint sf-grid-3__note">The same start and end every working day. Late arrival in Staff Attendance is counted from the start time.</p>
+                </div>
+                <div class="sf-grid-3" data-sf-hours-for="Flexible" hidden="@(!flexible)">
+                    <div class="field">
+                        <label class="label" for="WorkStartFlex">Start time <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="time" id="WorkStartFlex" name="WorkStart" value="@(flexible ? Model.WorkStart : null)" min="@windowStart" max="@windowEnd" data-timepicker data-empty-text="From 8:00 AM" />
+                    </div>
+                    <div class="field">
+                        <label class="label" for="WorkEndFlex">End time <span class="req" aria-hidden="true">*</span></label>
+                        <input class="input picker" type="time" id="WorkEndFlex" name="WorkEnd" value="@(flexible ? Model.WorkEnd : null)" min="@windowStart" max="@windowEnd" data-timepicker data-empty-text="Until 3:00 PM" />
+                    </div>
+                    <p class="hint sf-grid-3__note">Within the school working window, @Arrivals.Time(StaffEmploymentService.WindowStart) – @Arrivals.Time(StaffEmploymentService.WindowEnd).</p>
+                </div>
+                <span asp-validation-for="WorkStart" class="field-validation-error"></span>
+                <span asp-validation-for="WorkEnd" class="field-validation-error"></span>
+            </section>
+        </div>
+
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/staff/all">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Add staff member</button>
+        </div>
+    </form>
+</div>

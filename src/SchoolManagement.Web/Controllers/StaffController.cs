@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
+using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.Services.Pdf;
 using SchoolManagement.Web.ViewModels;
@@ -10,7 +11,7 @@ namespace SchoolManagement.Web.Controllers;
 [Route("staff")]
 public class StaffController(IStaffDutyService staffDuty, IDutyService duties, IWorkloadService workload, ITeacherService teachers, ICurrentUser currentUser,
     IDepartmentService departments, IManagementService management, IManagementTaskService tasks, ITimetableService timetable, IClassTeamService classTeams,
-    IStaffDirectoryService directory) : AppController
+    IStaffDirectoryService directory, IStaffEmploymentService employment) : AppController
 {
     /// <summary>
     /// Staff landing page: choose Academic Staff or Management Team. ?view=duties (the old Staff Duty Records
@@ -44,7 +45,11 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
                     "Manage school management members, positions, and individual tasks.",
                     $"{Ui.Plural(await management.CountAsync(ct), "member", "members")} · {taskCounts.Open} open tasks", "blue"),
             ],
-            Extra = [("All School Staff — the whole workforce in one directory", "/staff/all", "users")],
+            Extra =
+            [
+                ("Staff Attendance — today's register for every staff member, with history and reports", "/staff/attendance", "clipboard-check"),
+                ("All School Staff — the whole workforce in one directory", "/staff/all", "users"),
+            ],
         });
     }
 
@@ -132,31 +137,83 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
         return IsAjax ? PartialView("~/Views/Teachers/_Table.cshtml", model) : View("~/Views/Teachers/Index.cshtml", model);
     }
 
+    /// <summary>
+    /// Add Staff Member: one form for Academic staff (existing teacher rules) and Management Team members (existing
+    /// Management Team rules), with contract, probation, employment type and working hours. ?category=academic|management
+    /// preselects the category; ?departmentId= preselects an academic department.
+    /// </summary>
     [HttpGet("create")]
-    public async Task<IActionResult> Create(int? departmentId, CancellationToken ct)
+    public async Task<IActionResult> Create(int? departmentId, string? category, CancellationToken ct)
     {
-        var depts = await teachers.DepartmentsAsync(ct);
-        return PageOrPartial("~/Views/Teachers/Form.cshtml", new TeacherFormModel
+        var model = new StaffCreateModel
         {
-            DepartmentId = depts.Any(d => d.Id == departmentId) ? departmentId : null,
-            JobTitleSuggestions = await teachers.JobTitlesAsync(ct),
-            Departments = depts,
-        });
+            Category = Enum.TryParse<NewStaffCategory>(category, true, out var c) && Enum.IsDefined(c) ? c : departmentId is not null ? NewStaffCategory.Academic : null,
+        };
+        await FillAsync(model, ct);
+        model.DepartmentId = model.Departments.Any(d => d.Id == departmentId) ? departmentId : null;
+        return PageOrPartial("Create", model);
     }
 
     [HttpPost("create"), ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(TeacherFormModel model, CancellationToken ct)
+    public async Task<IActionResult> Create(StaffCreateModel model, CancellationToken ct)
     {
-        model.Id = null;
+        // Only the chosen category's fields apply; the other category's hidden fields are ignored.
+        if (model.Category == NewStaffCategory.Management) { model.DepartmentId = null; model.Subcategory = null; model.Subject = null; model.JobTitle = null; }
+        else
+        {
+            (model.Position, model.PositionChoice, model.NewPositionTitle, model.Email, model.AppointedOn) = (null, null, null, null, null);
+            ModelState.Remove(nameof(model.Email));
+            ModelState.Remove(nameof(model.NewPositionTitle));
+        }
+        // Management: the chosen leadership position, an existing school-added one, or a new one (created with the member).
+        var member = new ManagementMemberInput { FullName = model.FullName, ContactNumber = model.ContactNumber, Email = model.Email, AppointedOn = model.AppointedOn };
+        if (!PositionChoices.Apply(model.PositionChoice, model.Position, model.NewPositionTitle, member))
+            ModelState.AddModelError(nameof(model.Position), "Choose a position from the list.");
+        if (model.ProbationDays is null) model.ProbationStartDate = null;
+        if (model.EmploymentType != EmploymentType.PartTime) { model.WorkingDays = []; }
+        foreach (var (field, value) in new[] { (nameof(model.WorkStart), model.WorkStart), (nameof(model.WorkEnd), model.WorkEnd) })
+            if (!string.IsNullOrWhiteSpace(value) && StaffCreateModel.Time(value) is null) ModelState.AddModelError(field, "Enter a valid time.");
+        // Employment rules are checked before anyone is created, so a saved person always has a valid configuration.
+        var input = model.Employment();
+        AddErrors(employment.Validate(input));
+
         if (ModelState.IsValid)
         {
-            var result = await teachers.CreateAsync(model.FullName, model.JobTitle, model.ContactNumber, model.DepartmentId, model.Subcategory, model.Subject, ct);
-            if (result.Succeeded) return Saved($"{model.FullName.Trim()} was added.");
+            var result = model.Category == NewStaffCategory.Management
+                ? await management.CreateAsync(member, ct)
+                : await teachers.CreateAsync(model.FullName, model.JobTitle, model.ContactNumber, model.DepartmentId, model.Subcategory, model.Subject, ct);
+            if (result.Succeeded && result.EntityId is { } id)
+            {
+                ServiceResult saved;
+                try { saved = await employment.SaveAsync(id, input, ct); }
+                catch (Microsoft.EntityFrameworkCore.DbUpdateException) { saved = ServiceResult.Fail("", "The employment details could not be saved. Try again."); }
+                if (saved.Succeeded)
+                {
+                    var where = model.Category == NewStaffCategory.Management ? "the Management Team" : "Academic Staff";
+                    var message = $"{model.FullName.Trim()} was added to {where}.";
+                    var profile = model.Category == NewStaffCategory.Management ? $"/management/members/{id}" : $"/staff/{id}";
+                    if (IsAjax) return AjaxSuccess(message, model.FullPage ? profile : null);
+                    Toast(message);
+                    return LocalRedirect(profile);
+                }
+                // Nothing half-saved: the person just created is removed again (they have no other records yet).
+                if (model.Category == NewStaffCategory.Management) await management.DeleteAsync(id, ct); else await teachers.DeleteAsync(id, ct);
+                result = saved;
+            }
             AddErrors(result);
         }
-        model.JobTitleSuggestions = await teachers.JobTitlesAsync(ct);
+        await FillAsync(model, ct);
+        return FormView("Create", model);
+    }
+
+    private async Task FillAsync(StaffCreateModel model, CancellationToken ct)
+    {
         model.Departments = await teachers.DepartmentsAsync(ct);
-        return FormView("~/Views/Teachers/Form.cshtml", model);
+        model.JobTitleSuggestions = await teachers.JobTitlesAsync(ct);
+        model.Holders = await management.PositionHoldersAsync(null, ct);
+        model.CustomPositions = await management.CustomPositionsAsync(null, ct);
+        if (model.Position is { } held && model.Holders.ContainsKey(held)) model.Position = null;
+        model.PositionChoice ??= PositionChoices.Of(model.Position, null);
     }
 
     [HttpGet("edit/{id:int}")]

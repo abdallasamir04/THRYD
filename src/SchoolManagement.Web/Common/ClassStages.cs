@@ -38,8 +38,8 @@ public static class ClassStages
         public bool IsPreK => Code == PreKCode;
         public bool IsOpenEnded => MaxGrade is null;
 
-        /// <summary>Pre-K has no numbered name format (KG/G + number + section), so it has no automatic Add Class.</summary>
-        public bool CanAdd => !IsPreK;
+        /// <summary>Every group has Add Class: KG / G classes are named grade + section (KG1A), Pre-K classes PreK + section (PreKB).</summary>
+        public bool CanAdd => true;
 
         public bool Contains(ClassGrade grade) =>
             grade.Code == Code && grade.Number >= MinGrade && (MaxGrade is null || grade.Number <= MaxGrade);

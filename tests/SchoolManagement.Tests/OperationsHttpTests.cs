@@ -133,16 +133,65 @@ public partial class OperationsHttpTests(DbFixture fx)
         var html = await fx.Factory.CreateClient().GetStringAsync("/");
         var summary = await DbFixture.Arrivals(db).DaySummaryAsync(SchoolWeek.Today);
         var counts = await DbFixture.Duties(db).StatusCountsAsync(SchoolWeek.Today);
-        Assert.Contains($"\">{summary.Absent}</span><span class=\"ops-tile__label\">Absent today", html);
-        Assert.Contains($"\">{summary.Late}</span><span class=\"ops-tile__label\">Late today", html);
-        Assert.Contains($"\">{summary.Present}</span><span class=\"ops-tile__label\">Present today", html);
-        // Removed categories: no "not yet recorded" tile and no "without a valid class" card.
-        Assert.DoesNotContain("not yet recorded", html, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("without a valid class", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains($"\">{counts[DutyStatus.Covered]}</span><span class=\"ops-tile__label\">Duties covered", html);
-        Assert.Contains($"\">{counts[DutyStatus.Pending]}</span><span class=\"ops-tile__label\">Duties pending", html);
-        // No individual feedback text on the general dashboard.
-        Assert.DoesNotContain("Absent without notice", html);
+        string Tile(int value, string label) => $"\">{value}</span><span class=\"ops-tile__label\">{label}";
+
+        // Row 1: Covered and Not covered side by side in one tile, then Pending and In progress.
+        Assert.Contains($"\">{counts[DutyStatus.Covered]}</span><span class=\"ops-tile__label\"><i aria-hidden=\"true\"></i>Covered", html);
+        Assert.Contains($"\">{counts[DutyStatus.NotCovered]}</span><span class=\"ops-tile__label\"><i aria-hidden=\"true\"></i>Not covered", html);
+        Assert.Contains(Tile(counts[DutyStatus.Pending], "Duties pending"), html);
+        Assert.Contains(Tile(counts[DutyStatus.InProgress], "Duties in progress"), html);
+        // Row 2: student attendance from School Attendance.
+        Assert.Contains(Tile(summary.Present, "Students present"), html);
+        Assert.Contains(Tile(summary.Absent, "Students absent"), html);
+        Assert.Contains(Tile(summary.Late, "Students late"), html);
+        // Row 3: staff attendance from Staff Attendance records (active staff only; Not Recorded is never Absent).
+        var staff = await new StaffAttendanceService(db, new NoUser(), DbFixture.Settings(db), new BelongingsService(db, DbFixture.Timetable(db), new NoUser()))
+            .TodayAsync(SchoolWeek.Today);
+        Assert.Contains(Tile(staff.Counts.Present, "Staff present"), html);
+        Assert.Contains(Tile(staff.Counts.Absent, "Staff absent"), html);
+        Assert.Contains(Tile(staff.Counts.Late, "Staff late"), html);
+        Assert.Contains(staff.IsSchoolDay ? $"active staff · {staff.Counts.NotRecorded} not recorded" : "active staff · not a school day", WebUtility.HtmlDecode(html));
+        Assert.Contains("href=\"/staff/attendance?status=late\"", html);
+        Assert.Equal(9, Regex.Matches(html, "<li><(a|div) class=\"ops-tile").Count);
+        Assert.DoesNotContain("Staff duty performance", html);
+
+        // Hero: Students Arrived (attended / expected) and Staff Arrived (Present + Late / active staff expected today).
+        Assert.Contains("Students Arrived</span>", html);
+        Assert.Contains($"{summary.Attended}<small> / {summary.Students}</small>", html);
+        Assert.Contains("Staff Arrived</span>", html);
+        Assert.Contains(staff.IsSchoolDay ? $"{staff.Counts.Arrived}<small> / {staff.Counts.Expected}</small>" : $"—<small> / {staff.ActiveStaff}</small>", html);
+        // The hero has one action, Import from Excel, which opens the choice of Students / Staff.
+        var hero = html[html.IndexOf("<section class=\"hero\"", StringComparison.Ordinal)..html.IndexOf("</section>", html.IndexOf("<section class=\"hero\"", StringComparison.Ordinal), StringComparison.Ordinal)];
+        Assert.Single(Regex.Matches(hero, "class=\"btn "));
+        Assert.Contains("href=\"/import-export/choose\" data-modal>", hero);
+        Assert.DoesNotContain("Add student", hero);
+
+        // Quick actions: exactly six, Add student only here, Duties opens the main Duties page.
+        var quick = Regex.Match(html, "<nav class=\"quick\"[^>]*>(.*?)</nav>", RegexOptions.Singleline).Groups[1].Value;
+        Assert.Equal(6, Regex.Matches(quick, "<a ").Count);
+        foreach (var action in new[] { "Add student", "Add staff", "Duties", "Teacher workload", "Import Excel", "Manage classes" }) Assert.Contains($"</span>{action}</a>", quick);
+        Assert.Contains("<a href=\"/staff/create\" data-modal>", quick);
+        Assert.DoesNotContain("Add teacher", html);
+        Assert.Contains("<a href=\"/duties\"><span class=\"q-icon\">", quick);
+        Assert.Single(Regex.Matches(html, ">Add student<"));
+
+        // Removed sections; still no "without a valid class" card and no individual feedback on the general dashboard.
+        foreach (var gone in new[] { "Recently added", "Teachers by job title", "Morning duty", "without a valid class", "Absent without notice" })
+            Assert.DoesNotContain(gone, html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Students by class", html);
+
+        // The choice dialog offers exactly Students and Staff, each opening the existing import.
+        var choose = await fx.Factory.CreateClient().GetStringAsync("/import-export/choose");
+        Assert.Contains("href=\"/import-export?kind=Students\"", choose);
+        Assert.Contains("href=\"/import-export?kind=Teachers\"", choose);
+        Assert.Equal(2, Regex.Matches(choose, "class=\"import-choice__option").Count);
+    }
+
+    private sealed class NoUser : ICurrentUser
+    {
+        public string? Name => null;
+        public int? StaffId => null;
+        public bool IsVerified => false;
     }
 
     [GeneratedRegex("name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"")]

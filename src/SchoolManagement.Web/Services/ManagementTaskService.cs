@@ -31,15 +31,58 @@ public sealed class TaskListQuery
     /// <summary>overdue, today, week, later or none.</summary>
     public string? Due { get; set; }
 
+    /// <summary>
+    /// Tasks page tab (each task is in at most one): overdue (open, past its due moment), today (open, due later today),
+    /// upcoming (open, due after today) or completed. Empty = all tasks. See <see cref="TaskTabs"/>.
+    /// </summary>
+    public string? Tab { get; set; }
+
+    /// <summary>The executor's staff category: academic, management or support (StaffCategories).</summary>
+    public string? Category { get; set; }
+
+    /// <summary>Due date range (inclusive); either end may be empty.</summary>
+    public DateOnly? DueFrom { get; set; }
+    public DateOnly? DueTo { get; set; }
+
     public string Sort { get; set; } = "due";
     public string Dir { get; set; } = "asc";
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 25;
 
-    public bool HasScope => ReviewerId is not null || !string.IsNullOrWhiteSpace(Department) || !string.IsNullOrWhiteSpace(Mine);
+    public bool HasScope => ReviewerId is not null || !string.IsNullOrWhiteSpace(Department) || !string.IsNullOrWhiteSpace(Mine)
+        || StaffCategories.Parse(Category) is not null;
 
     public bool HasFilters => !string.IsNullOrWhiteSpace(Search) || !string.IsNullOrWhiteSpace(Status)
-        || !string.IsNullOrWhiteSpace(Priority) || !string.IsNullOrWhiteSpace(Due) || HasScope;
+        || !string.IsNullOrWhiteSpace(Priority) || !string.IsNullOrWhiteSpace(Due) || DueFrom is not null || DueTo is not null || HasScope;
+
+    /// <summary>The same filters without the tab (for the tab counts).</summary>
+    public TaskListQuery WithoutTab()
+    {
+        var copy = (TaskListQuery)MemberwiseClone();
+        copy.Tab = null;
+        return copy;
+    }
+}
+
+/// <summary>The Tasks page tabs. A task is in at most one of Overdue, Due Today, Upcoming and Completed.</summary>
+public static class TaskTabs
+{
+    public static readonly (string? Key, string Label, string Icon)[] All =
+    [
+        (null, "All Tasks", "list"), ("overdue", "Overdue", "alert-circle"), ("today", "Due Today", "clock"),
+        ("upcoming", "Upcoming", "calendar"), ("completed", "Completed", "check-circle"),
+    ];
+
+    public static string? Normalize(string? tab) => All.Any(t => t.Key == tab) ? tab : null;
+}
+
+/// <summary>Tab totals: All, Overdue, Due Today (not yet overdue), Upcoming (due after today) and Completed.</summary>
+public sealed record TaskTabCounts(int All, int Overdue, int DueToday, int Upcoming, int Completed)
+{
+    public int Of(string? tab) => tab switch
+    {
+        "overdue" => Overdue, "today" => DueToday, "upcoming" => Upcoming, "completed" => Completed, _ => All,
+    };
 }
 
 /// <summary>A staff member on a task (executor, reviewer or creator), from their current staff record.</summary>
@@ -56,7 +99,8 @@ public sealed record TaskPerson(int Id, string Name, string? JobTitle, string? D
 }
 
 /// <summary>A staff member in a task's person picker: name, with department and job title as the note.</summary>
-public sealed record TaskStaffOption(int Id, string FullName, string Note, int? DepartmentId, bool IsManagement);
+public sealed record TaskStaffOption(int Id, string FullName, string Note, int? DepartmentId, bool IsManagement,
+    StaffCategory Category = StaffCategory.Academic, bool IsActive = true);
 
 public sealed record TaskDepartmentOption(int Id, string Name);
 
@@ -111,6 +155,9 @@ public interface IManagementTaskService
 
     /// <summary>Counts within the query's people / department scope (status, priority and due filters are ignored).</summary>
     Task<TaskCounts> ScopeCountsAsync(TaskListQuery scope, CancellationToken ct = default);
+
+    /// <summary>Tab totals for every filter of <paramref name="query"/> except its tab.</summary>
+    Task<TaskTabCounts> TabCountsAsync(TaskListQuery query, CancellationToken ct = default);
     Task<TaskRow?> GetAsync(int id, CancellationToken ct = default);
     Task<ServiceResult> CreateAsync(TaskInput input, CancellationToken ct = default);
     Task<ServiceResult> UpdateAsync(int id, TaskInput input, CancellationToken ct = default);
@@ -170,6 +217,18 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
         int Of(ManagementTaskStatus s) => byStatus.GetValueOrDefault(s);
         return new TaskCounts(byStatus.Values.Sum(), Of(ManagementTaskStatus.ToDo), Of(ManagementTaskStatus.InProgress), Of(ManagementTaskStatus.OnHold),
             Of(ManagementTaskStatus.Completed), Of(ManagementTaskStatus.Cancelled), overdue, dueToday);
+    }
+
+    public async Task<TaskTabCounts> TabCountsAsync(TaskListQuery query, CancellationToken ct = default)
+    {
+        var (today, time) = Now();
+        var all = Filter(query.WithoutTab());
+        return new TaskTabCounts(
+            await all.CountAsync(ct),
+            await all.Where(TabPredicate("overdue", today, time)).CountAsync(ct),
+            await all.Where(TabPredicate("today", today, time)).CountAsync(ct),
+            await all.Where(TabPredicate("upcoming", today, time)).CountAsync(ct),
+            await all.Where(TabPredicate("completed", today, time)).CountAsync(ct));
     }
 
     public Task<TaskRow?> GetAsync(int id, CancellationToken ct = default) =>
@@ -299,15 +358,20 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
 
     public async Task<IReadOnlyList<TaskStaffOption>> StaffAsync(CancellationToken ct = default)
     {
+        // Staff records only (Teachers and Management Team share one table, so nobody is listed twice; students are a
+        // separate table and never appear). A contract that has ended marks the person as no longer active.
+        var today = SchoolWeek.Today;
         var rows = await db.StaffMembers.AsNoTracking()
             .Select(s => new
             {
                 s.Id, s.FullName, s.JobTitle, s.DepartmentId, Department = s.Department != null ? s.Department.Name : null,
                 IsManagement = s is ManagementMember, Position = s is ManagementMember ? ((ManagementMember)s).Position : null,
+                Active = s.ContractEndDate == null || s.ContractEndDate >= today,
             })
             .ToListAsync(ct);
         return rows
-            .Select(s => new TaskStaffOption(s.Id, s.FullName, new TaskPerson(s.Id, s.FullName, s.JobTitle, s.Department, s.Position, s.IsManagement).Describe, s.DepartmentId, s.IsManagement))
+            .Select(s => new TaskStaffOption(s.Id, s.FullName, new TaskPerson(s.Id, s.FullName, s.JobTitle, s.Department, s.Position, s.IsManagement).Describe,
+                s.DepartmentId, s.IsManagement, StaffCategories.Of(s.IsManagement, s.JobTitle), s.Active))
             .OrderBy(s => !s.IsManagement).ThenBy(s => s.FullName, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }
@@ -431,6 +495,9 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
         {
             executor = await NameOfAsync(executorId, ct);
             if (executor.Length == 0) result.AddError("AssignedToId", "Choose a staff member from the list.");
+            // A new assignee must still be on staff (contract not ended); an existing assignment is kept as it is.
+            else if (existing?.AssignedToId != executorId && await ContractEndedAsync(executorId, ct) is { } ended)
+                result.AddError("AssignedToId", $"{executor}'s contract ended on {ended.ToString("d MMM yyyy", CultureInfo.InvariantCulture)}. Choose a current staff member.");
         }
         if (input.ReviewerId is { } reviewerId)
         {
@@ -460,6 +527,13 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
         else if (input.DueTime is not null) result.AddError("DueTime", "Choose a due date for this time, or clear the time.");
 
         return (result, (executor, input.ReviewerId is null ? null : reviewer));
+    }
+
+    private async Task<DateOnly?> ContractEndedAsync(int staffId, CancellationToken ct)
+    {
+        var today = SchoolWeek.Today;
+        return await db.StaffMembers.AsNoTracking().Where(s => s.Id == staffId && s.ContractEndDate != null && s.ContractEndDate < today)
+            .Select(s => s.ContractEndDate).FirstOrDefaultAsync(ct);
     }
 
     private async Task<string> NameOfAsync(int staffId, CancellationToken ct) =>
@@ -509,6 +583,20 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
         t => t.Status != ManagementTaskStatus.Completed && t.Status != ManagementTaskStatus.Cancelled && t.DueDate != null
              && (t.DueDate < today || (t.DueDate == today && t.DueTime != null && t.DueTime < time));
 
+    /// <summary>
+    /// The Tasks page tabs. Overdue: open and past its due moment. Due Today: open, due today and not yet overdue.
+    /// Upcoming: open and due after today. Completed: completed. Open tasks without a due date are only under All.
+    /// </summary>
+    private static System.Linq.Expressions.Expression<Func<ManagementTask, bool>> TabPredicate(string tab, DateOnly today, TimeOnly time) => tab switch
+    {
+        "overdue" => OverduePredicate(today, time),
+        "today" => t => t.Status != ManagementTaskStatus.Completed && t.Status != ManagementTaskStatus.Cancelled && t.DueDate == today
+                        && (t.DueTime == null || t.DueTime >= time),
+        "upcoming" => t => t.Status != ManagementTaskStatus.Completed && t.Status != ManagementTaskStatus.Cancelled && t.DueDate > today,
+        "completed" => t => t.Status == ManagementTaskStatus.Completed,
+        _ => t => true,
+    };
+
     /// <summary>The people / department part of the filters (also the scope of the summary counts).</summary>
     private IQueryable<ManagementTask> Scope(TaskListQuery q)
     {
@@ -517,6 +605,16 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
         if (q.ReviewerId is { } rid) query = query.Where(t => t.ReviewerId == rid);
         if (q.Department == "management") query = query.Where(t => t.AssignedTo is ManagementMember);
         else if (int.TryParse(q.Department, out var dept)) query = query.Where(t => t.AssignedTo.DepartmentId == dept);
+        // Staff category (StaffCategories.Of): Management Team; otherwise a teaching job title (or none) is academic.
+        query = StaffCategories.Parse(q.Category) switch
+        {
+            StaffCategory.Management => query.Where(t => t.AssignedTo is ManagementMember),
+            StaffCategory.Academic => query.Where(t => !(t.AssignedTo is ManagementMember)
+                && (t.AssignedTo.JobTitle == null || t.AssignedTo.JobTitle.Trim() == "" || t.AssignedTo.JobTitle.Contains("teacher"))),
+            StaffCategory.Support => query.Where(t => !(t.AssignedTo is ManagementMember)
+                && t.AssignedTo.JobTitle != null && t.AssignedTo.JobTitle.Trim() != "" && !t.AssignedTo.JobTitle.Contains("teacher")),
+            _ => query,
+        };
         if (!string.IsNullOrWhiteSpace(q.Mine))
         {
             // Without a "Working as" staff member there is no "me": nothing matches.
@@ -566,6 +664,9 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
             "none" => query.Where(t => t.DueDate == null),
             _ => query,
         };
+        if (q.DueFrom is { } from) query = query.Where(t => t.DueDate >= from);
+        if (q.DueTo is { } to) query = query.Where(t => t.DueDate <= to);
+        if (TaskTabs.Normalize(q.Tab) is { } tab) query = query.Where(TabPredicate(tab, today, time));
         return query;
     }
 
@@ -578,6 +679,7 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
                 ? query.OrderBy(t => t.Priority).ThenBy(t => t.DueDate == null).ThenBy(t => t.DueDate)
                 : query.OrderByDescending(t => t.Priority).ThenBy(t => t.DueDate == null).ThenBy(t => t.DueDate),
             "created" => desc ? query.OrderBy(t => t.CreatedAt).ThenBy(t => t.Id) : query.OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id),
+            "oldest" => query.OrderBy(t => t.CreatedAt).ThenBy(t => t.Id),
             "title" => desc ? query.OrderByDescending(t => t.Title) : query.OrderBy(t => t.Title),
             "status" => desc ? query.OrderByDescending(t => t.Status).ThenBy(t => t.DueDate) : query.OrderBy(t => t.Status).ThenBy(t => t.DueDate),
             // Due date: completed and cancelled tasks last, tasks without a due date after dated ones.

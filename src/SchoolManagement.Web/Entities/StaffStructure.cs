@@ -98,9 +98,29 @@ public class ManagementMember : StaffMember
 {
     public const int EmailMaxLength = 150;
 
+    /// <summary>One of the seven leadership positions (with its own page and appointment history)…</summary>
     public ManagementPosition? Position { get; set; }
+    /// <summary>…or a position added by the school (never both; one holder per position).</summary>
+    public int? CustomPositionId { get; set; }
+    public ManagementCustomPosition? CustomPosition { get; set; }
     public string? Email { get; set; }
     public DateOnly? AppointedOn { get; set; }
+}
+
+/// <summary>
+/// A Management Team job title added by the school beside the seven leadership positions (e.g. "Student Affairs
+/// Manager"). A position, not a department. Titles are unique ignoring case and spacing; one holder at a time.
+/// </summary>
+public class ManagementCustomPosition
+{
+    public const int TitleMaxLength = StaffMember.JobTitleMaxLength;
+
+    public int Id { get; set; }
+    public string Title { get; set; } = "";
+    /// <summary>TextNormalizer.NameKey(Title): the uniqueness key.</summary>
+    public string NormalizedTitle { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
 }
 
 // ============================================================ Management Team tasks

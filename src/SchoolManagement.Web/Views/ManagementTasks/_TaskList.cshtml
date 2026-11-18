@@ -17,6 +17,12 @@
     var department = q.Department == "management" ? "Management Team"
         : int.TryParse(q.Department, out var deptId) ? Model.Departments.FirstOrDefault(d => d.Id == deptId)?.Name : null;
     var mine = q.Mine switch { "assigned" => "Assigned to me", "created" => "Created by me", "review" => "Submitted to me", _ => null };
+    var category = StaffCategories.Parse(q.Category) is { } sc ? StaffCategories.Name(sc) : null;
+    string D(DateOnly d) => d.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+    var range = q.DueFrom is null && q.DueTo is null ? null
+        : q.DueFrom is { } f && q.DueTo is { } to ? $"Due {D(f)} – {D(to)}"
+        : q.DueFrom is { } f2 ? $"Due from {D(f2)}" : $"Due by {D(q.DueTo!.Value)}";
+    var tab = TaskTabs.All.FirstOrDefault(x => x.Key is not null && x.Key == q.Tab).Label;
 }
 
 <div class="results-bar">
@@ -38,6 +44,14 @@
         @if (reviewerName is not null)
         {
             <span class="filter-chip" dir="auto">Submitted to: @reviewerName<a href="@Context.Request.WithQuery(("reviewerId", null), ("page", null))" aria-label="Clear reviewer filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (category is not null)
+        {
+            <span class="filter-chip">Staff: @category<a href="@Context.Request.WithQuery(("category", null), ("page", null))" aria-label="Clear staff category filter">@Ui.Icon("x", "icon--sm")</a></span>
+        }
+        @if (range is not null)
+        {
+            <span class="filter-chip">@range<a href="@Context.Request.WithQuery(("dueFrom", null), ("dueTo", null), ("page", null))" aria-label="Clear due date range">@Ui.Icon("x", "icon--sm")</a></span>
         }
         @if (department is not null)
         {
@@ -73,12 +87,24 @@
     }
     else
     {
-        <div class="empty">
-            <span class="empty__icon">@Ui.Icon("search")</span>
-            <p class="empty__title">No tasks match</p>
-            <p class="empty__text">Try another status, priority or due date, or clear the filters.</p>
-            <div class="empty__actions"><a class="btn btn--secondary" href="@Model.BaseUrl" data-list-link>Clear filters</a></div>
-        </div>
+        @if (tab is not null && !q.HasFilters && Model.Query.MemberId is null)
+        {
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon(q.Tab == "overdue" ? "check-circle" : "inbox")</span>
+                <p class="empty__title">@(q.Tab switch { "overdue" => "Nothing is overdue", "today" => "Nothing else is due today", "upcoming" => "No upcoming tasks", _ => "No completed tasks yet" })</p>
+                <p class="empty__text">@(q.Tab == "overdue" ? "Every open task is still within its due date." : "Tasks appear here as their due dates and statuses change.")</p>
+                <div class="empty__actions"><a class="btn btn--secondary" href="@Model.BaseUrl">All tasks</a></div>
+            </div>
+        }
+        else
+        {
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon("search")</span>
+                <p class="empty__title">No tasks match</p>
+                <p class="empty__text">Try another status, priority or due date, or clear the filters.</p>
+                <div class="empty__actions"><a class="btn btn--secondary" href="@Model.BaseUrl">Clear filters</a></div>
+            </div>
+        }
     }
 }
 else

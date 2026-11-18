@@ -17,20 +17,35 @@ public sealed record CalendarEventView(int Id, int YearId, string Title, DateOnl
     public bool Covers(DateOnly d) => StartDate is { } s && d >= s && d <= (EndDate ?? s);
 }
 
-/// <summary>One cell of a month grid. <see cref="InQuarter"/> is false for the days of a transition month that belong to the other quarter.</summary>
-public sealed record CalendarDay(DateOnly Date, bool InMonth, bool InQuarter, CalendarColor Color, string? QuarterStart, bool IsToday, IReadOnlyList<string> Events);
+/// <summary>The first or last day of a quarter (its school calendar dates), shown on the date and listed under its month.</summary>
+public sealed record CalendarMilestone(int QuarterId, int Number, DateOnly Date, bool IsStart, DateOnly Start, DateOnly End)
+{
+    public string Label => IsStart ? $"Start of Q{Number}" : $"End of Q{Number}";
+    public string Short => $"Q{Number}";
+}
+
+/// <summary>One cell of a month grid, with the quarter milestones that fall on it.</summary>
+public sealed record CalendarDay(DateOnly Date, bool InMonth, CalendarColor Color, IReadOnlyList<CalendarMilestone> Milestones, bool IsToday, IReadOnlyList<string> Events);
 
 /// <summary>An event line under a month. A continuation is the part of a multi-month event listed under another month.</summary>
 public sealed record CalendarRow(CalendarEventView Event, string DateText, bool Continuation, string? ContinuationText);
 
-public sealed record CalendarMonth(DateOnly Month, DateOnly From, DateOnly To, bool Partial, string? BoundaryNote,
-    IReadOnlyList<IReadOnlyList<CalendarDay>> Weeks, IReadOnlyList<CalendarRow> Rows);
+/// <summary>A line under a month: an event line or a quarter milestone, in date order.</summary>
+public sealed record CalendarMonthItem(CalendarRow? Row, CalendarMilestone? Milestone);
 
-public sealed record CalendarQuarter(int Id, int Number, string Name, DateOnly? Start, DateOnly? End, IReadOnlyList<CalendarMonth> Months);
+/// <summary>A whole month: its Sunday–Saturday grid and, underneath, its events and quarter milestones in date order.</summary>
+public sealed record CalendarMonth(DateOnly Month, IReadOnlyList<IReadOnlyList<CalendarDay>> Weeks, IReadOnlyList<CalendarMonthItem> Items)
+{
+    public IEnumerable<CalendarRow> Rows => Items.Where(i => i.Row is not null).Select(i => i.Row!);
+    public IEnumerable<CalendarMilestone> Milestones => Items.Where(i => i.Milestone is not null).Select(i => i.Milestone!);
+}
+
+/// <summary>A quarter's school calendar dates (the printed dates, or its 8-week dates when those are not set).</summary>
+public sealed record CalendarQuarter(int Id, int Number, string Name, DateOnly? Start, DateOnly? End);
 
 public sealed record SchoolCalendarPage(
     IReadOnlyList<CalendarYearOption> Years, int? YearId, string? YearName,
-    IReadOnlyList<CalendarQuarter> Quarters, IReadOnlyList<CalendarRow> Unplaced,
+    IReadOnlyList<CalendarQuarter> Quarters, IReadOnlyList<CalendarMonth> Months, IReadOnlyList<CalendarRow> Unplaced,
     int EventCount, int MarkCount, int ToConfirm, bool CanLoadReference);
 
 public sealed record CalendarDayView(int YearId, string YearName, DateOnly Date, CalendarColor Mark, IReadOnlyList<CalendarEventView> Events);
@@ -57,9 +72,11 @@ public interface ISchoolCalendarService
 }
 
 /// <summary>
-/// School Calendar: the teachers' calendar of an academic year, grouped by the quarters as printed (their own
-/// dates, <see cref="AcademicQuarter.CalendarStartDate"/>), month by month: coloured dates in the grid and the
-/// month's event lines underneath. The 8-week quarter dates used by other modules are never changed here.
+/// School Calendar: the teachers' calendar of an academic year as one continuous run of whole months, from the first
+/// quarter's first day to the last quarter's last day (the quarters' printed dates, <see cref="AcademicQuarter.CalendarStartDate"/>,
+/// or their 8-week dates when those are not set): coloured dates in each grid, the start and end of every quarter marked
+/// on its date, and the month's event lines and milestones underneath, in date order. The 8-week quarter dates used by
+/// other modules are never changed here.
 /// </summary>
 public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarService
 {
@@ -70,7 +87,7 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
     public async Task<SchoolCalendarPage> PageAsync(int? yearId, CancellationToken ct = default)
     {
         var years = await db.AcademicYears.AsNoTracking().OrderByDescending(y => y.Name).Select(y => new CalendarYearOption(y.Id, y.Name)).ToListAsync(ct);
-        if (years.Count == 0) return new SchoolCalendarPage(years, null, null, [], [], 0, 0, 0, false);
+        if (years.Count == 0) return new SchoolCalendarPage(years, null, null, [], [], [], 0, 0, 0, false);
 
         var quarters = await db.AcademicQuarters.AsNoTracking().OrderBy(q => q.Number).ToListAsync(ct);
         var year = years.FirstOrDefault(y => y.Id == yearId) ?? DefaultYear(years, quarters);
@@ -82,40 +99,49 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
 
         var today = SchoolWeek.Today;
         var visible = events.Where(e => !e.IsHidden).ToList();
-        var starts = mine.Where(q => q.CalendarStartDate is not null && q.Number > 1).ToDictionary(q => q.CalendarStartDate!.Value, q => $"Start of Q{q.Number}");
 
-        // Every event line goes to exactly one month card: the card of its month whose quarter part holds its anchor day.
+        // Each quarter's school calendar dates: as printed, or its 8-week dates until those are set.
+        var quarterViews = mine.Select(q => q.CalendarStartDate is { } cs && q.CalendarEndDate is { } ce
+                ? new CalendarQuarter(q.Id, q.Number, q.Name, cs, ce)
+                : new CalendarQuarter(q.Id, q.Number, q.Name, q.StartDate, q.EndDate))
+            .ToList();
+        var milestones = quarterViews.Where(q => q.Start is not null && q.End is not null)
+            .SelectMany(q => new[]
+            {
+                new CalendarMilestone(q.Id, q.Number, q.Start!.Value, true, q.Start.Value, q.End!.Value),
+                new CalendarMilestone(q.Id, q.Number, q.End!.Value, false, q.Start.Value, q.End.Value),
+            })
+            .ToList();
+        var byDate = milestones.ToLookup(m => m.Date);
+
+        // Every event line goes to exactly one month card: the month it is listed under (continuations in the others).
         var placements = events.SelectMany(Placements).ToList();
         var placed = new HashSet<(int, DateOnly)>();
 
-        var result = new List<CalendarQuarter>();
-        foreach (var q in mine)
+        var months = new List<CalendarMonth>();
+        if (milestones.Count > 0)
         {
-            var months = new List<CalendarMonth>();
-            if (q.CalendarStartDate is { } qs && q.CalendarEndDate is { } qe)
+            for (var m = MonthOf(milestones.Min(x => x.Date)); m <= milestones.Max(x => x.Date); m = m.AddMonths(1))
             {
-                for (var m = MonthOf(qs); m <= qe; m = m.AddMonths(1))
-                {
-                    var last = m.AddMonths(1).AddDays(-1);
-                    var from = qs > m ? qs : m;
-                    var to = qe < last ? qe : last;
-                    var rows = placements.Where(p => p.Month == m && p.Anchor >= from && p.Anchor <= to && !p.Event.IsHidden)
-                        .OrderBy(p => p.Continuation && p.Anchor == m ? 0 : p.Continuation ? 2 : 1)
-                        .ThenBy(p => p.Event.SortOrder).ThenBy(p => p.Event.StartDate)
-                        .Select(p => { placed.Add((p.Event.Id, p.Month)); return p.Row; }).ToList();
-                    months.Add(new CalendarMonth(m, from, to, from > m || to < last, Boundary(q, m, from, to, last, mine),
-                        Weeks(m, from, to, marks, starts, visible, today), rows));
-                }
+                var month = m;
+                var rows = placements.Where(p => p.Month == month && !p.Event.IsHidden).ToList();
+                foreach (var p in rows) placed.Add((p.Event.Id, p.Month));
+                // Date order: a quarter's start before the day's events, its end after them; then the printed order.
+                var items = rows.Select(p => (Date: p.Anchor, Kind: 1, p.Event.SortOrder, Item: new CalendarMonthItem(p.Row, null)))
+                    .Concat(milestones.Where(x => MonthOf(x.Date) == month)
+                        .Select(x => (x.Date, Kind: x.IsStart ? 0 : 2, SortOrder: x.Number, Item: new CalendarMonthItem(null, x))))
+                    .OrderBy(x => x.Date).ThenBy(x => x.Kind).ThenBy(x => x.SortOrder)
+                    .Select(x => x.Item).ToList();
+                months.Add(new CalendarMonth(month, Weeks(month, marks, byDate, visible, today), items));
             }
-            result.Add(new CalendarQuarter(q.Id, q.Number, q.Name, q.CalendarStartDate, q.CalendarEndDate, months));
         }
 
-        // Nothing is ever left out: lines outside every quarter's dates (or hidden) are listed separately.
+        // Nothing is ever left out: lines outside the calendar's months (or hidden) are listed separately.
         var unplaced = placements.Where(p => !placed.Contains((p.Event.Id, p.Month)) && !p.Continuation)
             .OrderBy(p => p.Month).ThenBy(p => p.Event.SortOrder).Select(p => p.Row).ToList();
 
         var canLoad = events.Count == 0 && marks.Count == 0 && SchoolCalendarReference.Fits(year.Name);
-        return new SchoolCalendarPage(years, year.Id, year.Name, result, unplaced, events.Count, marks.Count,
+        return new SchoolCalendarPage(years, year.Id, year.Name, quarterViews, months, unplaced, events.Count, marks.Count,
             events.Count(e => e.NeedsConfirmation), canLoad);
     }
 
@@ -169,22 +195,8 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
         return $"{start.ToString("d MMM", C)} – {end.ToString("d MMM", C)}";
     }
 
-    private static string? Boundary(AcademicQuarter q, DateOnly month, DateOnly from, DateOnly to, DateOnly last, List<AcademicQuarter> all)
-    {
-        if (from == month && to == last) return null;
-        var name = month.ToString("MMMM", C);
-        var other = from > month
-            ? all.FirstOrDefault(o => o.CalendarEndDate is { } oe && oe >= month && oe < from)
-            : all.FirstOrDefault(o => o.CalendarStartDate is { } os && os > to && os <= last);
-        var mine = $"{from.Day}–{to.Day} {name} belong to Q{q.Number}";
-        if (other is null) return mine;
-        return from > month
-            ? $"{mine} · 1–{from.AddDays(-1).Day} belong to Q{other.Number}"
-            : $"{mine} · Q{other.Number} starts {to.AddDays(1).ToString("ddd d MMM", C)}";
-    }
-
-    private static List<IReadOnlyList<CalendarDay>> Weeks(DateOnly month, DateOnly from, DateOnly to, Dictionary<DateOnly, CalendarColor> marks,
-        Dictionary<DateOnly, string> starts, List<CalendarEventView> events, DateOnly today)
+    private static List<IReadOnlyList<CalendarDay>> Weeks(DateOnly month, Dictionary<DateOnly, CalendarColor> marks,
+        ILookup<DateOnly, CalendarMilestone> milestones, List<CalendarEventView> events, DateOnly today)
     {
         var last = month.AddMonths(1).AddDays(-1);
         var day = month.AddDays(-(int)month.DayOfWeek); // weeks start on Sunday, like the printed calendar
@@ -196,9 +208,9 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
             {
                 var inMonth = day.Month == month.Month;
                 var d = day;
-                week.Add(new CalendarDay(day, inMonth, inMonth && day >= from && day <= to,
+                week.Add(new CalendarDay(day, inMonth,
                     inMonth && marks.TryGetValue(day, out var c) ? c : CalendarColor.None,
-                    inMonth && starts.TryGetValue(day, out var s) ? s : null,
+                    inMonth ? milestones[day].OrderBy(x => x.IsStart ? 1 : 0).ToList() : [],
                     day == today,
                     inMonth ? events.Where(e => e.Covers(d)).OrderBy(e => e.SortOrder).Select(e => e.Title).ToList() : []));
             }

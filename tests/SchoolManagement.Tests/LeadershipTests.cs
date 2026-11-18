@@ -64,7 +64,7 @@ public class LeadershipTests(DbFixture fx)
     }
 
     [Fact]
-    public async Task One_section_shows_every_stored_member_position_and_appointment()
+    public async Task Leadership_page_shows_every_member_without_positions_table_history_or_filters()
     {
         await using var db = fx.NewContext();
         var mgmt = DbFixture.Management(db);
@@ -73,38 +73,30 @@ public class LeadershipTests(DbFixture fx)
         var appointments = await db.PositionAssignments.CountAsync();
         var client = fx.Factory.CreateClient();
 
-        // Members and positions are parts of one School Leadership section: no tabs.
+        // One School Leadership section with every member's card (no tabs).
         var page = await client.GetStringAsync("/management/leadership");
         Assert.Equal(1, Regex.Matches(page, "class=\"card leadership\"").Count);
-        Assert.True(page.IndexOf("id=\"members\"", StringComparison.Ordinal) < page.IndexOf("id=\"positions\"", StringComparison.Ordinal));
-        Assert.DoesNotContain("Leadership Members <span class=\"count\">", page);
         Assert.DoesNotContain("?tab=", page);
-        var membersPart = page[page.IndexOf("id=\"members\"", StringComparison.Ordinal)..page.IndexOf("id=\"positions\"", StringComparison.Ordinal)];
-        foreach (var id in memberIds) Assert.Contains($"href=\"/management/members/{id}\"", membersPart);
-        Assert.Equal(memberIds.Count, Regex.Matches(membersPart, "<article class=\"leader-card ").Count);
+        foreach (var id in memberIds) Assert.Contains($"href=\"/management/members/{id}\"", page);
+        Assert.Equal(memberIds.Count, Regex.Matches(page, "<article class=\"leader-card ").Count);
         Assert.Contains("data-download=\"/management/members/pdf\"", page);
 
-        var positionsTab = page[page.IndexOf("id=\"positions\"", StringComparison.Ordinal)..];
-        Assert.Equal(7, ManagementPositions.All.Length);
+        // Removed: Current Leadership Positions (table, Replace / Remove), Appointment History, and the search / position filters.
+        foreach (var gone in new[] { "id=\"positions\"", "leadership-table", "Leadership Positions", "Current holder", "leadership__history", "Appointment history",
+                     "leadership__filters", "Search members", "All positions", "name=\"search\"", "name=\"position\"" })
+            Assert.DoesNotContain(gone, page);
+        foreach (var p in ManagementPositions.All) Assert.DoesNotContain($"/management/positions/{p}/assign", page);
+        // A stale search link still shows every member (the page has no filter any more).
+        Assert.Equal(memberIds.Count, Regex.Matches(await client.GetStringAsync("/management/leadership?search=zzzz&position=none"), "<article class=\"leader-card ").Count);
+
+        // Nothing was deleted: positions keep their own pages, with holder actions and the appointment history.
+        Assert.Equal(appointments, await db.PositionAssignments.CountAsync());
         foreach (var p in ManagementPositions.All)
         {
-            Assert.Contains($"href=\"{ManagementPositions.Href(p)}\"", positionsTab);
-            Assert.Contains($"href=\"/management/positions/{p}/assign\"", positionsTab);
+            var position = await client.GetAsync(ManagementPositions.Href(p));
+            Assert.Equal(HttpStatusCode.OK, position.StatusCode);
+            Assert.Contains($"/management/positions/{p}/assign", await position.Content.ReadAsStringAsync());
         }
-        // The full appointment history (one table row per appointment, current and ended).
-        var history = positionsTab[positionsTab.IndexOf("leadership__history", StringComparison.Ordinal)..];
-        Assert.Equal(appointments, Regex.Matches(history, "<td data-label=\"Position\">").Count);
-
-        // Vacancy filter: only positions without a holder.
-        var vacant = (await mgmt.PositionsAsync()).Where(s => s.Holder is null).Select(s => s.Position).ToList();
-        var vacantPage = await client.GetStringAsync("/management/leadership?status=vacant");
-        var table = vacantPage[vacantPage.IndexOf("id=\"positions\"", StringComparison.Ordinal)..vacantPage.IndexOf("leadership__history", StringComparison.Ordinal)];
-        foreach (var p in ManagementPositions.All)
-        {
-            if (vacant.Contains(p)) Assert.Contains($"href=\"{ManagementPositions.Href(p)}\"", table);
-            else Assert.DoesNotContain($"<a href=\"{ManagementPositions.Href(p)}\">", table);
-        }
-
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/management/leadership/positions/Janitor")).StatusCode);
     }
 

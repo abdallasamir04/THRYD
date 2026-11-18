@@ -21,7 +21,17 @@
     </div>
     <div class="page-head__actions">
         <a class="btn btn--secondary" href="/classes/all">@Ui.Icon("list")All classes</a>
-        <partial name="_Download" model='DownloadLink.Report("/classes/pdf")' />
+        @* Four independent downloads (only here: not on the Students page or the stage pages). PDF = red icon, Excel = green icon. *@
+        <div class="class-downloads" role="group" aria-label="Download reports">
+            <a class="btn btn--secondary btn--download dl-pdf" href="/classes/pdf" data-download="/classes/pdf" download
+               title="Classes summary as a PDF (portrait)" aria-label="Download Summary PDF">@Ui.Icon("file-pdf")<span><span class="dl-verb">Download </span>Summary PDF</span></a>
+            <a class="btn btn--secondary btn--download dl-xlsx" href="/classes/summary-excel" download
+               title="Classes summary as an Excel workbook (.xlsx)" aria-label="Download Summary Excel">@Ui.Icon("sheet")<span><span class="dl-verb">Download </span>Summary Excel</span></a>
+            <a class="btn btn--secondary btn--download dl-pdf" href="/classes/students-report" download
+               title="Every class and its students as a PDF: one page per class" aria-label="Download Students PDF">@Ui.Icon("file-pdf")<span><span class="dl-verb">Download </span>Students PDF</span></a>
+            <a class="btn btn--secondary btn--download dl-xlsx" href="/classes/students-excel" download
+               title="Every class and its students as an Excel workbook (.xlsx): one worksheet per class" aria-label="Download Students Excel">@Ui.Icon("sheet")<span><span class="dl-verb">Download </span>Students Excel</span></a>
+        </div>
     </div>
 </div>
 

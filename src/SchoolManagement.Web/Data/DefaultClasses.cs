@@ -27,7 +27,7 @@ public static class DefaultClasses
             Name = name,
             NormalizedName = TextNormalizer.ClassKey(name),
             SortOrder = (i + 1) * 10,
-            Capacity = 25,
+            Capacity = SchoolClass.DefaultCapacity,
             IsActive = true,
             CreatedAt = SeededAt,
             UpdatedAt = SeededAt,
