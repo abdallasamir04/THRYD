@@ -164,22 +164,25 @@
 </div>
 
     @*
-        Students by class: one stacked column per class (active classes, plus inactive classes that still have students), in
-        the Classes order (Pre-K, KG1A … G10B). A column is as tall as the larger of enrolment and capacity: blue = students
-        up to the capacity, yellow = seats left, red = students over it (never capped). The y-axis stays put while the
-        columns scroll sideways on narrow screens. Each column opens the class's student list; js/dashboard-chart.js shows
-        the details (cap-col__tip) as a tooltip on hover and keyboard focus.
+        Students by class: one line chart with a point per class (active classes, plus inactive classes that still have
+        students), in the Classes order (Pre-K, KG1A … G10B), against one student-count scale (Services/CapacityScale.cs:
+        0–25 in steps of 5, growing when needed). The points are joined by a smooth monotone line (Services/EnrolmentLine.cs:
+        no invented peaks or dips) with nothing filled under it; a point over its class's capacity is darker blue. Each class
+        also gets a subtle dashed tick at its own capacity, so equal capacities read as one reference line. The ratio
+        (enrolled/capacity) sits by the point, the name below. The y-axis stays put while the plot scrolls sideways on narrow
+        screens. Each class's column opens its student list; js/dashboard-chart.js shows the details (cap-pt__tip) as a tooltip
+        on hover and keyboard focus.
     *@
     <section class="card" aria-labelledby="dist-title">
         <div class="card__head">
             <div>
                 <h2 class="card__title" id="dist-title">@Ui.Icon("chart")Students by class</h2>
-                <p class="card__sub">Enrolment against each class's capacity. Active classes, plus inactive classes that still have students.</p>
+                <p class="card__sub">Enrolled students in each class against its capacity. Active classes, plus inactive classes that still have students.</p>
             </div>
             <div class="legend cap-legend">
-                <span><i class="l-occupied"></i>Occupied</span>
-                <span><i class="l-available"></i>Available</span>
+                <span><i class="l-enrolled"></i>Enrolled</span>
                 <span><i class="l-over"></i>Over capacity</span>
+                <span><i class="l-capacity"></i>Class capacity</span>
             </div>
         </div>
         @if (shown.Count == 0)
@@ -201,10 +204,8 @@
                 <li class="cap-totals--available"><span class="cap-totals__value num">@seats.Available.ToString("N0", inv)</span><span class="cap-totals__label">Available seats</span></li>
                 <li class="cap-totals--over @(seats.Over == 0 ? "is-zero" : "")"><span class="cap-totals__value num">@seats.Over.ToString("N0", inv)</span><span class="cap-totals__label">Over capacity</span></li>
             </ul>
-            // One shared scale: the tallest column (enrolment or capacity) rounded up to a tidy step, ≤ 6 gridlines.
-            var peak = Math.Max(1, shown.Max(x => Math.Max(x.Count, x.Capacity)));
-            var step = new[] { 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000 }.FirstOrDefault(s => peak <= s * 6, 1000);
-            var top = (int)Math.Ceiling(peak / (double)step) * step;
+            var (top, step) = CapacityScale.For(shown.Max(x => Math.Max(x.Count, x.Capacity)));
+            string F(double v) => v.ToString("0.#####", inv);
             string Pct(double v) => (v * 100).ToString("0.###", inv) + "%";
             var ticks = Enumerable.Range(0, top / step + 1).Select(i => i * step).ToList();
             <div class="cap-chart" data-cap-chart style="--cols:@shown.Count">
@@ -222,37 +223,38 @@
                                 <span class="cap-chart__line @(t == 0 ? "cap-chart__line--base" : "")" style="bottom:@Pct(t / (double)top)"></span>
                             }
                         </div>
+                        @* The line, in chart units (one unit per class across, one per student up), stretched to the plot; the stroke keeps its width. *@
+                        <svg class="cap-line" viewBox="0 0 @shown.Count @top" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                            <path class="cap-line__path" d="@EnrolmentLine.Path(shown.Select(x => x.Count).ToList(), top)" />
+                        </svg>
                         <ol class="cap-chart__cols">
-                            @foreach (var x in shown)
+                            @for (var i = 0; i < shown.Count; i++)
                             {
+                                var x = shown[i];
                                 var state = x.Over > 0 ? "over" : x.IsFull ? "full" : "open";
-                                var height = Math.Max(x.Count, x.Capacity) / (double)top;
                                 var label = $"{x.Name}: {x.Count} of {x.Capacity} students, " + (x.Over > 0 ? $"{x.Over} over capacity" : x.IsFull ? "full" : $"{x.Available} {(x.Available == 1 ? "seat" : "seats")} available") + $", {x.Utilization}% of capacity used{(x.IsActive ? "" : ", inactive class")}. Opens the class's students.";
-                                // Bottom to top: occupied (blue), over capacity (red), available (yellow); a class has red or yellow, never both.
-                                var segments = new (string Css, int N)[] { ("occupied", x.Occupied), ("over", x.Over), ("available", x.Available) };
-                                <li class="cap-col cap-col--@state @(x.IsActive ? "" : "is-inactive")">
-                                    <a class="cap-col__link" href="/students?classId=@x.ClassId" aria-label="@label" data-cap-col>
-                                        <span class="cap-col__zone">
-                                            <span class="cap-col__value num">@x.Count</span>
-                                            <span class="cap-col__stack" style="--h:@height.ToString("0.#####", inv)">
-                                                @foreach (var (css, n) in segments)
-                                                {
-                                                    if (n == 0) { continue; }
-                                                    <span class="cap-seg cap-seg--@css" style="flex-grow:@n" data-n="@n"></span>
-                                                }
-                                            </span>
+                                var v = x.Count / (double)top;
+                                // The ratio goes above the point, or below it at a dip (both neighbours higher) where the line would cross it.
+                                var dip = (i == 0 || shown[i - 1].Count > x.Count) && (i == shown.Count - 1 || shown[i + 1].Count > x.Count) && shown.Count > 1 && v >= 0.16;
+                                <li class="cap-pt cap-pt--@state @(x.IsActive ? "" : "is-inactive")">
+                                    <a class="cap-pt__link" href="/students?classId=@x.ClassId" aria-label="@label" data-cap-point>
+                                        <span class="cap-pt__plot" style="--v:@F(v);--c:@F(x.Capacity / (double)top)">
+                                            <span class="cap-pt__capacity" data-n="@x.Capacity"></span>
+                                            <span class="cap-pt__guide"></span>
+                                            <span class="cap-pt__dot" data-n="@x.Count"></span>
+                                            <span class="cap-pt__value num @(dip ? "is-below" : "") @(x.Count.ToString(inv).Length + x.Capacity.ToString(inv).Length > 4 ? "is-long" : "")">@x.Count<span class="cap-pt__cap">/@x.Capacity</span></span>
                                         </span>
-                                        <span class="cap-col__name">@x.Name</span>
+                                        <span class="cap-pt__name">@x.Name</span>
                                     </a>
-                                    <div class="cap-col__tip" hidden>
+                                    <div class="cap-pt__tip" hidden>
                                         <p class="cap-tip__title">@x.Name@(x.IsActive ? "" : " · inactive class")</p>
                                         <dl class="cap-tip__rows">
-                                            <div><dt><i class="l-occupied"></i>Enrolled students</dt><dd class="num">@x.Count</dd></div>
-                                            <div><dt><i class="l-capacity"></i>Total capacity</dt><dd class="num">@x.Capacity</dd></div>
-                                            <div><dt><i class="l-available"></i>Available seats</dt><dd class="num">@x.Available</dd></div>
-                                            <div class="@(x.Over > 0 ? "is-over" : "")"><dt><i class="l-over"></i>Over capacity</dt><dd class="num">@x.Over</dd></div>
+                                            <div><dt>Enrolled</dt><dd class="num">@x.Count</dd></div>
+                                            <div><dt>Capacity</dt><dd class="num">@x.Capacity</dd></div>
+                                            <div><dt>Available</dt><dd class="num">@x.Available</dd></div>
+                                            <div class="@(x.Over > 0 ? "is-over" : "")"><dt>Over capacity</dt><dd class="num">@x.Over</dd></div>
+                                            <div class="cap-tip__usage"><dt>Usage</dt><dd class="num">@x.Utilization%</dd></div>
                                         </dl>
-                                        <p class="cap-tip__foot"><span class="num">@x.Utilization%</span> of capacity used</p>
                                     </div>
                                 </li>
                             }

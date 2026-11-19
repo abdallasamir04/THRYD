@@ -834,68 +834,80 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.78rem; color: var(--color-text-muted); font-weight: 600; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-/* ---- Dashboard: Students by class as stacked columns (blue occupied, yellow available, red over capacity) */
-:root { --cap-occupied: #5685ff; --cap-available: #eab746; --cap-over: #ef5555; }
-.legend .l-occupied { background: var(--cap-occupied); }
-.legend .l-available { background: var(--cap-available); }
-.legend .l-over { background: var(--cap-over); }
+/* ---- Dashboard: Students by class as a line chart (blue line and points, darker blue points over capacity, a subtle
+   dashed capacity reference). Nothing is filled under the line: the card background stays clean. */
+:root { --cap-line: #2563eb; --cap-over: #172f80; --cap-over-ink: #1e3a8a; --cap-ref: #97a3c0; --cap-slot: #b3bdd6; }
+:root[data-theme="dark"] { --cap-line: #6382ff; --cap-over: #2a3db5; --cap-over-ink: #a9bbff; --cap-ref: #5d6c92; --cap-slot: #4d5d84; }
+.legend .l-enrolled { position: relative; width: 22px !important; height: 10px; background: linear-gradient(var(--cap-line), var(--cap-line)) center / 100% 2px no-repeat; border-radius: 0 !important; }
+.legend .l-enrolled::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--cap-line); transform: translate(-50%, -50%); }
+.legend .l-over { border-radius: 50% !important; background: var(--cap-over); }
+.legend .l-capacity { width: 18px !important; height: 0 !important; border-radius: 0 !important; border-top: 1.5px dashed var(--cap-ref); }
 .cap-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 16px 22px 0; list-style: none; }
 .cap-totals li { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-soft); }
 .cap-totals__value { font-size: 1.25rem; font-weight: 800; color: var(--color-text-strong); line-height: 1.2; }
 .cap-totals__label { font-size: 0.74rem; font-weight: 700; color: var(--color-text-muted); }
-.cap-totals--available { border-left: 3px solid var(--cap-available) !important; }
+.cap-totals--available { border-left: 3px solid var(--cap-slot) !important; }
 .cap-totals--over { border-left: 3px solid var(--cap-over) !important; }
-.cap-totals--over:not(.is-zero) .cap-totals__value { color: var(--color-error-ink); }
-/* Stacked columns, one per class. Fixed y-axis; the plot scrolls sideways when the classes need more room. */
-.cap-chart { --plot-h: 240px; --pad-top: 26px; --name-h: 32px; --col-min: 35px; --gap: 6px;
-    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 18px 22px 16px 14px; }
-.cap-chart__y { position: relative; width: 26px; height: var(--plot-h); margin-top: var(--pad-top); }
-.cap-chart__y span { position: absolute; right: 0; transform: translateY(50%); font-size: 0.7rem; font-weight: 600; line-height: 1; color: var(--color-text-faint); }
-.cap-chart__scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; border-radius: 10px; scrollbar-width: thin; }
+.cap-totals--over:not(.is-zero) .cap-totals__value { color: var(--cap-over-ink); }
+/* The plot: one equal column per class (no gaps, so point i sits at (i + ½) / n of the width, where the line's path puts
+   it). Fixed y-axis; the plot scrolls sideways when the classes need more room. */
+.cap-chart { --plot-h: 260px; --pad-top: 30px; --name-h: 34px; --col-min: 41px;
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 20px 22px 16px 14px; }
+.cap-chart__y { position: relative; min-width: 22px; height: var(--plot-h); margin-top: var(--pad-top); }
+.cap-chart__y span { position: absolute; right: 0; transform: translateY(50%); font-size: 0.72rem; font-weight: 600; line-height: 1; color: var(--color-text-faint); font-variant-numeric: tabular-nums; }
+.cap-chart__scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; padding-bottom: 4px; border-radius: 10px; scrollbar-width: thin; }
 .cap-chart__scroll:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
-.cap-chart__inner { position: relative; min-width: calc(var(--cols) * (var(--col-min) + var(--gap))); }
+.cap-chart__inner { position: relative; min-width: calc(var(--cols) * var(--col-min)); }
 .cap-chart__grid { position: absolute; inset-inline: 0; top: var(--pad-top); height: var(--plot-h); pointer-events: none; }
-.cap-chart__line { position: absolute; inset-inline: 0; border-top: 1px dashed var(--color-border-subtle); }
+.cap-chart__line { position: absolute; inset-inline: 0; border-top: 1px solid var(--color-border-subtle); }
 .cap-chart__line--base { border-top: 1px solid var(--color-border-strong); }
-.cap-chart__cols { position: relative; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: var(--gap); margin: 0; padding: 0; list-style: none; }
-.cap-col__link { display: flex; flex-direction: column; align-items: stretch; border-radius: 8px; color: var(--color-text); text-decoration: none; }
-.cap-col__link:hover { text-decoration: none; }
-.cap-col__link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -2px; }
-.cap-col__zone { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: calc(var(--pad-top) + var(--plot-h)); border-radius: 8px 8px 0 0; transition: background-color 0.15s; }
-.cap-col__link:hover .cap-col__zone, .cap-col__link:focus-visible .cap-col__zone { background: color-mix(in srgb, var(--cap-occupied) 9%, transparent); }
-.cap-col__value { margin-bottom: 4px; font-size: 0.74rem; font-weight: 800; line-height: 1; color: var(--color-text-strong); }
-.cap-col--over .cap-col__value { color: var(--color-error-ink); }
-.cap-col__stack { display: flex; flex-direction: column-reverse; height: calc(var(--plot-h) * var(--h, 0)); width: min(72%, 34px); border-radius: 6px 6px 0 0; overflow: hidden; transform-origin: bottom; animation: cap-col-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-.cap-seg { flex-basis: 0; min-height: 2px; }
-.cap-seg + .cap-seg { box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.55); }
-.cap-seg--occupied { background: var(--cap-occupied); }
-.cap-seg--available { background: var(--cap-available); }
-.cap-seg--over { background: var(--cap-over); }
-@keyframes cap-col-in { from { transform: scaleY(0); } }
-.cap-col__name { display: flex; align-items: center; justify-content: center; height: var(--name-h); font-size: 0.72rem; font-weight: 700; white-space: nowrap; color: var(--color-text-muted); }
-.cap-col__link:hover .cap-col__name, .cap-col__link:focus-visible .cap-col__name { color: var(--color-text-strong); }
-.cap-col.is-inactive .cap-col__stack { opacity: 0.5; }
-.cap-col.is-inactive .cap-col__name { font-style: italic; text-decoration: underline dotted; text-underline-offset: 3px; }
+.cap-line { position: absolute; left: 0; top: var(--pad-top); width: 100%; height: var(--plot-h); overflow: visible; pointer-events: none; z-index: 1;
+    animation: cap-line-in 0.9s cubic-bezier(0.3, 0.6, 0.2, 1) both; }
+.cap-line__path { fill: none; stroke: var(--cap-line); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+@keyframes cap-line-in { from { clip-path: inset(-10px 100% -10px 0); } to { clip-path: inset(-10px 0 -10px 0); } }
+.cap-chart__cols { position: relative; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.cap-pt__link { display: flex; flex-direction: column; align-items: stretch; color: var(--color-text); text-decoration: none; border-radius: 8px; }
+.cap-pt__link:hover { text-decoration: none; }
+.cap-pt__link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -2px; }
+.cap-pt__plot { position: relative; display: block; height: calc(var(--pad-top) + var(--plot-h)); }
+/* This class's capacity: a dashed tick across its column; neighbours with the same capacity join into one reference line. */
+.cap-pt__capacity { position: absolute; left: 0; right: 0; bottom: calc(var(--c) * var(--plot-h)); border-top: 1.5px dashed var(--cap-ref); opacity: 0.85; }
+.cap-pt__guide { position: absolute; left: 50%; bottom: 0; height: var(--plot-h); border-left: 1px dashed var(--cap-line); opacity: 0; transition: opacity 0.15s; }
+.cap-pt__dot { position: absolute; left: 50%; bottom: calc(var(--v) * var(--plot-h)); z-index: 2; width: 11px; height: 11px; border-radius: 50%; box-sizing: border-box;
+    background: var(--cap-line); box-shadow: 0 0 0 2px var(--color-surface); transform: translate(-50%, 50%); transition: transform 0.15s;
+    animation: cap-dot-in 0.4s 0.5s both; }
+/* Over capacity: a darker blue point with a fine ring of the same blue. */
+.cap-pt--over .cap-pt__dot { width: 13px; height: 13px; background: var(--cap-over); box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3.5px var(--cap-over); }
+@keyframes cap-dot-in { from { opacity: 0; transform: translate(-50%, 50%) scale(0.3); } }
+.cap-pt__value { position: absolute; left: 50%; bottom: calc(var(--v) * var(--plot-h) + 11px); z-index: 3; padding: 1px 3px; border-radius: 4px; background: var(--color-surface);
+    transform: translateX(-50%); font-size: 0.7rem; font-weight: 800; line-height: 1.15; white-space: nowrap; text-align: center; color: var(--color-text-strong); letter-spacing: -0.01em;
+    animation: cap-value-in 0.4s 0.7s both; }
+.cap-pt__value.is-below { bottom: auto; top: calc(var(--pad-top) + (1 - var(--v)) * var(--plot-h) + 11px); }
+.cap-pt__value.is-long { font-size: 0.66rem; }
+.cap-pt__value.is-long .cap-pt__cap { display: block; } /* long ratios (capacities of 100+) stack: enrolled over /capacity */
+.cap-pt__cap { font-weight: 600; color: var(--color-text-muted); }
+.cap-pt--over .cap-pt__value, .cap-pt--over .cap-pt__cap { color: var(--cap-over-ink); }
+@keyframes cap-value-in { from { opacity: 0; } }
+.cap-pt__name { display: flex; align-items: center; justify-content: center; height: var(--name-h); font-size: 0.74rem; font-weight: 700; white-space: nowrap; color: var(--color-text-muted); }
+.cap-pt__link:hover .cap-pt__guide, .cap-pt__link:focus-visible .cap-pt__guide { opacity: 0.45; }
+.cap-pt__link:hover .cap-pt__dot, .cap-pt__link:focus-visible .cap-pt__dot { transform: translate(-50%, 50%) scale(1.3); }
+.cap-pt__link:hover .cap-pt__name, .cap-pt__link:focus-visible .cap-pt__name { color: var(--color-text-strong); }
+.cap-pt.is-inactive .cap-pt__dot { background: var(--color-surface); box-shadow: inset 0 0 0 2.5px var(--cap-line), 0 0 0 2px var(--color-surface); }
+.cap-pt.is-inactive .cap-pt__name { font-style: italic; text-decoration: underline dotted; text-underline-offset: 3px; }
 /* The tooltip (one element, placed by js/dashboard-chart.js, fixed so the scrolling plot never clips it). */
-.cap-tip { position: fixed; z-index: 60; min-width: 196px; max-width: 240px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px;
+.cap-tip { position: fixed; z-index: 60; min-width: 180px; max-width: 240px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px;
     background: var(--color-surface-raised); box-shadow: var(--shadow-pop); color: var(--color-text); font-size: 0.78rem; pointer-events: none; }
 .cap-tip__title { margin: 0 0 6px; font-size: 0.86rem; font-weight: 800; color: var(--color-text-strong); }
 .cap-tip__rows { display: grid; gap: 3px; margin: 0; }
 .cap-tip__rows div { display: flex; justify-content: space-between; gap: 12px; }
-.cap-tip__rows dt { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-muted); font-weight: 600; }
+.cap-tip__rows dt { color: var(--color-text-muted); font-weight: 600; }
 .cap-tip__rows dd { margin: 0; font-weight: 800; color: var(--color-text-strong); }
-.cap-tip__rows .is-over dd { color: var(--color-error-ink); }
-.cap-tip__rows i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
-.cap-tip .l-occupied { background: var(--cap-occupied); }
-.cap-tip .l-available { background: var(--cap-available); }
-.cap-tip .l-over { background: var(--cap-over); }
-.cap-tip .l-capacity { background: transparent; border: 1.5px solid var(--color-text-faint); }
-.cap-tip__foot { margin: 7px 0 0; padding-top: 6px; border-top: 1px solid var(--color-border-subtle); color: var(--color-text-muted); font-weight: 600; }
-.cap-tip__foot .num { font-weight: 800; color: var(--color-text-strong); }
-@media (prefers-reduced-motion: reduce) { .cap-col__stack { animation: none; } .cap-col__zone { transition: none; } }
+.cap-tip__rows .is-over dd { color: var(--cap-over-ink); }
+.cap-tip__rows .cap-tip__usage { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--color-border-subtle); }
+@media (prefers-reduced-motion: reduce) { .cap-line, .cap-pt__dot, .cap-pt__value { animation: none; } .cap-pt__dot, .cap-pt__guide { transition: none; } }
 @media (max-width: 720px) {
     .cap-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px 14px 0; }
-    .cap-chart { --plot-h: 200px; --col-min: 38px; padding: 14px 14px 12px 8px; }
+    .cap-chart { --plot-h: 220px; --col-min: 46px; padding: 16px 14px 12px 8px; }
 }
 
 .list { margin: 0; padding: 0; list-style: none; }

@@ -1,8 +1,8 @@
 /*
- * Dashboard → Students by class: the tooltip of a column (class, enrolled, capacity, available, over capacity, % used).
- * The details are rendered by the server in each column (.cap-col__tip); this script shows them in one shared,
- * fixed-position tooltip above the column on hover and on keyboard focus, so the sideways-scrolling plot never clips
- * it. Each column stays a plain link to the class's students; without JavaScript its aria-label carries the details.
+ * Dashboard → Students by class: the tooltip of a point (class, enrolled, capacity, available, over capacity, usage).
+ * The details are rendered by the server for each class (.cap-pt__tip); this script shows them in one shared,
+ * fixed-position tooltip above the point on hover and on keyboard focus, so the sideways-scrolling plot never clips
+ * it. Each class stays a plain link to its students; without JavaScript its aria-label carries the details.
  */
 (function () {
     "use strict";
@@ -23,19 +23,19 @@
     }
 
     function place(link) {
-        var anchor = link.querySelector(".cap-col__stack");
+        var anchor = link.querySelector(".cap-pt__dot"); // the point
         var r = anchor && anchor.getBoundingClientRect().height > 0 ? anchor.getBoundingClientRect() : link.getBoundingClientRect();
         var t = tip.getBoundingClientRect();
         var margin = 8, vw = doc.documentElement.clientWidth, vh = doc.documentElement.clientHeight;
         var left = Math.min(Math.max(margin, r.left + r.width / 2 - t.width / 2), vw - t.width - margin);
-        var top = r.top - t.height - 10;                       // above the column…
+        var top = r.top - t.height - 32;                       // above the point and its ratio…
         if (top < margin) top = Math.min(r.top + 12, vh - t.height - margin); // …or over it when there is no room above
         tip.style.left = Math.round(left) + "px";
         tip.style.top = Math.round(top) + "px";
     }
 
     function show(link) {
-        var src = link.parentElement && link.parentElement.querySelector(".cap-col__tip");
+        var src = link.parentElement && link.parentElement.querySelector(".cap-pt__tip");
         if (!src) return;
         element().innerHTML = src.innerHTML;
         tip.hidden = false;
@@ -50,10 +50,10 @@
         if (tip) tip.hidden = true;
     }
 
-    function columnOf(target) { return target && target.closest ? target.closest("[data-cap-chart] [data-cap-col]") : null; }
+    function columnOf(target) { return target && target.closest ? target.closest("[data-cap-chart] [data-cap-point]") : null; }
 
     doc.addEventListener("pointerover", function (e) {
-        if (e.pointerType === "touch") return; // a tap opens the class; the numbers are on the column
+        if (e.pointerType === "touch") return; // a tap opens the class; the ratio is by the point
         var link = columnOf(e.target);
         if (link && link !== current) show(link);
     });

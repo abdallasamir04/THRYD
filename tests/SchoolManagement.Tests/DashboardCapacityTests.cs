@@ -8,8 +8,8 @@ using SchoolManagement.Web.ViewModels;
 namespace SchoolManagement.Tests;
 
 /// <summary>
-/// Default class capacity (20, never a limit) and the dashboard's Students by class stacked columns: blue occupied up to the
-/// capacity, yellow seats left, red students over it, with totals summed per class (one class never offsets another).
+/// Default class capacity (20, never a limit) and the dashboard's Students by class line chart: a point per class against
+/// its own capacity, darker blue over it, with totals summed per class (one class never offsets another).
 /// </summary>
 [Collection("db")]
 public sealed class DashboardCapacityTests(DbFixture fx)
@@ -61,7 +61,7 @@ public sealed class DashboardCapacityTests(DbFixture fx)
     }
 
     [Fact]
-    public async Task Dashboard_shows_a_stacked_column_per_class_with_real_enrolment_capacity_and_totals()
+    public async Task Dashboard_shows_one_line_chart_with_a_point_per_class_and_real_enrolment_capacity_and_totals()
     {
         int full = 0, over = 0;
         try
@@ -81,21 +81,38 @@ public sealed class DashboardCapacityTests(DbFixture fx)
 
             var html = WebUtility.HtmlDecode(await fx.Factory.CreateClient().GetStringAsync("/"));
             Assert.Contains("Students by class", html);
-            Assert.DoesNotContain("dist__bar", html);   // neither the old bar chart…
-            Assert.DoesNotContain("cap-ring", html);    // …nor the rings / class cards
+            Assert.DoesNotContain("dist__bar", html);   // neither the old bars…
+            Assert.DoesNotContain("cap-col", html);     // …nor columns…
+            Assert.DoesNotContain("cap-wheel", html);   // …nor a circle / rings / class cards
+            Assert.DoesNotContain("cap-ring", html);
             Assert.DoesNotContain("cap-class", html);
+            Assert.Single(Regex.Matches(html, "class=\"cap-chart\" data-cap-chart"));   // exactly one chart…
+            Assert.Single(Regex.Matches(html, "<path class=\"cap-line__path\""));      // …with one line
             Assert.Contains("js/dashboard-chart.js", html);
-            foreach (var key in new[] { "Occupied", "Available", "Over capacity" }) Assert.Contains($"</i>{key}</span>", html);
+            foreach (var key in new[] { "Enrolled", "Over capacity", "Class capacity" }) Assert.Contains($"</i>{key}</span>", html);
 
             await using (var db = fx.NewContext())
             {
-                // Active classes, plus inactive classes that still have students — one column each, in the Classes order.
+                // Active classes, plus inactive classes that still have students — one point each, in the Classes order.
                 var shown = await db.Classes.AsNoTracking().Where(c => c.IsActive || c.Students.Any()).OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
                     .Select(c => new ClassDistribution(c.Id, c.Name, c.IsActive, c.Students.Count, c.Capacity)).ToListAsync();
-                Assert.Equal(shown.Count, Regex.Matches(html, "<li class=\"cap-col ").Count);
-                var order = Regex.Matches(html, "class=\"cap-col__link\" href=\"/students\\?classId=(\\d+)\"").Select(m => int.Parse(m.Groups[1].Value)).ToList();
+                Assert.Equal(shown.Count, Regex.Matches(html, "<li class=\"cap-pt ").Count);
+                Assert.Equal(shown.Count, Regex.Matches(html, "<span class=\"cap-pt__dot\"").Count);
+                var order = Regex.Matches(html, "class=\"cap-pt__link\" href=\"/students\\?classId=(\\d+)\"").Select(m => int.Parse(m.Groups[1].Value)).ToList();
                 Assert.Equal(shown.Select(c => c.ClassId), order);
-                Assert.Contains($"--cols:{shown.Count}", html);
+
+                // The y-axis: 0 … at least 25 in steps of 5 (wider steps only when far larger values need them).
+                var (top, step) = CapacityScale.For(shown.Max(c => Math.Max(c.Count, c.Capacity)));
+                var axis = html[html.IndexOf("cap-chart__y", StringComparison.Ordinal)..html.IndexOf("cap-chart__scroll", StringComparison.Ordinal)];
+                var ticks = Regex.Matches(axis, "<span class=\"num\"[^>]*>(\\d+)</span>").Select(m => int.Parse(m.Groups[1].Value)).ToList();
+                Assert.Equal(Enumerable.Range(0, top / step + 1).Select(i => i * step), ticks);
+                if (step == 5) Assert.Equal([0, 5, 10, 15, 20, 25], ticks.Take(6));
+
+                // The line goes through every point, in order: x = i + ½, y = top − enrolment (chart units of the viewBox).
+                Assert.Contains($"viewBox=\"0 0 {shown.Count} {top}\"", html);
+                var d = Regex.Match(html, "<path class=\"cap-line__path\" d=\"([^\"]+)\"").Groups[1].Value;
+                var ends = Regex.Matches(d, "(?:M|C[^ ]+ [^ ]+ )([\\d.]+),([\\d.]+)").Select(m => (X: Num(m.Groups[1].Value), Y: Num(m.Groups[2].Value))).ToList();
+                Assert.Equal(shown.Select((c, i) => (i + 0.5, (double)(top - c.Count))), ends);
 
                 var t = CapacityTotals.Of(shown);
                 string Total(string label) => Regex.Match(html, $"cap-totals__value num\">([\\d,]+)</span><span class=\"cap-totals__label\">{label}<").Groups[1].Value.Replace(",", "");
@@ -103,48 +120,48 @@ public sealed class DashboardCapacityTests(DbFixture fx)
                     (int.Parse(Total("Total students")), int.Parse(Total("Total capacity")), int.Parse(Total("Available seats")), int.Parse(Total("Over capacity"))));
             }
 
-            // The full class and the over-capacity class: real numbers, the segments, the tooltip and the column heights.
-            string Column(int id)
+            // The full class and the over-capacity class: the ratio by the point, the point, its capacity tick and the tooltip.
+            string Point(int id)
             {
                 var at = html.IndexOf($"href=\"/students?classId={id}\"", StringComparison.Ordinal);
-                var start = html.LastIndexOf("<li class=\"cap-col ", at, StringComparison.Ordinal);
+                var start = html.LastIndexOf("<li class=\"cap-pt ", at, StringComparison.Ordinal);
                 return html[start..(html.IndexOf("</li>", at, StringComparison.Ordinal) + 5)];
             }
-            string Tip(string column, string row) => Regex.Match(column, $"</i>{Regex.Escape(row)}</dt><dd class=\"num\">(\\d+)</dd>").Groups[1].Value;
-            double Height(string column) => double.Parse(Regex.Match(column, "cap-col__stack\" style=\"--h:([\\d.]+)\"").Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+            string Tip(string point, string row) => Regex.Match(point, $"<dt>{Regex.Escape(row)}</dt><dd class=\"num\">(\\d+%?)</dd>").Groups[1].Value;
+            string Ratio(string point)
+            {
+                var m = Regex.Match(point, "cap-pt__value num[^\"]*\">(\\d+)<span class=\"cap-pt__cap\">/(\\d+)<");
+                return $"{m.Groups[1].Value}/{m.Groups[2].Value}";
+            }
+            double Var(string point, string name) => Num(Regex.Match(point, $"--{name}:([\\d.]+)").Groups[1].Value);
 
-            var fullCol = Column(full);
-            Assert.Contains("cap-col--full", fullCol);
-            Assert.Contains("<span class=\"cap-col__value num\">3</span>", fullCol);
-            Assert.Contains("cap-seg--occupied\" style=\"flex-grow:3\"", fullCol);
-            Assert.DoesNotContain("cap-seg--available", fullCol);   // no seats left: no yellow
-            Assert.DoesNotContain("cap-seg--over", fullCol);
-            Assert.Equal(("3", "3", "0", "0"), (Tip(fullCol, "Enrolled students"), Tip(fullCol, "Total capacity"), Tip(fullCol, "Available seats"), Tip(fullCol, "Over capacity")));
-            Assert.Contains("<span class=\"num\">100%</span> of capacity used", fullCol);
+            var fullPt = Point(full);
+            Assert.Contains("cap-pt--full", fullPt);
+            Assert.Equal("3/3", Ratio(fullPt));
+            Assert.Contains("cap-pt__dot\" data-n=\"3\"", fullPt);
+            Assert.Contains("cap-pt__capacity\" data-n=\"3\"", fullPt);     // its own capacity line
+            Assert.Equal(Var(fullPt, "c"), Var(fullPt, "v"), 5);             // on the capacity line
+            Assert.Equal(("3", "3", "0", "0", "100%"), (Tip(fullPt, "Enrolled"), Tip(fullPt, "Capacity"), Tip(fullPt, "Available"), Tip(fullPt, "Over capacity"), Tip(fullPt, "Usage")));
 
-            var overCol = Column(over);
-            Assert.Contains("cap-col--over", overCol);
-            Assert.Contains("<span class=\"cap-col__value num\">5</span>", overCol); // not capped at 3
-            Assert.Contains("cap-seg--occupied\" style=\"flex-grow:3\"", overCol); // blue up to the capacity…
-            Assert.Contains("cap-seg--over\" style=\"flex-grow:2\"", overCol);     // …red for the 2 beyond it
-            Assert.DoesNotContain("cap-seg--available", overCol);
-            Assert.Equal(("5", "3", "0", "2"), (Tip(overCol, "Enrolled students"), Tip(overCol, "Total capacity"), Tip(overCol, "Available seats"), Tip(overCol, "Over capacity")));
-            Assert.Contains("<span class=\"num\">167%</span> of capacity used", overCol);
-            Assert.Contains("5 of 3 students, 2 over capacity, 167% of capacity used", overCol); // the column's accessible name
-            Assert.Equal(5 / 3.0, Height(overCol) / Height(fullCol), 2); // one shared scale: 5 students vs 3
+            var overPt = Point(over);
+            Assert.Contains("cap-pt--over", overPt);                        // the darker blue point
+            Assert.Equal("5/3", Ratio(overPt));                             // not capped at 3
+            Assert.Contains("cap-pt__dot\" data-n=\"5\"", overPt);
+            Assert.Equal(5 / 3.0, Var(overPt, "v") / Var(overPt, "c"), 3);   // above its capacity line
+            Assert.Equal(("5", "3", "0", "2", "167%"), (Tip(overPt, "Enrolled"), Tip(overPt, "Capacity"), Tip(overPt, "Available"), Tip(overPt, "Over capacity"), Tip(overPt, "Usage")));
+            Assert.Contains("5 of 3 students, 2 over capacity, 167% of capacity used", overPt); // the point's accessible name
+            Assert.Equal(5 / 3.0, Var(overPt, "v") / Var(fullPt, "v"), 2);  // one shared scale: 5 students vs 3
 
-            // Changing a capacity changes the column: the over class at 10 has 5 blue and 5 yellow, and stands 10 high.
+            // Changing a capacity moves its capacity line, not the point: 5 / 10 is open, below the line, 5 seats available.
             await using (var db = fx.NewContext())
                 Assert.True((await DbFixture.Classes(db).UpdateAsync(over, (await db.Classes.FindAsync(over))!.Name, null, 10, true)).Succeeded);
             html = WebUtility.HtmlDecode(await fx.Factory.CreateClient().GetStringAsync("/"));
-            overCol = Column(over);
-            fullCol = Column(full);
-            Assert.Contains("cap-col--open", overCol);
-            Assert.Contains("cap-seg--occupied\" style=\"flex-grow:5\"", overCol);
-            Assert.Contains("cap-seg--available\" style=\"flex-grow:5\"", overCol);
-            Assert.DoesNotContain("cap-seg--over", overCol);
-            Assert.Equal("5", Tip(overCol, "Available seats"));
-            Assert.Equal(10 / 3.0, Height(overCol) / Height(fullCol), 2);
+            overPt = Point(over);
+            Assert.Contains("cap-pt--open", overPt);
+            Assert.Equal("5/10", Ratio(overPt));
+            Assert.Contains("cap-pt__capacity\" data-n=\"10\"", overPt);
+            Assert.Equal(0.5, Var(overPt, "v") / Var(overPt, "c"), 5);
+            Assert.Equal("5", Tip(overPt, "Available"));
         }
         finally
         {
@@ -153,4 +170,38 @@ public sealed class DashboardCapacityTests(DbFixture fx)
             await db.Classes.Where(x => x.Id == full || x.Id == over).ExecuteDeleteAsync();
         }
     }
+
+    private static double Num(string s) => double.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+
+    [Fact]
+    public void Line_passes_through_every_point_and_never_overshoots_between_them()
+    {
+        int[] values = [12, 13, 15, 14, 14, 15, 19, 17, 18, 19, 16, 17, 19, 18, 17, 15, 23, 18, 14, 15, 15, 20, 15, 18, 17];
+        var d = EnrolmentLine.Path(values, 25);
+        Assert.StartsWith("M0.5,13C", d);
+        var segments = Regex.Matches(d, "C([\\d.]+),([\\d.]+) ([\\d.]+),([\\d.]+) ([\\d.]+),([\\d.]+)").ToList();
+        Assert.Equal(values.Length - 1, segments.Count);
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var g = segments[i].Groups;
+            double y0 = 25 - values[i], y1 = 25 - values[i + 1];
+            Assert.Equal((i + 1.5, y1), (Num(g[5].Value), Num(g[6].Value)));     // through the next point
+            foreach (var c in new[] { Num(g[2].Value), Num(g[4].Value) })        // control points stay between the two
+                Assert.InRange(c, Math.Min(y0, y1) - 1e-9, Math.Max(y0, y1) + 1e-9);   // values: no invented peak or dip
+        }
+        Assert.Equal("M0.5,5h0", EnrolmentLine.Path([20], 25));
+        Assert.Equal("", EnrolmentLine.Path([], 25));
+    }
+
+    [Theory]
+    [InlineData(0, 25, 5)]
+    [InlineData(20, 25, 5)]
+    [InlineData(23, 25, 5)]   // G6B 23/20: the usual 0–25 axis
+    [InlineData(25, 25, 5)]
+    [InlineData(26, 30, 5)]   // beyond 25: grows in whole steps, never clipping
+    [InlineData(48, 50, 5)]
+    [InlineData(51, 60, 10)]  // past 50 the step widens (≤ 10 gridlines)
+    [InlineData(1000, 1000, 100)]
+    public void Capacity_axis_starts_at_0_to_25_in_fives_and_grows_to_fit(int peak, int top, int step)
+        => Assert.Equal((top, step), CapacityScale.For(peak));
 }
