@@ -6,9 +6,10 @@ using SchoolManagement.Web.ViewModels;
 namespace SchoolManagement.Web.Controllers;
 
 /// <summary>
-/// Daily Operations → Tasks: every task in the school in one place (the same tasks as Management Team → Tasks, from the
-/// same table and service). Creating, editing, status changes, details, attachments and history are the existing task
-/// actions under /management/tasks; this page is the central list with tabs, totals, filters and sorting.
+/// Daily Operations → Tasks: the school's one Tasks page: every task (Management Team, academic, administrative and
+/// support staff) in one list, from the one task table and service. Creating (the one Add Task form), editing, status
+/// changes, details, attachments and history are the shared task actions under /management/tasks/…; this page is the
+/// central list with tabs, totals, filters and sorting (the former /management/tasks list redirects here).
 /// </summary>
 [Route("tasks")]
 public class TasksController(IManagementTaskService tasks, ICurrentUser currentUser) : AppController

@@ -7,7 +7,7 @@
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties?date=@date">Duties</a></li><li><a href="/duties?type=@DutyComponents.TypeSlug(Model.Info.Type)&date=@date">@DutyComponents.TypeName(Model.Info.Type)</a></li><li>@Model.Info.Name</li></ol>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties/audit?date=@date">Duties &amp; Audit</a></li><li><a href="/duties/audit?date=@date&amp;duty=@DutyComponents.TypeSlug(Model.Info.Type)#duty-details">@DutyComponents.TypeName(Model.Info.Type)</a></li><li>@Model.Info.Name</li></ol>
         <h1 class="page-title">@Model.Info.Name</h1>
         @if (Model.Info.Grades is not null)
         {

@@ -27,8 +27,8 @@ public partial class HttpTests
     [InlineData("/management")]
     [InlineData("/management/members/create")]
     [InlineData("/management/members/create?position=Sqam")]
-    [InlineData("/management/tasks")]
-    [InlineData("/management/tasks?status=overdue&priority=high&due=week&sort=priority")]
+    [InlineData("/tasks")]
+    [InlineData("/tasks?status=overdue&priority=high&due=week&sort=priority")]
     [InlineData("/management/tasks/create")]
     [InlineData("/staff/academic")]
     [InlineData("/staff/members")]
@@ -287,10 +287,10 @@ public partial class HttpTests
     public async Task Duties_page_has_three_tabs_and_new_duties_save_under_their_type()
     {
         var client = fx.Factory.CreateClient();
-        // The Duties page is four cards: each duty, then Activities (P.E. and the other activities open from there).
+        // Duties & Audit starts with four cards: each duty, then Activities (P.E. and the other activities open from there).
         var landing = await client.GetStringAsync("/duties");
         Assert.Equal(4, Regex.Matches(landing, "<article class=\"dmain").Count);
-        foreach (var t in new[] { "morning", "midday", "dismissal" }) Assert.Contains($"href=\"/duties?type={t}&amp;date=", landing);
+        foreach (var t in new[] { "morning", "midday", "dismissal" }) Assert.Contains($"href=\"/duties/audit?duty={t}&amp;date=", landing);
         Assert.Matches("href=\"/duties/activities\\?date=[0-9-]+\"", landing);
         Assert.DoesNotContain("href=\"/pe?", landing); // no standalone P.E. card
         Assert.DoesNotContain("/duties/activities/new", landing); // Add Activity lives inside Activities only
@@ -341,7 +341,7 @@ public partial class HttpTests
 
         var page = await client.GetStringAsync("/pe?date=2026-11-20");
         var sidebar = page[..page.IndexOf("</aside>", StringComparison.Ordinal)];
-        Assert.Contains("href=\"/duties\" aria-current=\"page\"", sidebar); // Duties highlighted (P.E. opens from Duties)
+        Assert.Contains("href=\"/duties/audit\" aria-current=\"page\"", sidebar); // Duties & Audit highlighted (P.E. opens from its Activities card)
         Assert.DoesNotContain("href=\"/pe\"", sidebar); // no standalone P.E. sidebar item
         Assert.Equal(10, Regex.Matches(page, "class=\"tt__period\"").Count);
         Assert.Equal(5, Regex.Matches(page, "class=\"tt__day[ \"]").Count);

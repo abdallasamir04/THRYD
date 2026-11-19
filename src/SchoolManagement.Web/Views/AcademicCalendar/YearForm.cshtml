@@ -1,0 +1,48 @@
+@*
+    School Calendar → + Add year: the academic year's name (e.g. 2026–2027). It is created with its four quarters, exactly
+    as before (POST /school-calendar/years); the quarters' dates are kept in the same records the other modules use.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Add academic year"; ViewData["Nav"] = "AcademicCalendar"; }
+}
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/school-calendar">School Calendar</a></li><li>Add year</li></ol>
+            <h1 class="page-title">Add academic year</h1>
+        </div>
+    </div>
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/school-calendar/years" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("calendar", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Add academic year</h2>
+                <p class="modal__sub">The year is added with its four quarters.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body">
+            <div class="field">
+                <label class="label" for="year-name">Academic year <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" id="year-name" name="Name" maxlength="50" required placeholder="e.g. 2026–2027" data-autofocus />
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="/school-calendar">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("plus")Add year</button>
+        </div>
+    </form>
+</div>

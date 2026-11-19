@@ -6,19 +6,33 @@
 @{
     ViewData["Title"] = "Staff Duty Records";
     ViewData["Nav"] = "DutyAudit";
+    var day = Model.Duties is { } d ? SchoolWeek.Iso(d.Day.Date) : null;
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/duties/audit">Duty Audit</a></li><li>Staff Duty Records</li></ol>
-        <h1 class="page-title">Duty Audit</h1>
-        <p class="page-sub">Staff Duty Records: each staff member's duties and evaluations. Open a person for their full duty history.</p>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/duties/audit">Duties &amp; Audit</a></li><li>Staff Duty Records</li></ol>
+        <h1 class="page-title">Duties &amp; Audit</h1>
+        <p class="page-sub">Manage the school's duties and track how they are carried out. Staff Duty Records: each staff member's duties and evaluations; open a person for their full duty history.</p>
     </div>
     <div class="page-head__actions">
-        <a class="btn btn--secondary" href="/duties">@Ui.Icon("shield-check")Morning Duty</a>
+        <a class="btn btn--secondary" href="@DutiesAudit.For("morning", day)">@Ui.Icon("shield-check")Morning Duty</a>
         <partial name="_Download" model='DownloadLink.Report("/staff/duty-records/pdf")' />
     </div>
 </div>
+
+@if (Model.Duties is { } duties)
+{
+    <partial name="_DutiesSection" model="duties" />
+}
+
+<section class="ops-section" id="duty-audit" aria-labelledby="duty-audit-title">
+<header class="ops-section__head">
+    <div>
+        <h2 class="ops-section__title" id="duty-audit-title">@Ui.Icon("clipboard-check")Duty Audit</h2>
+        <p class="ops-section__sub">Staff Duty Records: each staff member's duties and evaluations.</p>
+    </div>
+</header>
 
 <partial name="_AuditTabs" model='"staff"' />
 
@@ -33,3 +47,8 @@
         <partial name="~/Views/Staff/_Overview.cshtml" model="Model" />
     </div>
 </section>
+</section>
+
+@section Scripts {
+    <script src="~/js/duties.js" asp-append-version="true"></script>
+}

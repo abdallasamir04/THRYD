@@ -13,6 +13,9 @@ public sealed class DutyAuditViewModel
     public required PagedResult<DutyRow> Result { get; init; }
     public required IReadOnlyList<StaffOption> Staff { get; init; }
     public required IReadOnlyList<string> Locations { get; init; }
+
+    /// <summary>The Duties section at the top of the page (every Main Duty card, and the selected one's details).</summary>
+    public DutyHubViewModel? Duties { get; init; }
 }
 
 public sealed class DutyAuditFormModel
@@ -38,6 +41,9 @@ public sealed class StaffOverviewViewModel
 {
     public required IReadOnlyList<StaffDutyOverviewRow> Rows { get; init; }
     public string? Search { get; init; }
+
+    /// <summary>Duties & Audit → Staff Duty Records: the Duties section at the top of the page.</summary>
+    public DutyHubViewModel? Duties { get; init; }
 }
 
 public sealed class StaffProfileViewModel

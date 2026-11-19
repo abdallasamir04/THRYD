@@ -169,10 +169,10 @@ public partial class OperationsHttpTests(DbFixture fx)
         // Quick actions: exactly six, Add student only here, Duties opens the main Duties page.
         var quick = Regex.Match(html, "<nav class=\"quick\"[^>]*>(.*?)</nav>", RegexOptions.Singleline).Groups[1].Value;
         Assert.Equal(6, Regex.Matches(quick, "<a ").Count);
-        foreach (var action in new[] { "Add student", "Add staff", "Duties", "Teacher workload", "Import Excel", "Manage classes" }) Assert.Contains($"</span>{action}</a>", quick);
+        foreach (var action in new[] { "Add student", "Add staff", "Duties &amp; Audit", "Teacher workload", "Import Excel", "Manage classes" }) Assert.Contains($"</span>{action}</a>", quick);
         Assert.Contains("<a href=\"/staff/create\" data-modal>", quick);
         Assert.DoesNotContain("Add teacher", html);
-        Assert.Contains("<a href=\"/duties\"><span class=\"q-icon\">", quick);
+        Assert.Contains("<a href=\"/duties/audit\"><span class=\"q-icon\">", quick);
         Assert.Single(Regex.Matches(html, ">Add student<"));
 
         // Removed sections; still no "without a valid class" card and no individual feedback on the general dashboard.

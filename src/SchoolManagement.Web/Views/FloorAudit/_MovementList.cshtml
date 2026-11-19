@@ -1,0 +1,33 @@
+@model MovementPage
+@* Student Access live board: today's figures, students by destination, and every student outside now. *@
+@{
+    var t = Model.Today;
+    var back = "/floor-audit/movements" + Context.Request.QueryString;
+}
+<div class="fa-move-summary">
+    <ul class="fa-tiles fa-tiles--6" aria-label="Today">
+        <li class="@(t.Outside > 0 ? "is-warn" : "")"><span class="num">@t.Outside</span><span>outside now</span></li>
+        <li class="@(t.Overdue > 0 ? "is-bad" : "")"><span class="num">@t.Overdue</span><span>overdue (&gt; @Model.OverdueMinutes min)</span></li>
+        <li><span class="num">@t.Total</span><span>movements today</span></li>
+        <li class="is-ok"><span class="num">@t.Returned</span><span>returned today</span></li>
+        <li><span class="num">@(t.AverageOutside is { } avg ? FloorAuditLabels.Duration(avg) : "—")</span><span>average time outside</span></li>
+        <li><span class="num">@Model.Counts.ByDestination.Count(d => d.Outside > 0)</span><span>destinations in use</span></li>
+    </ul>
+    @if (Model.Counts.ByDestination.Any(d => d.Outside > 0))
+    {
+        <details class="fa-dest-details">
+            <summary>@Ui.Icon("chevron-down", "icon--sm")Students outside by destination</summary>
+            <ul class="fa-dest">
+                @foreach (var d in Model.Counts.ByDestination.Where(d => d.Outside > 0))
+                {
+                    <li><span dir="auto">@d.Name@(d.Floor is null ? "" : $" · {d.Floor}")</span><span class="num">@d.Outside outside</span></li>
+                }
+            </ul>
+        </details>
+    }
+</div>
+<partial name="_MovementTable" model='(Model.Result.Items, Model.User, back, "live")' />
+@if (Model.Result.TotalCount > Model.Result.PageSize)
+{
+    <partial name="_Pager" model='PagerModel.From(Model.Result, "students outside")' />
+}

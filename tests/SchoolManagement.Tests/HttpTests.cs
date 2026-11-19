@@ -57,7 +57,8 @@ public partial class HttpTests(DbFixture fx)
         var html = await fx.Factory.CreateClient().GetStringAsync("/duties?type=morning");
         Assert.Equal(3, Regex.Matches(html, "<li class=\"dsub dsub--").Count); // the three Morning Sub-Duties
         Assert.Contains("Students Arrival Check", html);
-        Assert.Contains("In-Class Morning", html);
+        Assert.Contains("Morning Revision", html);                         // formerly In-Class Morning
+        Assert.DoesNotContain("In-Class Morning", html);
         Assert.Contains("Morning Assembly (Line) / Proadcast", html);
         Assert.DoesNotContain("broadcast", html, StringComparison.OrdinalIgnoreCase);
     }

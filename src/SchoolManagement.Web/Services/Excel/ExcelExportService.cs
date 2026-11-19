@@ -43,6 +43,19 @@ public interface IExcelExportService
     /// <summary>Import / Export → Tasks → Export: every task as an Excel workbook, or as CSV.</summary>
     byte[] Tasks(IReadOnlyList<TaskRow> tasks);
     byte[] TasksCsv(IReadOnlyList<TaskRow> tasks);
+
+    /// <summary>Import / Export → Classes: the import template (with the existing classes), and every class as Excel or CSV.</summary>
+    byte[] ClassTemplate(IReadOnlyList<ClassRow> existing);
+    byte[] Classes(IReadOnlyList<ClassRow> classes);
+    byte[] ClassesCsv(IReadOnlyList<ClassRow> classes);
+
+    /// <summary>Floor Audit → History → Excel: the filtered inspections and every checklist answer as recorded.</summary>
+    byte[] FloorAudit(IReadOnlyList<(SchoolManagement.Web.ViewModels.InspectionBrief Inspection, IReadOnlyList<SchoolManagement.Web.ViewModels.InspectionResponseView> Responses)> rows,
+        string filterSummary, string schoolName);
+
+    /// <summary>Floor Audit → Student Access → Excel: the filtered movements with their summary.</summary>
+    byte[] StudentMovements(IReadOnlyList<SchoolManagement.Web.ViewModels.MovementRow> rows, SchoolManagement.Web.ViewModels.MovementCounts counts,
+        string filterSummary, string schoolName);
 }
 
 /// <summary>Builds every downloadable workbook. Contact numbers are always written as text.</summary>
@@ -62,7 +75,7 @@ public sealed partial class ExcelExportService : IExcelExportService
         foreach (var s in rows)
         {
             ws.Cell(r, 1).Value = r - 1;
-            ws.Cell(r, 2).Value = s.FullName;
+            ws.Cell(r, 2).Value = s.PrintedName;
             ws.Cell(r, 3).Value = s.ClassName;
             ws.Cell(r, 4).Value = s.ClassActive ? "Active" : "Inactive";
             ws.Cell(r, 5).Value = SchoolTime.Current.ToLocal(s.CreatedAt);

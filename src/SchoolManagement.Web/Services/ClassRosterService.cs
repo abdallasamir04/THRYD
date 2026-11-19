@@ -5,6 +5,7 @@ using SchoolManagement.Web.Entities;
 
 namespace SchoolManagement.Web.Services;
 
+/// <summary>A student on a class roster; <see cref="FullName"/> is the name exactly as the official list printed it (with its mark).</summary>
 public sealed record RosterStudent(int Id, string FullName);
 
 /// <summary>One class with its current KG teaching team (KG Stage classes only) and every enrolled student.</summary>
@@ -58,10 +59,10 @@ public sealed class ClassRosterService(SchoolDbContext db, IClassTeamService tea
     {
         var classes = await db.Classes.AsNoTracking().OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
             .Select(c => new { c.Id, c.Name, c.Capacity, c.IsActive }).ToListAsync(ct);
-        var students = (await db.Students.AsNoTracking().Select(s => new { s.Id, s.FullName, s.SchoolClassId }).ToListAsync(ct))
+        var students = (await db.Students.AsNoTracking().Select(s => new { s.Id, s.FullName, s.NameMarker, s.SchoolClassId }).ToListAsync(ct))
             .GroupBy(s => s.SchoolClassId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<RosterStudent>)g.OrderBy(s => s.FullName, StringComparer.CurrentCultureIgnoreCase).ThenBy(s => s.Id)
-                .Select(s => new RosterStudent(s.Id, s.FullName)).ToList());
+                .Select(s => new RosterStudent(s.Id, StudentMarks.Printed(s.FullName, s.NameMarker))).ToList());
 
         var year = await teams.CurrentYearAsync(ct);
         var team = year is null ? []

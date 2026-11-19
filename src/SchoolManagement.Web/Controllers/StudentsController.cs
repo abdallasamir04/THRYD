@@ -106,6 +106,7 @@ public class StudentsController(IStudentService students, IClassService classes,
         {
             Query = query,
             Result = await students.ListAsync(query, ct),
+            ShowSecondLanguage = await students.AnySecondLanguageAsync(query, ct),
             Classes = await classes.AllOptionsAsync(ct),
             TotalStudents = await students.CountAsync(ct),
         };

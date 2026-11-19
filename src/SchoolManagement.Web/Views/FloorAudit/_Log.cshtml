@@ -1,0 +1,19 @@
+@model IReadOnlyList<AuditLogView>
+@* Floor Audit trail entries: what happened, who did it and when (never edited). *@
+@if (Model.Count == 0)
+{
+    <p class="hint">No changes recorded.</p>
+}
+else
+{
+    <ol class="fa-log">
+        @foreach (var l in Model)
+        {
+            <li>
+                <span class="fa-log__action">@l.Action</span>
+                <span class="fa-log__text" dir="auto">@l.Text</span>
+                <span class="fa-log__meta">@Ui.DateTime(l.At) · @(l.By ?? "not recorded")</span>
+            </li>
+        }
+    </ol>
+}

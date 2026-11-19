@@ -1,0 +1,61 @@
+@model AreaPage
+@*
+    One classroom or facility: its details, latest inspection and open issues, every inspection (with the floor it was
+    made on — kept if the area moved) and its configuration trail. The Area Inspection Report exports the same history.
+*@
+@{
+    var a = Model.Area;
+    ViewData["Title"] = $"{a.Name} · Floor Audit";
+    ViewData["Nav"] = "FloorAudit";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit">Floor Audit</a></li><li><a href="/floor-audit/floors/@a.FloorId">@a.FloorName</a></li><li dir="auto">@a.Name</li></ol>
+        <h1 class="page-title" dir="auto">@a.Name@if (!a.IsActive) { <span class="badge badge--neutral fa-title-badge">Inactive</span> }</h1>
+        <p class="page-sub">@a.TypeLabel on @a.FloorName@(a.Description is { } d ? $" · {d}" : "")</p>
+    </div>
+    <div class="page-head__actions">
+        <partial name="_Download" model='new DownloadLink($"/floor-audit/areas/{a.Id}/report.pdf", "Area Inspection Report")' />
+        <a class="btn btn--secondary" href="/floor-audit/floors/@a.FloorId">@Ui.Icon("layers")@a.FloorName</a>
+    </div>
+</div>
+
+<partial name="_Identity" model="Model.User" />
+
+<section class="card fa-arearound" aria-label="Current audit round">
+    <div class="fa-arearound__text">
+        @if (Model.Session is { } s)
+        {
+            <span class="fa-eyebrow">Today · @s.Label · @s.Times</span>
+            <strong>@FloorAuditRounds.Label(Model.Round) — scheduled @FloorAuditLabels.Time(s.RoundTime(Model.Round)) (start + @FloorAuditRounds.OffsetMinutes[Model.Round - 1] min)</strong>
+            @if (Model.RoundStatus is { } rs) { <partial name="_Stat" model="(FloorAuditLabels.Area(rs), FloorAuditLabels.Tone(rs))" /> }
+        }
+        @if (Model.RecordNote is { } note) { <span class="fa-arearound__note">@Ui.Icon("info", "icon--sm")@note</span> }
+    </div>
+    @if (Model.Session is { } s2 && Model.CanRecord)
+    {
+        <a class="btn btn--primary" href="/floor-audit/inspect?area=@a.Id&amp;date=@SchoolWeek.Iso(SchoolWeek.Today)&amp;slot=@s2.SlotId&amp;round=@Model.Round" data-modal>@Ui.Icon("clipboard-check")@(Model.RoundStatus == AreaAuditStatus.InProgress ? "Continue Inspection" : Model.RoundStatus is AreaAuditStatus.Completed or AreaAuditStatus.IssuesFound ? "View / correct" : "Record Audit")</a>
+    }
+    else
+    {
+        <button class="btn btn--primary" type="button" disabled title="@Model.RecordNote">@Ui.Icon("clipboard-check")Record Audit</button>
+    }
+</section>
+
+<ul class="kpis fa-kpis">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("clipboard-check")</span><span class="kpi__label">Inspections</span><span class="kpi__value num">@Model.History.Count</span><span class="kpi__meta">@Model.History.Count(h => h.IsCompleted) completed</span></div></li>
+    <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("clock")</span><span class="kpi__label">Last inspection</span><span class="kpi__value fa-kpi-text">@(Model.Last is { } l ? $"{l.Date:d MMM} {FloorAuditLabels.Time(l.CompletedAt)}" : "Never")</span><span class="kpi__meta">@(Model.Last?.Inspector ?? "—")</span></div></li>
+    <li><div class="kpi kpi--warn"><span class="kpi__icon">@Ui.Icon("alert-triangle")</span><span class="kpi__label">Open issues</span><span class="kpi__value num">@(Model.Last?.Issues ?? 0)</span><span class="kpi__meta" dir="auto">@(Model.Last?.IssueSummary ?? "From the latest inspection")</span></div></li>
+    <li><div class="kpi"><span class="kpi__icon">@Ui.Icon("layers")</span><span class="kpi__label">Floors inspected on</span><span class="kpi__value num">@Math.Max(1, Model.FloorChanges.Count)</span><span class="kpi__meta">@(Model.FloorChanges.Count == 0 ? a.FloorName : string.Join(", ", Model.FloorChanges.Select(f => f.Floor)))</span></div></li>
+</ul>
+
+<section class="card table-card" aria-labelledby="fa-area-hist">
+    <div class="card__head"><h2 class="card__title" id="fa-area-hist">@Ui.Icon("clipboard-check")Inspection history</h2></div>
+    <partial name="_InspectionList" model="Model.History" />
+</section>
+
+<section class="card" aria-labelledby="fa-area-log">
+    <div class="card__head"><h2 class="card__title" id="fa-area-log">@Ui.Icon("clock")Configuration changes</h2></div>
+    <div class="card__body"><partial name="_Log" model="Model.Log" /></div>
+</section>

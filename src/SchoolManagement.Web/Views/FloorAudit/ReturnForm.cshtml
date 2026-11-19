@@ -1,0 +1,37 @@
+@model MovementRow
+@* Mark Returned (page / dialog form): confirms the return; the return time is the server's clock when confirmed. *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Mark Returned"; ViewData["Nav"] = "FloorAudit"; }
+    var back = ViewData["Back"] as string;
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/floor-audit/movements/@Model.Id/return" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        <input type="hidden" name="back" value="@back" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("check", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">Mark @Model.StudentName returned</h2>
+                <p class="modal__sub">@Model.ClassName → @Model.ToName · left at @FloorAuditLabels.Time(Model.ExitAt) · <span data-fa-since="@Model.ExitAt.ToString("o")">@FloorAuditLabels.Duration(Model.Duration)</span> outside so far</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            @if (!Model.IsOpen)
+            {
+                <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>This movement is already closed.</strong>@(Model.ReturnAt is { } r ? $"Returned at {FloorAuditLabels.Time(r)}." : "It was voided.")</div></div>
+            }
+            else
+            {
+                <p>The return is recorded with the server's time at the moment you confirm, and your name (Working as). The total time outside is then final.</p>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="@(back ?? "/floor-audit/movements")">Cancel</a> }
+            @if (Model.IsOpen) { <button class="btn btn--primary" type="submit">@Ui.Icon("check")Mark Returned now</button> }
+        </div>
+    </form>
+</div>

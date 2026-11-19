@@ -194,17 +194,17 @@ public class TaskWorkflowTests(DbFixture fx)
         }
 
         // The task list shows the executor, reviewer and attachment count; filters work for any staff member.
-        var list = await client.GetStringAsync($"/management/tasks?memberId={teacher}");
+        var list = await client.GetStringAsync($"/tasks?memberId={teacher}");
         Assert.Contains(title, list);
         Assert.Contains("Submitted to", list);
-        foreach (var url in new[] { $"/management/tasks?reviewerId={reviewer}", "/management/tasks?department=" + await DeptAsync("Math"), "/management/tasks?mine=created" })
+        foreach (var url in new[] { $"/tasks?reviewerId={reviewer}", "/tasks?department=" + await DeptAsync("Math"), "/tasks?mine=created" })
             Assert.Contains(title, await client.GetStringAsync(url));
-        Assert.DoesNotContain(title, await client.GetStringAsync("/management/tasks?department=management"));
-        Assert.DoesNotContain(title, await client.GetStringAsync("/management/tasks?mine=assigned"));     // the manager is not the executor
+        Assert.DoesNotContain(title, await client.GetStringAsync("/tasks?department=management"));
+        Assert.DoesNotContain(title, await client.GetStringAsync("/tasks?mine=assigned"));     // the manager is not the executor
         var (teacherBrowser, _) = Browser(teacher);
-        Assert.Contains(title, await teacherBrowser.GetStringAsync("/management/tasks?mine=assigned"));    // "Assigned to me" for the teacher
+        Assert.Contains(title, await teacherBrowser.GetStringAsync("/tasks?mine=assigned"));    // "Assigned to me" for the teacher
         var (reviewerBrowser, _) = Browser(reviewer);
-        Assert.Contains(title, await reviewerBrowser.GetStringAsync("/management/tasks?mine=review"));
+        Assert.Contains(title, await reviewerBrowser.GetStringAsync("/tasks?mine=review"));
 
         // Edit as somebody else: new reviewer, one file removed, one added. The creator never changes; the history grows.
         WorkAs(cookies, admin);

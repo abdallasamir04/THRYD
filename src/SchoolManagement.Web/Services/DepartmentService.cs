@@ -48,9 +48,17 @@ public sealed class DepartmentListQuery
 
 public sealed class DepartmentMemberQuery
 {
+    /// <summary>The <see cref="Subcategory"/> value for staff who have no subcategory.</summary>
+    public const string NoSubcategory = "none";
+
     public string? Search { get; set; }
+
+    /// <summary>A subcategory ("Islamic"), a subject under it ("Islamic|Quran"), or <see cref="NoSubcategory"/>.</summary>
     public string? Subcategory { get; set; }
     public string Sort { get; set; } = "name";
+
+    /// <summary>"all": a department with subcategories lists all its staff together (otherwise its page shows the subcategory cards).</summary>
+    public string? View { get; set; }
 
     public bool HasFilters => !string.IsNullOrWhiteSpace(Search) || !string.IsNullOrWhiteSpace(Subcategory);
 }
@@ -150,7 +158,8 @@ public sealed class DepartmentService(SchoolDbContext db, ICurrentUser currentUs
         {
             var parts = q.Subcategory.Split('|', 2);
             var sub = parts[0];
-            query = query.Where(t => t.Subcategory == sub);
+            if (sub == DepartmentMemberQuery.NoSubcategory) query = query.Where(t => t.Subcategory == null);
+            else query = query.Where(t => t.Subcategory == sub);
             if (parts.Length == 2) { var subject = parts[1]; query = query.Where(t => t.Subject == subject); }
         }
 

@@ -1,7 +1,8 @@
 @model TaskIndexViewModel
 @*
-    Daily Operations → Tasks: every task in the school (teachers, Management Team, administrative and support staff) in
-    one place. The same tasks, form, details, status changes and history as Management Team → Tasks (/management/tasks).
+    Daily Operations → Tasks: the one Tasks page for the whole school: every task (teachers, Management Team,
+    administrative and support staff) in one list, with one Add Task form. There is no separate Management Team tasks
+    page (/management/tasks redirects here); the task form, details, status changes and history stay under /management/tasks/….
     Totals at the top are school-wide; the tabs below count the tasks matching the current filters.
 *@
 @{
@@ -23,7 +24,6 @@
         <p class="page-sub">Every task in the school in one place: who carries it out, its priority, due date and status.</p>
     </div>
     <div class="page-head__actions">
-        <a class="btn btn--secondary" href="/management/tasks">@Ui.Icon("briefcase")Management Team tasks</a>
         <partial name="_Download" model='DownloadLink.Report("/management/tasks/pdf")' />
         <a class="btn btn--primary" href="/management/tasks/create" data-modal>@Ui.Icon("plus")Add Task</a>
     </div>

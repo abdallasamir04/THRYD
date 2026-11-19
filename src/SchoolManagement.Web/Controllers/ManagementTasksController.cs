@@ -7,26 +7,19 @@ using SchoolManagement.Web.ViewModels;
 namespace SchoolManagement.Web.Controllers;
 
 /// <summary>
-/// Management Team → Tasks: tasks created by the Management Team for any staff member, with create / edit / details /
-/// status / delete and instruction attachments.
+/// The task actions of the school's one Tasks system (any staff member can be assigned a task): create / edit / details /
+/// status / delete, instruction attachments and the PDF report. The task list itself is the central Tasks page
+/// (<see cref="TasksController"/>); the former separate Management Team tasks list now leads there.
 /// </summary>
 [Route("management/tasks")]
 public class ManagementTasksController(IManagementTaskService tasks, ICurrentUser currentUser) : AppController
 {
+    /// <summary>
+    /// The former Management Team Tasks page: removed, as every task is on the one Tasks page. Old links and bookmarks
+    /// lead there with their filters (the same query: memberId, status, priority, search …).
+    /// </summary>
     [HttpGet("")]
-    public async Task<IActionResult> Index([FromQuery] TaskListQuery query, CancellationToken ct)
-    {
-        var model = new TaskIndexViewModel
-        {
-            Query = query,
-            Result = await tasks.ListAsync(query, ct),
-            Counts = await tasks.ScopeCountsAsync(query, ct),
-            Staff = await tasks.StaffAsync(ct),
-            Departments = await tasks.DepartmentsAsync(ct),
-            MeId = currentUser.StaffId,
-        };
-        return IsAjax ? PartialView("_TaskList", model) : View(model);
-    }
+    public IActionResult Index() => RedirectPermanent(TasksController.Url + Request.QueryString.Value);
 
     /// <summary>Download Report: every task matching the page's filters (all pages), in its sort order.</summary>
     [HttpGet("pdf")]
@@ -242,6 +235,6 @@ public class ManagementTasksController(IManagementTaskService tasks, ICurrentUse
             && !uri.AbsolutePath.EndsWith("/edit", StringComparison.OrdinalIgnoreCase)
             && !uri.AbsolutePath.EndsWith("/create", StringComparison.OrdinalIgnoreCase))
             return LocalRedirect(uri.PathAndQuery);
-        return RedirectToAction(nameof(Index));
+        return Redirect(TasksController.Url);
     }
 }

@@ -43,10 +43,41 @@ public class AcademicCalendarNavigationTests(DbFixture fx)
     }
 
     [Fact]
+    public async Task The_calendar_toolbar_has_no_School_holidays_button_but_holidays_still_exist()
+    {
+        var client = fx.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        // Two years, so the toolbar shows both the year selector and Add event.
+        var names = new[] { "Year " + DbFixture.Unique(), "Year " + DbFixture.Unique() };
+        try
+        {
+            foreach (var name in names)
+            {
+                var token = Token.Match(await client.GetStringAsync("/school-calendar/years/new")).Groups[1].Value;
+                Assert.Equal(HttpStatusCode.Redirect, (await client.PostAsync("/school-calendar/years",
+                    new FormUrlEncodedContent([new("__RequestVerificationToken", token), new("name", name)]))).StatusCode);
+            }
+
+            var page = await client.GetStringAsync("/school-calendar");
+            var actions = Regex.Match(page, "(?s)<div class=\"page-head__actions\">(.*?)</div>").Groups[1].Value;   // the toolbar (no nested divs)
+            Assert.DoesNotContain("School holidays", actions);                // the button is gone from the toolbar…
+            Assert.DoesNotContain("/attendance/holidays", page[page.IndexOf("</aside>", StringComparison.Ordinal)..]); // …and from the page body
+            Assert.Contains("/school-calendar/events/new?year=", actions);    // Add event stays
+            Assert.Matches("(?s)class=\"sc-year\".*id=\"sc-year\" name=\"year\" data-autosubmit", actions);   // the year selector stays
+            Assert.Contains("School holidays", await client.GetStringAsync("/attendance/holidays")); // the holidays page and data are untouched
+        }
+        finally
+        {
+            await using var db = fx.NewContext();
+            await db.AcademicQuarters.Where(q => names.Contains(q.AcademicYear.Name)).ExecuteDeleteAsync();
+            await db.AcademicYears.Where(y => names.Contains(y.Name)).ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
     public async Task Years_and_quarters_are_created_and_edited_on_the_new_page_with_the_same_data()
     {
         var client = fx.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var token = Token.Match(await client.GetStringAsync("/school-calendar")).Groups[1].Value;
+        var token = Token.Match(await client.GetStringAsync("/school-calendar/years/new")).Groups[1].Value;
         var name = "Year " + DbFixture.Unique();
         var created = await client.PostAsync("/school-calendar/years", new FormUrlEncodedContent([new("__RequestVerificationToken", token), new("name", name)]));
         Assert.Equal(HttpStatusCode.Redirect, created.StatusCode);
@@ -60,7 +91,14 @@ public class AcademicCalendarNavigationTests(DbFixture fx)
             quarterId = year.Quarters.OrderBy(q => q.Number).First().Id;
         }
         Assert.Contains(name, await client.GetStringAsync("/school-calendar"));
-        Assert.Contains($"/school-calendar/quarters/{quarterId}/edit", await client.GetStringAsync("/school-calendar"));
+        // The page keeps only + Add year from the former "Academic years and 8-week quarters" section; the quarters stay
+        // in the database (other modules use them) and their form still works.
+        var calendar = await client.GetStringAsync("/school-calendar");
+        Assert.DoesNotContain("Academic years and 8-week quarters", calendar);
+        Assert.DoesNotContain("bl-quarter", calendar);
+        Assert.DoesNotContain("bl-weeks", calendar);
+        Assert.Contains("<a class=\"btn btn--primary\" href=\"/school-calendar/years/new\" data-modal>", calendar);
+        Assert.Contains("name=\"Name\"", await client.GetStringAsync("/school-calendar/years/new"));
 
         var form = await client.GetStringAsync($"/school-calendar/quarters/{quarterId}/edit");
         var saved = await client.PostAsync($"/school-calendar/quarters/{quarterId}/edit", new FormUrlEncodedContent(

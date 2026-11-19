@@ -1,0 +1,33 @@
+@model InspectionsPage
+@*
+    Classroom & Facility Inspections: the areas of every floor (or one) for a session and round — the current ones by
+    default — each with Record Audit / Continue / View. "To inspect" shows only the areas still waiting in that round.
+*@
+@{
+    ViewData["Title"] = "Inspections · Floor Audit";
+    ViewData["Nav"] = "FloorAudit";
+    var live = Context.Request.Path + Context.Request.QueryString;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit">Floor Audit</a></li><li>Inspections</li></ol>
+        <h1 class="page-title">Classroom &amp; Facility Inspections</h1>
+        <p class="page-sub">Choose a session and round, then Record Audit on each classroom and facility. Rounds are due at the session's start + 6, + 25 and + 40 minutes.</p>
+    </div>
+    <div class="page-head__actions">
+        <partial name="_QuickActions" model='(Model.User, Model.FloorId, (string?)null)' />
+    </div>
+</div>
+
+<partial name="_Tabs" model='"inspections"' />
+<partial name="_Identity" model="Model.User" />
+<partial name="~/Views/Attendance/_SessionDayNav.cshtml" model="Model.Date" />
+
+<div id="fa-inspections" class="fa-board" data-ajax-list data-fa-live="@live" aria-live="polite">
+    <partial name="_InspectionsBoard" model="Model" />
+</div>
+
+@section Scripts {
+    <script src="~/js/floor-audit.js" asp-append-version="true"></script>
+}

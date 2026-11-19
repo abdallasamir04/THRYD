@@ -1,0 +1,57 @@
+@model FloorPage
+@*
+    One floor: its classrooms and facilities as separate cards for the chosen session and round (each opens its
+    inspection), the round's progress, Student Access for the floor and its latest inspections. Reloads itself.
+*@
+@{
+    ViewData["Title"] = $"{Model.Floor.Name} · Floor Audit";
+    ViewData["Nav"] = "FloorAudit";
+    var date = SchoolWeek.Iso(Model.Date);
+    var cur = Model.CurrentSession;
+    var nowTime = TimeOnly.FromDateTime(Model.Now);
+    var sessionWord = !Model.IsToday || cur is null ? "Session" : cur.Start > nowTime ? "Next session" : nowTime >= cur.Over ? "Last session" : "Current session";
+    var live = $"/floor-audit/floors/{Model.Floor.Id}?date={date}" + (Model.Session is { } s ? $"&slot={s.SlotId}&round={Model.Round}" : "");
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit?date=@date">Floor Audit</a></li><li>@Model.Floor.Name</li></ol>
+        <h1 class="page-title">@Model.Floor.Name@if (!Model.Floor.IsActive) { <span class="badge badge--neutral fa-title-badge">Inactive</span> }</h1>
+        <ul class="fa-facts" aria-label="Floor information">
+            <li>@Ui.Icon("calendar", "icon--sm")<span>@Model.Date.ToString("dddd d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span></li>
+            <li>@Ui.Icon("calendar-days", "icon--sm")<span>Academic year @(Model.AcademicYear ?? "not set")</span></li>
+            <li>@Ui.Icon("clock", "icon--sm")<span>@(cur is null ? "No timetable session" : $"{sessionWord}: {cur.Label} · {cur.Times}")</span></li>
+            @if (Model.Progress is { HasAreas: true } p)
+            {
+                <li><span>Floor status:</span> <partial name="_Stat" model="(FloorAuditLabels.Round(p.Status), FloorAuditLabels.Tone(p.Status))" /></li>
+            }
+        </ul>
+    </div>
+    <div class="page-head__actions">
+        <partial name="_QuickActions" model='(Model.User, (int?)Model.Floor.Id, $"/floor-audit/inspections?date={date}&floor={Model.Floor.Id}&show=pending" + (Model.Session is { } qs ? $"&slot={qs.SlotId}&round={Model.Round}" : ""))' />
+        <a class="btn btn--secondary" href="#student-access">@Ui.Icon("users")Student Access</a>
+        <a class="btn btn--secondary" href="/floor-audit/history?floor=@Model.Floor.Id&amp;from=@SchoolWeek.Iso(Model.Date.AddDays(-6))&amp;to=@date">@Ui.Icon("clock")View Audit History</a>
+        @if (Model.User.CanManage)
+        {
+            <a class="btn btn--secondary" href="/floor-audit/manage#floor-@Model.Floor.Id">@Ui.Icon("settings")Manage Floor Areas</a>
+        }
+    </div>
+</div>
+
+<nav class="fa-floor-switch segmented" aria-label="Floors">
+    @foreach (var (id, name) in Model.AllFloors)
+    {
+        <a href="/floor-audit/floors/@id?date=@date" aria-current="@(id == Model.Floor.Id ? "true" : null)">@name</a>
+    }
+</nav>
+
+<partial name="_Identity" model="Model.User" />
+<partial name="~/Views/Attendance/_SessionDayNav.cshtml" model="Model.Date" />
+
+<div id="fa-floor" class="fa-board" data-ajax-list data-fa-live="@live" aria-live="polite">
+    <partial name="_FloorBoard" model="Model" />
+</div>
+
+@section Scripts {
+    <script src="~/js/floor-audit.js" asp-append-version="true"></script>
+}

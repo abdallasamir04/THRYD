@@ -1,26 +1,55 @@
 @model DepartmentDetailsViewModel
+@*
+    A department's page. A department with subcategories (Religion: Islamic, Christian) opens on one card per subcategory
+    (Academic Departments → Department → Subcategory → Staff); each card opens the subcategory's own page (?subcategory=)
+    with only its staff, and "All staff" (?view=all) lists everyone together. Other departments show their staff directly.
+*@
 @{
     var d = Model.Department;
     var q = Model.Query;
-    ViewData["Title"] = d.Name;
+    var sub = Model.ScopeCard;
+    var label = d.Rules?.Label ?? "Subcategory";
+    ViewData["Title"] = sub is null ? d.Name : $"{sub.Name} · {d.Name}";
     ViewData["Nav"] = "Departments";
     var c = System.Globalization.CultureInfo.InvariantCulture;
+    string SubHref(SubcategoryCard card) => $"/staff/departments/{d.Id}?subcategory={Uri.EscapeDataString(card.Key)}";
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/staff/departments">Departments</a></li><li>@d.Name</li></ol>
-        <h1 class="page-title">@d.Name</h1>
-        @if (!string.IsNullOrWhiteSpace(d.Description))
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/academic">Academic Staff</a></li><li><a href="/staff/departments">Departments</a></li>
+            @if (sub is not null || Model.AllStaff)
+            {
+                <li><a href="/staff/departments/@d.Id">@d.Name</a></li><li>@(sub?.Name ?? "All staff")</li>
+            }
+            else
+            {
+                <li>@d.Name</li>
+            }
+        </ol>
+        @if (sub is not null)
         {
-            <p class="page-sub" dir="auto" style="white-space:pre-line">@d.Description</p>
+            <h1 class="page-title" dir="auto">@sub.Name</h1>
+            <p class="page-sub">@(sub.IsNone ? $"{d.Name} staff without a {label.ToLowerInvariant()}" : $"{label} · {d.Name}") · @Ui.Plural(sub.Count, "staff member", "staff members")@(sub.Retired ? $" · no longer offered as a {label.ToLowerInvariant()}" : "")</p>
         }
         else
         {
-            <p class="page-sub">No description yet. <a href="/staff/departments/@d.Id/edit" data-modal>Add one</a>.</p>
+            <h1 class="page-title">@d.Name@(Model.AllStaff ? " · all staff" : "")</h1>
+            @if (!string.IsNullOrWhiteSpace(d.Description))
+            {
+                <p class="page-sub" dir="auto" style="white-space:pre-line">@d.Description</p>
+            }
+            else
+            {
+                <p class="page-sub">No description yet. <a href="/staff/departments/@d.Id/edit" data-modal>Add one</a>.</p>
+            }
         }
     </div>
     <div class="page-head__actions">
+        @if (sub is not null || Model.AllStaff)
+        {
+            <a class="btn btn--secondary" href="/staff/departments/@d.Id">@Ui.Icon("arrow-left")@d.Name</a>
+        }
         <a class="btn btn--secondary" href="/staff/departments/@d.Id/edit" data-modal>@Ui.Icon("pencil")Edit details</a>
         @if (d.Name == "Second Language")
         {
@@ -36,11 +65,50 @@
 </div>
 
 <div class="grid-3-1@(Model.Pe is null ? "" : " dept-grid--pe")">
+    @if (Model.IsOverview)
+    {
+        <section class="sub-cards" aria-labelledby="subcards-title">
+            <div class="sub-cards__head">
+                <div>
+                    <h2 class="card__title" id="subcards-title">@Ui.Icon("layers")@(label)s</h2>
+                    <p class="card__sub">@Ui.Plural(d.MemberCount, "staff member", "staff members") in @Ui.Plural(Model.Cards.Count(x => !x.IsNone), label.ToLowerInvariant(), label.ToLowerInvariant() + "s"). Open one for its staff.</p>
+                </div>
+                <a class="btn btn--secondary btn--sm" href="/staff/departments/@d.Id?view=all">@Ui.Icon("users", "icon--sm")All @d.MemberCount staff</a>
+            </div>
+            <div class="dept-grid sub-grid">
+                @for (var i = 0; i < Model.Cards.Count; i++)
+                {
+                    var card = Model.Cards[i];
+                    <article class="dept-card sub-card @(card.IsNone || card.Retired ? "sub-card--muted" : "")" aria-labelledby="sub-@i">
+                        <div class="dept-card__top">
+                            <span class="dept-card__mark" aria-hidden="true">@(card.IsNone ? "–" : card.Name.Length <= 3 ? card.Name.ToUpperInvariant() : card.Name[..2].ToUpperInvariant())</span>
+                            <div style="min-width:0">
+                                <h3 class="dept-card__name" id="sub-@i"><a class="stretched" href="@SubHref(card)" dir="auto">@card.Name</a></h3>
+                                <p class="dept-card__desc">@(card.IsNone ? $"Staff of {d.Name} without a {label.ToLowerInvariant()}" : card.Retired ? "No longer offered · still set on these staff" : label)</p>
+                            </div>
+                            <div class="dept-card__count"><strong>@card.Count</strong><span>@(card.Count == 1 ? "member" : "members")</span></div>
+                        </div>
+                        @if (card.Subjects.Count > 0)
+                        {
+                            <div class="sub-card__subjects">
+                                @foreach (var (subject, n) in card.Subjects)
+                                {
+                                    <span class="sub-chip">@subject<b>@n</b></span>
+                                }
+                            </div>
+                        }
+                    </article>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
     <section class="card table-card" aria-labelledby="members-title">
         <div class="card__head">
             <div>
-                <h2 class="card__title" id="members-title">@Ui.Icon("users")Department staff</h2>
-                <p class="card__sub">@Ui.Plural(d.MemberCount, "member", "members") · the HOD is listed first.</p>
+                <h2 class="card__title" id="members-title">@Ui.Icon("users")@(sub is null ? "Department staff" : $"{sub.Name} staff")</h2>
+                <p class="card__sub">@(sub is null ? Ui.Plural(d.MemberCount, "member", "members") : Ui.Plural(sub.Count, "member", "members")) · the HOD is listed first.</p>
             </div>
             <partial name="_Download" model='DownloadLink.Report($"/staff/departments/{d.Id}/pdf", small: true)' />
         </div>
@@ -54,8 +122,29 @@
                 @Ui.Icon("search")
                 <input class="input" type="search" name="search" value="@q.Search" placeholder="Search name or job title…" aria-label="Search department members" autocomplete="off" dir="auto" />
             </div>
-            @if (d.Rules is { } rules)
+            @if (sub is not null)
             {
+                @if (sub.Subjects.Count > 1)
+                {
+                    <div class="toolbar__filter">
+                        <select class="select" name="subcategory" aria-label="Filter @sub.Name by subject">
+                            <option value="@sub.Key" selected="@(q.Subcategory == sub.Key)">All @sub.Name (@sub.Count)</option>
+                            @foreach (var (subject, n) in sub.Subjects)
+                            {
+                                var key = sub.Key + "|" + subject;
+                                <option value="@key" selected="@(q.Subcategory == key)">@subject (@n)</option>
+                            }
+                        </select>
+                    </div>
+                }
+                else
+                {
+                    <input type="hidden" name="subcategory" value="@sub.Key" />
+                }
+            }
+            else if (d.Rules is { } rules)
+            {
+                @if (Model.AllStaff) { <input type="hidden" name="view" value="all" /> }
                 <div class="toolbar__filter">
                     <select class="select" name="subcategory" aria-label="Filter by @rules.Label.ToLowerInvariant()">
                         <option value="">All @(rules.Label.ToLowerInvariant())s</option>
@@ -88,6 +177,7 @@
             <partial name="_Members" model="Model" />
         </div>
     </section>
+    }
 
     <div class="stack">
         <section class="card" aria-labelledby="hod-title">
@@ -130,7 +220,7 @@
             </div>
         </section>
 
-        @if (d.Rules is { } r)
+        @if (d.Rules is { } r && !Model.IsOverview)
         {
             <section class="card" aria-labelledby="subs-title">
                 <div class="card__head"><h2 class="card__title" id="subs-title">@Ui.Icon("layers")@(r.Label)s</h2><a class="btn btn--ghost btn--sm" href="/staff/departments/@d.Id/subcategories">Manage</a></div>
@@ -138,7 +228,7 @@
                     @foreach (var o in r.Options)
                     {
                         <div class="sub-tree__group">
-                            <a class="sub-tree__head" href="/staff/departments/@d.Id?subcategory=@Uri.EscapeDataString(o.Value)"><span>@o.Value</span><span class="badge badge--neutral">@d.CountOf(o.Value)</span></a>
+                            <a class="sub-tree__head" href="/staff/departments/@d.Id?subcategory=@Uri.EscapeDataString(o.Value)" aria-current="@(Model.Scope == o.Value ? "page" : null)"><span>@o.Value</span><span class="badge badge--neutral">@d.CountOf(o.Value)</span></a>
                             @if (o.Subjects.Count > 0)
                             {
                                 <div class="sub-tree__items">

@@ -1,0 +1,31 @@
+@model ClassroomForm
+@* Move a classroom (or facility) to another floor (managers). Earlier inspections keep the floor they were made on. *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Move to another floor"; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/floor-audit/manage/areas/@Model.AreaId/move" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("swap", "icon--lg")</span>
+            <div><h2 class="modal__title" dir="auto">Move @Model.ClassName</h2><p class="modal__sub">New audit rounds use the new floor; inspections already made stay recorded on the floor they were made on.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="mv-floor">Floor <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" id="mv-floor" name="floorId" required>
+                    @foreach (var (id, name) in Model.Floors) { <option value="@id" selected="@(Model.FloorId == id)">@name</option> }
+                </select>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-audit/manage">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Move</button>
+        </div>
+    </form>
+</div>

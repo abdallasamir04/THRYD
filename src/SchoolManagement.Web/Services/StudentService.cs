@@ -17,13 +17,27 @@ public sealed class StudentListQuery
     public bool HasFilters => !string.IsNullOrWhiteSpace(Search) || ClassId is not null;
 }
 
-public sealed record StudentRow(int Id, string FullName, int ClassId, string ClassName, bool ClassActive, DateTime CreatedAt, DateTime UpdatedAt);
+public sealed record StudentRow(int Id, string FullName, int ClassId, string ClassName, bool ClassActive, DateTime CreatedAt, DateTime UpdatedAt,
+    string? NameMarker = null, string? HighlightColor = null, string? NameColor = null, string? Religion = null, string? SecondLanguage = null)
+{
+    /// <summary>The name exactly as the official name list printed it (with its mark).</summary>
+    public string PrintedName => StudentMarks.Printed(FullName, NameMarker);
+
+    /// <summary>The second language's name (French, Deutsch), or null.</summary>
+    public string? SecondLanguageName => StudentMarks.LanguageName(SecondLanguage);
+}
 public sealed record StudentTransferHistoryRow(int Id, int StudentId, string StudentName, int FromClassId, string FromClassName, int ToClassId, string ToClassName, DateTime TransferredAt, string? TransferredBy);
 
 public interface IStudentService
 {
     Task<int> CountAsync(CancellationToken ct = default);
     Task<PagedResult<StudentRow>> ListAsync(StudentListQuery query, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether any student matching the search / class filter (on any page) has a second language: the list shows its
+    /// Second Language column only then, so it stays the same while paging and sorting through one result set.
+    /// </summary>
+    Task<bool> AnySecondLanguageAsync(StudentListQuery query, CancellationToken ct = default);
     Task<IReadOnlyList<StudentRow>> ListAllAsync(StudentListQuery query, CancellationToken ct = default);
     Task<StudentRow?> GetAsync(int id, CancellationToken ct = default);
     Task<ServiceResult> CreateAsync(string fullName, int classId, CancellationToken ct = default);
@@ -48,6 +62,9 @@ public sealed class StudentService(SchoolDbContext db) : IStudentService
         var items = await Project(Sort(filtered, q)).Skip((page - 1) * size).Take(size).ToListAsync(ct);
         return new PagedResult<StudentRow> { Items = items, Page = page, PageSize = size, TotalCount = total };
     }
+
+    public Task<bool> AnySecondLanguageAsync(StudentListQuery q, CancellationToken ct = default) =>
+        Filter(q).AnyAsync(s => s.SecondLanguage != null && s.SecondLanguage != "", ct);
 
     public async Task<IReadOnlyList<StudentRow>> ListAllAsync(StudentListQuery q, CancellationToken ct = default) =>
         await Project(Sort(Filter(q), q)).ToListAsync(ct);
@@ -215,6 +232,13 @@ public sealed class StudentService(SchoolDbContext db) : IStudentService
             "created" => desc
                 ? query.OrderByDescending(s => s.CreatedAt).ThenByDescending(s => s.Id)
                 : query.OrderBy(s => s.CreatedAt).ThenBy(s => s.Id),
+            // REL and Second Language: students without a value last, then by name.
+            "rel" => desc
+                ? query.OrderBy(s => s.Religion == null).ThenByDescending(s => s.Religion).ThenBy(s => s.FullName)
+                : query.OrderBy(s => s.Religion == null).ThenBy(s => s.Religion).ThenBy(s => s.FullName),
+            "lang" => desc
+                ? query.OrderBy(s => s.SecondLanguage == null).ThenByDescending(s => s.SecondLanguage).ThenBy(s => s.FullName)
+                : query.OrderBy(s => s.SecondLanguage == null).ThenBy(s => s.SecondLanguage).ThenBy(s => s.FullName),
             _ => desc
                 ? query.OrderByDescending(s => s.FullName).ThenByDescending(s => s.Id)
                 : query.OrderBy(s => s.FullName).ThenBy(s => s.Id),
@@ -222,7 +246,8 @@ public sealed class StudentService(SchoolDbContext db) : IStudentService
     }
 
     private static IQueryable<StudentRow> Project(IQueryable<Student> query) =>
-        query.Select(s => new StudentRow(s.Id, s.FullName, s.SchoolClassId, s.SchoolClass.Name, s.SchoolClass.IsActive, s.CreatedAt, s.UpdatedAt));
+        query.Select(s => new StudentRow(s.Id, s.FullName, s.SchoolClassId, s.SchoolClass.Name, s.SchoolClass.IsActive, s.CreatedAt, s.UpdatedAt,
+            s.NameMarker, s.HighlightColor, s.NameColor, s.Religion, s.SecondLanguage));
 
     private async Task<bool> TrySaveAsync(CancellationToken ct)
     {

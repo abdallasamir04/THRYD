@@ -548,7 +548,7 @@ public static class PdfReports
                 RowNumbers = true,
                 Columns = [new("Student name", 3), new("Class", 1), new("Class status", 1), new("Added on", 1.2f), new("Last updated", 1.2f)],
                 Rows = rows.Select(s => R(
-                    new PdfCell(s.FullName, Strong: true),
+                    new PdfCell(s.PrintedName, Strong: true),
                     s.ClassName,
                     s.ClassActive ? PdfCell.Status("Active", PdfTone.Success) : PdfCell.Status("Inactive", PdfTone.Muted),
                     Ui.Date(s.CreatedAt),
@@ -594,7 +594,7 @@ public static class PdfReports
 
     public static PdfReport Tasks(IReadOnlyList<TaskRow> rows, TaskListQuery q, string? memberName, string? reviewerName = null, string? departmentName = null) => new()
     {
-        Title = "Management Team Tasks",
+        Title = "Tasks",
         Subtitle = memberName is null ? "All staff" : $"Assigned to: {memberName}",
         Meta =
         [

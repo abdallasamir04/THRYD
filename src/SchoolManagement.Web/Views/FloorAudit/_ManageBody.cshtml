@@ -1,0 +1,246 @@
+@model ManagePage
+@{
+    var can = Model.User.CanManage && Model.User.HasIdentity;
+    var tab = Model.Tab;
+}
+<nav class="segmented fa-manage-tabs" aria-label="Configuration">
+    <a href="/floor-audit/manage" data-list-link aria-current="@(tab == "floors" ? "true" : null)">@Ui.Icon("layers", "icon--sm")Floors &amp; areas</a>
+    <a href="/floor-audit/manage?tab=checklist" data-list-link aria-current="@(tab == "checklist" ? "true" : null)">@Ui.Icon("list-checks", "icon--sm")Checklist <span class="count">@Model.Items.Count(i => i.Active)</span></a>
+    <a href="/floor-audit/manage?tab=access" data-list-link aria-current="@(tab == "access" ? "true" : null)">@Ui.Icon("users", "icon--sm")Access <span class="count">@Model.Access.Count</span></a>
+    <a href="/floor-audit/manage?tab=settings" data-list-link aria-current="@(tab == "settings" ? "true" : null)">@Ui.Icon("settings", "icon--sm")Settings &amp; changes</a>
+</nav>
+
+@if (tab == "floors")
+{
+    <div class="fa-manage-bar">
+        @if (Model.UnassignedClasses.Count > 0)
+        {
+            <p class="fa-unassigned">@Ui.Icon("info", "icon--sm")<span><strong>@Ui.Plural(Model.UnassignedClasses.Count, "active class is", "active classes are") not on a floor:</strong> @string.Join(", ", Model.UnassignedClasses.Select(c => c.Name)).</span></p>
+        }
+        else
+        {
+            <p class="fa-unassigned fa-unassigned--ok">@Ui.Icon("check-circle", "icon--sm")Every active class has its classroom on a floor.</p>
+        }
+        @if (can) { <a class="btn btn--secondary btn--sm" href="/floor-audit/manage/floors/new" data-modal>@Ui.Icon("plus", "icon--sm")Add floor</a> }
+    </div>
+    <div class="fa-manage-floors">
+        @foreach (var f in Model.Floors)
+        {
+            var areas = Model.Areas.Where(a => a.FloorId == f.Id).ToList();
+            var rooms = areas.Where(a => a.Kind == FloorAreaKind.Classroom && a.IsActive).ToList();
+            var facilities = areas.Where(a => a.Kind == FloorAreaKind.Facility && a.IsActive).ToList();
+            var inactive = areas.Where(a => !a.IsActive).ToList();
+            <section class="card fa-mfloor @(f.IsActive ? "" : "is-inactive")" id="floor-@f.Id" aria-labelledby="mf-@f.Id">
+                <div class="card__head">
+                    <div>
+                        <h2 class="card__title" id="mf-@f.Id">@Ui.Icon("layers")@f.Name@if (!f.IsActive) { <span class="badge badge--neutral">Inactive</span> }</h2>
+                        <p class="card__sub">Order @f.SortOrder · @Ui.Plural(f.Classrooms, "classroom", "classrooms") · @Ui.Plural(f.Facilities, "facility", "facilities")@(f.Inactive > 0 ? $" · {f.Inactive} inactive" : "")</p>
+                    </div>
+                    @if (can)
+                    {
+                        <div class="fa-head-actions">
+                            <a class="btn btn--ghost btn--sm" href="/floor-audit/manage/floors/@f.Id/edit" data-modal>@Ui.Icon("pencil", "icon--sm")Edit</a>
+                            <form method="post" action="/floor-audit/manage/floors/@f.Id/active" data-ajax-form data-confirm="@(f.IsActive ? $"Deactivate {f.Name}? It must have no active areas. Its history stays." : $"Activate {f.Name}?")" data-confirm-title="@(f.IsActive ? "Deactivate floor" : "Activate floor")" data-confirm-button="@(f.IsActive ? "Deactivate" : "Activate")" data-confirm-tone="@(f.IsActive ? "danger" : "primary")">
+                                @Html.AntiForgeryToken()<input type="hidden" name="active" value="@(f.IsActive ? "false" : "true")" />
+                                <button class="btn btn--ghost btn--sm" type="submit">@(f.IsActive ? "Deactivate" : "Activate")</button>
+                            </form>
+                        </div>
+                    }
+                </div>
+                <div class="card__body fa-mfloor__body">
+                    <div class="fa-mlist">
+                        <div class="fa-mlist__head">
+                            <h3>@Ui.Icon("door", "icon--sm")Classrooms</h3>
+                            @if (can && f.IsActive) { <a class="btn btn--secondary btn--sm" href="/floor-audit/manage/classrooms/assign?floor=@f.Id" data-modal>@Ui.Icon("plus", "icon--sm")Assign classes</a> }
+                        </div>
+                        @if (rooms.Count == 0) { <p class="hint">No classrooms on this floor.</p> }
+                        <ul class="fa-mrows">
+                            @foreach (var a in rooms)
+                            {
+                                <li>
+                                    <a href="/floor-audit/areas/@a.Id" class="fa-mrows__name" dir="auto">@a.Name</a>
+                                    @if (can)
+                                    {
+                                        <span class="fa-mrows__actions">
+                                            <a class="btn btn--ghost btn--sm" href="/floor-audit/manage/areas/@a.Id/move" data-modal>Move</a>
+                                            <form method="post" action="/floor-audit/manage/areas/@a.Id/active" data-ajax-form data-confirm="Remove @a.Name's classroom from @f.Name? No new inspections; its history stays." data-confirm-title="Remove classroom" data-confirm-button="Remove">
+                                                @Html.AntiForgeryToken()<input type="hidden" name="active" value="false" />
+                                                <button class="icon-btn" type="submit" title="Remove from the floor" aria-label="Remove @a.Name from the floor">@Ui.Icon("x")</button>
+                                            </form>
+                                        </span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                    <div class="fa-mlist">
+                        <div class="fa-mlist__head">
+                            <h3>@Ui.Icon("school", "icon--sm")Facilities</h3>
+                            @if (can && f.IsActive) { <a class="btn btn--secondary btn--sm" href="/floor-audit/manage/facilities/new?floor=@f.Id" data-modal>@Ui.Icon("plus", "icon--sm")Add facility</a> }
+                        </div>
+                        @if (facilities.Count == 0) { <p class="hint">No active facilities on this floor.</p> }
+                        <ul class="fa-mrows">
+                            @foreach (var a in facilities)
+                            {
+                                <li>
+                                    <span class="fa-mrows__name"><a href="/floor-audit/areas/@a.Id" dir="auto">@a.Name</a><span class="person__meta">@a.TypeLabel@(a.Description is { } d ? $" · {d}" : "")</span></span>
+                                    @if (can)
+                                    {
+                                        <span class="fa-mrows__actions">
+                                            <a class="btn btn--ghost btn--sm" href="/floor-audit/manage/facilities/@a.Id/edit" data-modal>Edit</a>
+                                            <form method="post" action="/floor-audit/manage/areas/@a.Id/active" data-ajax-form data-confirm="Deactivate @a.Name? It is not inspected any more; its history stays." data-confirm-title="Deactivate facility" data-confirm-button="Deactivate">
+                                                @Html.AntiForgeryToken()<input type="hidden" name="active" value="false" />
+                                                <button class="icon-btn" type="submit" title="Deactivate" aria-label="Deactivate @a.Name">@Ui.Icon("x")</button>
+                                            </form>
+                                        </span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                    @if (inactive.Count > 0)
+                    {
+                        <details class="fa-inactive">
+                            <summary>@Ui.Icon("chevron-down", "icon--sm")Inactive (@inactive.Count) — kept with their history</summary>
+                            <ul class="fa-mrows">
+                                @foreach (var a in inactive)
+                                {
+                                    <li>
+                                        <span class="fa-mrows__name"><a href="/floor-audit/areas/@a.Id" dir="auto">@a.Name</a><span class="person__meta">@a.TypeLabel</span></span>
+                                        @if (can && f.IsActive)
+                                        {
+                                            <form method="post" action="/floor-audit/manage/areas/@a.Id/active" data-ajax-form>
+                                                @Html.AntiForgeryToken()<input type="hidden" name="active" value="true" />
+                                                <button class="btn btn--ghost btn--sm" type="submit">Reactivate</button>
+                                            </form>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        </details>
+                    }
+                </div>
+            </section>
+        }
+    </div>
+}
+else if (tab == "checklist")
+{
+    <section class="card table-card" aria-labelledby="fa-items-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="fa-items-title">@Ui.Icon("list-checks")Inspection checklist</h2>
+                <p class="card__sub">Asked in every new inspection of the areas they apply to. Editing or deactivating an item never changes inspections already started — each keeps the question as it was asked.</p>
+            </div>
+            @if (can) { <a class="btn btn--primary btn--sm" href="/floor-audit/manage/items/new" data-modal>@Ui.Icon("plus", "icon--sm")Add Audit Item</a> }
+        </div>
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Item</th><th scope="col">Applies to</th><th scope="col">Response</th><th scope="col">Required</th><th scope="col">Status</th><th scope="col">Answers recorded</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var i in Model.Items)
+                    {
+                        <tr class="@(i.Active ? "" : "is-muted")">
+                            <td data-label="Item"><strong dir="auto">@i.Name</strong>@if (i.IsDefault) { <span class="badge badge--neutral">Default</span> }@if (i.Description is { } d) { <div class="person__meta" dir="auto">@d</div> }</td>
+                            <td data-label="Applies to">@FloorAuditLabels.Scope(i.AppliesTo)</td>
+                            <td data-label="Response">@AuditResponses.Label(i.Type)</td>
+                            <td data-label="Required">@(i.Required ? "Required" : "Optional")</td>
+                            <td data-label="Status">@if (i.Active) { <span class="badge badge--success">Active</span> } else { <span class="badge badge--neutral">Inactive</span> }</td>
+                            <td data-label="Answers recorded" class="num">@i.TimesUsed</td>
+                            <td class="col-actions">
+                                @if (can)
+                                {
+                                    <div class="row-actions">
+                                        <a class="icon-btn icon-btn--primary" href="/floor-audit/manage/items/@i.Id/edit" data-modal title="Edit" aria-label="Edit @i.Name">@Ui.Icon("pencil")</a>
+                                        <form method="post" action="/floor-audit/manage/items/@i.Id/active" data-ajax-form>
+                                            @Html.AntiForgeryToken()<input type="hidden" name="active" value="@(i.Active ? "false" : "true")" />
+                                            <button class="btn btn--ghost btn--sm" type="submit">@(i.Active ? "Deactivate" : "Activate")</button>
+                                        </form>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+else if (tab == "access")
+{
+    <section class="card table-card" aria-labelledby="fa-access-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="fa-access-title">@Ui.Icon("users")Who may inspect and record</h2>
+                <p class="card__sub">Managers configure Floor Audit and can correct records. Inspectors complete audit rounds on their floor (or every floor) and, when allowed, record student movements. Everyone else can view.</p>
+            </div>
+            @if (can) { <a class="btn btn--primary btn--sm" href="/floor-audit/manage/access/new" data-modal>@Ui.Icon("plus", "icon--sm")Give access</a> }
+        </div>
+        <div class="card__body">
+            <p class="fa-team">@Ui.Icon("crown", "icon--sm")<span><strong>Managers through the Management Team:</strong> @(Model.ManagementTeam.Count == 0 ? "none" : string.Join(", ", Model.ManagementTeam)).</span></p>
+        </div>
+        @if (Model.Access.Count == 0)
+        {
+            <div class="empty fa-empty-pad"><span class="empty__icon">@Ui.Icon("users")</span><p class="empty__title">No inspectors yet</p><p class="empty__text">Give staff the Inspector role for a floor so they can complete its audit rounds.</p></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table table--stack">
+                    <thead><tr><th scope="col">Staff member</th><th scope="col">Role</th><th scope="col">Floor</th><th scope="col">Student movements</th><th scope="col">Given</th><th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var a in Model.Access)
+                        {
+                            <tr>
+                                <td data-label="Staff member"><strong dir="auto">@a.StaffName</strong><div class="person__meta">@a.JobTitle</div></td>
+                                <td data-label="Role">@(a.Role == FloorAuditRole.Manager ? "Manager" : "Inspector")</td>
+                                <td data-label="Floor">@(a.Role == FloorAuditRole.Manager ? "All" : a.Floor ?? "Every floor")</td>
+                                <td data-label="Student movements">@(a.Movements ? "Yes" : "No")</td>
+                                <td data-label="Given">@Ui.Date(a.GrantedAt)<div class="person__meta">by @(a.GrantedBy ?? "—")</div></td>
+                                <td class="col-actions">
+                                    @if (can)
+                                    {
+                                        <form method="post" action="/floor-audit/manage/access/@a.Id/end" data-ajax-form data-confirm="End @a.StaffName's access? Their recorded inspections stay." data-confirm-title="End access" data-confirm-button="End access">
+                                            @Html.AntiForgeryToken()<button class="btn btn--ghost btn--sm" type="submit">End</button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+else
+{
+    <div class="fa-columns fa-columns--even">
+        <section class="card" aria-labelledby="fa-set-title">
+            <div class="card__head"><h2 class="card__title" id="fa-set-title">@Ui.Icon("settings")Student Access</h2></div>
+            <form class="card__body form-grid" method="post" action="/floor-audit/manage/settings" data-ajax-form>
+                @Html.AntiForgeryToken()
+                <div class="field">
+                    <label class="label" for="fa-overdue">Overdue after (minutes outside)</label>
+                    <input class="input" type="number" id="fa-overdue" name="overdueMinutes" min="1" max="@StudentMovementService.MaxOverdueMinutes" value="@Model.OverdueMinutes" disabled="@(!can)" />
+                    <span class="hint">An open movement longer than this is shown as Overdue. It is only a flag: the movement stays open until the student is marked returned.</span>
+                </div>
+                @if (can) { <div><button class="btn btn--primary btn--sm" type="submit">@Ui.Icon("check", "icon--sm")Save</button></div> }
+            </form>
+        </section>
+        <section class="card" aria-labelledby="fa-rules-title">
+            <div class="card__head"><h2 class="card__title" id="fa-rules-title">@Ui.Icon("clock")Audit rounds</h2></div>
+            <div class="card__body">
+                <p>Every timetable session has three rounds, calculated from that session's own start time:</p>
+                <ul class="fa-rules">
+                    @for (var r = 1; r <= FloorAuditRounds.Count; r++) { <li><strong>@FloorAuditRounds.Label(r)</strong> — start + @FloorAuditRounds.OffsetMinutes[r - 1] minutes</li> }
+                </ul>
+                <p class="hint">Sessions come from the timetable of each date (period times, cancellations and holidays included). Classrooms are inspected in the sessions their class has a lesson in; facilities in every school-wide session.</p>
+            </div>
+        </section>
+    </div>
+    <section class="card" aria-labelledby="fa-log-title">
+        <div class="card__head"><h2 class="card__title" id="fa-log-title">@Ui.Icon("clock")Recent configuration changes</h2></div>
+        <div class="card__body"><partial name="_Log" model="Model.Log" /></div>
+    </section>
+}

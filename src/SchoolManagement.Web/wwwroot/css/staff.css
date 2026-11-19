@@ -1027,3 +1027,15 @@ a.leader-card__position:hover { background: var(--color-primary-soft); text-deco
 .task-tabs a.is-alert .count { background: var(--color-error-soft); color: var(--color-error-ink); }
 .task-card__created { color: var(--color-text-faint); font-size: 0.76rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 720px) { .task-tabs { padding: 10px 12px 0; } }
+
+/* ---- A department's subcategory cards (Religion → Islamic, Christian): the department cards' look, in the page's main column ---- */
+.sub-cards { min-width: 0; }
+.sub-cards__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; margin-bottom: 14px; }
+.sub-grid { padding: 0; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.sub-card { position: relative; }
+.sub-card__subjects { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; position: relative; z-index: 1; pointer-events: none; }
+.sub-card--muted .dept-card__mark { background: var(--color-surface-soft); color: var(--color-text-muted); }
+.sub-tree__head[aria-current="page"] { color: var(--color-primary-ink); }
+@media (max-width: 640px) {
+    .sub-grid { padding: 0; }
+}

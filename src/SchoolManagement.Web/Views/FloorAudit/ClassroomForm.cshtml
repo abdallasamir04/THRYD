@@ -1,0 +1,51 @@
+@model ClassroomForm
+@*
+    Assign classes to a floor (managers): only existing classes without a classroom on a floor are offered, so a class
+    can never be on two floors. A class's classroom is moved with "Move" on its row.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Assign classes"; ViewData["Nav"] = "FloorAudit"; }
+    var floorName = Model.Floors.FirstOrDefault(f => f.Id == Model.FloorId).Name;
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/floor-audit/manage/classrooms/assign" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("door", "icon--lg")</span>
+            <div><h2 class="modal__title">Assign classes@(floorName is null ? "" : $" to {floorName}")</h2><p class="modal__sub">Choose the classes taught on this floor. Class names come from the existing classes; nothing is created.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="cr-floor">Floor <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" id="cr-floor" name="FloorId" required>
+                    @foreach (var (id, name) in Model.Floors) { <option value="@id" selected="@(Model.FloorId == id)">@name</option> }
+                </select>
+            </div>
+            <fieldset class="field">
+                <legend class="label">Classes without a classroom on a floor</legend>
+                @if (Model.Classes.Count == 0)
+                {
+                    <p class="hint">Every active class already has its classroom on a floor. Use “Move” to change a class's floor.</p>
+                }
+                else
+                {
+                    <div class="check-chips fa-class-chips">
+                        @foreach (var (id, name) in Model.Classes)
+                        {
+                            <label class="check-chip"><input type="checkbox" name="ClassIds" value="@id" checked="@Model.ClassIds.Contains(id)" /><span>@name</span></label>
+                        }
+                    </div>
+                }
+            </fieldset>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-audit/manage">Cancel</a> }
+            <button class="btn btn--primary" type="submit" disabled="@(Model.Classes.Count == 0)">@Ui.Icon("check")Assign</button>
+        </div>
+    </form>
+</div>

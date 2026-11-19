@@ -25,6 +25,9 @@ public sealed class StudentIndexViewModel
     public required IReadOnlyList<ClassOption> Classes { get; init; }
     public required int TotalStudents { get; init; }
 
+    /// <summary>Show the Second Language column: some student in the current results (any page) has one.</summary>
+    public bool ShowSecondLanguage { get; init; }
+
     /// <summary>The list is embedded in one class's page (/classes/{id}): no class filter chip and no export of "all".</summary>
     public bool FixedClass { get; init; }
 }
@@ -263,6 +266,10 @@ public sealed class ImportExportViewModel
     /// <summary>Every task (all statuses), and the open ones, from the Tasks module.</summary>
     public int Tasks { get; init; }
     public int OpenTasks { get; init; }
+
+    /// <summary>Every class (active and inactive), and its grade levels in school order ("Pre-K", "KG1", "Grade 1" …).</summary>
+    public IReadOnlyList<ClassRow> Classes { get; init; } = [];
+    public IReadOnlyList<string> GradeLevels { get; init; } = [];
     public ImportKind Kind { get; init; } = ImportKind.Students;
     public string? Error { get; init; }
 }

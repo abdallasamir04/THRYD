@@ -18,7 +18,7 @@
         <div class="profile">
             <span class="avatar avatar--lg avatar--@Ui.Tone(st.FullName)" aria-hidden="true">@Ui.Initials(st.FullName)</span>
             <div>
-                <h1 class="page-title" dir="auto">@st.FullName</h1>
+                <h1 class="page-title" dir="auto">@st.FullName<span class="profile-marks"><partial name="_StudentMarks" model="st" /></span></h1>
                 <p class="page-sub">Student · <span class="badge badge--class">@st.ClassName</span>@if (Model.CurrentClass is { } cc) { <span class="muted">(@cc.StudentCount / @cc.Capacity students)</span> }@if (!st.ClassActive) { <span class="badge badge--warning">Inactive class</span> }</p>
             </div>
         </div>

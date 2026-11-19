@@ -1,0 +1,21 @@
+@model InspectionHistoryPage
+<ul class="fa-tiles fa-tiles--4 fa-hist-tiles" aria-label="Summary">
+    <li><span class="num">@(Model.Completed + Model.InProgress)</span><span>inspections</span></li>
+    <li class="is-ok"><span class="num">@Model.Completed</span><span>completed</span></li>
+    <li><span class="num">@Model.InProgress</span><span>in progress</span></li>
+    <li class="@(Model.WithIssues > 0 ? "is-bad" : "")"><span class="num">@Model.WithIssues</span><span>with issues</span></li>
+</ul>
+@if (Model.Result.TotalCount == 0)
+{
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("clipboard-check")</span>
+        <p class="empty__title">@(Model.Filter.HasFilters ? "No inspections match" : "No inspections in these dates")</p>
+        <p class="empty__text">@(Model.Filter.HasFilters ? "Try a wider date range or fewer filters." : "Inspections recorded in the audit rounds appear here.")</p>
+        @if (Model.Filter.HasFilters) { <div class="empty__actions"><a class="btn btn--secondary" href="/floor-audit/history" data-list-link>Clear filters</a></div> }
+    </div>
+}
+else
+{
+    <partial name="_InspectionList" model="Model.Result.Items" />
+    <partial name="_Pager" model='PagerModel.From(Model.Result, Model.Result.TotalCount == 1 ? "inspection" : "inspections")' />
+}

@@ -8,7 +8,7 @@
     var modal = Context.Request.IsAjax();
     var heading = Model.IsEdit ? "Edit task" : "New task";
     if (modal) { Layout = null; }
-    else { ViewData["Title"] = heading; ViewData["Nav"] = "ManagementTasks"; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Tasks"; }
     var action = Model.IsEdit ? $"/management/tasks/{Model.Id}/edit" : "/management/tasks/create";
     // A new task cannot be due in the past; an existing one keeps whatever date it has.
     var minDue = Model.IsEdit ? SchoolWeek.Iso(ManagementTaskService.EarliestDue) : SchoolWeek.Iso(SchoolWeek.Today);
@@ -23,7 +23,7 @@
 {
     <div class="page-head">
         <div class="page-head__text">
-            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/tasks">Tasks</a></li><li>@heading</li></ol>
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/tasks">Tasks</a></li><li>@heading</li></ol>
             <h1 class="page-title">@heading</h1>
         </div>
     </div>
@@ -263,7 +263,7 @@
             }
             else
             {
-                <a class="btn btn--secondary" href="@(Model.IsEdit ? $"/management/tasks/{Model.Id}" : "/management/tasks")">Cancel</a>
+                <a class="btn btn--secondary" href="@(Model.IsEdit ? $"/management/tasks/{Model.Id}" : "/tasks")">Cancel</a>
             }
             <button class="btn btn--primary" type="submit" disabled="@(Model.Staff.Count == 0)" data-task-submit>@Ui.Icon("check")@(Model.IsEdit ? "Save changes" : "Create task")</button>
         </div>

@@ -30,18 +30,22 @@ public static class SpreadsheetReader
 
     public static readonly string[] AllowedExtensions = [".xlsx", ".csv"];
 
-    public static IReadOnlyList<SheetGrid> Read(Stream stream, string fileName)
+    /// <param name="fillMergedCells">
+    /// .xlsx only: every cell of a merged range reads the range's value (a timetable's "Break" merged across the days),
+    /// instead of only its top-left cell.
+    /// </param>
+    public static IReadOnlyList<SheetGrid> Read(Stream stream, string fileName, bool fillMergedCells = false)
     {
         var ext = Path.GetExtension(fileName).ToLowerInvariant();
         return ext switch
         {
-            ".xlsx" => ReadXlsx(stream),
+            ".xlsx" => ReadXlsx(stream, fillMergedCells),
             ".csv" => [ReadCsv(stream, Path.GetFileNameWithoutExtension(fileName))],
             _ => throw new SpreadsheetReadException("Upload an Excel workbook (.xlsx) or a CSV file (.csv)."),
         };
     }
 
-    private static IReadOnlyList<SheetGrid> ReadXlsx(Stream stream)
+    private static IReadOnlyList<SheetGrid> ReadXlsx(Stream stream, bool fillMergedCells)
     {
         XLWorkbook workbook;
         try
@@ -75,6 +79,7 @@ public static class SpreadsheetReader
                     for (var c = 1; c <= lastCol; c++)
                     {
                         var cell = ws.Cell(r, c);
+                        if (fillMergedCells && cell.IsMerged()) cell = cell.MergedRange().FirstCell();
                         (cells[c - 1], numbers[c - 1]) = CellText(cell);
                         if (IsoOf(cell) is { } d) (iso ??= new string?[lastCol])[c - 1] = d;
                     }

@@ -1,0 +1,29 @@
+@model (FloorAuditUser User, int? FloorId, string? AuditUrl)
+@*
+    The two recording actions, the same everywhere: Record Audit (the areas to inspect now) and Record Student Movement
+    (a dialog). Without permission they stay visible but disabled, with the reason — the services refuse anyway.
+*@
+@{
+    var (user, floorId, auditUrl) = Model;
+    var canAudit = user.HasIdentity && (floorId is { } f ? user.CanInspect(f) : user.CanInspectAny);
+    var canMove = user.HasIdentity && (floorId is { } g ? user.CanRecordMovements(g) : user.CanRecordAnyMovement);
+    var why = !user.HasIdentity ? "Choose “Working as” first (above)." : "Your Floor Audit role does not allow this.";
+    var audit = auditUrl ?? "/floor-audit/inspections?show=pending" + (floorId is { } h ? $"&floor={h}" : "");
+    var move = "/floor-audit/movements/new" + (floorId is { } k ? $"?floor={k}" : "");
+}
+@if (canAudit)
+{
+    <a class="btn btn--primary" href="@audit">@Ui.Icon("clipboard-check")Record Audit</a>
+}
+else
+{
+    <button class="btn btn--primary" type="button" disabled title="@why">@Ui.Icon("clipboard-check")Record Audit</button>
+}
+@if (canMove)
+{
+    <a class="btn btn--primary" href="@move" data-modal>@Ui.Icon("plus")Record Student Movement</a>
+}
+else
+{
+    <button class="btn btn--primary" type="button" disabled title="@why">@Ui.Icon("plus")Record Student Movement</button>
+}

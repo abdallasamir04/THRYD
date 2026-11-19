@@ -1,0 +1,83 @@
+@model InspectionDetails
+@*
+    One inspection as recorded: academic year, date, floor and area (at the time), session, round, scheduled vs actual
+    time, inspector, every checklist answer with the question as it was asked, observations, attachments and its trail.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var i = Model.Inspection;
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = $"{i.AreaName} · inspection"; ViewData["Nav"] = "FloorAudit"; }
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var formUrl = $"/floor-audit/inspect?area={i.AreaId}&date={SchoolWeek.Iso(i.Date)}&slot={i.SlotId}&round={i.Round}";
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <div class="modal__head">
+        <span class="modal__icon">@Ui.Icon("clipboard-check", "icon--lg")</span>
+        <div>
+            <h2 class="modal__title" dir="auto">@i.AreaName — @FloorAuditRounds.Label(i.Round)</h2>
+            <p class="modal__sub">@i.FloorName · @FloorAuditLabels.Kind(i.Kind) · @i.Date.ToString("dddd d MMMM yyyy", c)</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+    </div>
+    <div class="modal__body form-grid">
+        <dl class="fa-detail">
+            <div><dt>Status</dt><dd><partial name="_Stat" model="(FloorAuditLabels.Area(i.AreaStatus), FloorAuditLabels.Tone(i.AreaStatus))" /></dd></div>
+            <div><dt>Academic year</dt><dd>@(Model.AcademicYear ?? "—")</dd></div>
+            <div><dt>Session</dt><dd dir="auto">@i.SessionLabel · starts <span class="num">@FloorAuditLabels.Time(i.SessionStart)</span></dd></div>
+            <div><dt>Scheduled</dt><dd class="num">@FloorAuditLabels.Time(i.ScheduledTime) <span class="faint">(start + @FloorAuditRounds.OffsetMinutes[i.Round - 1] min)</span></dd></div>
+            <div><dt>Started</dt><dd><span class="num">@FloorAuditLabels.Time(i.StartedAt)</span> by @(i.Inspector ?? "—")</dd></div>
+            <div><dt>Completed</dt><dd>@if (i.CompletedAt is { } done) { <span class="num">@FloorAuditLabels.Time(done)</span> <text>by @(Model.CompletedBy ?? "—")</text>@if (i.LateMinutes is > 0 and var late) { <span class="faint"> · @late min after schedule</span> } } else { <span class="faint">Not completed</span> }</dd></div>
+            <div><dt>Issues found</dt><dd>@(i.Issues == 0 ? "None" : Ui.Plural(i.Issues, "issue", "issues"))</dd></div>
+        </dl>
+
+        <section>
+            <h3 class="fa-mini-title">Checklist (as asked at the time)</h3>
+            @if (Model.Responses.Count == 0)
+            {
+                <p class="hint">No checklist items were part of this inspection.</p>
+            }
+            else
+            {
+                <ul class="fa-answers">
+                    @foreach (var r in Model.Responses)
+                    {
+                        <li class="@(r.IsIssue ? "is-issue" : "")">
+                            <span class="fa-answers__q" dir="auto">@r.ItemName@if (r.Required) { <span class="req" aria-hidden="true"> *</span> }<span class="faint"> · @AuditResponses.Label(r.Type)</span></span>
+                            <span class="fa-answers__a" dir="auto">@if (r.IsIssue) { @Ui.Icon("alert-triangle", "icon--sm") }@(r.Value ?? "—")</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        @if (i.Observations is { } obs)
+        {
+            <section><h3 class="fa-mini-title">Observations</h3><p class="fa-pre" dir="auto">@obs</p></section>
+        }
+
+        @if (Model.Attachments.Count > 0)
+        {
+            <section>
+                <h3 class="fa-mini-title">Attachments</h3>
+                <ul class="fa-files">
+                    @foreach (var f in Model.Attachments)
+                    {
+                        <li><a href="/floor-audit/inspections/@i.Id/files/@f.Id" target="_blank" rel="noopener">@Ui.Icon(TaskAttachmentRules.Icon(f.Extension), "icon--sm")<span dir="auto">@f.FileName</span></a><span class="faint">@f.Size · @(f.UploadedBy ?? "—") · @Ui.DateTime(f.UploadedAt)</span></li>
+                    }
+                </ul>
+            </section>
+        }
+
+        <section>
+            <h3 class="fa-mini-title">Audit trail</h3>
+            <partial name="_Log" model="Model.Log" />
+        </section>
+    </div>
+    <div class="modal__foot">
+        @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Close</button> }
+        <a class="btn btn--ghost" href="/floor-audit/areas/@i.AreaId">@Ui.Icon("clock")Area history</a>
+        @if (Model.CanContinue) { <a class="btn btn--primary" href="@formUrl" data-modal>@Ui.Icon("pencil")Continue inspection</a> }
+        @if (Model.CanCorrect) { <a class="btn btn--secondary" href="@formUrl" data-modal>@Ui.Icon("pencil")Correct (manager)</a> }
+    </div>
+</div>

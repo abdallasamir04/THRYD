@@ -1,0 +1,119 @@
+@model RevisionFormModel
+@*
+    Morning Revision → Add / edit a revision record: the session it belongs to, the Class (an existing class from the
+    Classes list — never a section or free text), the Teacher (academic staff), the lesson reviewed, and the entry and exit
+    times (left empty when they were not recorded; the exit must be after the entry). Every change goes to the session's
+    audit trail.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var info = DutyComponents.Get(SchoolManagement.Web.Services.DutyService.RevisionComponent);
+    var heading = Model.IsEdit ? "Edit revision record" : "Add revision record";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "MorningDuty"; }
+    var action = Model.IsEdit ? $"/duties/revisions/{Model.Id}/edit" : "/duties/revisions/new";
+    var date = SchoolWeek.Iso(Model.Date);
+    var o = Model.Options;
+}
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/duties/audit?date=@date">Duties &amp; Audit</a></li><li><a href="@DutyComponents.Href(info)?date=@date">@info.Name</a></li><li>@heading</li></ol>
+            <h1 class="page-title">@heading</h1>
+        </div>
+    </div>
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Date" value="@date" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(info.Icon, "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub">@info.Name · @Model.Date.ToString("dddd d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors" style="margin-bottom:14px"></div>
+            @if (o.Sessions.Count == 0)
+            {
+                <div class="notice notice--warning" style="margin-bottom:14px">
+                    @Ui.Icon("alert-triangle")
+                    <div class="notice__body"><strong>No @info.Name session on this day.</strong>Revision records belong to a session: <a href="@DutyComponents.Href(info)?date=@date">add a coverage point</a> for @info.Name on this day first.</div>
+                </div>
+            }
+            <div class="form-grid">
+                <div class="field">
+                    <label class="label" for="DutyAssignmentId">Session <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="DutyAssignmentId" name="DutyAssignmentId" required>
+                        <option value="">Choose the session…</option>
+                        @foreach (var s in o.Sessions)
+                        {
+                            <option value="@s.Id" selected="@(Model.DutyAssignmentId == s.Id)">@s.Label</option>
+                        }
+                    </select>
+                    <span asp-validation-for="DutyAssignmentId" class="field-validation-error"></span>
+                </div>
+
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" for="SchoolClassId">Class <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" id="SchoolClassId" name="SchoolClassId" required data-searchable data-autofocus>
+                            <option value="">Choose the class…</option>
+                            @foreach (var c in o.Classes)
+                            {
+                                <option value="@c.Id" selected="@(Model.SchoolClassId == c.Id)" data-note="@(c.IsActive ? $"{c.StudentCount} students" : "Inactive class")">@c.Name</option>
+                            }
+                        </select>
+                        <span asp-validation-for="SchoolClassId" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="TeacherId">Teacher <span class="req" aria-hidden="true">*</span></label>
+                        <select class="select" id="TeacherId" name="TeacherId" required data-searchable>
+                            <option value="">Choose the teacher…</option>
+                            @foreach (var t in o.Teachers)
+                            {
+                                <option value="@t.Id" selected="@(Model.TeacherId == t.Id)" data-note="@t.Note">@t.FullName</option>
+                            }
+                        </select>
+                        <span asp-validation-for="TeacherId" class="field-validation-error"></span>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="label" for="Lesson">Lesson reviewed <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="Lesson" name="Lesson" value="@Model.Lesson" required maxlength="@MorningRevisionRecord.LessonMaxLength" dir="auto" placeholder="e.g. Mathematics – Fractions" />
+                    <span asp-validation-for="Lesson" class="field-validation-error"></span>
+                </div>
+
+                <div class="form-grid form-grid--2">
+                    <div class="field">
+                        <label class="label" for="EntryTime">Entry time</label>
+                        <input class="input picker" type="time" id="EntryTime" name="EntryTime" value="@Model.EntryTime?.ToString("HH:mm")" data-timepicker data-empty-text="Not recorded" />
+                        <span asp-validation-for="EntryTime" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="ExitTime">Exit time</label>
+                        <input class="input picker" type="time" id="ExitTime" name="ExitTime" value="@Model.ExitTime?.ToString("HH:mm")" data-timepicker data-empty-text="Not recorded" />
+                        <span asp-validation-for="ExitTime" class="field-validation-error"></span>
+                    </div>
+                </div>
+                <p class="hint">When the teacher entered and left the classroom. Leave a time empty if it was not recorded — it is shown as “Not recorded”, never estimated.</p>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal)
+            {
+                <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button>
+            }
+            else
+            {
+                <a class="btn btn--secondary" href="@DutyComponents.Href(info)?date=@date">Cancel</a>
+            }
+            <button class="btn btn--primary" type="submit" disabled="@(o.Sessions.Count == 0)">@Ui.Icon("check")Save Record</button>
+        </div>
+    </form>
+</div>

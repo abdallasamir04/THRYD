@@ -98,10 +98,16 @@ public interface ITimetableService
 
     Task<SessionView?> GetSessionAsync(int id, CancellationToken ct = default);
     Task<IReadOnlyList<string>> SubjectsAsync(int departmentId, CancellationToken ct = default);
+
+    /// <summary>The teachers who may teach a subject of a department (the same rule a lesson save checks), by name.</summary>
+    Task<IReadOnlyList<(int Id, string Name)>> TeachersForAsync(int departmentId, string subject, CancellationToken ct = default);
     Task<IReadOnlyList<TeacherCandidate>> CandidatesAsync(int departmentId, string? subject, DayOfWeek day, int slotId, DateOnly? week, int? excludeSessionId, CancellationToken ct = default);
     Task<ServiceResult> AssignAsync(SessionInput input, CancellationToken ct = default);
     Task<ServiceResult> UpdateSessionAsync(int id, SessionInput input, CancellationToken ct = default);
     Task<ServiceResult> RemoveSessionAsync(int id, CancellationToken ct = default);
+
+    /// <summary>The same, with the reason kept in the lesson's history (e.g. "Replaced by an uploaded timetable").</summary>
+    Task<ServiceResult> RemoveSessionAsync(int id, string reason, CancellationToken ct = default);
 
     /// <summary>Moves a lesson to another day / period of its class (from this week; history kept).</summary>
     Task<ServiceResult> MoveSessionAsync(int id, DayOfWeek day, int slotId, CancellationToken ct = default);
@@ -292,6 +298,10 @@ public sealed class TimetableService(SchoolDbContext db, IWorkloadService worklo
         return rules is null ? [name] : rules.TeachingSubjects.Distinct().ToList();
     }
 
+    public async Task<IReadOnlyList<(int Id, string Name)>> TeachersForAsync(int departmentId, string subject, CancellationToken ct = default) =>
+        (await (await EligibleTeachersAsync(departmentId, subject, ct)).OrderBy(t => t.FullName).Select(t => new { t.Id, t.FullName }).ToListAsync(ct))
+            .Select(t => (t.Id, t.FullName)).ToList();
+
     public async Task<IReadOnlyList<TeacherCandidate>> CandidatesAsync(int departmentId, string? subject, DayOfWeek day, int slotId, DateOnly? week, int? excludeSessionId, CancellationToken ct = default)
     {
         var slot = await db.TimeSlots.AsNoTracking().FirstOrDefaultAsync(s => s.Id == slotId, ct);
@@ -332,7 +342,7 @@ public sealed class TimetableService(SchoolDbContext db, IWorkloadService worklo
     public async Task<ServiceResult> MoveSessionAsync(int id, DayOfWeek day, int slotId, CancellationToken ct = default)
     {
         if (!ScheduleRules.IsSchoolDay(day)) return ServiceResult.Fail("Day", "Choose a school day.");
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+        await using var tx = await DbScope.BeginAsync(db, IsolationLevel.ReadCommitted, ct);
         try
         {
             await ScheduleRules.LockPeriodsAsync(db, exclusive: false, ct);
@@ -395,13 +405,15 @@ public sealed class TimetableService(SchoolDbContext db, IWorkloadService worklo
     }
 
     /// <summary>Ends the session from the current week (kept as history; earlier weeks still count it).</summary>
-    public async Task<ServiceResult> RemoveSessionAsync(int id, CancellationToken ct = default)
+    public Task<ServiceResult> RemoveSessionAsync(int id, CancellationToken ct = default) => RemoveSessionAsync(id, "Removed from the timetable", ct);
+
+    public async Task<ServiceResult> RemoveSessionAsync(int id, string reason, CancellationToken ct = default)
     {
         var session = await db.TimetableAssignments.FirstOrDefaultAsync(t => t.Id == id && t.EndedOn == null, ct);
         if (session is null) return ServiceResult.Fail("", "This session is no longer on the timetable.");
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+        await using var tx = await DbScope.BeginAsync(db, IsolationLevel.ReadCommitted, ct);
         await ScheduleRules.LockTeacherAsync(db, session.TeacherId, ct);
-        End(session, "Removed from the timetable");
+        End(session, reason);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return ServiceResult.Ok(id);
@@ -435,7 +447,7 @@ public sealed class TimetableService(SchoolDbContext db, IWorkloadService worklo
             .Select(t => new { t.Id, t.FullName }).FirstOrDefaultAsync(ct);
         if (teacher is null) return ServiceResult.Fail("TeacherId", $"Choose a teacher of the selected department who teaches {canonical}.");
 
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+        await using var tx = await DbScope.BeginAsync(db, IsolationLevel.ReadCommitted, ct);
         try
         {
             // The class's period structure cannot change while the lesson is saved.

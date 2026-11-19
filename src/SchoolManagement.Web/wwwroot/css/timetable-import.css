@@ -1,0 +1,93 @@
+/* Timetables → Upload Timetable (upload, review grid, summary). Uses the app's colour tokens, so light and dark themes follow. */
+
+.ti-steps { margin: 4px 0 18px; }
+
+/* ---- Step 1: class, year and file ---- */
+.ti-upload { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.ti-upload__pickers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.ti-help ul { margin: 6px 0 12px; padding-inline-start: 20px; display: grid; gap: 6px; font-size: 0.9rem; }
+.ti-help p { margin: 0 0 6px; font-size: 0.9rem; }
+
+/* ---- Context chips and totals ---- */
+.ti-context { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
+.ti-context__file { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ti-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 0 0 16px; padding: 0; list-style: none; }
+.ti-stats li { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.ti-stats__n { font-size: 1.45rem; font-weight: 800; color: var(--color-text-strong); line-height: 1.1; }
+.ti-stats__l { font-size: 0.78rem; font-weight: 700; color: var(--color-text-muted); }
+.ti-stats .is-ok .ti-stats__n { color: var(--color-success-ink); }
+.ti-stats .is-warn { border-color: var(--color-warning); background: var(--color-warning-soft); }
+.ti-stats .is-warn .ti-stats__n { color: var(--color-warning-ink); }
+.ti-stats .is-bad { border-color: var(--color-error); background: var(--color-error-soft); }
+.ti-stats .is-bad .ti-stats__n { color: var(--color-error); }
+.ti-list { margin: 6px 0 0; padding-inline-start: 18px; display: grid; gap: 4px; }
+
+/* ---- Review grid ---- */
+.ti-card { overflow: hidden; }
+.ti-grid-wrap { overflow-x: auto; border-top: 1px solid var(--color-border-subtle); }
+.ti-grid { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 760px; font-size: 0.84rem; }
+.ti-grid th, .ti-grid td { padding: 8px; border-bottom: 1px solid var(--color-border-subtle); border-inline-end: 1px solid var(--color-border-subtle); vertical-align: top; text-align: start; }
+.ti-grid thead th { position: sticky; top: 0; z-index: 2; background: var(--color-surface-soft); font-size: 0.78rem; font-weight: 800; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.02em; }
+.ti-grid__corner, .ti-period { position: sticky; inset-inline-start: 0; z-index: 1; background: var(--color-surface); width: 190px; min-width: 190px; }
+.ti-grid thead .ti-grid__corner { z-index: 3; background: var(--color-surface-soft); }
+.ti-day { display: inline-flex; align-items: center; gap: 4px; }
+.ti-grid .icon-btn--sm { width: 24px; height: 24px; min-width: 24px; }
+
+.ti-grid .input, .ti-grid .select { min-height: 32px; padding: 4px 8px; font-size: 0.82rem; border-radius: var(--radius-sm); width: 100%; }
+.ti-grid .select { padding-inline-end: 26px; }
+.ti-period { display: table-cell; }
+.ti-period__name { font-weight: 700; }
+.ti-period__times { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.ti-period__times .input { min-width: 0; padding-inline: 4px; }
+.ti-period__actions { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 4px; }
+.ti-period__actions .btn { min-height: 28px; padding: 2px 8px; font-size: 0.76rem; }
+.ti-danger { color: var(--color-error); }
+
+.ti-cell { min-width: 176px; background: var(--color-surface); }
+.ti-cell > * + * { margin-top: 6px; }
+.ti-lesson { display: grid; gap: 6px; }
+.ti-special { display: none; }
+.ti-cell--k3, .ti-cell--k4 { background: repeating-linear-gradient(135deg, var(--color-surface) 0 8px, var(--color-surface-soft) 8px 16px); }
+.ti-cell--k2 { background: var(--color-surface); }
+.ti-cell--k5 { background: var(--color-surface-sunken); }
+/* The fields of the cell's type: shown from the server's type, and live when the type changes (where :has() is supported). */
+.ti-cell:not([data-kind="1"]) .ti-lesson { display: none; }
+.ti-cell[data-kind="3"] .ti-special, .ti-cell[data-kind="4"] .ti-special { display: block; }
+@supports selector(:has(*)) {
+    .ti-cell .ti-lesson, .ti-cell .ti-special { display: none; }
+    .ti-cell:has(.ti-kind option[value="1"]:checked) .ti-lesson { display: grid; }
+    .ti-cell:has(.ti-kind option[value="3"]:checked) .ti-special,
+    .ti-cell:has(.ti-kind option[value="4"]:checked) .ti-special { display: block; }
+    .ti-cell:has(.ti-kind option[value="5"]:checked) { background: var(--color-surface-sunken); }
+}
+
+.ti-raw { display: flex; gap: 4px; align-items: flex-start; margin: 0; font-size: 0.74rem; color: var(--color-text-faint); overflow-wrap: anywhere; }
+.ti-raw .icon { flex: none; margin-top: 1px; }
+.ti-msg { margin: 0; padding: 4px 6px; border-radius: var(--radius-sm); font-size: 0.74rem; font-weight: 600; line-height: 1.35; }
+.ti-msg--error { background: var(--color-error-soft); color: var(--color-error); }
+.ti-msg--warn { background: var(--color-warning-soft); color: var(--color-warning-ink); }
+.ti-grid td.is-error { box-shadow: inset 3px 0 0 var(--color-error); }
+.ti-grid td.is-warn { box-shadow: inset 3px 0 0 var(--color-warning); }
+.ti-grid tr.is-error > .ti-period { box-shadow: inset 3px 0 0 var(--color-error); }
+.ti-grid tr.is-warn > .ti-period { box-shadow: inset 3px 0 0 var(--color-warning); }
+
+.ti-grid-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--color-border-subtle); }
+.ti-grid-actions .hint { margin: 0 0 0 auto; }
+
+.ti-replace { margin-top: 16px; }
+.ti-replace__switch { margin-top: 10px; }
+.ti-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; margin: 18px 0 8px; }
+
+.ti-warnings summary { cursor: pointer; list-style: none; }
+.ti-warnings summary::-webkit-details-marker { display: none; }
+
+@media (max-width: 900px) {
+    .ti-upload { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+    .ti-upload__pickers { grid-template-columns: 1fr; }
+    .ti-grid__corner, .ti-period { width: 150px; min-width: 150px; }
+    .ti-grid-actions .hint { margin: 0; }
+    .ti-actions { justify-content: stretch; }
+    .ti-actions .btn { flex: 1 1 auto; }
+}

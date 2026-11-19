@@ -1,0 +1,50 @@
+@model AccessForm
+@* Give a staff member Floor Audit access (managers): Manager, or Inspector of one floor / every floor, optionally recording student movements. *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Give access"; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/floor-audit/manage/access/new" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("users", "icon--lg")</span>
+            <div><h2 class="modal__title">Give Floor Audit access</h2><p class="modal__sub">Access is ended, never deleted, so it stays known who could record what and when.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="ac-staff">Staff member <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" id="ac-staff" name="StaffId" data-searchable required>
+                    <option value="">Choose a staff member…</option>
+                    @foreach (var (id, name, note) in Model.Staff) { <option value="@id" selected="@(Model.StaffId == id)" data-note="@note">@name</option> }
+                </select>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="ac-role">Role</label>
+                    <select class="select" id="ac-role" name="Role">
+                        <option value="@FloorAuditRole.Inspector" selected="@(Model.Role == FloorAuditRole.Inspector)">Inspector — completes audit rounds</option>
+                        <option value="@FloorAuditRole.Manager" selected="@(Model.Role == FloorAuditRole.Manager)">Manager — configures and corrects</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="label" for="ac-floor">Floor (inspectors)</label>
+                    <select class="select" id="ac-floor" name="FloorId">
+                        <option value="">Every floor</option>
+                        @foreach (var (id, name) in Model.Floors) { <option value="@id" selected="@(Model.FloorId == id)">@name</option> }
+                    </select>
+                </div>
+            </div>
+            <label class="switch"><input type="checkbox" name="CanRecordMovements" value="true" checked="@Model.CanRecordMovements" /><span class="switch__track" aria-hidden="true"></span><span>May record student movements and mark students returned (managers always may)</span></label>
+            <input type="hidden" name="CanRecordMovements" value="false" />
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-audit/manage?tab=access">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Give access</button>
+        </div>
+    </form>
+</div>

@@ -109,6 +109,7 @@ public class ClassesController(IClassService classes, IClassTeamService teams, I
     {
         Query = query,
         Result = await studentList.ListAsync(query, ct),
+        ShowSecondLanguage = await studentList.AnySecondLanguageAsync(query, ct),
         Classes = [new ClassOption(row.Id, row.Name, row.IsActive, row.StudentCount, row.Capacity)],
         TotalStudents = row.StudentCount,
         FixedClass = true,

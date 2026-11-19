@@ -1,0 +1,90 @@
+@model SchoolManagement.Web.Services.Timetables.Import.TimetableImportSummary
+@*
+    Timetables → Upload Timetable, done: what the upload saved, the lessons still waiting for a teacher (each opens the
+    class timetable's ordinary Assign form for that day and period) and the way to the saved timetable.
+*@
+@{
+    var s = Model;
+    ViewData["Title"] = $"Timetable imported — {s.ClassName}";
+    ViewData["Nav"] = "Timetables";
+    var timetableUrl = $"/timetable/classes/{s.ClassId}";
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/timetable-import.css" asp-append-version="true" />
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/timetables">Timetables</a></li><li><span aria-current="page">Timetable imported</span></li></ol>
+        <h1 class="page-title">Timetable of @s.ClassName imported</h1>
+        <p class="page-sub">Saved @Ui.DateTime(s.ImportedAt)@(s.ImportedBy is null ? "" : $" by {s.ImportedBy}") from <span dir="auto">@s.FileName</span>@(s.Sheet is null ? "" : $" (sheet “{s.Sheet}”)").</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/timetables/upload?classId=@s.ClassId">@Ui.Icon("upload")Upload a replacement</a>
+        <a class="btn btn--primary" href="@timetableUrl">@Ui.Icon("calendar")Open the timetable</a>
+    </div>
+</div>
+
+<partial name="_Steps" model="4" />
+
+<ul class="ti-context" aria-label="Import">
+    <li class="chip chip--brand">@Ui.Icon("door")Class <strong>@s.ClassName</strong></li>
+    <li class="chip">@Ui.Icon("calendar-days")Academic year <strong>@(s.YearName ?? "Not chosen")</strong></li>
+</ul>
+
+<ul class="ti-stats" aria-label="Import summary">
+    <li><span class="ti-stats__n num">@s.Days</span><span class="ti-stats__l">Days imported</span></li>
+    <li><span class="ti-stats__n num">@s.Periods</span><span class="ti-stats__l">Periods imported</span></li>
+    <li><span class="ti-stats__n num">@s.SubjectAssignments</span><span class="ti-stats__l">Subject assignments</span></li>
+    <li class="is-ok"><span class="ti-stats__n num">@s.TeacherAssignments</span><span class="ti-stats__l">Teacher assignments</span></li>
+    <li class="@(s.Unassigned > 0 ? "is-warn" : "")"><span class="ti-stats__n num">@s.Unassigned</span><span class="ti-stats__l">Unmatched / unassigned teachers</span></li>
+    <li><span class="ti-stats__n num">@s.Breaks</span><span class="ti-stats__l">Breaks &amp; activities</span></li>
+    <li class="@(s.Warnings > 0 ? "is-warn" : "")"><span class="ti-stats__n num">@s.Warnings</span><span class="ti-stats__l">Warnings</span></li>
+</ul>
+
+<div class="notice notice--success">@Ui.Icon("check-circle")<div class="notice__body">
+    <strong>@s.ClassName's timetable now comes from this upload.</strong>
+    @Ui.Plural(s.TeacherAssignments, "lesson was", "lessons were") added from this week@(s.ReplacedLessons > 0 ? $", replacing {s.ReplacedLessons} earlier {(s.ReplacedLessons == 1 ? "lesson" : "lessons")} (kept in the history of earlier weeks)" : "").
+    Open the timetable to see it, edit a lesson, or assign the lessons below.
+</div></div>
+
+@if (s.Details.Pending.Count > 0)
+{
+    <section class="card table-card" aria-labelledby="ti-pending-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="ti-pending-title">@Ui.Icon("user-plus")Lessons waiting for a teacher</h2>
+                <p class="card__sub">These lessons were not added because no teacher was matched or chosen. Assign a teacher to add each one to the timetable.</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th scope="col">Day</th><th scope="col">Period</th><th scope="col">Subject</th><th scope="col">Teacher in the file</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+                <tbody>
+                    @foreach (var p in s.Details.Pending)
+                    {
+                        <tr>
+                            <td data-label="Day">@ScheduleRules.DayName(p.Day)</td>
+                            <td data-label="Period">@p.Period <span class="muted num">@p.Times</span></td>
+                            <td data-label="Subject">@p.Subject <span class="muted">· @p.Department</span></td>
+                            <td data-label="Teacher in the file" dir="auto">@(p.TeacherText ?? "—")</td>
+                            <td><a class="btn btn--secondary btn--sm" href="/timetable/assign?classId=@s.ClassId&day=@p.Day&slotId=@p.SlotId" data-modal>@Ui.Icon("user-plus", "icon--sm")Assign teacher</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@if (s.Details.Warnings.Count > 0)
+{
+    <details class="card ti-warnings">
+        <summary class="card__head"><span class="card__title">@Ui.Icon("alert-triangle")Warnings when it was saved (@s.Details.Warnings.Count)</span></summary>
+        <div class="card__body">
+            <ul class="ti-list">
+                @foreach (var w in s.Details.Warnings) { <li>@w</li> }
+            </ul>
+        </div>
+    </details>
+}

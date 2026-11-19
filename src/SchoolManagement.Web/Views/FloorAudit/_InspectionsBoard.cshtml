@@ -1,0 +1,109 @@
+@model InspectionsPage
+@{
+    var date = SchoolWeek.Iso(Model.Date);
+    var s = Model.Session;
+    string Url(int? slot = null, int? round = null, int? floor = -1, bool? pending = null)
+    {
+        var q = new List<string> { $"date={date}" };
+        if ((slot ?? s?.SlotId) is { } sl) q.Add($"slot={sl}");
+        q.Add($"round={round ?? Model.Round}");
+        var f = floor == -1 ? Model.FloorId : floor;
+        if (f is { } fl) q.Add($"floor={fl}");
+        if (pending ?? Model.PendingOnly) q.Add("show=pending");
+        return "/floor-audit/inspections?" + string.Join("&", q);
+    }
+    static bool Waiting(AreaCard c) => c.Required && c.Status is AreaAuditStatus.NotStarted or AreaAuditStatus.Pending or AreaAuditStatus.InProgress;
+    var total = Model.Rounds.FirstOrDefault(r => r.Round == Model.Round);
+}
+<div class="fa-stack">
+    @if (!Model.Schedule.IsSchoolDay)
+    {
+        <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>@(Model.Schedule.Holiday is null ? "Not a school day." : $"School holiday: {Model.Schedule.Holiday}.")</strong>There are no audit rounds on this day. Choose another date above.</div></div>
+    }
+    else if (!Model.Schedule.HasSchedule)
+    {
+        <partial name="_NoSchedule" model="Model.Schedule" />
+    }
+
+    @if (s is not null)
+    {
+        <section class="card fa-roundbar fa-roundbar--wide" aria-label="Session, round and areas shown">
+            <form class="fa-roundbar__filters" method="get" action="/floor-audit/inspections">
+                <input type="hidden" name="date" value="@date" />
+                <input type="hidden" name="round" value="@Model.Round" />
+                <div class="field">
+                    <label class="label" for="in-slot">Session</label>
+                    <select class="select" id="in-slot" name="slot" data-autosubmit>
+                        @foreach (var x in Model.Schedule.Active) { <option value="@x.SlotId" selected="@(x.SlotId == s.SlotId)">@x.Label · @x.Times</option> }
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="label" for="in-floor">Floor</label>
+                    <select class="select" id="in-floor" name="floor" data-autosubmit>
+                        <option value="">All floors</option>
+                        @foreach (var (id, name) in Model.AllFloors) { <option value="@id" selected="@(Model.FloorId == id)">@name</option> }
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="label" for="in-show">Show</label>
+                    <select class="select" id="in-show" name="show" data-autosubmit>
+                        <option value="">All areas</option>
+                        <option value="pending" selected="@Model.PendingOnly">To inspect in this round</option>
+                    </select>
+                </div>
+                <noscript><button class="btn btn--secondary btn--sm" type="submit">Show</button></noscript>
+            </form>
+            <nav class="fa-roundbar__rounds" aria-label="Audit round">
+                @foreach (var r in Model.Rounds)
+                {
+                    <a class="fa-roundtab fa-roundtab--@(r.HasAreas ? FloorAuditLabels.Tone(r.Status) : "muted")" href="@Url(round: r.Round)" aria-current="@(r.Round == Model.Round ? "true" : null)">
+                        <span class="fa-roundtab__name">@FloorAuditRounds.Label(r.Round) <span class="faint">· +@FloorAuditRounds.OffsetMinutes[r.Round - 1] min</span></span>
+                        <span class="fa-roundtab__time num">@FloorAuditLabels.Time(r.Time)</span>
+                        <span class="fa-roundtab__status">@(r.HasAreas ? $"{FloorAuditLabels.Round(r.Status)} · {r.Completed}/{r.Required}" : "No areas")</span>
+                    </a>
+                }
+            </nav>
+            @if (total is { HasAreas: true } t)
+            {
+                <div class="fa-roundbar__progress">
+                    <div class="fa-bar" role="img" aria-label="@t.Completed of @t.Required areas inspected"><span style="width:@t.Percent%"></span></div>
+                    <p><strong class="num">@t.Completed of @t.Required</strong> areas inspected in @FloorAuditRounds.Label(Model.Round) of @s.Label · <span class="num">@t.Pending</span> to inspect · scheduled <span class="num">@FloorAuditLabels.Time(t.Time)</span></p>
+                </div>
+            }
+        </section>
+
+        @foreach (var fp in Model.Floors)
+        {
+            var rooms = fp.Classrooms.Where(c => !Model.PendingOnly || Waiting(c)).ToList();
+            var facilities = fp.Facilities.Where(c => !Model.PendingOnly || Waiting(c)).ToList();
+            var p = fp.Progress;
+            <section class="fa-ifloor" aria-labelledby="if-@fp.Floor.Id">
+                <div class="fa-ifloor__head">
+                    <h2 class="fa-section-title" id="if-@fp.Floor.Id">@Ui.Icon("layers")<a href="/floor-audit/floors/@fp.Floor.Id?date=@date&amp;slot=@s.SlotId&amp;round=@Model.Round">@fp.Floor.Name</a></h2>
+                    @if (p is { HasAreas: true })
+                    {
+                        <span class="fa-ifloor__count"><strong class="num">@p.Completed/@p.Required</strong> inspected</span>
+                        <partial name="_Stat" model="(FloorAuditLabels.Round(p.Status), FloorAuditLabels.Tone(p.Status))" />
+                    }
+                </div>
+                @if (rooms.Count + facilities.Count == 0)
+                {
+                    <p class="fa-empty-line fa-ifloor__empty">@Ui.Icon("check-circle", "icon--sm")@(Model.PendingOnly ? "Nothing left to inspect on this floor in this round." : "No classrooms or facilities on this floor.")</p>
+                }
+                else
+                {
+                    @if (rooms.Count > 0)
+                    {
+                        <h3 class="fa-mini-title">Classrooms (@rooms.Count)</h3>
+                        <div class="fa-areas">@foreach (var a in rooms) { <partial name="_AreaCard" model="(a, fp)" /> }</div>
+                    }
+                    @if (facilities.Count > 0)
+                    {
+                        <h3 class="fa-mini-title">Facilities (@facilities.Count)</h3>
+                        <div class="fa-areas">@foreach (var a in facilities) { <partial name="_AreaCard" model="(a, fp)" /> }</div>
+                    }
+                }
+            </section>
+        }
+    }
+</div>

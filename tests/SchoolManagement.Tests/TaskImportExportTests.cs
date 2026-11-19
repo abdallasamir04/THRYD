@@ -33,10 +33,10 @@ public sealed partial class TaskImportExportTests(DbFixture fx)
     private static string Token(string html) => TokenPattern().Match(html).Groups[1].Value;
     private static string Iso(DateOnly d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
-    private sealed record Row(int Number, string Status, string Text);
+    internal sealed record Row(int Number, string Status, string Text);
 
     /// <summary>Upload → match columns (as detected) → returns the import's token.</summary>
-    private static async Task<Guid> UploadAndMatchAsync(HttpClient client, string kind, string fileName, byte[] bytes)
+    internal static async Task<Guid> UploadAndMatchAsync(HttpClient client, string kind, string fileName, byte[] bytes)
     {
         var page = await client.GetStringAsync($"/import-export?kind={kind}");
         using var form = new MultipartFormDataContent
@@ -69,7 +69,7 @@ public sealed partial class TaskImportExportTests(DbFixture fx)
         return token;
     }
 
-    private static async Task<(string Html, List<Row> Rows)> PreviewAsync(HttpClient client, Guid token)
+    internal static async Task<(string Html, List<Row> Rows)> PreviewAsync(HttpClient client, Guid token)
     {
         var html = WebUtility.HtmlDecode(await client.GetStringAsync($"/import-export/{token}/preview"));
         var rows = RowPattern().Matches(html).Select(m => new Row(int.Parse(m.Groups[1].Value),
@@ -77,7 +77,7 @@ public sealed partial class TaskImportExportTests(DbFixture fx)
         return (html, rows);
     }
 
-    private static async Task ConfirmAsync(HttpClient client, Guid token, string previewHtml)
+    internal static async Task ConfirmAsync(HttpClient client, Guid token, string previewHtml)
     {
         var r = await client.PostAsync($"/import-export/{token}/confirm",
             new FormUrlEncodedContent([new("__RequestVerificationToken", Token(previewHtml))]));
@@ -113,7 +113,7 @@ public sealed partial class TaskImportExportTests(DbFixture fx)
 
         // ---------- The page: a third card with the task count, its own import and export sections.
         var page = WebUtility.HtmlDecode(await client.GetStringAsync("/import-export?kind=Tasks"));
-        Assert.Equal(3, Regex.Matches(page, "<a class=\"kind-tab\"").Count);
+        Assert.Equal(4, Regex.Matches(page, "<a class=\"kind-tab\"").Count);           // Students, Teachers, Tasks, Classes
         Assert.Contains("<a class=\"kind-tab\" href=\"/import-export?kind=Tasks\" aria-current=\"true\">", page);
         int total;
         await using (var db = fx.NewContext()) total = await db.ManagementTasks.CountAsync();

@@ -12,13 +12,14 @@
     @foreach (var m in day.Duties)
     {
         var (icon, text) = DutyComponents.TypeCard(m.Type);
-        var href = $"/duties?type={DutyComponents.TypeSlug(m.Type)}&date={date}";
+        var href = Model.CardHref(m.Type);
+        var selected = Model.Selected == m.Type;
         var pct = m.Required.Count == 0 ? 0 : (int)Math.Round(m.RequiredCovered * 100.0 / m.Required.Count);
-        <article class="dmain dmain--@DutyStatuses.Slug(m.Status) @(m.Scheduled ? "" : "is-idle")" aria-labelledby="dm-@m.Type">
+        <article class="dmain dmain--@DutyStatuses.Slug(m.Status) @(m.Scheduled ? "" : "is-idle") @(selected ? "is-selected" : "")" aria-labelledby="dm-@m.Type" aria-current="@(selected ? "true" : null)">
             <header class="dmain__head">
                 <span class="dmain__icon dmain__icon--@Tone(m.Type)">@Ui.Icon(icon, "icon--lg")</span>
                 <div class="dmain__title">
-                    <h2 id="dm-@m.Type"><a href="@href">@m.Name</a></h2>
+                    <h2 id="dm-@m.Type"><a href="@href" data-duty-card>@m.Name</a></h2>
                     <span class="dmain__time num">@Ui.Icon("clock", "icon--sm")@(m.Scheduled ? m.Times : "Not scheduled on this day")</span>
                 </div>
                 @if (m.Scheduled) { <partial name="_DStatus" model="m.Status" /> }
@@ -30,13 +31,13 @@
                 </div>
                 <div class="dmain__bar" aria-hidden="true"><span class="is-ok" style="width:@pct%"></span><span class="is-bad" style="width:@(m.Required.Count == 0 ? 0 : (int)Math.Round(m.RequiredNotCovered * 100.0 / m.Required.Count))%"></span></div>
                 <ul class="dmain__chips">
-                    <li class="is-ok"><span class="num">@m.RequiredCovered</span> covered</li>
-                    <li class="is-bad"><span class="num">@m.RequiredNotCovered</span> not covered</li>
-                    <li><span class="num">@m.RequiredOpen</span> pending / in progress</li>
-                    @if (m.Optional.Count > 0) { <li class="is-muted"><span class="num">@m.Optional.Count</span> optional</li> }
+                    <li class="is-ok"><span class="num">@m.RequiredCovered</span> <span class="dmain__chip-label">covered</span></li>
+                    <li class="is-bad"><span class="num">@m.RequiredNotCovered</span> <span class="dmain__chip-label">not covered</span></li>
+                    <li><span class="num">@m.RequiredOpen</span> <span class="dmain__chip-label">pending / in progress</span></li>
+                    @if (m.Optional.Count > 0) { <li class="is-muted"><span class="num">@m.Optional.Count</span> <span class="dmain__chip-label">optional</span></li> }
                 </ul>
                 <details class="dmain__subs">
-                    <summary>@Ui.Icon("chevron-down", "icon--sm")Sub-Duties (@m.Scheduled_.Count)</summary>
+                    <summary><span class="dmain__subs-label">Sub-Duties</span> <span class="dmain__subs-count num">@m.Scheduled_.Count</span>@Ui.Icon("chevron-down", "icon--sm")</summary>
                     <ul>
                         @foreach (var s in m.Scheduled_)
                         {
@@ -54,13 +55,14 @@
                 <p class="dmain__text">@text</p>
             }
             <footer class="dmain__foot">
-                <a class="btn btn--secondary btn--sm" href="@href">Open @Ui.Icon("arrow-right", "icon--sm")</a>
+                <a class="btn @(selected ? "btn--primary" : "btn--secondary") btn--sm" href="@href" data-duty-card aria-current="@(selected ? "true" : null)">@(selected ? "Details shown" : "Show details") @Ui.Icon(selected ? "chevron-down" : "arrow-right", "icon--sm")</a>
                 @if (m.Scheduled) { <a class="btn btn--ghost btn--sm" href="/duties/@DutyComponents.TypeSlug(m.Type)/report.pdf?date=@date" data-download-direct>@Ui.Icon("file-pdf", "icon--sm")Coverage report</a> }
                 <a class="btn btn--ghost btn--sm" href="/duties/@DutyComponents.TypeSlug(m.Type)/schedule">@Ui.Icon("clock", "icon--sm")Schedule</a>
             </footer>
         </article>
     }
-    <article class="dmain is-idle">
+    @* Activities is its own category (P.E. and the school's other activities): a full-width band under the three Main Duties. *@
+    <article class="dmain dmain--strip is-idle">
         <header class="dmain__head">
             <span class="dmain__icon dmain__icon--green">@Ui.Icon("activity", "icon--lg")</span>
             <div class="dmain__title"><h2><a href="/duties/activities?date=@date">Activities</a></h2><span class="dmain__time">P.E. and the school's other activities</span></div>

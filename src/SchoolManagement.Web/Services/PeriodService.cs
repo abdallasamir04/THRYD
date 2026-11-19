@@ -541,7 +541,7 @@ public sealed class PeriodService(SchoolDbContext db, ICurrentUser currentUser) 
     {
         try
         {
-            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+            await using var tx = await DbScope.BeginAsync(db, IsolationLevel.ReadCommitted, ct);
             await ScheduleRules.LockPeriodsAsync(db, exclusive: true, ct);
             var outcome = await work(await PeriodMap.LoadAsync(db, ct));
             if (outcome.Result.Succeeded) await tx.CommitAsync(ct);

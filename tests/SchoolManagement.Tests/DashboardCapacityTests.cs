@@ -8,7 +8,7 @@ using SchoolManagement.Web.ViewModels;
 namespace SchoolManagement.Tests;
 
 /// <summary>
-/// Default class capacity (20, never a limit) and the dashboard's Students by class line chart: a point per class against
+/// Default class capacity (22, never a limit) and the dashboard's Students by class line chart: a point per class against
 /// its own capacity, darker blue over it, with totals summed per class (one class never offsets another).
 /// </summary>
 [Collection("db")]
@@ -31,11 +31,24 @@ public sealed class DashboardCapacityTests(DbFixture fx)
     }
 
     [Fact]
-    public async Task New_classes_default_to_20_and_a_chosen_capacity_is_kept()
+    public void Ratios_use_each_class_s_own_capacity()
     {
-        Assert.Equal(20, SchoolClass.DefaultCapacity);
-        Assert.Equal(20, new SchoolClass().Capacity);
-        Assert.Equal(20, new ClassFormModel().Capacity);
+        // 14/22 open, 23/22 one over, 23/25 open: never one fixed capacity for every class.
+        var a = new ClassDistribution(1, "KG1A", true, 14, 22);
+        var b = new ClassDistribution(2, "G6B", true, 23, 22);
+        var c = new ClassDistribution(3, "KG2A", true, 23, 25);
+        Assert.Equal((8, 0, 64), (a.Available, a.Over, a.Utilization));
+        Assert.Equal((0, 1, 105), (b.Available, b.Over, b.Utilization));
+        Assert.Equal((2, 0, 92), (c.Available, c.Over, c.Utilization));
+        Assert.Equal(new CapacityTotals(60, 69, 10, 1), CapacityTotals.Of([a, b, c]));
+    }
+
+    [Fact]
+    public async Task New_classes_default_to_22_and_a_chosen_capacity_is_kept()
+    {
+        Assert.Equal(22, SchoolClass.DefaultCapacity);
+        Assert.Equal(22, new SchoolClass().Capacity);
+        Assert.Equal(22, new ClassFormModel().Capacity);
 
         int? plain = null, custom = null;
         try
@@ -49,8 +62,20 @@ public sealed class DashboardCapacityTests(DbFixture fx)
             }
             await using (var db = fx.NewContext())
             {
-                Assert.Equal(20, await db.Classes.Where(c => c.Id == plain).Select(c => c.Capacity).SingleAsync());
+                Assert.Equal(22, await db.Classes.Where(c => c.Id == plain).Select(c => c.Capacity).SingleAsync());
                 Assert.Equal(34, await db.Classes.Where(c => c.Id == custom).Select(c => c.Capacity).SingleAsync()); // a chosen value stays
+                // An edit without a capacity (rename, activate) keeps the class's own capacity, never resetting it to 22.
+                Assert.True((await DbFixture.Classes(db).UpdateAsync(custom!.Value, (await db.Classes.FindAsync(custom))!.Name, null, false)).Succeeded);
+            }
+            await using (var db = fx.NewContext())
+            {
+                Assert.Equal(34, await db.Classes.Where(c => c.Id == custom).Select(c => c.Capacity).SingleAsync());
+                // The database default for a row inserted without a capacity is 22 too.
+                var raw = "T" + DbFixture.Unique()[..8];
+                await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO [Classes] ([Name], [NormalizedName], [SortOrder], [IsActive], [CreatedAt], [UpdatedAt]) VALUES ({raw}, {raw.ToUpperInvariant()}, 999999, 1, SYSUTCDATETIME(), SYSUTCDATETIME())");
+                var row = await db.Classes.SingleAsync(c => c.Name == raw);
+                Assert.Equal(22, row.Capacity);
+                await db.Classes.Where(c => c.Id == row.Id).ExecuteDeleteAsync();
             }
         }
         finally
@@ -89,7 +114,11 @@ public sealed class DashboardCapacityTests(DbFixture fx)
             Assert.Single(Regex.Matches(html, "class=\"cap-chart\" data-cap-chart"));   // exactly one chart…
             Assert.Single(Regex.Matches(html, "<path class=\"cap-line__path\""));      // …with one line
             Assert.Contains("js/dashboard-chart.js", html);
-            foreach (var key in new[] { "Enrolled", "Over capacity", "Class capacity" }) Assert.Contains($"</i>{key}</span>", html);
+            foreach (var key in new[] { "Enrolled", "Over capacity" }) Assert.Contains($"</i>{key}</span>", html);
+            // No class capacity reference line (nor its legend item): over capacity shows as red points and ratios.
+            Assert.DoesNotContain("Class capacity", html);
+            Assert.DoesNotContain("cap-pt__capacity", html);
+            Assert.DoesNotContain("--c:", html);
 
             await using (var db = fx.NewContext())
             {
@@ -111,11 +140,25 @@ public sealed class DashboardCapacityTests(DbFixture fx)
                 var grid = html[html.IndexOf("cap-chart__grid", StringComparison.Ordinal)..html.IndexOf("<svg class=\"cap-line\"", StringComparison.Ordinal)];
                 Assert.Equal(ticks.Count, Regex.Matches(grid, "class=\"cap-chart__line").Count);   // one gridline per tick
 
-                // The line goes through every point, in order: x = i + ½, y = top − enrolment (chart units of the viewBox).
-                Assert.Contains($"viewBox=\"0 0 {shown.Count} {top}\"", html);
+                // Evenly spaced ticks (intentional, not proportional): tick k of n at k / (n − 1), on the axis and the gridlines.
+                var even = ticks.Select((_, k) => k / (double)(ticks.Count - 1)).ToList();
+                Assert.Equal(even, Regex.Matches(axis, "bottom:([0-9.]+)%").Select(m => Num(m.Groups[1].Value) / 100).ToList(), new Close());
+                Assert.Equal(even, Regex.Matches(grid, "bottom:([0-9.]+)%").Select(m => Num(m.Groups[1].Value) / 100).ToList(), new Close());
+
+                // The line goes through every point, in order: x = i + ½, y = 100 − 100 × the enrolment's axis position.
+                Assert.Contains($"viewBox=\"0 0 {shown.Count} 100\"", html);
                 var d = Regex.Match(html, "<path class=\"cap-line__path\" d=\"([^\"]+)\"").Groups[1].Value;
                 var ends = Regex.Matches(d, "(?:M|C[^ ]+ [^ ]+ )([\\d.]+),([\\d.]+)").Select(m => (X: Num(m.Groups[1].Value), Y: Num(m.Groups[2].Value))).ToList();
-                Assert.Equal(shown.Select((c, i) => (i + 0.5, (double)(top - c.Count))), ends);
+                Assert.Equal(shown.Select((c, i) => (i + 0.5, Math.Round(100 - 100 * CapacityScale.Position(c.Count, ticks), 3))), ends);
+
+                // Each point sits at its enrolment's axis position; the ratio and tooltip keep the real numbers.
+                foreach (var c in shown)
+                {
+                    var at = html.IndexOf($"href=\"/students?classId={c.ClassId}\"", StringComparison.Ordinal);
+                    var pt = html[at..html.IndexOf("</li>", at, StringComparison.Ordinal)];
+                    Assert.Equal(CapacityScale.Position(c.Count, ticks), Num(Regex.Match(pt, "--v:([0-9.]+)").Groups[1].Value), 5);
+                    Assert.Contains($"<dt>Enrolled</dt><dd class=\"num\">{c.Count}</dd>", pt);
+                }
 
                 var t = CapacityTotals.Of(shown);
                 string Total(string label) => Regex.Match(html, $"cap-totals__value num\">([\\d,]+)</span><span class=\"cap-totals__label\">{label}<").Groups[1].Value.Replace(",", "");
@@ -142,18 +185,16 @@ public sealed class DashboardCapacityTests(DbFixture fx)
             Assert.Contains("cap-pt--full", fullPt);
             Assert.Equal("3/3", Ratio(fullPt));
             Assert.Contains("cap-pt__dot\" data-n=\"3\"", fullPt);
-            Assert.Contains("cap-pt__capacity\" data-n=\"3\"", fullPt);     // its own capacity line
-            Assert.Equal(Var(fullPt, "c"), Var(fullPt, "v"), 5);             // on the capacity line
+            Assert.DoesNotContain("cap-pt--over", fullPt);                  // exactly at capacity: not red
             Assert.Equal(("3", "3", "0", "0", "100%"), (Tip(fullPt, "Enrolled"), Tip(fullPt, "Capacity"), Tip(fullPt, "Available"), Tip(fullPt, "Over capacity"), Tip(fullPt, "Usage")));
 
             var overPt = Point(over);
             Assert.Contains("cap-pt--over", overPt);                        // the darker blue point
             Assert.Equal("5/3", Ratio(overPt));                             // not capped at 3
             Assert.Contains("cap-pt__dot\" data-n=\"5\"", overPt);
-            Assert.Equal(5 / 3.0, Var(overPt, "v") / Var(overPt, "c"), 3);   // above its capacity line
             Assert.Equal(("5", "3", "0", "2", "167%"), (Tip(overPt, "Enrolled"), Tip(overPt, "Capacity"), Tip(overPt, "Available"), Tip(overPt, "Over capacity"), Tip(overPt, "Usage")));
             Assert.Contains("5 of 3 students, 2 over capacity, 167% of capacity used", overPt); // the point's accessible name
-            Assert.Equal(5 / 3.0, Var(overPt, "v") / Var(fullPt, "v"), 2);  // one shared scale: 5 students vs 3
+            Assert.True(Var(overPt, "v") > Var(fullPt, "v"));               // one shared scale: 5 students above 3
 
             // Changing a capacity moves its capacity line, not the point: 5 / 10 is open, below the line, 5 seats available.
             await using (var db = fx.NewContext())
@@ -162,8 +203,7 @@ public sealed class DashboardCapacityTests(DbFixture fx)
             overPt = Point(over);
             Assert.Contains("cap-pt--open", overPt);
             Assert.Equal("5/10", Ratio(overPt));
-            Assert.Contains("cap-pt__capacity\" data-n=\"10\"", overPt);
-            Assert.Equal(0.5, Var(overPt, "v") / Var(overPt, "c"), 5);
+            Assert.DoesNotContain("cap-pt--over", overPt);                  // no longer red
             Assert.Equal("5", Tip(overPt, "Available"));
         }
         finally
@@ -174,7 +214,64 @@ public sealed class DashboardCapacityTests(DbFixture fx)
         }
     }
 
+    [Fact]
+    public async Task Default22_migration_moves_only_capacity_20_to_22_and_keeps_custom_capacities()
+    {
+        var sql = new SchoolManagement.Web.Data.Migrations.ClassCapacityDefault22().UpOperations
+            .OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.SqlOperation>().Single().Sql;
+        await using var db = fx.NewContext();
+        await using var tx = await db.Database.BeginTransactionAsync();   // rolled back: the shared test data is not changed
+        var names = new[] { 20, 25, 30, 22, 19 }.ToDictionary(cap => cap, _ => "T" + DbFixture.Unique()[..8]);
+        foreach (var (cap, name) in names)
+            db.Classes.Add(new SchoolClass { Name = name, NormalizedName = name.ToUpperInvariant(), SortOrder = 999_000 + cap, Capacity = cap });
+        await db.SaveChangesAsync();
+        var ids = names.Values.ToList();
+        var students = await db.Students.CountAsync();
+        var updated = await db.Classes.Where(c => ids.Contains(c.Name)).Select(c => new { c.Name, c.UpdatedAt }).ToDictionaryAsync(c => c.Name, c => c.UpdatedAt);
+
+        await db.Database.ExecuteSqlRawAsync(sql);
+        db.ChangeTracker.Clear();
+
+        var after = await db.Classes.AsNoTracking().Where(c => ids.Contains(c.Name)).ToDictionaryAsync(c => c.Name);
+        Assert.Equal(22, after[names[20]].Capacity);   // the former default becomes the new one
+        Assert.Equal(25, after[names[25]].Capacity);   // custom capacities stay
+        Assert.Equal(30, after[names[30]].Capacity);
+        Assert.Equal(22, after[names[22]].Capacity);
+        Assert.Equal(19, after[names[19]].Capacity);
+        Assert.All(after.Values, c => Assert.Equal(updated[c.Name], c.UpdatedAt));
+        Assert.Equal(students, await db.Students.CountAsync());   // no student data touched
+        await tx.RollbackAsync();
+    }
+
     private static double Num(string s) => double.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+
+    private sealed class Close : IEqualityComparer<double>
+    {
+        public bool Equals(double a, double b) => Math.Abs(a - b) < 1e-4;
+        public int GetHashCode(double d) => 0;
+    }
+
+    [Theory]
+    [InlineData(0, 0.0)]
+    [InlineData(10, 0.25)]    // the ticks sit evenly: 0, ¼, ½, ¾, 1
+    [InlineData(15, 0.5)]
+    [InlineData(20, 0.75)]
+    [InlineData(25, 1.0)]
+    [InlineData(5, 0.125)]    // linear between the two ticks around it
+    [InlineData(14, 0.45)]    // 14/20: 4/5 of the way from 10 to 15
+    [InlineData(23, 0.9)]     // 23/20: 3/5 of the way from 20 to 25
+    public void Values_sit_on_the_evenly_spaced_axis_between_their_ticks(int value, double expected)
+        => Assert.Equal(expected, CapacityScale.Position(value, [0, 10, 15, 20, 25]), 9);
+
+    [Fact]
+    public void Axis_positions_keep_the_order_of_the_values()
+    {
+        IReadOnlyList<int> ticks = [0, 10, 15, 20, 25, 30];
+        var p = Enumerable.Range(0, 31).Select(v => CapacityScale.Position(v, ticks)).ToList();
+        for (var i = 1; i < p.Count; i++) Assert.True(p[i] > p[i - 1]);
+        Assert.Equal(0.2, CapacityScale.Position(10, ticks), 9);
+        Assert.Equal([0, 0.25, 0.5, 0.75, 1], Enumerable.Range(0, 5).Select(k => CapacityScale.TickPosition(k, 5)));
+    }
 
     [Fact]
     public void Line_passes_through_every_point_and_never_overshoots_between_them()

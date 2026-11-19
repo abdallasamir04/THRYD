@@ -33,6 +33,11 @@ public enum DutyAuditAction
     BackupAttendanceRecorded = 7,
     AuditNotesUpdated = 8,
     Deleted = 9,
+
+    // Morning Revision records of the session (they never change its coverage).
+    RevisionAdded = 10,
+    RevisionUpdated = 11,
+    RevisionRemoved = 12,
 }
 
 /// <summary>

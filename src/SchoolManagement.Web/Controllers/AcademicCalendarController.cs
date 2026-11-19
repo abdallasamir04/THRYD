@@ -28,6 +28,10 @@ public class AcademicCalendarController(IBelongingsService calendar, ISchoolCale
 
     // ------------------------------------------------------------------ academic years and quarters
 
+    /// <summary>+ Add year (at the bottom of the School Calendar): the year's name, in a dialog.</summary>
+    [HttpGet("years/new")]
+    public IActionResult NewYear() => PageOrPartial("YearForm", null!);
+
     [HttpPost("years"), ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateYear(string? name, CancellationToken ct) =>
         Done(await calendar.CreateYearAsync(name, ct), $"Academic year {name?.Trim()} added with four quarters. Set each quarter's dates.");

@@ -1,0 +1,37 @@
+@model FloorForm
+@* Add or rename a floor (managers). *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = Model.Id is null ? "Add floor" : "Edit floor"; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/floor-audit/manage/floors/save" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        @if (Model.Id is { } id) { <input type="hidden" name="Id" value="@id" /> }
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("layers", "icon--lg")</span>
+            <div><h2 class="modal__title">@(Model.Id is null ? "Add a floor" : $"Edit {Model.Name}")</h2><p class="modal__sub">Floors are deactivated, never deleted, so their history stays.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="fl-name">Name <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="fl-name" name="Name" value="@Model.Name" maxlength="@SchoolFloor.NameMaxLength" dir="auto" data-autofocus required />
+                </div>
+                <div class="field">
+                    <label class="label" for="fl-order">Order</label>
+                    <input class="input" type="number" id="fl-order" name="SortOrder" value="@Model.SortOrder" min="0" max="99" placeholder="After the last floor" />
+                    <span class="hint">0 = ground floor, 1, 2…</span>
+                </div>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-audit/manage">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,108 @@
+@model MovementFormModel
+@*
+    Record Student Movement: an existing student (searched by name); their class and classroom fill in from the student's
+    record (the room they leave can be confirmed or changed); the destination is a configured classroom or facility on
+    any floor, or a clearly marked custom destination; an optional reason. The departure time is taken by the server
+    when the form is saved, and the person "Working as" is recorded. The return is recorded later with Mark Returned.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Record Student Movement"; ViewData["Nav"] = "FloorAudit"; }
+    var rooms = Model.Areas.Where(a => a.Kind == FloorAreaKind.Classroom).ToList();
+    var floors = Model.Areas.GroupBy(a => a.FloorName).ToList();
+    var selected = Model.Students.FirstOrDefault(s => s.Id == Model.StudentId);
+    var to = Model.Areas.FirstOrDefault(a => a.Id == Model.ToAreaId);
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/floor-audit/movements/new" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents" data-fa-movement>
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        @if (Model.Floor is { } fl) { <input type="hidden" name="Floor" value="@fl" /> }
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("arrow-right", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Record Student Movement</h2>
+                <p class="modal__sub">The student is shown as outside until marked returned. Attendance is not changed.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            @if (Model.Existing is { } ex)
+            {
+                <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>@ex.StudentName is already outside.</strong>Left @(ex.FromName is { } fn ? $"classroom {fn}" : ex.ClassName) for @ex.ToName at @FloorAuditLabels.Time(ex.ExitAt) (@FloorAuditLabels.Duration(ex.Duration) so far, recorded by @(ex.RecordedBy ?? "—")). Mark them returned before recording a new movement.</div></div>
+            }
+            <div class="field">
+                <label class="label" for="mv-student">Student <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" id="mv-student" name="StudentId" data-searchable required data-fa-student>
+                    <option value="">Search a student by name…</option>
+                    @foreach (var s in Model.Students)
+                    {
+                        <option value="@s.Id" selected="@(Model.StudentId == s.Id)" data-note="@s.ClassName@(s.FloorName is null ? "" : $" · {s.FloorName}")@(s.Outside ? " · outside now" : "")"
+                                data-room="@s.AreaId" data-class="@s.ClassName" data-floor="@s.FloorName" data-outside="@(s.Outside ? "1" : null)">@s.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <span class="label">Class</span>
+                    <p class="fa-readonly" data-fa-class>@(selected is null ? "Filled in from the student's record" : selected.ClassName)</p>
+                    <span class="hint fa-hint-warn" data-fa-outside-hint @(selected?.Outside == true ? null : "hidden")>This student is already outside: mark them returned first.</span>
+                </div>
+                <div class="field">
+                    <label class="label" for="mv-from">From (classroom)</label>
+                    <select class="select" id="mv-from" name="FromAreaId" data-fa-from>
+                        <option value="">The student's own classroom</option>
+                        @foreach (var g in rooms.GroupBy(r => r.FloorName))
+                        {
+                            <optgroup label="@g.Key">
+                                @foreach (var r in g) { <option value="@r.Id" selected="@(Model.FromAreaId == r.Id)" data-floor="@r.FloorName">Classroom @r.Name</option> }
+                            </optgroup>
+                        }
+                    </select>
+                    <span class="hint" data-fa-from-floor>@(selected?.FloorName is { } sf ? $"Source floor: {sf}" : "Set to the student's classroom when you choose the student; change it if they are elsewhere.")</span>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label" for="mv-to">To <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" id="mv-to" name="ToAreaId" data-searchable data-fa-to disabled="@Model.Custom">
+                    <option value="">Choose a destination…</option>
+                    @foreach (var g in floors)
+                    {
+                        <optgroup label="@g.Key">
+                            @foreach (var a in g.OrderByDescending(x => x.Kind))
+                            {
+                                <option value="@a.Id" selected="@(Model.ToAreaId == a.Id)" data-note="@a.TypeLabel · @a.FloorName" data-floor="@a.FloorName">@(a.Kind == FloorAreaKind.Classroom ? $"Classroom {a.Name}" : a.Name)</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+                <span class="hint" data-fa-to-floor>@(to is null ? "Classrooms and facilities of every floor." : $"Destination floor: {to.FloorName}")</span>
+                <label class="fa-custom-toggle"><input type="checkbox" name="Custom" value="true" checked="@Model.Custom" data-fa-custom /> <span>Somewhere else (custom destination)</span></label>
+                <input type="hidden" name="Custom" value="false" />
+            </div>
+            <div class="field" data-fa-custom-field @(Model.Custom ? null : "hidden")>
+                <label class="label" for="mv-custom">Custom destination <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" id="mv-custom" name="CustomDestination" value="@Model.CustomDestination" maxlength="@StudentMovement.DestinationMaxLength" dir="auto" placeholder="e.g. Parent meeting at the gate" />
+                <span class="hint">Recorded and shown as a custom destination (not one of the configured areas).</span>
+            </div>
+            <div class="field">
+                <label class="label" for="mv-notes">Reason <span class="hint">(optional)</span></label>
+                <input class="input" id="mv-notes" name="Notes" value="@Model.Notes" maxlength="@StudentMovement.NotesMaxLength" dir="auto" placeholder="e.g. Feeling unwell, bathroom, sent to the office" />
+            </div>
+            <dl class="fa-context fa-context--2">
+                <div><dt>Departure time</dt><dd>Recorded by the server when you save</dd></div>
+                <div><dt>Recorded by</dt><dd dir="auto">@(Model.RecordedBy ?? "—") <span class="faint">(Working as)</span></dd></div>
+            </dl>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="/floor-audit/movements">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("arrow-right")Record departure</button>
+        </div>
+    </form>
+</div>
+@section Scripts {
+    <script src="~/js/floor-audit.js" asp-append-version="true"></script>
+}

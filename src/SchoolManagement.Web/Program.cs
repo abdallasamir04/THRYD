@@ -50,6 +50,7 @@ builder.Services.AddSingleton<ITaskFileStore, DiskTaskFileStore>();
 builder.Services.AddScoped<IManagementTaskService, ManagementTaskService>();
 builder.Services.AddScoped<ITimetableService, TimetableService>();
 builder.Services.AddScoped<IPeriodService, PeriodService>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.Import.ITimetableImportService, SchoolManagement.Web.Services.Timetables.Import.TimetableImportService>();
 builder.Services.AddScoped<IActivityService, ActivityService>();
 builder.Services.AddScoped<IClassTeamService, ClassTeamService>();
 builder.Services.AddScoped<IStaffDirectoryService, StaffDirectoryService>();
@@ -78,6 +79,11 @@ builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSo
 builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableSource, SchoolManagement.Web.Services.Timetables.BellScheduleSource>();
 builder.Services.AddScoped<SchoolManagement.Web.Services.Timetables.ITimetableCenter, SchoolManagement.Web.Services.Timetables.TimetableCenter>();
 builder.Services.AddScoped<IIncidentService, IncidentService>();
+// Floor Audit & Student Movement: floors and areas, session-based audit rounds, checklist, student access.
+builder.Services.AddScoped<IFloorAuditAccessService, FloorAuditAccessService>();
+builder.Services.AddScoped<IStudentMovementService, StudentMovementService>();
+builder.Services.AddScoped<IFloorAuditService, FloorAuditService>();
+builder.Services.AddScoped<IFloorConfigService, FloorConfigService>();
 if (testDataCommand is null) builder.Services.AddHostedService<AttendanceAlertSweep>();
 // After the 09:30 cutoff students with no arrival are Absent; ArrivalFinalizer stores those records (off in tests).
 var automaticAbsences = builder.Configuration.GetValue("Attendance:AutoFinalize", true);

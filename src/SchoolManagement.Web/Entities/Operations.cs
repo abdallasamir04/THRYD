@@ -89,7 +89,42 @@ public class DutyAssignment : IAuditable
     public ICollection<DutyStaffAssignment> StaffAssignments { get; set; } = new List<DutyStaffAssignment>();
 }
 
-/// <summary>Classes covered by a duty (In-Class Morning).</summary>
+/// <summary>
+/// Morning Revision (Morning Duty's Sub-Duty, code <see cref="DutyComponent.InClassMorning"/>): one teacher's revision
+/// session in one class — which teacher entered which class, the lesson reviewed, and when they entered and left. Each
+/// record belongs to a Morning Revision duty session (<see cref="DutyAssignment"/>, a coverage point on a date) and refers
+/// to the existing class and staff records. Times are only what was recorded (null = not recorded). Records do not
+/// change the session's coverage, which still comes from the staff attendance at its coverage points; every change is
+/// written to the session's audit trail.
+/// </summary>
+public class MorningRevisionRecord : IAuditable
+{
+    public const int LessonMaxLength = 200;
+
+    public int Id { get; set; }
+    public int DutyAssignmentId { get; set; }
+    public DutyAssignment DutyAssignment { get; set; } = null!;
+    public int SchoolClassId { get; set; }
+    public SchoolClass SchoolClass { get; set; } = null!;
+    public int TeacherId { get; set; }
+    public StaffMember Teacher { get; set; } = null!;
+
+    /// <summary>The lesson or topic reviewed ("Mathematics – Fractions").</summary>
+    public string Lesson { get; set; } = "";
+
+    /// <summary>When the teacher entered the classroom; null when it was not recorded.</summary>
+    public TimeOnly? EntryTime { get; set; }
+
+    /// <summary>When the teacher left the classroom; null when it was not recorded.</summary>
+    public TimeOnly? ExitTime { get; set; }
+
+    public string? CreatedBy { get; set; }
+    public string? UpdatedBy { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>Classes covered by a duty (Morning Revision coverage points).</summary>
 public class DutyAssignmentClass
 {
     public int DutyAssignmentId { get; set; }

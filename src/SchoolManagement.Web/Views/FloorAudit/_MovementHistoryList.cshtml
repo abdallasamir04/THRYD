@@ -1,0 +1,19 @@
+@model MovementPage
+@* Movement History list: the range's figures, then the closed movements (returned and voided). *@
+@{
+    var c = Model.Counts;
+    var back = "/floor-audit/movements/history" + Context.Request.QueryString;
+}
+<div class="fa-move-summary">
+    <ul class="fa-tiles fa-tiles--4" aria-label="Summary">
+        <li><span class="num">@Model.Result.TotalCount</span><span>movements shown</span></li>
+        <li class="is-ok"><span class="num">@c.Returned</span><span>returned</span></li>
+        <li><span class="num">@(c.AverageOutside is { } avg ? FloorAuditLabels.Duration(avg) : "—")</span><span>average time outside</span></li>
+        <li><span class="num">@c.ByDestination.Count</span><span>destinations</span></li>
+    </ul>
+</div>
+<partial name="_MovementTable" model='(Model.Result.Items, Model.User, back, "history")' />
+@if (Model.Result.TotalCount > 0)
+{
+    <partial name="_Pager" model='PagerModel.From(Model.Result, Model.Result.TotalCount == 1 ? "movement" : "movements")' />
+}

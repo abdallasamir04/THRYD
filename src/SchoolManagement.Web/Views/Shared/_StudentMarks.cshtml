@@ -1,0 +1,21 @@
+@model StudentRow
+@*
+    The official name list's mark next to a student's name: a star for "*" and "(*)"; any other printed mark (such as "#")
+    is shown as plain text, as printed. The name itself is stored without the mark, so it is never shown twice. Row
+    colours are shown on the row / name (see the student list), not as an indicator here.
+*@
+@{
+    var symbol = StudentMarks.Symbol(Model.NameMarker);
+}
+@if (symbol is not null)
+{
+    var tip = $"Marked “{symbol}” in the official name list: {Model.PrintedName}";
+    if (StudentMarks.IsStar(Model.NameMarker))
+    {
+        <span class="student-mark student-mark--star" title="@tip" role="img" aria-label="@tip">@Ui.Icon("star")</span>
+    }
+    else
+    {
+        <span class="student-mark-text" title="@tip">@symbol</span>
+    }
+}

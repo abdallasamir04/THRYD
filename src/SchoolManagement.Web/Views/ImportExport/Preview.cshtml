@@ -6,7 +6,7 @@
     var p = Model.Preview;
     var fields = ImportDefinitions.Fields(s.Kind);
     var noun = ImportDefinitions.Noun(s.Kind);
-    var readyLabel = $"{p.Ready} {noun}{(p.Ready == 1 ? "" : "s")}";
+    var readyLabel = $"{p.Ready} {(p.Ready == 1 ? noun : ImportDefinitions.Nouns(s.Kind))}";
     var rows = Model.Filter switch
     {
         "ready" => p.Rows.Where(r => r.Status == RowStatus.Ready),
@@ -90,7 +90,16 @@
                             {
                                 var v = r.Value(f.Key);
                                 <td data-label="@f.Label" dir="@(f.Key == ImportDefinitions.ContactNumber ? "ltr" : "auto")">
-                                    @if (v.Length == 0) { <span class="faint">—</span> }
+                                    @if (s.Kind == ImportKind.Classes && f.Key == ImportDefinitions.Capacity && v.Length == 0 && r.NewClass is { DefaultCapacity: true } nc)
+                                    {
+                                        @nc.Capacity <span class="faint" style="font-size:0.78rem">(standard)</span>
+                                    }
+                                    else if (s.Kind == ImportKind.Classes && f.Key == ImportDefinitions.ActiveStatus && v.Length == 0 && r.NewClass is not null)
+                                    {
+                                        <span>Active</span> <span class="faint" style="font-size:0.78rem">(default)</span>
+                                    }
+                                    else if (v.Length == 0) { <span class="faint">—</span> }
+                                    else if (s.Kind == ImportKind.Classes && f.Key == ImportDefinitions.ClassName && r.ClassName is not null) { <span class="badge badge--class">@r.ClassName</span> }
                                     else if (f.Key == ImportDefinitions.Class && r.ClassName is not null) { <span class="badge badge--class">@r.ClassName</span> }
                                     else if (s.Kind == ImportKind.Tasks && f.Key == ImportDefinitions.AssignedTo && r.AssigneeNote is { Length: > 0 } who)
                                     {

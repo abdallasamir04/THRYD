@@ -315,7 +315,7 @@ public sealed class DutyRotaSource(IDutyService duties) : ITimetableSource
         var rows = await WeekAsync(s.Week, null, ct);
         return DutyComponents.Types.Select(t => new TimetableItem(Key, DutyComponents.TypeSlug(t), DutyComponents.TypeName(t),
             $"{Ui.Plural(rows.Count(r => r.DutyType == t), "duty", "duties")} this week", null,
-            $"/duties?type={DutyComponents.TypeSlug(t)}&date={SchoolWeek.Iso(s.Week)}")).ToList();
+            $"/duties/audit?duty={DutyComponents.TypeSlug(t)}&date={SchoolWeek.Iso(s.Week)}#duty-details")).ToList();
     }
 
     public async Task<PdfReport?> ReportAsync(string id, DateOnly week, IReadOnlyList<DayOfWeek> days, CancellationToken ct)

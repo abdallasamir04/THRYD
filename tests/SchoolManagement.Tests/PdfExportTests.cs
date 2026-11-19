@@ -190,7 +190,7 @@ public class PdfExportTests(DbFixture fx)
             ("/staff/members", "/staff/members/pdf"),
             ("/students", "/students/pdf"),
             ("/management/leadership", "/management/members/pdf"),
-            ("/management/tasks", "/management/tasks/pdf"),
+            ("/tasks", "/management/tasks/pdf"),
             ("/pe", "/pe/pdf"),
             ($"/timetable/classes/{classId}", $"/timetable/classes/{classId}/pdf"),
         })

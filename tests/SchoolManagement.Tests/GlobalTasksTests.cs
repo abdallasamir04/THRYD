@@ -43,10 +43,36 @@ public sealed class GlobalTasksTests(DbFixture fx)
         Assert.Contains("#i-list-checks", sidebar);
         Assert.True(sidebar.IndexOf("href=\"/duties/audit\"", StringComparison.Ordinal) < sidebar.IndexOf("href=\"/tasks\"", StringComparison.Ordinal));
         Assert.True(sidebar.IndexOf("Daily Operations", StringComparison.Ordinal) < sidebar.IndexOf("href=\"/tasks\"", StringComparison.Ordinal));
-        // Add Task opens the existing task form; Management Team → Tasks is still there.
+        // Add Task opens the one task form; there is no separate Management Team Tasks button or page.
         Assert.Contains("<a class=\"btn btn--primary\" href=\"/management/tasks/create\" data-modal>", page);
-        Assert.Contains("href=\"/management/tasks\"", page);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/management/tasks")).StatusCode);
+        Assert.DoesNotContain("href=\"/management/tasks\"", page);
+        Assert.DoesNotContain("Management Team tasks", page, StringComparison.OrdinalIgnoreCase);
+        var actions = Regex.Match(page, "(?s)<div class=\"page-head__actions\">(.*?)</div>").Groups[1].Value;
+        Assert.Equal(["/management/tasks/pdf", "/management/tasks/create"],   // Download Report and Add Task, nothing else
+            Regex.Matches(actions, "(?:href|data-download)=\"(/[^\"]*)\"").Select(m => m.Groups[1].Value).Distinct());
+    }
+
+    [Fact]
+    public async Task The_former_Management_Team_Tasks_page_leads_to_the_one_Tasks_page_with_its_filters()
+    {
+        var client = fx.Factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var plain = await client.GetAsync("/management/tasks");
+        Assert.Equal(HttpStatusCode.MovedPermanently, plain.StatusCode);
+        Assert.Equal("/tasks", plain.Headers.Location!.OriginalString);
+        var filtered = await client.GetAsync("/management/tasks?status=overdue&memberId=5");
+        Assert.Equal(HttpStatusCode.MovedPermanently, filtered.StatusCode);
+        Assert.Equal("/tasks?status=overdue&memberId=5", filtered.Headers.Location!.OriginalString);
+
+        // The task actions stay where they are: the one Add Task form (any staff member, Management Team included) and the report.
+        var form = WebUtility.HtmlDecode(await client.GetStringAsync("/management/tasks/create"));
+        Assert.Contains("<li><a href=\"/tasks\">Tasks</a></li>", form);
+        Assert.DoesNotContain("href=\"/management/tasks\"", form);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/management/tasks/pdf")).StatusCode);
+
+        // School Leadership's task totals open the Tasks page.
+        var leadership = await client.GetStringAsync("/management/leadership");
+        Assert.Contains("href=\"/tasks?status=open\"", leadership);
+        Assert.Contains("href=\"/tasks?status=overdue\"", leadership);
     }
 
     [Fact]
@@ -135,11 +161,11 @@ public sealed class GlobalTasksTests(DbFixture fx)
             at = names.Select(n => newest.IndexOf(T(n), StringComparison.Ordinal)).ToList();
             Assert.Equal(at.OrderDescending(), at);
 
-            // The same tasks on Management Team → Tasks; the cards show who created them and when.
-            var management = WebUtility.HtmlDecode(await client.GetStringAsync($"/management/tasks?search={stamp}"));
-            foreach (var n in names) Assert.Contains(T(n), management);
-            Assert.Contains("Created ", management);
-            Assert.Contains("· Tasks tester", management);
+            // Management Team and teachers' tasks together in the one list; the cards show who created them and when.
+            var unified = WebUtility.HtmlDecode(await client.GetStringAsync($"/tasks?search={stamp}"));
+            foreach (var n in names) Assert.Contains(T(n), unified);
+            Assert.Contains("Created ", unified);
+            Assert.Contains("· Tasks tester", unified);
 
             // A task opens from the central page: its details lead back to Tasks.
             var details = await client.GetStringAsync($"/management/tasks/{ids[0]}");

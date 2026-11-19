@@ -1,0 +1,65 @@
+@model AuditItemForm
+@*
+    + Add Audit Item / edit one (managers): name, description, where it applies, how it is answered, required, active.
+    Inspections already started keep the question exactly as they asked it.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = Model.Id is null ? "Add Audit Item" : "Edit audit item"; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/floor-audit/manage/items/save" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        @if (Model.Id is { } id) { <input type="hidden" name="Id" value="@id" /> }
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("list-checks", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">@(Model.Id is null ? "Add Audit Item" : $"Edit {Model.Name}")</h2>
+                <p class="modal__sub">@(Model.TimesUsed > 0 ? $"Answered {Model.TimesUsed} times already: those answers keep the question as it was asked." : "Appears in inspections started from now on.")</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="it-name">Item name <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" id="it-name" name="Name" value="@Model.Name" maxlength="@FloorAuditItem.NameMaxLength" dir="auto" data-autofocus required />
+            </div>
+            <div class="field">
+                <label class="label" for="it-desc">Description</label>
+                <input class="input" id="it-desc" name="Description" value="@Model.Description" maxlength="@FloorAuditItem.DescriptionMaxLength" dir="auto" placeholder="Optional: what the inspector should check" />
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="it-scope">Applies to <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="it-scope" name="AppliesTo">
+                        @foreach (var s in Enum.GetValues<AuditItemScope>()) { <option value="@s" selected="@(Model.AppliesTo == s)">@FloorAuditLabels.Scope(s)</option> }
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="label" for="it-type">Response type <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="it-type" name="ResponseType">
+                        @foreach (var t in AuditResponses.All) { <option value="@t" selected="@(Model.ResponseType == t)">@AuditResponses.Label(t)</option> }
+                    </select>
+                    <span class="hint">Fail, No, Needs Attention and Absent are recorded as issues; so is any text in an “Issue description” item.</span>
+                </div>
+                <div class="field">
+                    <label class="label" for="it-order">Order</label>
+                    <input class="input" type="number" id="it-order" name="SortOrder" value="@Model.SortOrder" min="0" max="9999" placeholder="At the end" />
+                </div>
+                <div class="field fa-switches">
+                    <label class="switch"><input type="checkbox" name="IsRequired" value="true" checked="@Model.IsRequired" /><span class="switch__track" aria-hidden="true"></span><span>Required to complete an inspection</span></label>
+                    <input type="hidden" name="IsRequired" value="false" />
+                    <label class="switch"><input type="checkbox" name="IsActive" value="true" checked="@Model.IsActive" /><span class="switch__track" aria-hidden="true"></span><span>Active</span></label>
+                    <input type="hidden" name="IsActive" value="false" />
+                </div>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-audit/manage?tab=checklist">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.Id is null ? "Add item" : "Save")</button>
+        </div>
+    </form>
+</div>

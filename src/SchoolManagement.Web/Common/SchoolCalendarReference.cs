@@ -34,12 +34,16 @@ public static class SchoolCalendarReference
         new(4, D(4, 4), D(7, 31)),
     ];
 
+    /// <summary>Months whose event list keeps the printed order rather than date order (June, as the school asked).</summary>
+    public static IReadOnlyList<DateOnly> PrintedOrderMonths => [M(6)];
+
     /// <summary>August–December are 2026, January–July 2027.</summary>
     private static DateOnly D(int month, int day) => new(month >= 8 ? 2026 : 2027, month, day);
     private static DateOnly M(int month) => D(month, 1);
 
     private const CalendarColor None = CalendarColor.None, Yellow = CalendarColor.Yellow, Teal = CalendarColor.DarkTeal,
-        Green = CalendarColor.Green, Blue = CalendarColor.Blue, Orange = CalendarColor.Orange, Red = CalendarColor.Red;
+        Green = CalendarColor.Green, Blue = CalendarColor.Blue, Orange = CalendarColor.Orange, Red = CalendarColor.Red, Pink = CalendarColor.Pink,
+        Gray = CalendarColor.Gray;
 
     private static Entry On(int m, int d, string title, CalendarColor c = None, string? label = null, string? accent = null, bool confirm = false, string? notes = null) =>
         new(M(m), title, D(m, d), null, c, label, accent, confirm, notes);
@@ -52,20 +56,19 @@ public static class SchoolCalendarReference
     public static readonly IReadOnlyList<Entry> Events =
     [
         // ---------------- Q1 — August 2026
-        On(8, 20, "Q1 Curriculum Map", Teal),
-        On(8, 25, "Q1 Lesson Plans", Teal),
-        On(8, 30, "Weeks 1 & 2 PPTs", Teal),
+        // August, September and October as confirmed by the school (19 Nov 2026): no event on 1 August.
+        On(8, 20, "Q1 Curriculum Map", Green),
+        On(8, 25, "Q1 Lesson Plans", Green),
+        On(8, 30, "Weeks 1 & 2 PPTs", Green),
 
         // ---------------- September 2026
         On(9, 1, "Diagnostic Tests Submission", Green),
-        On(9, 8, "HW 1 & 2 + Quiz 1 Submission", confirm: true,
-            notes: "Printed with the date 8. The 3rd is coloured green in the grid with no event of its own: confirm which date this submission is due."),
-        Span(9, 7, 8, "First Day of School + Diagnostic Test", Blue, label: "7/8", confirm: true,
-            notes: "Printed as 7/8 (the grid colours 6–8 blue). Confirm the first day of school."),
+        On(9, 3, "HW 1 & 2 + Quiz 1 Submission", Green),
+        Span(9, 6, 8, "First Day of School + Diagnostic Test", Blue),
         On(9, 10, "Weeks 3 & 4 PPTs"),
-        Span(9, 23, 24, "Aqua Day", Orange, label: "23/24"),
+        Span(9, 23, 24, "Aqua Day", Orange),
         On(9, 27, "Quiz 2 Submission", Green),
-        On(9, 28, "Armed Forces Day Proposal"),
+        On(9, 28, "Armed Forces Day Proposal", Pink),
         On(9, 29, "Weeks 5 & 6 PPTs", Green),
         On(9, 30, "Q1 Project Proposal Submission", Green),
 
@@ -73,43 +76,44 @@ public static class SchoolCalendarReference
         On(10, 5, "World Teachers’ Day"),
         On(10, 6, "6th of October Victory"),
         On(10, 8, "Armed Forces Day"),
-        On(10, 11, "Q1 Exams Submission + M.A.", Teal),
-        On(10, 15, "Spelling bee"),
-        On(10, 15, "Q2 Curriculum map submission", Green),
+        On(10, 11, "Q1 Exams Submission + M.A.", Green),
+        On(10, 15, "Spelling Bee"),
+        On(10, 15, "Q2 Curriculum Map Submission"),
         On(10, 18, "Fire Drill / Q1 Project Submission", Red, accent: "Fire Drill"),
         Span(10, 18, 22, "Revision"),
         On(10, 22, "Q2 Lesson Plans Submission", Green),
         Span(10, 25, 29, "Q1 Exams (Submission of Grading Sheets + Graph Analysis on the same day of the exam)", Yellow),
 
-        // ---------------- Q2 — November 2026
+        // ---------------- Q2 — November 2026 (November–January as confirmed by the school, 19 Nov 2026)
         On(11, 1, "Start of Q2", Blue),
-        On(11, 12, "Q2 Project Proposal Submission", Teal),
+        On(11, 12, "Q2 Project Proposal Submission", Green),
         On(11, 16, "Career Day"),
-        On(11, 19, "PTC"),
+        On(11, 19, "PTC", Pink),
         Span(11, 22, 26, "Reading Week"),
         On(11, 30, "International Day"),
 
         // ---------------- December 2026
+        On(12, 2, "Mock Exams Submission", Green),
         On(12, 3, "Fire Drill", Red),
-        On(12, 7, "Mock Exams Submission", Teal),
-        On(12, 8, "Q2 Exams Submission", Teal),
-        On(12, 8, "Q3 Curriculum map Submission", Teal),
+        On(12, 6, "Q2 Exams Submission", Green),
+        On(12, 8, "Q3 Curriculum Map Submission", Green),
         On(12, 13, "Q2 Projects Submission", Green),
         Span(12, 13, 15, "Revision"),
         On(12, 15, "Arabic Day"),
         Span(12, 16, 22, "Q2 Exams", Yellow),
         On(12, 22, "Xmas Bazaar"),
-        On(12, 23, "Q3 Lesson Plans Submission", Green),
-        // One break from 27 December to 9 January: listed under December, shown as continuing in January (Q2).
-        new(M(12), "Xmas Break", D(12, 27), D(1, 9), None),
+        On(12, 23, "Q3 Lesson Plans Submission"),
+        // The Xmas Break is printed under both months: 27–31 under December, 1–9 under January.
+        Span(12, 27, 31, "Xmas Break"),
 
-        // ---------------- Q3 — January 2027 (1–9 belong to Q2: the Xmas Break above)
-        On(1, 10, "Start of Q3", Blue),
-        On(1, 12, "Science Fair Proposal Submission", Teal),
-        On(1, 13, "Quiz 1 Submission", Teal),
+        // ---------------- Q3 — January 2027 (1–9 belong to Q2: the rest of the Xmas Break)
+        Span(1, 1, 9, "Xmas Break"),
+        On(1, 10, "Start of Q3"),
         Span(1, 11, 14, "Environmental Awareness"),
+        On(1, 12, "Science Fair Proposal Submission", Green),
+        On(1, 13, "Quiz 1 Submission", Green),
         On(1, 21, "Science Fair"),
-        On(1, 25, "National Police Day"),
+        On(1, 25, "National Police Day", Gray),
         On(1, 26, "International Day of Education (UN)"),
         On(1, 28, "National Police Day Off"),
 
@@ -118,9 +122,10 @@ public static class SchoolCalendarReference
         new(M(2), "Reunion Break", D(1, 31), D(2, 4), None),
         On(2, 4, "World Cancer Day"),
         On(2, 8, "1st Day of Ramadan"),
-        On(2, 10, "100 Days of School Proposal Submission", Teal),
-        On(2, 10, "Quiz 2 Submission", Teal),
-        On(2, 11, "PTC"),
+        // February–June as confirmed by the school (19 Nov 2026), checked against the printed calendar.
+        On(2, 9, "100 Days of School Proposal Submission", Green),
+        On(2, 10, "Quiz 2 Submission", Green),
+        On(2, 11, "PTC", Pink),
         On(2, 14, "Valentine’s Day"),
         On(2, 17, "Q3 Project Proposal Submission"),
         On(2, 18, "100 Days of School"),
@@ -128,15 +133,15 @@ public static class SchoolCalendarReference
         On(2, 28, "Drama Day"),
 
         // ---------------- March 2027
+        On(3, 7, "Q3 Exams Submission", Teal),
         On(3, 9, "Eid El Fitr Celebration"),
         Span(3, 10, 13, "Eid El Fitr Holiday"),
-        Undated(3, "Mock Exams Submission",
-            notes: "The printed date is not readable. The grid colours 7–8, 15 and 18 March dark teal: confirm which is this submission."),
+        On(3, 15, "Mock Exams Submission", Teal),
         On(3, 14, "International Math Day"),
-        On(3, 17, "Q3 Project Submission"),
+        On(3, 21, "Q4 Curriculum Map Submission", Teal),
         Span(3, 21, 25, "Revision"),
-        On(3, 21, "Q4 Curriculum Map Submission", Green),
-        On(3, 25, "Q4 Lesson Plans Submission", Green),
+        On(3, 23, "Q4 Project Submission", Teal),
+        On(3, 25, "Q4 Lesson Plans Submission", Teal),
         // 28 March – 1 April: listed under March, continues into April (still Q3).
         new(M(3), "Q3 Exams", D(3, 28), D(4, 1), Yellow),
 
@@ -144,9 +149,9 @@ public static class SchoolCalendarReference
         On(4, 4, "Start of Q4", Blue),
         On(4, 5, "Social Studies Gallery Proposal", Green),
         On(4, 6, "Quiz 1 Submission", Green),
-        On(4, 11, "Spirit Week Proposal Submission"),
+        On(4, 11, "Spirit Week Proposal Submission", Green),
         On(4, 13, "Social Studies Gallery"),
-        On(4, 14, "Production Day Proposal Submission"),
+        On(4, 14, "Production Day Proposal Submission", Green),
         Span(4, 18, 22, "Spirit Week + Art Gallery"),
         Span(4, 25, 29, "Easter Break"),
 
@@ -158,9 +163,8 @@ public static class SchoolCalendarReference
         On(5, 10, "Q4 Project Proposal Submission", Green),
         On(5, 13, "Eid Al-Adha Celebration"),
         Span(5, 16, 20, "Eid Al-Adha Holiday"),
-        Undated(5, "Q4 Exams Submission",
-            notes: "The printed date is not readable (26 May is coloured green in the grid). Confirm the date."),
-        Undated(5, "Mock Exams Submission", notes: "The printed date is not readable. Confirm the date."),
+        On(5, 21, "Q4 Exams Submission", Teal),
+        On(5, 26, "Mock Exams Submission", Teal),
         On(5, 27, "Production Day"),
         On(5, 30, "Q4 Projects Submission"),
 
@@ -171,11 +175,10 @@ public static class SchoolCalendarReference
         On(6, 10, "Hijri New Year Day Off"),
         Span(6, 6, 15, "Q4 Exams", Yellow),
         On(6, 20, "All Grading Sheets Submission"),
-        Undated(6, "Pacing Guide Submission", Teal, label: "22: 27/28",
-            notes: "Printed as “22: 27/28” (22, 27 and 28 June are coloured dark teal). Confirm the date or dates."),
-        On(6, 27, "Q1 Lesson Plans Submission", Teal, confirm: true,
-            notes: "Printed as Q1 in June (the plans for next year's first quarter?). Kept as printed: confirm the wording."),
-        On(6, 29, "Summer Pack Submission"),
+        On(6, 22, "Pacing Guide Submission", Teal, label: "22:27/28",
+            notes: "Printed as “22: 27//28”: the date is shown as printed (listed on 22 June)."),
+        On(6, 27, "Q1 Lesson Plans Submission", Teal),
+        On(6, 29, "Summer Pack Submission", Teal),
 
         // ---------------- July 2027: no events in the printed calendar.
     ];
@@ -187,17 +190,17 @@ public static class SchoolCalendarReference
     {
         var marks = new List<(DateOnly, CalendarColor)>();
         void Add(int m, CalendarColor c, params int[] days) { foreach (var d in days) marks.Add((D(m, d), c)); }
-        Add(8, Teal, 20, 25, 30);
+        Add(8, Green, 20, 25, 30);
         Add(9, Green, 1, 3); Add(9, Blue, 6, 7, 8); Add(9, Orange, 23, 24); Add(9, Green, 27, 29, 30);
-        Add(10, Teal, 11); Add(10, Green, 15); Add(10, Red, 18); Add(10, Green, 22); Add(10, Yellow, 25, 26, 27, 28, 29);
-        Add(11, Blue, 1); Add(11, Teal, 12);
-        Add(12, Green, 2); Add(12, Red, 3); Add(12, Teal, 6, 7, 8); Add(12, Green, 13); Add(12, Yellow, 16, 17, 20, 21, 22); Add(12, Green, 23);
-        Add(1, Blue, 10); Add(1, Teal, 12, 13);
-        Add(2, Teal, 9, 10); Add(2, Red, 25);
-        Add(3, Teal, 7, 8, 15, 18); Add(3, Green, 21, 25); Add(3, Yellow, 28, 29, 30, 31);
+        Add(10, Green, 11); Add(10, Red, 18); Add(10, Green, 22); Add(10, Yellow, 25, 26, 27, 28, 29);
+        Add(11, Blue, 1); Add(11, Green, 12);
+        Add(12, Green, 2); Add(12, Red, 3); Add(12, Green, 6, 8); Add(12, Yellow, 16, 17, 20, 21, 22);   // 13: list green only
+        Add(1, Blue, 10); Add(1, Green, 12, 13);
+        Add(2, Green, 9, 10); Add(2, Red, 25);
+        Add(3, Teal, 7, 8, 15, 21, 25); Add(3, Yellow, 28, 29, 30, 31);
         Add(4, Yellow, 1); Add(4, Blue, 4); Add(4, Green, 5, 6);
-        Add(5, Green, 9, 10, 26);
-        Add(6, Red, 3); Add(6, Yellow, 6, 7, 8, 9, 13, 14, 15); Add(6, Teal, 22, 27, 28);
+        Add(5, Green, 9, 10); Add(5, Teal, 26);
+        Add(6, Red, 3); Add(6, Yellow, 6, 7, 8, 9, 13, 14, 15); Add(6, Teal, 22, 27, 29);
         return marks;
     }
 }

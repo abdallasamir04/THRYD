@@ -1,0 +1,125 @@
+@model FloorPage
+@{
+    var date = SchoolWeek.Iso(Model.Date);
+    var s = Model.Session;
+    var back = $"/floor-audit/floors/{Model.Floor.Id}?date={date}" + (s is null ? "" : $"&slot={s.SlotId}&round={Model.Round}");
+    var nowTime = TimeOnly.FromDateTime(Model.Now);
+    bool Running(AuditSession x) => Model.IsToday && x.Start <= nowTime && nowTime < x.Over;
+}
+<div class="fa-stack" data-updated="@Model.Now.ToString("h:mm:ss tt", System.Globalization.CultureInfo.InvariantCulture)">
+    @if (!Model.Schedule.IsSchoolDay)
+    {
+        <div class="notice">@Ui.Icon("info")<div class="notice__body"><strong>@(Model.Schedule.Holiday is null ? "Not a school day." : $"School holiday: {Model.Schedule.Holiday}.")</strong>No audit rounds are scheduled on this day.</div></div>
+    }
+    else if (!Model.Schedule.HasSchedule)
+    {
+        <partial name="_NoSchedule" model="Model.Schedule" />
+    }
+
+    @* ---- Session and round ---- *@
+    @if (s is not null)
+    {
+        <section class="card fa-roundbar" aria-label="Session and audit round">
+            <form class="fa-roundbar__session" method="get" action="/floor-audit/floors/@Model.Floor.Id">
+                <input type="hidden" name="date" value="@date" />
+                <label class="label" for="fa-slot">Session</label>
+                <select class="select" id="fa-slot" name="slot" data-autosubmit>
+                    @foreach (var x in Model.Schedule.Active)
+                    {
+                        <option value="@x.SlotId" selected="@(x.SlotId == s.SlotId)">@x.Label · @x.Times@(Running(x) ? " (now)" : "")</option>
+                    }
+                </select>
+                <noscript><button class="btn btn--secondary btn--sm" type="submit">Show</button></noscript>
+            </form>
+            <nav class="fa-roundbar__rounds" aria-label="Audit round">
+                @foreach (var r in Model.Rounds)
+                {
+                    <a class="fa-roundtab fa-roundtab--@(r.HasAreas ? FloorAuditLabels.Tone(r.Status) : "muted")" href="/floor-audit/floors/@Model.Floor.Id?date=@date&amp;slot=@s.SlotId&amp;round=@r.Round"
+                       aria-current="@(r.Round == Model.Round ? "true" : null)">
+                        <span class="fa-roundtab__name">@FloorAuditRounds.Label(r.Round)</span>
+                        <span class="fa-roundtab__time num">@FloorAuditLabels.Time(r.Time)</span>
+                        <span class="fa-roundtab__status">@(r.HasAreas ? $"{FloorAuditLabels.Round(r.Status)} · {r.Completed}/{r.Required}" : "No areas")</span>
+                    </a>
+                }
+            </nav>
+            @if (Model.Progress is { HasAreas: true } p)
+            {
+                <div class="fa-roundbar__progress">
+                    <div class="fa-bar" role="img" aria-label="@p.Completed of @p.Required areas inspected"><span style="width:@p.Percent%"></span></div>
+                    <p><strong class="num">@p.Completed of @p.Required</strong> areas inspected in @FloorAuditRounds.Label(Model.Round) · <span class="num">@p.Pending</span> pending
+                        · scheduled <span class="num">@FloorAuditLabels.Time(p.Time)</span>@(p.Status == AuditRoundStatus.Missed ? " — the round's time is over" : "")</p>
+                </div>
+            }
+            else
+            {
+                <p class="fa-roundbar__none">@Ui.Icon("info", "icon--sm")No area of this floor is inspected in this session@(s.SchoolWide ? "" : " (a period of one class only)").</p>
+            }
+        </section>
+    }
+
+    @* ---- Classrooms ---- *@
+    <section aria-labelledby="fa-rooms-title">
+        <div class="fa-section-head">
+            <h2 class="fa-section-title" id="fa-rooms-title">@Ui.Icon("door")Classrooms <span class="count num">@Model.Classrooms.Count</span></h2>
+        </div>
+        @if (Model.Classrooms.Count == 0)
+        {
+            <div class="empty empty--boxed fa-empty"><span class="empty__icon">@Ui.Icon("door")</span><p class="empty__title">No classrooms on this floor</p>
+                <p class="empty__text">@(Model.User.CanManage ? "Assign the classes taught on this floor in Manage." : "A Floor Audit manager assigns classes to floors.")</p>
+                @if (Model.User.CanManage) { <div class="empty__actions"><a class="btn btn--secondary btn--sm" href="/floor-audit/manage/classrooms/assign?floor=@Model.Floor.Id" data-modal>@Ui.Icon("plus", "icon--sm")Assign classes</a></div> }</div>
+        }
+        else
+        {
+            <div class="fa-areas">@foreach (var a in Model.Classrooms) { <partial name="_AreaCard" model="(a, Model)" /> }</div>
+        }
+    </section>
+
+    @* ---- Facilities ---- *@
+    <section aria-labelledby="fa-fac-title">
+        <div class="fa-section-head">
+            <h2 class="fa-section-title" id="fa-fac-title">@Ui.Icon("school")Facilities <span class="count num">@Model.Facilities.Count</span></h2>
+        </div>
+        @if (Model.Facilities.Count == 0)
+        {
+            <div class="empty empty--boxed fa-empty"><span class="empty__icon">@Ui.Icon("school")</span><p class="empty__title">No active facilities on this floor</p>
+                <p class="empty__text">Bathrooms, corridors, stairs and other facilities are added per floor in Manage.</p>
+                @if (Model.User.CanManage) { <div class="empty__actions"><a class="btn btn--secondary btn--sm" href="/floor-audit/manage/facilities/new?floor=@Model.Floor.Id" data-modal>@Ui.Icon("plus", "icon--sm")Add a facility</a></div> }</div>
+        }
+        else
+        {
+            <div class="fa-areas">@foreach (var a in Model.Facilities) { <partial name="_AreaCard" model="(a, Model)" /> }</div>
+        }
+    </section>
+
+    @* ---- Student Access ---- *@
+    <section class="card fa-floor-access" id="student-access" aria-labelledby="fa-sa-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="fa-sa-title">@Ui.Icon("users")Student Access — @Model.Floor.Name</h2>
+                <p class="card__sub">Students who left a classroom on this floor or went to an area on it. Open movements show the time outside so far; overdue after @Model.OverdueMinutes minutes.</p>
+            </div>
+            <div class="fa-head-actions">
+                @if (Model.User.CanRecordMovements(Model.Floor.Id) && Model.User.HasIdentity)
+                {
+                    <a class="btn btn--primary btn--sm" href="/floor-audit/movements/new?floor=@Model.Floor.Id" data-modal>@Ui.Icon("plus", "icon--sm")Record Student Movement</a>
+                }
+                else
+                {
+                    <button class="btn btn--primary btn--sm" type="button" disabled title="@(Model.User.HasIdentity ? "Your Floor Audit role cannot record movements for this floor." : "Choose “Working as” first (above).")">@Ui.Icon("plus", "icon--sm")Record Student Movement</button>
+                }
+                <a class="btn btn--secondary btn--sm" href="/floor-audit/movements?floor=@Model.Floor.Id">Outside now</a>
+                <a class="btn btn--ghost btn--sm" href="/floor-audit/movements/history?floor=@Model.Floor.Id&amp;from=@date&amp;to=@date">History</a>
+            </div>
+        </div>
+        <partial name="_MovementTable" model='(Model.Movements, Model.User, back, "floor")' />
+    </section>
+
+    @* ---- Recent audit history ---- *@
+    <section class="card" aria-labelledby="fa-recent-title">
+        <div class="card__head">
+            <h2 class="card__title" id="fa-recent-title">@Ui.Icon("clipboard-check")Recent inspections on @Model.Floor.Name</h2>
+            <a class="btn btn--ghost btn--sm" href="/floor-audit/history?floor=@Model.Floor.Id">Full history @Ui.Icon("arrow-right", "icon--sm")</a>
+        </div>
+        <partial name="_InspectionList" model="Model.Recent" />
+    </section>
+</div>

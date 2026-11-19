@@ -58,14 +58,18 @@ public class DepartmentsController(IDepartmentService departments, IPeService pe
         if (dept is null) return NotFoundResult("This department no longer exists.");
         // The PE department page embeds the P.E. module (same data as /pe) under Department Staff.
         var isPe = !IsAjax && await pe.DepartmentIdAsync(ct) == id;
+        // A department with subcategories opens on its subcategory cards; ?subcategory= opens one of them, ?view=all lists everyone.
+        var overview = dept.Rules is not null && query.View != "all" && string.IsNullOrWhiteSpace(query.Subcategory);
         var model = new DepartmentDetailsViewModel
         {
             Department = dept,
             Query = query,
-            Members = await departments.MembersAsync(id, query, ct),
+            Members = overview && !IsAjax ? [] : await departments.MembersAsync(id, query, ct),
             HeadHistory = IsAjax ? [] : await departments.HeadHistoryAsync(id, ct),
             Pe = isPe ? await PePageViewModel.LoadAsync(SchoolWeek.ParseDayOrToday(date), pe, timetable, teachers, ct) : null,
         };
+        // An unknown subcategory in the address leads back to the department's cards.
+        if (!IsAjax && model.Scope is not null && model.ScopeCard is null) return Redirect($"/staff/departments/{id}");
         return IsAjax ? PartialView("_Members", model) : View(model);
     }
 

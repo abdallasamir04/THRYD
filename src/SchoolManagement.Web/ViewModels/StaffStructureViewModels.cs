@@ -47,6 +47,50 @@ public sealed class DepartmentDetailsViewModel
 
     /// <summary>The P.E. module, shown under Department Staff on the PE department page only (null elsewhere).</summary>
     public PePageViewModel? Pe { get; init; }
+
+    // ---- Departments with subcategories: Department → Subcategory → Staff ----
+
+    public bool HasSubcategories => Department.Rules is not null;
+
+    /// <summary>The department's staff all together (?view=all) instead of its subcategory cards.</summary>
+    public bool AllStaff => Query.View == "all";
+
+    /// <summary>The department page of a department with subcategories: its subcategory cards (no member list).</summary>
+    public bool IsOverview => HasSubcategories && !AllStaff && string.IsNullOrWhiteSpace(Query.Subcategory);
+
+    /// <summary>The subcategory whose page this is ("Islamic"; also when a subject under it is chosen), or null.</summary>
+    public string? Scope => HasSubcategories && !AllStaff && !string.IsNullOrWhiteSpace(Query.Subcategory) ? Query.Subcategory.Split('|', 2)[0] : null;
+    public SubcategoryCard? ScopeCard => Scope is { } s ? Cards.FirstOrDefault(c => c.Key == s) : null;
+
+    /// <summary>
+    /// One card per subcategory, in the department's order; then any subcategory no longer offered that staff still have,
+    /// and the staff without a subcategory — so every member of the department is on exactly one card.
+    /// </summary>
+    public IReadOnlyList<SubcategoryCard> Cards => _cards ??= BuildCards();
+    private IReadOnlyList<SubcategoryCard>? _cards;
+
+    private List<SubcategoryCard> BuildCards()
+    {
+        var d = Department;
+        if (d.Rules is not { } rules) return [];
+        var cards = rules.Options.Select(o => new SubcategoryCard(o.Value, o.Value, d.CountOf(o.Value),
+            o.Subjects.Select(s => (s, d.CountOf(o.Value, s))).ToList(), Retired: false)).ToList();
+        foreach (var old in d.Breakdown.Select(b => b.Subcategory).Distinct().Where(v => rules.Find(v) is null))
+            cards.Add(new SubcategoryCard(old, old, d.CountOf(old),
+                d.Breakdown.Where(b => b.Subcategory == old && b.Subject != null).Select(b => (b.Subject!, b.Count)).ToList(), Retired: true));
+        var without = d.MemberCount - d.Breakdown.Sum(b => b.Count);
+        if (without > 0) cards.Add(new SubcategoryCard(DepartmentMemberQuery.NoSubcategory, $"No {rules.Label.ToLowerInvariant()}", without, [], Retired: false));
+        return cards;
+    }
+}
+
+/// <summary>
+/// A subcategory card of a department page (Religion → Islamic): its name, its staff and the subjects under it.
+/// <paramref name="Key"/> is the member filter value (the subcategory, or "none" for staff without one).
+/// </summary>
+public sealed record SubcategoryCard(string Key, string Name, int Count, IReadOnlyList<(string Subject, int Count)> Subjects, bool Retired)
+{
+    public bool IsNone => Key == DepartmentMemberQuery.NoSubcategory;
 }
 
 public sealed class DepartmentEditModel
@@ -269,7 +313,7 @@ public sealed class TaskIndexViewModel
     public int? MeId { get; init; }
 
     /// <summary>The list's own URL (the Tasks page, or a member's profile) — used by filters, chips and paging.</summary>
-    public string BaseUrl { get; init; } = "/management/tasks";
+    public string BaseUrl { get; init; } = "/tasks";
 
     /// <summary>The central Tasks page (Daily Operations → Tasks): tabs, totals, staff category and due-date range.</summary>
     public bool IsGlobal => BaseUrl == "/tasks";
@@ -279,7 +323,7 @@ public sealed class TaskIndexViewModel
     public TaskTabCounts? Totals { get; init; }
 
     /// <summary>True on a member's profile: the member column and filter are not shown.</summary>
-    public bool ForMember => Query.MemberId is not null && BaseUrl is not ("/management/tasks" or "/tasks");
+    public bool ForMember => Query.MemberId is not null && !IsGlobal;
 }
 
 /// <summary>New / edit task form: task information, assignment (creator, executor, reviewer), schedule, attachments, notes.</summary>

@@ -1,8 +1,10 @@
 /*
  * Duties (Views/Duties): display helpers only — every status is calculated on the server from the school clock.
  *
- *  - [data-duty-live]: the board reloads itself every 30 seconds (same URL, as a partial), so PENDING → IN PROGRESS →
- *    COVERED / NOT COVERED follow the clock without a page reload. Paused while the tab is hidden or a dialog is open.
+ *  - [data-duty-live]: the board reloads itself every 30 seconds (as a partial, from the attribute's URL — on Duties &
+ *    Audit the board's own address, since the page's address answers with the audit table — or else the page's URL), so
+ *    PENDING → IN PROGRESS → COVERED / NOT COVERED follow the clock without a page reload. Paused while the tab is
+ *    hidden or a dialog is open.
  *  - [data-days]: "Every school day" switch hides / shows the weekday choices.
  */
 (function () {
@@ -13,7 +15,8 @@
 
     function refresh(el) {
         if (doc.hidden || doc.querySelector("dialog[open]")) return;
-        fetch(window.location.pathname + window.location.search, { headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin" })
+        var url = el.getAttribute("data-duty-live") || (window.location.pathname + window.location.search);
+        fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin" })
             .then(function (r) { return r.ok ? r.text() : null; })
             .then(function (html) {
                 if (html === null) return;

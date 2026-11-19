@@ -75,8 +75,16 @@
                     </p>
                     <p class="dsub__staff" dir="auto">@(s.Staff.Count == 0 ? "No staff assigned" : string.Join(", ", s.Staff))</p>
                 }
+                @if (s.Info.Component == SchoolManagement.Web.Services.DutyService.RevisionComponent)
+                {
+                    <p class="dsub__revision">@Ui.Icon("door", "icon--sm")Classroom revision · <strong class="num">@Model.Revisions</strong> @(Model.Revisions == 1 ? "revision record" : "revision records")</p>
+                }
                 <div class="dsub__foot">
                     <a class="btn btn--secondary btn--sm" href="@href">Open @Ui.Icon("arrow-right", "icon--sm")</a>
+                    @if (s.Info.Component == SchoolManagement.Web.Services.DutyService.RevisionComponent && pts.Count > 0)
+                    {
+                        <a class="btn btn--ghost btn--sm" href="/duties/revisions/new?date=@date" data-modal>@Ui.Icon("plus", "icon--sm")Add Revision Record</a>
+                    }
                     <a class="btn btn--ghost btn--sm" href="/duties/create?component=@s.Info.Slug&date=@date" data-modal>@Ui.Icon("plus", "icon--sm")Coverage point</a>
                 </div>
             </li>

@@ -6,8 +6,8 @@ using SchoolManagement.Web.Services;
 namespace SchoolManagement.Tests;
 
 /// <summary>
-/// School Calendar as one continuous run of months: no quarter sections, the start and end of every quarter highlighted
-/// on its date and listed under its month, and each month's events and milestones in date order.
+/// School Calendar as one continuous run of months (from the quarters' dates): no quarter sections, each month listing
+/// only its events in date order, no quarter milestone lines or flags and no dots under the dates.
 /// </summary>
 [Collection("db")]
 public sealed class SchoolCalendarLayoutTests(DbFixture fx)
@@ -51,7 +51,7 @@ public sealed class SchoolCalendarLayoutTests(DbFixture fx)
     }
 
     [Fact]
-    public async Task Months_run_continuously_with_quarter_milestones_and_items_in_date_order()
+    public async Task Months_run_continuously_and_list_only_their_events_in_date_order()
     {
         var y = await YearAsync();
         await using var db = fx.NewContext();
@@ -60,35 +60,25 @@ public sealed class SchoolCalendarLayoutTests(DbFixture fx)
         // One continuous run of whole months: August 2051 to July 2052, each once, in order.
         Assert.Equal(Enumerable.Range(0, 12).Select(i => new DateOnly(2051, 8, 1).AddMonths(i)), page.Months.Select(m => m.Month));
 
-        // Every quarter's first and last day, under its own month; January and April hold an end and a start.
-        string[] Labels(int year, int month) => page.Months.Single(m => m.Month == new DateOnly(year, month, 1)).Milestones.Select(x => x.Label).ToArray();
-        Assert.Equal(["Start of Q1"], Labels(2051, 8));
-        Assert.Equal(["End of Q1"], Labels(2051, 10));
-        Assert.Equal(["Start of Q2"], Labels(2051, 11));
-        Assert.Equal(["End of Q2", "Start of Q3"], Labels(2052, 1));
-        Assert.Equal(["End of Q3", "Start of Q4"], Labels(2052, 4));
-        Assert.Equal(["End of Q4"], Labels(2052, 7));
-        Assert.Equal(8, page.Months.Sum(m => m.Milestones.Count()));
-        Assert.Empty(Labels(2051, 9));
+        // Quarter starts and ends are not event lines: August (Q1 starts on the 1st) lists nothing.
+        Assert.Empty(page.Months.Single(m => m.Month == new DateOnly(2051, 8, 1)).Rows);
 
-        // January in date order: concert (5th), end of Q2 (8th), start of Q3 (9th), sports day (20th) — not the printed order.
+        // January in date order: concert (5th), sports day (20th) — not the printed order; nothing for the quarter change.
         var january = page.Months.Single(m => m.Month == new DateOnly(2052, 1, 1));
-        Assert.Equal(["Winter concert", "End of Q2", "Start of Q3", "Sports day"],
-            january.Items.Select(i => i.Milestone?.Label ?? i.Row!.Event.Title).ToArray());
+        Assert.Equal(["Winter concert", "Sports day"], january.Rows.Select(r => r.Event.Title).ToArray());
 
-        // The milestone dates carry the milestone in the grid; a printed colour on the same date is kept.
+        // A printed colour on a date is kept (the 9th, also the start of Q3, is only its yellow).
         var days = january.Weeks.SelectMany(w => w).Where(d => d.InMonth).ToDictionary(d => d.Date);
-        Assert.Equal("End of Q2", Assert.Single(days[new(2052, 1, 8)].Milestones).Label);
-        var start = days[new(2052, 1, 9)];
-        Assert.Equal(("Start of Q3", CalendarColor.Yellow), (Assert.Single(start.Milestones).Label, start.Color));
-        Assert.All(days.Values.Where(d => d.Date.Day is not (8 or 9)), d => Assert.Empty(d.Milestones));
+        Assert.Equal(CalendarColor.Yellow, days[new(2052, 1, 9)].Color);
+        Assert.Equal(CalendarColor.None, days[new(2052, 1, 8)].Color);
 
-        // Events keep their months: a multi-month event under its month, continued in the next; undated under its month;
-        // hidden ones are listed separately, never lost.
+        // Events keep their months: a multi-month event is listed once, under its month (not repeated in the next, whose
+        // dates still carry it); undated under its month; hidden ones are listed separately, never lost.
         var october = page.Months.Single(m => m.Month == new DateOnly(2051, 10, 1)).Rows.ToList();
-        var november = page.Months.Single(m => m.Month == new DateOnly(2051, 11, 1)).Rows.ToList();
+        var novemberMonth = page.Months.Single(m => m.Month == new DateOnly(2051, 11, 1));
         Assert.Contains(october, r => r.Event.Id == y.Midterm && !r.Continuation);
-        Assert.Contains(november, r => r.Event.Id == y.Midterm && r.Continuation);
+        Assert.DoesNotContain(novemberMonth.Rows, r => r.Event.Id == y.Midterm);
+        Assert.Contains("Midterm week", novemberMonth.Weeks.SelectMany(w => w).Single(d => d.Date == new DateOnly(2051, 11, 3)).Events);
         Assert.Contains(page.Months.Single(m => m.Month == new DateOnly(2052, 3, 1)).Rows, r => r.Event.Id == y.Undated);
         Assert.DoesNotContain(page.Months.SelectMany(m => m.Rows), r => r.Event.Id == y.Hidden);
         Assert.Contains(page.Unplaced, r => r.Event.Id == y.Hidden);
@@ -109,15 +99,24 @@ public sealed class SchoolCalendarLayoutTests(DbFixture fx)
         Assert.DoesNotContain("sc-quarter", html);
         Assert.DoesNotContain("sc-qnav", html);
         Assert.Equal(12, Regex.Matches(html, "<article class=\"sc-month\"").Count);
+        // No quarter milestone lines or flags, and no dots under the dates.
         foreach (var label in new[] { "Start of Q1", "End of Q1", "Start of Q2", "End of Q2", "Start of Q3", "End of Q3", "Start of Q4", "End of Q4" })
-            Assert.Equal(1, Regex.Matches(html, $">{label}</span>").Count);
-        Assert.Equal(4, Regex.Matches(html, "sc-day__flag sc-day__flag--start\">Q").Count);
-        Assert.Equal(4, Regex.Matches(html, "sc-day__flag sc-day__flag--end\">Q").Count);
+            Assert.DoesNotContain(label, html);
+        Assert.DoesNotContain("sc-day__flag", html);
+        Assert.DoesNotContain("sc-ms", html);
+        Assert.DoesNotContain("sc-day__dot", html);
         Assert.DoesNotContain("sc-legend", html);                                       // no key above the months
         Assert.DoesNotContain("Start of a quarter", html);
 
-        // Every milestone opens its quarter's dates; every event opens its edit form, which still loads.
-        foreach (var q in y.QuarterIds) Assert.Contains($"href=\"/school-calendar/quarters/{q}/edit\" data-modal title=\"Change the dates", html);
+        // No Quarters bar above the months; the quarters themselves are kept and their dates still open and save.
+        Assert.DoesNotContain("sc-qlink", html);
+        Assert.DoesNotContain(">Quarters<", html);
+        foreach (var q in y.QuarterIds)
+        {
+            Assert.DoesNotContain($"/school-calendar/quarters/{q}/edit", html);
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/school-calendar/quarters/{q}/edit")).StatusCode);
+        }
+        // Every event opens its edit form, which still loads.
         foreach (var id in new[] { y.Concert, y.Midterm, y.Sports, y.Undated })
         {
             Assert.Contains($"/school-calendar/events/{id}/edit", html);

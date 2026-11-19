@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
 
@@ -25,13 +26,46 @@ public sealed class DutyListViewModel
     public SubDutyView? Sub { get; init; }
     public MainDutyView? Main { get; init; }
     public IReadOnlyList<DutyReportView> ReportHistory { get; init; } = [];
+
+    /// <summary>Morning Revision: the day's revision records (class, teacher, lesson, entry and exit times).</summary>
+    public IReadOnlyList<RevisionRow> Revisions { get; init; } = [];
+    public bool IsRevision => Info.Component == DutyService.RevisionComponent;
 }
 
-/// <summary>Duties landing page: every Main Duty of the day with its Sub-Duties, plus Activities.</summary>
+/// <summary>
+/// Duties & Audit → Duties (the top of the page): every Main Duty of the day with its Sub-Duties, plus Activities, and the
+/// Main Duty selected from its card with its full board (status, coverage, Sub-Duties and their management pages).
+/// </summary>
 public sealed class DutyHubViewModel
 {
     public required DutyDay Day { get; init; }
     public int Activities { get; init; }
+
+    /// <summary>The Main Duty whose card is selected (its details are shown below the cards); null = none selected.</summary>
+    public DutyType? Selected { get; init; }
+    public MainDutyPageViewModel? Details { get; init; }
+
+    /// <summary>The unified page's address of a card (selects it and shows its details).</summary>
+    public string CardHref(DutyType type) => DutiesAudit.For(DutyComponents.TypeSlug(type), SchoolWeek.Iso(Day.Date));
+
+    /// <summary>The address the board reloads itself from (same day and selection).</summary>
+    public string LiveUrl => $"/duties/overview?date={SchoolWeek.Iso(Day.Date)}{(Selected is { } t ? "&duty=" + DutyComponents.TypeSlug(t) : "")}";
+}
+
+/// <summary>Duties & Audit: the one page for managing duties (top) and auditing their execution (below).</summary>
+public static class DutiesAudit
+{
+    public const string Url = "/duties/audit";
+    public const string Title = "Duties & Audit";
+
+    /// <summary>The unified page with a Main Duty's card selected (or none), on a date (today when null).</summary>
+    public static string For(string? dutySlug, string? date)
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(dutySlug)) query.Add("duty=" + Uri.EscapeDataString(dutySlug));
+        if (!string.IsNullOrWhiteSpace(date)) query.Add("date=" + Uri.EscapeDataString(date));
+        return Url + (query.Count == 0 ? "" : "?" + string.Join("&", query)) + (string.IsNullOrWhiteSpace(dutySlug) ? "" : "#duty-details");
+    }
 }
 
 /// <summary>A Main Duty page: its schedule, status, Sub-Duties and the coverage report.</summary>
@@ -39,6 +73,9 @@ public sealed class MainDutyPageViewModel
 {
     public required DutyDay Day { get; init; }
     public required MainDutyView Main { get; init; }
+
+    /// <summary>Morning Duty: the day's Morning Revision records (shown on the Morning Revision card).</summary>
+    public int Revisions { get; init; }
 }
 
 public sealed class DutyDepartmentsViewModel
@@ -118,6 +155,46 @@ public sealed class DutyDetailsViewModel
     public required IReadOnlyList<BackupResponseRow> History { get; init; }
     public IReadOnlyList<DutyAuditRow> AuditTrail { get; init; } = [];
     public IReadOnlyList<DutyStaffRow> Staff { get; init; } = [];
+
+    /// <summary>Morning Revision sessions: the revision records of this session.</summary>
+    public IReadOnlyList<RevisionRow> Revisions { get; init; } = [];
+}
+
+/// <summary>
+/// A list of Morning Revision records: the day's (Morning Revision page, every session; <paramref name="DutyId"/> null) or one
+/// session's (its details). <paramref name="CanAdd"/> = there is a session to add a record to.
+/// </summary>
+public sealed record RevisionListModel(IReadOnlyList<RevisionRow> Rows, DateOnly Date, int? DutyId, bool ShowSession, bool CanAdd);
+
+/// <summary>Add / edit a Morning Revision record: the session, the class (an existing class), the teacher, the lesson and the times.</summary>
+public sealed class RevisionFormModel
+{
+    public int? Id { get; set; }
+    public DateOnly Date { get; set; }
+
+    [Display(Name = "Session")]
+    public int? DutyAssignmentId { get; set; }
+
+    [Display(Name = "Class")]
+    public int? SchoolClassId { get; set; }
+
+    [Display(Name = "Teacher")]
+    public int? TeacherId { get; set; }
+
+    [Display(Name = "Lesson reviewed")]
+    [StringLength(MorningRevisionRecord.LessonMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    public string? Lesson { get; set; }
+
+    [Display(Name = "Entry time")]
+    public TimeOnly? EntryTime { get; set; }
+
+    [Display(Name = "Exit time")]
+    public TimeOnly? ExitTime { get; set; }
+
+    public RevisionFormOptions Options { get; set; } = new([], [], []);
+    public bool IsEdit => Id is > 0;
+
+    public RevisionInput ToInput() => new(DutyAssignmentId, SchoolClassId, TeacherId, Lesson, EntryTime, ExitTime);
 }
 
 public sealed class DutyFormModel

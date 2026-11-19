@@ -1,0 +1,73 @@
+@model RevisionListModel
+@*
+    Morning Revision records: which teacher revised which lesson with which class, and when they entered and left.
+    Used on the Morning Revision page (the day's records, every session) and in a session's details (its records).
+    A time that was not recorded shows "Not recorded"; records never change the session's coverage.
+*@
+@{
+    var date = SchoolWeek.Iso(Model.Date);
+    var addHref = $"/duties/revisions/new?date={date}{(Model.DutyId is { } did ? $"&dutyId={did}" : "")}";
+    var back = $"{DutyComponents.Href(DutyComponents.Get(SchoolManagement.Web.Services.DutyService.RevisionComponent))}?date={date}";
+}
+<section class="card revisions" aria-labelledby="revisions-title-@(Model.DutyId ?? 0)">
+    <div class="revisions__head">
+        <div>
+            <h2 class="revisions__title" id="revisions-title-@(Model.DutyId ?? 0)">@Ui.Icon("door", "icon--sm")Revision records</h2>
+            <p class="revisions__sub">Classroom revision before the first lesson: the class, the teacher, the lesson reviewed and when the teacher entered and left. These records are kept with the session's audit trail; they do not change its coverage.</p>
+        </div>
+        @if (Model.CanAdd)
+        {
+            <a class="btn btn--primary btn--sm" href="@addHref" data-modal>@Ui.Icon("plus", "icon--sm")Add Revision Record</a>
+        }
+    </div>
+    @if (Model.Rows.Count == 0)
+    {
+        <div class="empty empty--sm">
+            <span class="empty__icon">@Ui.Icon("door")</span>
+            <p class="empty__title">No revision records yet</p>
+            <p class="empty__text">@(Model.CanAdd ? "Add a record for each teacher who revised a lesson with a class." : "Add a coverage point for this Sub-Duty on this day first; revision records belong to a session.")</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack revisions__table">
+                <thead>
+                    <tr>
+                        <th scope="col">Class</th>
+                        <th scope="col">Teacher</th>
+                        <th scope="col">Lesson reviewed</th>
+                        <th scope="col">Entry time</th>
+                        <th scope="col">Exit time</th>
+                        @if (Model.ShowSession) { <th scope="col">Session</th> }
+                        <th scope="col"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <td data-label="Class"><span class="badge badge--class">@r.ClassName</span></td>
+                            <td data-label="Teacher" dir="auto">@r.TeacherName</td>
+                            <td data-label="Lesson reviewed" dir="auto">@r.Lesson</td>
+                            <td data-label="Entry time" class="num @(r.EntryTime is null ? "faint" : "")">@SchoolManagement.Web.Services.DutyService.Hm(r.EntryTime)</td>
+                            <td data-label="Exit time" class="num @(r.ExitTime is null ? "faint" : "")">@SchoolManagement.Web.Services.DutyService.Hm(r.ExitTime)</td>
+                            @if (Model.ShowSession) { <td data-label="Session" class="muted" dir="auto">@r.Session</td> }
+                            <td class="col-actions">
+                                <div class="row-actions">
+                                    <a class="icon-btn icon-btn--primary" href="/duties/revisions/@r.Id/edit" data-modal title="Edit" aria-label="Edit the revision record of @r.ClassName (@r.TeacherName)">@Ui.Icon("pencil")</a>
+                                    <form action="/duties/revisions/@r.Id/delete" method="post" data-ajax-form
+                                          data-confirm="The record of @r.TeacherName in @r.ClassName is removed; the removal is kept in the session's audit trail." data-confirm-title="Remove this revision record?" data-confirm-button="Remove">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="back" value="@back" />
+                                        <button class="icon-btn icon-btn--danger" type="submit" title="Remove" aria-label="Remove the revision record of @r.ClassName (@r.TeacherName)">@Ui.Icon("trash")</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

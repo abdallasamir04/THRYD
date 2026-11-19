@@ -1,0 +1,63 @@
+@model FloorAuditUser
+@*
+    Who is recording in Floor Audit, what they may do, and — right here — the way to choose "Working as" (the
+    application's existing identity, a cookie on this browser). Every inspection and movement keeps that person's
+    name; the services check the permissions of whoever is chosen, whatever the page shows.
+*@
+@inject IFloorAuditAccessService Access
+@{
+    var options = await Access.IdentityOptionsAsync();
+    var returnUrl = Context.Request.Path + Context.Request.QueryString;
+    var canRecord = Model.IsManager || Model.CanInspectAny || Model.CanRecordAnyMovement;
+    var open = !Model.HasIdentity || !canRecord;
+}
+<section class="fa-who @(open ? "fa-who--attention" : "")" aria-label="Who is recording">
+    <div class="fa-who__text">
+        <span class="fa-who__icon">@Ui.Icon(canRecord ? "user" : "lock")</span>
+        <div>
+            @if (!Model.HasIdentity)
+            {
+                <strong>View only — nobody is chosen under “Working as”.</strong>
+                <span>Floor Audit records every inspection and student movement with the person who made it, so recording needs a name. Choose yourself below: Management Team members are Floor Audit managers; floor inspectors can audit their floors and record student movements.</span>
+            }
+            else if (!canRecord)
+            {
+                <strong>View only — @Model.Name has no Floor Audit role.</strong>
+                <span>Choose another person below, or ask a Floor Audit manager to give @Model.Name inspector access (Manage → Access).</span>
+            }
+            else
+            {
+                <strong>Recording as <span dir="auto">@Model.Name</span></strong>
+                <span>@Model.RoleLabel@(Model.IsManager ? " — can inspect every floor, record student movements, correct records and manage the configuration." : Model.CanRecordAnyMovement ? " — can inspect the assigned floors and record student movements." : " — can inspect the assigned floors.")</span>
+            }
+        </div>
+    </div>
+    <details class="fa-who__pick" @(open ? "open" : null)>
+        <summary>@Ui.Icon("users", "icon--sm")@(Model.HasIdentity ? "Change “Working as”" : "Choose “Working as”")</summary>
+        <form method="post" action="/operator" class="fa-who__form">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnUrl" value="@returnUrl" />
+            <label class="visually-hidden" for="fa-who-staff">Working as</label>
+            <select class="select" id="fa-who-staff" name="staffId" data-searchable required>
+                <option value="">Choose a person…</option>
+                @if (options.Managers.Count > 0)
+                {
+                    <optgroup label="Floor Audit managers">
+                        @foreach (var o in options.Managers) { <option value="@o.Id" selected="@(Model.StaffId == o.Id)" data-note="@o.Role">@o.Name</option> }
+                    </optgroup>
+                }
+                @if (options.Inspectors.Count > 0)
+                {
+                    <optgroup label="Floor inspectors">
+                        @foreach (var o in options.Inspectors) { <option value="@o.Id" selected="@(Model.StaffId == o.Id)" data-note="@o.Role">@o.Name</option> }
+                    </optgroup>
+                }
+                <optgroup label="Other staff (view only)">
+                    @foreach (var o in options.Others) { <option value="@o.Id" selected="@(Model.StaffId == o.Id)" data-note="@o.Role">@o.Name</option> }
+                </optgroup>
+            </select>
+            <button class="btn btn--primary btn--sm" type="submit">@Ui.Icon("check", "icon--sm")Work as this person</button>
+        </form>
+        <p class="hint">Chosen on this browser only, and not verified (the application has no sign-in yet).</p>
+    </details>
+</section>

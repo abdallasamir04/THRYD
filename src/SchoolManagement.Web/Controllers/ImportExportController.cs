@@ -20,6 +20,7 @@ public class ImportExportController(
     {
         var data = await dashboard.GetAsync(ct);
         var taskCounts = await tasks.CountsAsync(null, ct);
+        var allClasses = await classes.ListAsync(null, null, ct);
         return View(new ImportExportViewModel
         {
             Students = data.TotalStudents,
@@ -27,6 +28,11 @@ public class ImportExportController(
             ActiveClasses = data.ActiveClasses,
             Tasks = taskCounts.Total,
             OpenTasks = taskCounts.Open,
+            Classes = allClasses,
+            GradeLevels = allClasses.Select(c => ImportService.ClassIdentity(c.Name)).Where(i => i is not null)
+                .Select(i => (i!.Value.Stage, i.Value.Grade)).Distinct()
+                .OrderBy(g => g.Stage == ClassStages.PreKCode ? 0 : g.Stage == "KG" ? 1 : 2).ThenBy(g => g.Grade)
+                .Select(g => ImportService.GradeLevelLabel(g.Stage, g.Grade)).ToList(),
             Kind = Enum.IsDefined(kind) ? kind : ImportKind.Students,
             Error = TempData["ImportError"] as string,
         });
@@ -43,6 +49,17 @@ public class ImportExportController(
             : File(excel.Tasks(rows), StudentsController.ExcelContentType, name + ".xlsx");
     }
 
+    /// <summary>Import / Export → Classes → Export: every class (active and inactive) with its own capacity and current students, as .xlsx or .csv. Read-only.</summary>
+    [HttpGet("classes/export")]
+    public async Task<IActionResult> ExportClasses(string? format, CancellationToken ct)
+    {
+        var rows = await classes.ListAsync(null, null, ct);
+        var name = $"THRYD_Classes_{SchoolTime.Today:yyyy-MM-dd}";
+        return format == "csv"
+            ? File(excel.ClassesCsv(rows), "text/csv; charset=utf-8", name + ".csv")
+            : File(excel.Classes(rows), StudentsController.ExcelContentType, name + ".xlsx");
+    }
+
     /// <summary>
     /// Dashboard → Import from Excel: choose Students or Staff (dialog, or a page without JavaScript). Each choice opens
     /// the existing import of that kind (template, upload, column mapping, preview, duplicates, report) — never a second one.
@@ -57,6 +74,7 @@ public class ImportExportController(
         {
             ImportKind.Students => excel.StudentTemplate(await classes.OptionsAsync(null, ct)),
             ImportKind.Tasks => excel.TaskTemplate(await tasks.StaffAsync(ct), await tasks.DepartmentsAsync(ct)),
+            ImportKind.Classes => excel.ClassTemplate(await classes.ListAsync(null, null, ct)),
             _ => excel.TeacherTemplate(),
         };
         return File(bytes, StudentsController.ExcelContentType, $"{kind.ToString().ToLowerInvariant()}-import-template.xlsx");
@@ -139,7 +157,7 @@ public class ImportExportController(
             var result = await imports.CommitAsync(session, ct);
             Toast(result.Imported == 0
                 ? "Nothing was imported. See the rows below."
-                : $"{result.Imported} {ImportDefinitions.Noun(session.Kind)}{(result.Imported == 1 ? "" : "s")} imported.",
+                : $"{result.Imported} {(result.Imported == 1 ? ImportDefinitions.Noun(session.Kind) : ImportDefinitions.Nouns(session.Kind))} imported.",
                 result.Imported == 0 ? "warning" : "success");
         }
         finally

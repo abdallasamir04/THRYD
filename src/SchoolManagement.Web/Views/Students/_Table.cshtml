@@ -61,7 +61,11 @@ else
                 <tr>
                     <th scope="col" class="col-num">#</th>
                     <th scope="col" aria-sort="@(q.Sort == "name" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "name", "Student name", q.Sort, q.Dir)</th>
-                    <th scope="col" aria-sort="@(q.Sort == "class" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "class", "Class", q.Sort, q.Dir)</th>
+                    <th scope="col" class="col-rel" aria-sort="@(q.Sort == "rel" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "rel", "REL", q.Sort, q.Dir)</th>
+                    @if (Model.ShowSecondLanguage)
+                    {
+                    <th scope="col" class="col-lang" aria-sort="@(q.Sort == "lang" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "lang", "Second Language", q.Sort, q.Dir)</th>
+                    }
                     <th scope="col" aria-sort="@(q.Sort == "created" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "created", "Added", q.Sort, q.Dir)</th>
                     <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
                 </tr>
@@ -70,21 +74,24 @@ else
                 @{ var n = r.FirstItem; }
                 @foreach (var s in r.Items)
                 {
-                    <tr>
+                    // The official list's row background (on the whole row) and name colour (on the name only), as printed.
+                    var highlight = StudentMarks.SafeColor(s.HighlightColor);
+                    var nameColor = StudentMarks.SafeColor(s.NameColor);
+                    <tr class="@(highlight is null ? null : "student-hl")" style="@(highlight is null ? null : $"--student-hl:{highlight}")">
                         <td class="col-num">@(n++)</td>
                         <td data-label="Student">
                             <div class="person">
                                 <span class="avatar avatar--@Ui.Tone(s.FullName)" aria-hidden="true">@Ui.Initials(s.FullName)</span>
-                                <span class="person__name" dir="auto"><a href="/students/profile/@s.Id">@s.FullName</a></span>
+                                <span class="person__name @(nameColor is null ? null : "student-name-color")" dir="auto" style="@(nameColor is null ? null : $"--student-name:{nameColor}")"><a href="/students/profile/@s.Id">@s.FullName</a></span>
+                                <partial name="_StudentMarks" model="s" />
                             </div>
                         </td>
-                        <td data-label="Class">
-                            <span class="badge badge--class">@s.ClassName</span>
-                            @if (!s.ClassActive)
-                            {
-                                <span class="badge badge--warning" title="This class is inactive">Inactive class</span>
-                            }
-                        </td>
+                        <td data-label="REL" class="col-rel">@(s.Religion ?? "—")</td>
+                        @* Shown only when some student in these results has a second language (see ShowSecondLanguage). *@
+                        @if (Model.ShowSecondLanguage)
+                        {
+                            <td data-label="Second Language" class="col-lang" title="@(s.SecondLanguage is { } code ? $"Sec Lang: {code}" : null)">@(s.SecondLanguageName ?? "—")</td>
+                        }
                         <td data-label="Added" class="muted nowrap" title="@Ui.DateTime(s.CreatedAt)">@Ui.Date(s.CreatedAt)</td>
                         <td class="col-actions">
                             <div class="row-actions">

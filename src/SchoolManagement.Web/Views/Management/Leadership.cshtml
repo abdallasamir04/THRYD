@@ -31,8 +31,8 @@
 <ul class="kpis leadership-kpis" aria-label="School Leadership totals">
     <li><a class="kpi kpi--blue" href="#members" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Members</p><p class="kpi__value">@Model.AllMembers.Count</p><p class="kpi__meta">@(Model.Unpositioned == 0 ? "All hold a position" : $"{Model.Unpositioned} without a position")</p></a></li>
     <li><a class="kpi @(Model.Vacant > 0 ? "kpi--full" : "kpi--ok")" href="#members" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("crown")</span><p class="kpi__label">Positions filled</p><p class="kpi__value">@Model.Filled<span class="faint" style="font-size:1rem"> / @Model.Positions.Count</span></p><p class="kpi__meta">@(Model.Vacant == 0 ? "No vacancies" : Ui.Plural(Model.Vacant, "vacant position", "vacant positions"))</p></a></li>
-    <li><a class="kpi kpi--teal" href="/management/tasks?status=open" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("list")</span><p class="kpi__label">Open tasks</p><p class="kpi__value">@t.Open</p><p class="kpi__meta">@t.InProgress in progress · @t.OnHold on hold</p></a></li>
-    <li><a class="kpi @(t.Overdue > 0 ? "kpi--full" : "kpi--ok")" href="/management/tasks?status=overdue" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("alert-circle")</span><p class="kpi__label">Overdue</p><p class="kpi__value">@t.Overdue</p><p class="kpi__meta">@t.DueToday due today · @t.Completed done</p></a></li>
+    <li><a class="kpi kpi--teal" href="/tasks?status=open" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("list")</span><p class="kpi__label">Open tasks</p><p class="kpi__value">@t.Open</p><p class="kpi__meta">@t.InProgress in progress · @t.OnHold on hold</p></a></li>
+    <li><a class="kpi @(t.Overdue > 0 ? "kpi--full" : "kpi--ok")" href="/tasks?status=overdue" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("alert-circle")</span><p class="kpi__label">Overdue</p><p class="kpi__value">@t.Overdue</p><p class="kpi__meta">@t.DueToday due today · @t.Completed done</p></a></li>
 </ul>
 
 <section class="card leadership" aria-labelledby="sl-title">

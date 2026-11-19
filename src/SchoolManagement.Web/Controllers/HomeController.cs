@@ -24,7 +24,7 @@ public class HomeController(
         var byType = await duties.SectionCoverageAsync(today, ct);
         var coverage = DutyComponents.Types
             .Select(t => new DutyCoverage(DutyComponents.TypeName(t).Replace(" Duty", ""),
-                $"/duties?type={DutyComponents.TypeSlug(t)}&date={SchoolWeek.Iso(today)}", byType[t], "section", "sections"))
+                DutiesAudit.For(DutyComponents.TypeSlug(t), SchoolWeek.Iso(today)), byType[t], "section", "sections"))
             .ToList();
         var sessions = await activities.SessionsOnAsync(today, ct);
         coverage.Add(new DutyCoverage("Activities", $"/duties/activities?date={SchoolWeek.Iso(today)}#sessions", sessions.Sections, "activity", "activities"));

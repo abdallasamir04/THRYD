@@ -1,0 +1,81 @@
+@model MovementPage
+@*
+    Student Access — live board: every student outside their classroom now (open movements, whatever day they left),
+    with the time outside ticking in the browser, Mark Returned, today's figures, filters and the report of the board.
+    Returned and voided movements are in Movement History.
+*@
+@{
+    ViewData["Title"] = "Student Access · Floor Audit";
+    ViewData["Nav"] = "FloorAudit";
+    var f = Model.Filter;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit">Floor Audit</a></li><li>Student Access</li></ol>
+        <h1 class="page-title">Student Access</h1>
+        <p class="page-sub">Students outside their classrooms right now, from the moment they leave until they are marked returned. Times come from the server; attendance is never changed.</p>
+    </div>
+    <div class="page-head__actions">
+        <partial name="_QuickActions" model='(Model.User, f.FloorId, (string?)null)' />
+    </div>
+</div>
+
+<partial name="_Tabs" model='"movements"' />
+<partial name="_Identity" model="Model.User" />
+
+<nav class="segmented fa-subtabs" aria-label="Student Access">
+    <a href="/floor-audit/movements" aria-current="true">@Ui.Icon("users", "icon--sm")Outside now <span class="count">@Model.Today.Outside</span></a>
+    <a href="/floor-audit/movements/history">@Ui.Icon("clock", "icon--sm")Movement History</a>
+</nav>
+
+<section class="card table-card fa-table-card" aria-label="Students outside their classrooms">
+    <form class="toolbar toolbar--wrap fa-filters" action="/floor-audit/movements" method="get" role="search" data-list-filter="#movement-list">
+        <div class="field toolbar__filter">
+            <label class="label" for="m-student">Search student</label>
+            <input class="input" type="search" id="m-student" name="student" value="@f.Student" placeholder="Name" dir="auto" autocomplete="off" />
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="m-floor">Floor</label>
+            <select class="select" id="m-floor" name="floor">
+                <option value="">All floors</option>
+                @foreach (var (id, name) in Model.Floors) { <option value="@id" selected="@(f.FloorId == id)">@name</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="m-class">Class</label>
+            <select class="select" id="m-class" name="class" data-searchable>
+                <option value="">All classes</option>
+                @foreach (var (id, name) in Model.Classes) { <option value="@id" selected="@(f.ClassId == id)">@name</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="m-dest">Destination</label>
+            <select class="select" id="m-dest" name="destination">
+                <option value="">All destinations</option>
+                @foreach (var d in Model.Destinations) { <option value="@d" selected="@(f.Destination == d)">@d</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="m-status">Status</label>
+            <select class="select" id="m-status" name="status">
+                <option value="">Outside and overdue</option>
+                <option value="overdue" selected="@(f.Status == "overdue")">Overdue only (over @Model.OverdueMinutes min)</option>
+            </select>
+        </div>
+        <div class="fa-filters__report">
+            <partial name="_Download" model='new DownloadLink("/floor-audit/movements/pdf", "PDF", Small: true)' />
+            <a class="btn btn--secondary btn--sm" href="/floor-audit/movements/excel@(Context.Request.QueryString)" data-download="/floor-audit/movements/excel" download>@Ui.Icon("sheet", "icon--sm")Excel</a>
+        </div>
+        <input type="hidden" name="pageSize" value="@f.PageSize" />
+        <input type="hidden" name="page" value="" />
+        <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+    </form>
+    <div id="movement-list" data-ajax-list data-fa-autorefresh aria-live="polite">
+        <partial name="_MovementList" model="Model" />
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/floor-audit.js" asp-append-version="true"></script>
+}

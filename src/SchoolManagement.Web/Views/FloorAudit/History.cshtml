@@ -1,0 +1,87 @@
+@model InspectionHistoryPage
+@*
+    Floor Audit History: every inspection with its recorded answers, filtered by date, floor, area, session, round,
+    inspector and status. The Floor Audit Report (PDF / Excel) exports exactly these filters.
+*@
+@{
+    ViewData["Title"] = "Audit History · Floor Audit";
+    ViewData["Nav"] = "FloorAudit";
+    var f = Model.Filter;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit">Floor Audit</a></li><li>Audit History</li></ol>
+        <h1 class="page-title">Audit History</h1>
+        <p class="page-sub">Every area inspection as it was recorded: the floor and checklist at the time, scheduled and actual times, inspector, answers and issues.</p>
+    </div>
+    <div class="page-head__actions">
+        <partial name="_Download" model='new DownloadLink("/floor-audit/history/pdf", "Floor Audit Report")' />
+        <a class="btn btn--secondary" href="/floor-audit/history/excel@(Context.Request.QueryString)" data-download="/floor-audit/history/excel" download>@Ui.Icon("sheet")Excel</a>
+    </div>
+</div>
+
+<partial name="_Tabs" model='"history"' />
+
+<section class="card table-card fa-table-card" aria-label="Inspections">
+    <form class="toolbar toolbar--wrap fa-filters" action="/floor-audit/history" method="get" role="search" data-list-filter="#history-list">
+        <div class="field toolbar__date"><label class="label" for="h-from">From</label><input class="input picker" type="date" id="h-from" name="from" value="@SchoolWeek.Iso(f.From)" data-datepicker /></div>
+        <div class="field toolbar__date"><label class="label" for="h-to">To</label><input class="input picker" type="date" id="h-to" name="to" value="@SchoolWeek.Iso(f.To)" data-datepicker /></div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-floor">Floor</label>
+            <select class="select" id="h-floor" name="floor">
+                <option value="">All floors</option>
+                @foreach (var (id, name) in Model.Floors) { <option value="@id" selected="@(f.FloorId == id)">@name</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-area">Area</label>
+            <select class="select" id="h-area" name="area" data-searchable>
+                <option value="">All areas</option>
+                @foreach (var g in Model.Areas.GroupBy(a => a.FloorName))
+                {
+                    <optgroup label="@g.Key">
+                        @foreach (var a in g) { <option value="@a.Id" selected="@(f.AreaId == a.Id)" data-note="@a.TypeLabel">@a.Name@(a.IsActive ? "" : " (inactive)")</option> }
+                    </optgroup>
+                }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-slot">Session</label>
+            <select class="select" id="h-slot" name="slot">
+                <option value="">All sessions</option>
+                @foreach (var (id, name) in Model.Sessions) { <option value="@id" selected="@(f.SlotId == id)">@name</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-round">Round</label>
+            <select class="select" id="h-round" name="round">
+                <option value="">All rounds</option>
+                @for (var r = 1; r <= FloorAuditRounds.Count; r++) { <option value="@r" selected="@(f.Round == r)">@FloorAuditRounds.Label(r) (+@FloorAuditRounds.OffsetMinutes[r - 1] min)</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-insp">Inspector</label>
+            <select class="select" id="h-insp" name="inspector" data-searchable>
+                <option value="">All inspectors</option>
+                @foreach (var (id, name) in Model.Inspectors) { <option value="@id" selected="@(f.InspectorId == id)">@name</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-status">Status</label>
+            <select class="select" id="h-status" name="status">
+                <option value="">All statuses</option>
+                <option value="completed" selected="@(f.Status == "completed")">Completed</option>
+                <option value="in-progress" selected="@(f.Status == "in-progress")">In progress</option>
+                <option value="issues" selected="@(f.Status == "issues")">Issues found</option>
+                <option value="no-issues" selected="@(f.Status == "no-issues")">Completed without issues</option>
+            </select>
+        </div>
+        <input type="hidden" name="pageSize" value="@f.PageSize" />
+        <input type="hidden" name="page" value="" />
+        <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+    </form>
+    <div id="history-list" data-ajax-list aria-live="polite">
+        <partial name="_HistoryTable" model="Model" />
+    </div>
+</section>

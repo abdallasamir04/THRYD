@@ -303,8 +303,9 @@ public sealed class ClassService(SchoolDbContext db) : IClassService
         return ServiceResult.Ok(entity.Id);
     }
 
+    // Without a capacity the class keeps its own (0 = unchanged): an edit never resets a chosen capacity to the default.
     public Task<ServiceResult> UpdateAsync(int id, string name, int? sortOrder, bool isActive, CancellationToken ct = default) =>
-        UpdateAsync(id, name, sortOrder, SchoolClass.DefaultCapacity, isActive, ct);
+        UpdateAsync(id, name, sortOrder, 0, isActive, ct);
 
     public async Task<ServiceResult> UpdateAsync(int id, string name, int? sortOrder, int capacity, bool isActive, CancellationToken ct = default)
     {

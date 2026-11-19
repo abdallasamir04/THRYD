@@ -26,8 +26,9 @@ public static class DutyComponents
     [
         new(DutyType.Morning, DutyComponent.StudentsArrival, "students-arrival", "Students Arrival Check",
             "Staff on duty while students arrive at school.", "users", false, false, SortOrder: 1),
-        new(DutyType.Morning, DutyComponent.InClassMorning, "in-class-morning", "In-Class Morning",
-            "Staff supervising classes before the first lesson.", "door", true, false, SortOrder: 2),
+        // Formerly "In-Class Morning": same code and slug (links and history unchanged); its records are Morning Revision records.
+        new(DutyType.Morning, DutyComponent.InClassMorning, "in-class-morning", "Morning Revision",
+            "Classroom revision before the first lesson: which teacher revised which lesson with which class, and when they entered and left.", "door", true, false, SortOrder: 2),
         new(DutyType.Morning, DutyComponent.MorningAssembly, "morning-assembly", "Morning Assembly (Line) / Proadcast",
             "Assembly line-up and proadcast duty.", "activity", false, true, SortOrder: 3),
         // Youngest first. Slugs (URLs) and stored component values are unchanged.
@@ -64,7 +65,7 @@ public static class DutyComponents
     {
         DutyType.Midday => ("sun", "Break supervision by stage: Pre-K / KG1, KG2, Lower and Upper Elementary, Middle / High School."),
         DutyType.Dismissal => ("door", "End-of-day duties: students leaving by bus and pickup at the gates."),
-        _ => ("shield-check", "Students arrival check, in-class morning and the morning assembly line-up."),
+        _ => ("shield-check", "Students arrival check, morning revision in the classrooms and the morning assembly line-up."),
     };
 
     public static readonly DutyType[] Types = [DutyType.Morning, DutyType.Midday, DutyType.Dismissal];
@@ -319,6 +320,15 @@ public interface IDutyService
     /// <summary>Audit notes, issues and follow-up. The status is calculated automatically and cannot be set.</summary>
     Task<ServiceResult> UpdateAuditAsync(int id, string? auditNotes, string? issues, bool followUp, CancellationToken ct = default);
     Task<ServiceResult> DeleteAsync(int id, CancellationToken ct = default);
+
+    // Morning Revision records (DutyService.Revisions.cs).
+    Task<IReadOnlyList<RevisionRow>> RevisionsAsync(DateOnly date, CancellationToken ct = default);
+    Task<IReadOnlyList<RevisionRow>> RevisionsForDutyAsync(int dutyAssignmentId, CancellationToken ct = default);
+    Task<RevisionRow?> GetRevisionAsync(int id, CancellationToken ct = default);
+    Task<int> RevisionCountAsync(DateOnly date, CancellationToken ct = default);
+    Task<RevisionFormOptions> RevisionOptionsAsync(DateOnly date, CancellationToken ct = default);
+    Task<ServiceResult> SaveRevisionAsync(int? id, RevisionInput input, CancellationToken ct = default);
+    Task<ServiceResult> DeleteRevisionAsync(int id, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -327,7 +337,7 @@ public interface IDutyService
 /// from the school clock and these records. Every change is validated here, mirrored into DutyStaffAssignments (one row per
 /// person and role) and written to the DutyAudits trail.
 /// </summary>
-public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser, IDutyBoardService? board = null, ISchoolTimeService? schoolTime = null) : IDutyService
+public sealed partial class DutyService(SchoolDbContext db, ICurrentUser currentUser, IDutyBoardService? board = null, ISchoolTimeService? schoolTime = null) : IDutyService
 {
     private readonly IDutyBoardService _board = board ?? new DutyBoardService(db, currentUser, schoolTime);
     private readonly ISchoolTimeService _time = schoolTime ?? SchoolTime.Current;
@@ -637,6 +647,9 @@ public sealed class DutyService(SchoolDbContext db, ICurrentUser currentUser, ID
         var evaluations = await db.StaffFeedback.CountAsync(f => f.DutyStaffAssignment.DutyAssignmentId == id, ct);
         if (evaluations > 0)
             return ServiceResult.Fail("", $"This duty has {evaluations} staff evaluation(s), which are kept as history. Mark it Not Covered or add audit notes instead.");
+        var revisions = await db.MorningRevisions.CountAsync(r => r.DutyAssignmentId == id, ct);
+        if (revisions > 0)
+            return ServiceResult.Fail("", $"This session has {revisions} {DutyComponents.Name(RevisionComponent)} record(s). Remove them first (each removal is kept in the audit trail).");
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         Audit(entity, DutyAuditAction.Deleted, $"Deleted: {entity.Description} ({Times(entity)}).");

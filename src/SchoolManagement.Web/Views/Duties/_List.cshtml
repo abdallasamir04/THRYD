@@ -97,6 +97,11 @@
     }
 }
 
+@if (Model.IsRevision)
+{
+    <partial name="_Revisions" model="new RevisionListModel(Model.Revisions, Model.Date, null, duties.Count > 1, duties.Count > 0)" />
+}
+
 @if (duties.Count == 0)
 {
     <div class="card">

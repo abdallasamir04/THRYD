@@ -1,0 +1,75 @@
+@model (AreaCard Card, FloorPage Page)
+@*
+    A classroom or facility in the selected round: its status, this session's round progress, its latest inspection and
+    open issues. The card opens the inspection (record / continue / view) or, when it cannot be inspected now, its history.
+*@
+@{
+    var (c, p) = Model;
+    var a = c.Area;
+    var s = p.Session;
+    var date = SchoolWeek.Iso(p.Date);
+    var tone = FloorAuditLabels.Tone(c.Status);
+    var inspectUrl = s is null ? null : $"/floor-audit/inspect?area={a.Id}&date={date}&slot={s.SlotId}&round={p.Round}";
+    string? action = null;
+    string? href = null;
+    if (c.InspectionId is { } iid && c.Status is AreaAuditStatus.Completed or AreaAuditStatus.IssuesFound && !c.CanInspect)
+    {
+        action = "View inspection"; href = $"/floor-audit/inspections/{iid}";
+    }
+    else if (c.CanInspect)
+    {
+        action = c.Status switch
+        {
+            AreaAuditStatus.InProgress => "Continue Inspection",
+            AreaAuditStatus.Completed or AreaAuditStatus.IssuesFound => "View / correct",
+            _ => "Record Audit",
+        };
+        href = inspectUrl;
+    }
+    else if (c.InspectionId is { } id2)
+    {
+        action = "View inspection"; href = $"/floor-audit/inspections/{id2}";
+    }
+    // Why "Record Audit" is not available right now (shown on a disabled button).
+    string? blocked = null;
+    if (href is null && s is not null && c.Required)
+    {
+        var started = FloorAuditSchedule.HasStarted(s, p.Round, p.Date, SchoolWeek.Today, TimeOnly.FromDateTime(p.Now));
+        blocked = !p.User.HasIdentity ? "Choose “Working as” first (above)."
+            : !p.User.CanInspect(a.FloorId) ? "You are not an inspector of this floor."
+            : !started ? $"{FloorAuditRounds.Label(p.Round)} starts at {FloorAuditLabels.Time(s.RoundTime(p.Round))}." : null;
+    }
+}
+<article class="fa-area fa-area--@tone @(c.Required ? "" : "is-off")" aria-labelledby="fa-area-@a.Id">
+    <div class="fa-area__head">
+        <span class="fa-area__icon">@Ui.Icon(a.Icon)</span>
+        <div class="fa-area__title">
+            <h3 id="fa-area-@a.Id">
+                @if (href is not null) { <a href="@href" data-modal dir="auto">@a.Name</a> }
+                else { <a href="/floor-audit/areas/@a.Id" dir="auto">@a.Name</a> }
+            </h3>
+            <span class="fa-area__type">@a.TypeLabel · @a.FloorName</span>
+        </div>
+        <partial name="_Stat" model="(FloorAuditLabels.Area(c.Status), tone)" />
+    </div>
+    <dl class="fa-area__facts">
+        <div><dt>This session</dt><dd class="num">@(c.Required || c.RoundsDone > 0 ? $"{c.RoundsDone}/{FloorAuditRounds.Count} rounds" : "Not inspected")</dd></div>
+        <div><dt>Last inspection</dt><dd>@(c.Last is { } l ? $"{(l.Date == p.Date ? "" : l.Date.ToString("d MMM ", System.Globalization.CultureInfo.InvariantCulture))}{FloorAuditLabels.Time(l.CompletedAt)}" : "Never")</dd></div>
+        <div><dt>Open issues</dt><dd class="num @(c.OpenIssues > 0 ? "is-bad" : "")">@c.OpenIssues</dd></div>
+    </dl>
+    @if (c.Last is { Issues: > 0 } li)
+    {
+        <p class="fa-area__issue" dir="auto" title="@li.IssueSummary">@Ui.Icon("alert-triangle", "icon--sm")<span>@li.IssueSummary</span></p>
+    }
+    <div class="fa-area__foot">
+        @if (href is not null)
+        {
+            <a class="btn @(c.CanInspect && c.Status is AreaAuditStatus.Pending or AreaAuditStatus.InProgress ? "btn--primary" : "btn--secondary") btn--sm" href="@href" data-modal>@action</a>
+        }
+        else if (blocked is not null)
+        {
+            <button class="btn btn--secondary btn--sm" type="button" disabled title="@blocked">Record Audit</button>
+        }
+        <a class="btn btn--ghost btn--sm" href="/floor-audit/areas/@a.Id">@Ui.Icon("clock", "icon--sm")History</a>
+    </div>
+</article>

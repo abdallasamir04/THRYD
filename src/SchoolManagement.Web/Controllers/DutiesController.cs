@@ -7,27 +7,37 @@ using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
-/// <summary>Daily Operations → Morning Duty (Students Arrival Check, In-Class Morning, Morning Assembly / Proadcast).</summary>
+/// <summary>
+/// Daily Operations → Duties & Audit (/duties/audit): the Main Duties as cards (each opens its full board — Sub-Duties,
+/// coverage points, staff, backups, schedules and reports — below the cards) above the Duty Audit and Staff Duty Records.
+/// The duty management pages (Sub-Duty lists, assignments, schedules, reports) are unchanged and open from there.
+/// </summary>
 [Route("duties")]
 public class DutiesController(IDutyService duties, IClassService classes, IStaffDutyService staffDuty, IActivityService activities, IDutyBoardService board) : AppController
 {
     /// <summary>
-    /// Duties landing page: Morning, Midday and Dismissal cards (?type=morning | midday | dismissal opens
-    /// that duty's page) plus an Activities card (/duties/activities: P.E., Add Activity and every created activity).
+    /// The former Duties landing page (and ?type=morning | midday | dismissal, a Main Duty's page): now the top of Duties &
+    /// Audit, where the card of that duty is selected. A reload of the old board (AJAX) still gets its partial.
     /// </summary>
     [HttpGet("")]
     public async Task<IActionResult> Index(string? date, string? type, CancellationToken ct)
     {
+        if (!IsAjax) return Redirect(DutiesAudit.For(ValidSlug(type), date));
         var day = SchoolWeek.ParseDayOrToday(date);
         var dutyDay = await board.DayAsync(day, ct);
         if (string.IsNullOrWhiteSpace(type))
         {
             // Every Main Duty with its calculated status and Sub-Duties; the board refreshes itself as time passes.
             var hub = new DutyHubViewModel { Day = dutyDay, Activities = (await activities.ListAsync(false, ct)).Count };
-            return IsAjax ? PartialView("_HubBoard", hub) : View("Hub", hub);
+            return PartialView("_HubBoard", hub);
         }
-        var model = new MainDutyPageViewModel { Day = dutyDay, Main = dutyDay.Get(DutyComponents.TypeFromSlug(type)) };
-        return IsAjax ? PartialView("_MainBoard", model) : View(model);
+        var mainType = DutyComponents.TypeFromSlug(type);
+        var model = new MainDutyPageViewModel
+        {
+            Day = dutyDay, Main = dutyDay.Get(mainType),
+            Revisions = mainType == DutyType.Morning ? await duties.RevisionCountAsync(day, ct) : 0,
+        };
+        return PartialView("_MainBoard", model);
     }
 
     [HttpGet("{type:regex(^(morning|midday|dismissal)$)}/{slug}")]
@@ -43,6 +53,7 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
             Info = info, Date = day, Duties = await duties.ListAsync(info.Component, day, ct), Main = main,
             Sub = main.Subs.FirstOrDefault(s => s.Info.Component == info.Component),
             ReportHistory = await board.ReportHistoryAsync(day, info.Component, ct),
+            Revisions = info.Component == DutyService.RevisionComponent ? await duties.RevisionsAsync(day, ct) : [],
         };
         return IsAjax ? PartialView("_List", model) : View(model);
     }
@@ -59,6 +70,7 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
             History = await duties.BackupHistoryAsync(id, ct),
             AuditTrail = await duties.AuditTrailAsync(id, ct),
             Staff = await duties.StaffAsync(id, ct),
+            Revisions = duty.Component == DutyService.RevisionComponent ? await duties.RevisionsForDutyAsync(id, ct) : [],
         });
     }
 
@@ -204,9 +216,12 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
         return LocalRedirect(redirect);
     }
 
-    /// <summary>Duty audit: every duty session with its audit fields, filterable.</summary>
+    /// <summary>
+    /// Duties & Audit: the Main Duty cards of the day (?date=, ?duty= selects one and shows its board) above the duty
+    /// audit — every duty session with its audit fields, filterable. The audit filters (AJAX) return only the table.
+    /// </summary>
     [HttpGet("audit")]
-    public async Task<IActionResult> Audit([FromQuery] DutyAuditQuery query, CancellationToken ct)
+    public async Task<IActionResult> Audit([FromQuery] DutyAuditQuery query, string? duty, string? date, CancellationToken ct)
     {
         var model = new DutyAuditViewModel
         {
@@ -214,8 +229,32 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
             Result = await duties.AuditListAsync(query, ct),
             Staff = await duties.StaffOptionsAsync(ct),
             Locations = await duties.LocationsAsync(ct),
+            Duties = IsAjax ? null : await OverviewAsync(duty, date, ct),
         };
         return IsAjax ? PartialView("_AuditTable", model) : View(model);
+    }
+
+    /// <summary>The Duties section of Duties & Audit, reloaded by its board every 30 seconds (duties.js).</summary>
+    [HttpGet("overview")]
+    public async Task<IActionResult> Overview(string? duty, string? date, CancellationToken ct) =>
+        IsAjax ? PartialView("_Overview", await OverviewAsync(duty, date, ct)) : Redirect(DutiesAudit.For(ValidSlug(duty), date));
+
+    private static string? ValidSlug(string? slug) =>
+        DutyComponents.Types.Select(DutyComponents.TypeSlug).FirstOrDefault(s => string.Equals(s, slug, StringComparison.OrdinalIgnoreCase));
+
+    private async Task<DutyHubViewModel> OverviewAsync(string? duty, string? date, CancellationToken ct)
+    {
+        var dutyDay = await board.DayAsync(SchoolWeek.ParseDayOrToday(date), ct);
+        DutyType? selected = ValidSlug(duty) is { } slug ? DutyComponents.TypeFromSlug(slug) : null;
+        return new DutyHubViewModel
+        {
+            Day = dutyDay, Activities = (await activities.ListAsync(false, ct)).Count, Selected = selected,
+            Details = selected is { } t ? new MainDutyPageViewModel
+            {
+                Day = dutyDay, Main = dutyDay.Get(t),
+                Revisions = t == DutyType.Morning ? await duties.RevisionCountAsync(dutyDay.Date, ct) : 0,
+            } : null,
+        };
     }
 
     /// <summary>
@@ -223,9 +262,13 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
     /// was /staff?view=duties, which now redirects here). Same service, table and PDF as before.
     /// </summary>
     [HttpGet("audit/staff-records")]
-    public async Task<IActionResult> StaffRecords(string? search, CancellationToken ct)
+    public async Task<IActionResult> StaffRecords(string? search, string? duty, string? date, CancellationToken ct)
     {
-        var model = new StaffOverviewViewModel { Rows = await staffDuty.OverviewAsync(search, ct), Search = search };
+        var model = new StaffOverviewViewModel
+        {
+            Rows = await staffDuty.OverviewAsync(search, ct), Search = search,
+            Duties = IsAjax ? null : await OverviewAsync(duty, date, ct),
+        };
         return IsAjax ? PartialView("~/Views/Staff/_Overview.cshtml", model) : View(model);
     }
 
@@ -266,6 +309,65 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
         model.Duty = await duties.GetAsync(id, ct);
         if (model.Duty is null) return NotFoundResult("This duty no longer exists.");
         return FormView("AuditForm", model);
+    }
+
+    // ------------------------------------------------------------------ Morning Revision records
+
+    /// <summary>+ Add Revision Record: a record of a Morning Revision session of the date (<paramref name="dutyId"/> preselects the session).</summary>
+    [HttpGet("revisions/new")]
+    public async Task<IActionResult> NewRevision(string? date, int? dutyId, CancellationToken ct)
+    {
+        var day = SchoolWeek.ParseDayOrToday(date);
+        var model = new RevisionFormModel { Date = day, Options = await duties.RevisionOptionsAsync(day, ct) };
+        model.DutyAssignmentId = model.Options.Sessions.Any(s => s.Id == dutyId) ? dutyId : model.Options.Sessions.Count == 1 ? model.Options.Sessions[0].Id : null;
+        return PageOrPartial("RevisionForm", model);
+    }
+
+    [HttpPost("revisions/new"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> NewRevision(RevisionFormModel model, CancellationToken ct)
+    {
+        model.Id = null;
+        return await SaveRevisionAsync(model, ct);
+    }
+
+    [HttpGet("revisions/{id:int}/edit")]
+    public async Task<IActionResult> EditRevision(int id, CancellationToken ct)
+    {
+        var r = await duties.GetRevisionAsync(id, ct);
+        if (r is null) return NotFoundResult("This revision record no longer exists.");
+        return PageOrPartial("RevisionForm", new RevisionFormModel
+        {
+            Id = r.Id, Date = r.Date, DutyAssignmentId = r.DutyAssignmentId, SchoolClassId = r.ClassId, TeacherId = r.TeacherId,
+            Lesson = r.Lesson, EntryTime = r.EntryTime, ExitTime = r.ExitTime, Options = await duties.RevisionOptionsAsync(r.Date, ct),
+        });
+    }
+
+    [HttpPost("revisions/{id:int}/edit"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditRevision(int id, RevisionFormModel model, CancellationToken ct)
+    {
+        model.Id = id;
+        return await SaveRevisionAsync(model, ct);
+    }
+
+    [HttpPost("revisions/{id:int}/delete"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteRevision(int id, CancellationToken ct)
+    {
+        var r = await duties.GetRevisionAsync(id, ct);
+        if (r is null) return NotFoundResult("This revision record no longer exists.");
+        return Finish(await duties.DeleteRevisionAsync(id, ct), "Revision record removed (kept in the session's audit trail).",
+            $"{DutyComponents.Href(DutyComponents.Get(DutyService.RevisionComponent))}?date={SchoolWeek.Iso(r.Date)}");
+    }
+
+    private async Task<IActionResult> SaveRevisionAsync(RevisionFormModel model, CancellationToken ct)
+    {
+        if (ModelState.IsValid)
+        {
+            var result = await duties.SaveRevisionAsync(model.Id, model.ToInput(), ct);
+            if (result.Succeeded) return Saved(model.Id is null ? "Revision record saved." : "Revision record updated.", DutyComponents.Get(DutyService.RevisionComponent), model.Date);
+            AddErrors(result);
+        }
+        model.Options = await duties.RevisionOptionsAsync(model.Date, ct);
+        return FormView("RevisionForm", model);
     }
 
     [HttpGet("create")]

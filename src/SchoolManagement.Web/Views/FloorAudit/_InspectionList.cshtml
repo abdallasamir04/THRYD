@@ -1,0 +1,43 @@
+@model IReadOnlyList<InspectionBrief>
+@* Inspections as a table: when (date, session, round), area and floor (as recorded), scheduled vs actual time, inspector, status and issues. *@
+@if (Model.Count == 0)
+{
+    <div class="empty fa-empty-pad">
+        <span class="empty__icon">@Ui.Icon("clipboard-check")</span>
+        <p class="empty__title">No inspections yet</p>
+        <p class="empty__text">Each inspection recorded in a round appears here with its checklist answers.</p>
+    </div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="table table--stack fa-insp">
+            <thead>
+                <tr>
+                    <th scope="col">Date &amp; round</th>
+                    <th scope="col">Area</th>
+                    <th scope="col">Scheduled / actual</th>
+                    <th scope="col">Inspector</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Issues</th>
+                    <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var i in Model)
+                {
+                    <tr>
+                        <td data-label="Date & round" class="nowrap"><strong>@i.Date.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</strong><div class="person__meta" dir="auto">@i.SessionLabel · @FloorAuditRounds.Label(i.Round)</div></td>
+                        <td data-label="Area"><a href="/floor-audit/areas/@i.AreaId" dir="auto">@i.AreaName</a><div class="person__meta">@i.FloorName · @FloorAuditLabels.Kind(i.Kind)</div></td>
+                        <td data-label="Scheduled / actual" class="num nowrap">@FloorAuditLabels.Time(i.ScheduledTime)
+                            <div class="person__meta">@(i.CompletedAt is { } c ? $"done {FloorAuditLabels.Time(c)}{(i.LateMinutes is > 0 and var late ? $" (+{late} min)" : "")}" : $"started {FloorAuditLabels.Time(i.StartedAt)}")</div></td>
+                        <td data-label="Inspector" dir="auto">@(i.Inspector ?? "—")</td>
+                        <td data-label="Status"><partial name="_Stat" model="(FloorAuditLabels.Area(i.AreaStatus), FloorAuditLabels.Tone(i.AreaStatus))" /></td>
+                        <td data-label="Issues" class="fa-insp__issues">@if (i.Issues > 0) { <span class="badge badge--error">@i.Issues</span> <span class="person__meta" dir="auto">@i.IssueSummary</span> } else { <span class="faint">—</span> }</td>
+                        <td class="col-actions"><a class="icon-btn icon-btn--primary" href="/floor-audit/inspections/@i.Id" data-modal title="Inspection details" aria-label="Inspection details">@Ui.Icon("eye")</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

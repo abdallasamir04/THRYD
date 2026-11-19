@@ -2,9 +2,14 @@
 @{
     var d = Model.Department;
     var q = Model.Query;
+    // On a subcategory's page the list never leaves the subcategory: clearing a filter goes back to the whole subcategory.
+    var scope = Model.Scope;
+    var cleared = scope is null ? $"/staff/departments/{d.Id}{(Model.AllStaff ? "?view=all" : "")}" : $"/staff/departments/{d.Id}?subcategory={Uri.EscapeDataString(scope)}";
+    var filtered = scope is null ? q.HasFilters : !string.IsNullOrWhiteSpace(q.Search) || q.Subcategory != scope;
+    var where = Model.ScopeCard?.Name ?? d.Name;
 }
 
-@if (q.HasFilters)
+@if (filtered)
 {
     <div class="results-bar">
         <div class="results-bar__info">
@@ -13,9 +18,9 @@
             {
                 <span class="filter-chip">Search: “@q.Search.Trim()”<a href="@Context.Request.WithQuery(("search", null))" data-list-link aria-label="Clear search">@Ui.Icon("x", "icon--sm")</a></span>
             }
-            @if (!string.IsNullOrWhiteSpace(q.Subcategory))
+            @if (!string.IsNullOrWhiteSpace(q.Subcategory) && q.Subcategory != scope)
             {
-                <span class="filter-chip">@q.Subcategory.Replace("|", " · ")<a href="@Context.Request.WithQuery(("subcategory", null))" data-list-link aria-label="Clear subcategory filter">@Ui.Icon("x", "icon--sm")</a></span>
+                <span class="filter-chip">@(q.Subcategory == DepartmentMemberQuery.NoSubcategory ? "No subcategory" : q.Subcategory.Replace("|", " · "))<a href="@Context.Request.WithQuery(("subcategory", scope))" data-list-link aria-label="Clear subcategory filter">@Ui.Icon("x", "icon--sm")</a></span>
             }
         </div>
     </div>
@@ -23,20 +28,20 @@
 
 @if (Model.Members.Count == 0)
 {
-    @if (q.HasFilters)
+    @if (filtered)
     {
         <div class="empty">
             <span class="empty__icon">@Ui.Icon("search")</span>
             <p class="empty__title">No members match</p>
             <p class="empty__text">Try another name, or clear the filters.</p>
-            <div class="empty__actions"><a class="btn btn--secondary" href="/staff/departments/@d.Id" data-list-link>Clear filters</a></div>
+            <div class="empty__actions"><a class="btn btn--secondary" href="@cleared" data-list-link>Clear filters</a></div>
         </div>
     }
     else
     {
         <div class="empty">
             <span class="empty__icon">@Ui.Icon("users")</span>
-            <p class="empty__title">No staff in @d.Name yet</p>
+            <p class="empty__title">No staff in @where yet</p>
             <p class="empty__text">Add a new staff member here, or edit an existing staff member and choose @d.Name as their department.</p>
             <div class="empty__actions">
                 <a class="btn btn--primary" href="/staff/create?departmentId=@d.Id" data-modal>@Ui.Icon("user-plus")Add member</a>

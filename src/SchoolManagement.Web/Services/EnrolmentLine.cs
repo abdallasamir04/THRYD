@@ -13,7 +13,10 @@ public static class EnrolmentLine
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    public static string Path(IReadOnlyList<int> values, int top)
+    public static string Path(IReadOnlyList<int> values, int top) => Path(values.Select(v => (double)v).ToList(), (double)top);
+
+    /// <summary>The same line for heights already mapped onto the chart's axis (e.g. <see cref="CapacityScale.Position"/> × top).</summary>
+    public static string Path(IReadOnlyList<double> values, double top)
     {
         var n = values.Count;
         if (n == 0) return "";

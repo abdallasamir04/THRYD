@@ -8,6 +8,7 @@ public enum ImportKind
     Students,
     Teachers,
     Tasks,
+    Classes,
 }
 
 public sealed record ImportField(string Key, string Label, bool Required, string Hint, IReadOnlyList<string> Synonyms)
@@ -84,10 +85,33 @@ public static class ImportDefinitions
             ["Notes", "Note", "Comments", "Remarks", "ملاحظات", "ملاحظة"]),
     ];
 
+    // ---------- Classes: a class is its name (grade + section, e.g. G3B; Pre-K classes PreK, PreKB), capacity and status.
+    // The grade level and section are not stored separately: they are read from the name, as on the Classes pages.
+    public const string ClassName = "ClassName";
+    public const string GradeLevel = "GradeLevel";
+    public const string Section = "Section";
+    public const string Capacity = "Capacity";
+    public const string ActiveStatus = "ActiveStatus";
+
+    public static readonly IReadOnlyList<ImportField> ClassFields =
+    [
+        new(ClassName, "Class Name", true, "Grade and section, e.g. PreK, KG1A, G3B (the same rule as Add Class)",
+            ["Class Name", "Class", "Name", "Class Code", "Homeroom", "اسم الفصل", "الفصل", "اسم الصف"]),
+        new(GradeLevel, "Grade Level", true, "Pre-K, KG1, KG2, Grade 1 … Grade 10 (G3 or 3 also work)",
+            ["Grade Level", "Grade", "Level", "Year", "Grade/Level", "Stage", "المرحلة", "الصف", "المستوى", "الصف الدراسي"]),
+        new(Section, "Section", false, "1–3 letters (A, B…); must match the class name",
+            ["Section", "Sec", "Division", "Letter", "الشعبة", "الفصل الفرعي"]),
+        new(Capacity, "Capacity", false, $"1–1,000 students (empty: {Entities.SchoolClass.DefaultCapacity})",
+            ["Capacity", "Class Capacity", "Max Students", "Maximum", "Seats", "Size", "السعة", "سعة الفصل", "العدد الأقصى"]),
+        new(ActiveStatus, "Active Status", false, "Active or Inactive (empty: Active)",
+            ["Active Status", "Status", "Active", "State", "الحالة", "نشط"]),
+    ];
+
     public static IReadOnlyList<ImportField> Fields(ImportKind kind) => kind switch
     {
         ImportKind.Students => StudentFields,
         ImportKind.Tasks => TaskFields,
+        ImportKind.Classes => ClassFields,
         _ => TeacherFields,
     };
 
@@ -95,16 +119,21 @@ public static class ImportDefinitions
     {
         ImportKind.Students => "Students",
         ImportKind.Tasks => "Tasks",
+        ImportKind.Classes => "Classes",
         _ => "Teachers",
     };
 
-    /// <summary>"student", "teacher" or "task".</summary>
+    /// <summary>"student", "teacher", "task" or "class".</summary>
     public static string Noun(ImportKind kind) => kind switch
     {
         ImportKind.Students => "student",
         ImportKind.Tasks => "task",
+        ImportKind.Classes => "class",
         _ => "teacher",
     };
+
+    /// <summary>Plural of <see cref="Noun"/> ("classes", "students").</summary>
+    public static string Nouns(ImportKind kind) => kind == ImportKind.Classes ? "classes" : Noun(kind) + "s";
 }
 
 /// <summary>Uploaded file and the user's choices, kept in server memory between the import steps.</summary>
@@ -156,8 +185,14 @@ public sealed class PreviewRow
     public TaskInput? Task { get; set; }
     public string? AssigneeNote { get; set; }
 
+    /// <summary>Classes: the class to create (its name follows the Add Class rule: grade + section).</summary>
+    public ClassImportInput? NewClass { get; set; }
+
     public string Value(string key) => Values.GetValueOrDefault(key) ?? "";
 }
+
+/// <summary>A class an import row creates: <paramref name="Stage"/> "PreK", "KG" or "G", the grade number (0 for Pre-K), its section and the resulting name.</summary>
+public sealed record ClassImportInput(string Stage, int Grade, string Section, string Name, int Capacity, bool IsActive, bool DefaultCapacity);
 
 public sealed class ImportPreview
 {

@@ -1,0 +1,262 @@
+@model SchoolManagement.Web.Services.Timetables.Import.TimetableImportPreview
+@using SchoolManagement.Web.Services.Timetables.Import
+@*
+    Timetables → Upload Timetable, step 2: the extracted timetable as a weekly grid (days across, periods down), every
+    value editable. Every button posts the whole grid back; the server re-checks it and tries the save in a transaction
+    that is rolled back, so teacher clashes, workload limits and period rules are known before Save. Nothing is stored
+    until Save, and the class's current timetable is replaced only when "Replace the current timetable" is ticked.
+*@
+@{
+    var f = Model.Form;
+    var k = Model.Check;
+    ViewData["Title"] = $"Review timetable — {Model.ClassName}";
+    ViewData["Nav"] = "Timetables";
+    var missingDays = ScheduleRules.Days.Where(d => !f.Days.Contains(d)).ToList();
+    var cellErrors = k.CellErrors.Values.Sum(v => v.Count);
+    var cellWarnings = k.CellWarnings.Values.Sum(v => v.Count);
+    string KindName(ImportCellKind kind) => kind switch
+    {
+        ImportCellKind.Lesson => "Lesson", ImportCellKind.Free => "Free period", ImportCellKind.Break => "Break",
+        ImportCellKind.Activity => "Activity", _ => "No period",
+    };
+    var kinds = new[] { ImportCellKind.Lesson, ImportCellKind.Free, ImportCellKind.Break, ImportCellKind.Activity, ImportCellKind.NoPeriod };
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/timetable-import.css" asp-append-version="true" />
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/timetables">Timetables</a></li><li><a href="/timetables/upload?classId=@f.ClassId&yearId=@f.YearId">Upload Timetable</a></li><li><span aria-current="page">Review</span></li></ol>
+        <h1 class="page-title">Review the timetable of @Model.ClassName</h1>
+        <p class="page-sub">Check what was read from the file and correct anything that is wrong. Nothing has been saved yet.</p>
+    </div>
+</div>
+
+<partial name="_Steps" model="2" />
+
+<ul class="ti-context" aria-label="Upload">
+    <li class="chip chip--brand">@Ui.Icon("door")Class <strong>@Model.ClassName</strong></li>
+    <li class="chip">@Ui.Icon("calendar-days")Academic year <strong>@(Model.YearName ?? "Not chosen")</strong></li>
+    <li class="chip" title="@f.FileName">@Ui.Icon("sheet")<span class="ti-context__file">@f.FileName</span></li>
+    @if (!string.IsNullOrEmpty(f.Sheet))
+    {
+        <li class="chip">@Ui.Icon("layers")Sheet <strong dir="auto">@f.Sheet</strong></li>
+    }
+</ul>
+
+<ul class="ti-stats" aria-label="What was read">
+    <li><span class="ti-stats__n num">@k.Days</span><span class="ti-stats__l">Days</span></li>
+    <li><span class="ti-stats__n num">@k.Periods</span><span class="ti-stats__l">Periods</span></li>
+    <li><span class="ti-stats__n num">@k.SubjectAssignments</span><span class="ti-stats__l">Lessons with a subject</span></li>
+    <li class="is-ok"><span class="ti-stats__n num">@k.TeacherAssignments</span><span class="ti-stats__l">With a teacher</span></li>
+    <li class="@(k.Unassigned > 0 ? "is-warn" : "")"><span class="ti-stats__n num">@k.Unassigned</span><span class="ti-stats__l">Teacher unassigned@(k.UnmatchedTeachers > 0 ? $" · {k.UnmatchedTeachers} not matched" : "")</span></li>
+    <li><span class="ti-stats__n num">@k.Breaks</span><span class="ti-stats__l">Breaks &amp; activities</span></li>
+    <li class="@(k.HasErrors ? "is-bad" : k.WarningCount > 0 ? "is-warn" : "is-ok")"><span class="ti-stats__n num">@(k.HasErrors ? k.ErrorCount : k.WarningCount)</span><span class="ti-stats__l">@(k.HasErrors ? "To correct" : "Warnings")</span></li>
+</ul>
+
+@if (k.HasErrors)
+{
+    <div class="notice notice--error" role="alert">@Ui.Icon("alert-circle")<div class="notice__body">
+        <strong>Correct @Ui.Plural(k.ErrorCount, "problem", "problems") before saving.</strong>
+        @if (k.Errors.Count > 0 || k.RowErrors.Count > 0)
+        {
+            <ul class="ti-list">
+                @foreach (var e in k.Errors) { <li>@e</li> }
+                @foreach (var e in k.RowErrors.OrderBy(r => r.Key).SelectMany(r => r.Value)) { <li>@e</li> }
+            </ul>
+        }
+        @if (cellErrors > 0)
+        {
+            <p>@Ui.Plural(cellErrors, "cell is", "cells are") marked in red below.</p>
+        }
+    </div></div>
+}
+else if (k.DryRun)
+{
+    <div class="notice notice--success">@Ui.Icon("check-circle")<div class="notice__body">
+        <strong>Ready to save.</strong>Every lesson with a teacher passed the timetable checks: the teacher may teach the subject, has no other class, substitution or duty at that time, and stays within the weekly workload. The period times do not overlap.
+    </div></div>
+}
+@if (k.Warnings.Count > 0 || k.RowWarnings.Count > 0 || cellWarnings > 0)
+{
+    <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body">
+        <strong>Please check</strong>
+        <ul class="ti-list">
+            @foreach (var w in k.Warnings) { <li>@w</li> }
+            @foreach (var w in k.RowWarnings.OrderBy(r => r.Key).SelectMany(r => r.Value)) { <li>@w</li> }
+            @if (cellWarnings > 0)
+            {
+                <li>@Ui.Plural(cellWarnings, "cell needs", "cells need") attention (marked in amber): unmatched or unchecked teachers, missing periods.</li>
+            }
+        </ul>
+    </div></div>
+}
+
+<form method="post" action="/timetables/upload/preview" class="ti-form" data-loading autocomplete="off">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="ClassId" value="@f.ClassId" />
+    <input type="hidden" name="YearId" value="@f.YearId" />
+    <input type="hidden" name="FileName" value="@f.FileName" />
+    <input type="hidden" name="Sheet" value="@f.Sheet" />
+    @for (var d = 0; d < f.Days.Count; d++)
+    {
+        <input type="hidden" name="Days[@d]" value="@f.Days[d]" />
+    }
+    @for (var n = 0; n < f.Notes.Count; n++)
+    {
+        <input type="hidden" name="Notes[@n]" value="@f.Notes[n]" />
+    }
+
+    <section class="card ti-card" aria-labelledby="ti-grid-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="ti-grid-title">@Ui.Icon("grid")Weekly timetable · @Model.ClassName</h2>
+                <p class="card__sub">Days across, periods down. Change a cell's type, subject or teacher, correct a time, or add / remove periods and days. The text read from the file is shown under each cell.</p>
+            </div>
+        </div>
+        <div class="ti-grid-wrap" tabindex="0" role="region" aria-label="Timetable to review (scrolls sideways)">
+            <table class="ti-grid">
+                <thead>
+                    <tr>
+                        <th scope="col" class="ti-grid__corner">Period</th>
+                        @foreach (var day in f.Days)
+                        {
+                            <th scope="col">
+                                <span class="ti-day">@ScheduleRules.DayName(day)
+                                    @if (f.Days.Count > 1)
+                                    {
+                                        <button class="icon-btn icon-btn--sm" type="submit" name="Op" value="remove-day:@((int)day)" title="Remove @ScheduleRules.DayName(day)" aria-label="Remove @ScheduleRules.DayName(day)" formnovalidate>@Ui.Icon("x", "icon--sm")</button>
+                                    }
+                                </span>
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < f.Periods.Count; i++)
+                    {
+                        var row = f.Periods[i];
+                        var rowErrors = k.RowErrors.GetValueOrDefault(i) ?? [];
+                        var rowWarnings = k.RowWarnings.GetValueOrDefault(i) ?? [];
+                        var label = TimetableImportService.Label(row, i);
+                        <tr class="@(rowErrors.Count > 0 ? "is-error" : rowWarnings.Count > 0 ? "is-warn" : "")">
+                            <th scope="row" class="ti-period">
+                                <label class="visually-hidden" for="p@(i)-label">Name of period @(i + 1)</label>
+                                <input class="input input--sm ti-period__name" id="p@(i)-label" name="Periods[@i].Label" value="@row.Label" maxlength="50" placeholder="Period @(i + 1)" dir="auto" />
+                                <div class="ti-period__times">
+                                    <label class="visually-hidden" for="p@(i)-start">@label starts</label>
+                                    <input class="input input--sm" type="time" id="p@(i)-start" name="Periods[@i].Start" value="@row.Start" />
+                                    <span aria-hidden="true">–</span>
+                                    <label class="visually-hidden" for="p@(i)-end">@label ends</label>
+                                    <input class="input input--sm" type="time" id="p@(i)-end" name="Periods[@i].End" value="@row.End" />
+                                </div>
+                                <div class="ti-period__actions">
+                                    <button class="btn btn--ghost btn--sm" type="submit" name="Op" value="break-period:@i" formnovalidate title="Mark every day of @label as a break">@Ui.Icon("clock", "icon--sm")Break</button>
+                                    <button class="btn btn--ghost btn--sm ti-danger" type="submit" name="Op" value="remove-period:@i" formnovalidate title="Remove @label">@Ui.Icon("trash", "icon--sm")Remove</button>
+                                </div>
+                                @foreach (var e in rowErrors) { <p class="ti-msg ti-msg--error">@e</p> }
+                                @foreach (var w in rowWarnings) { <p class="ti-msg ti-msg--warn">@w</p> }
+                            </th>
+                            @for (var j = 0; j < row.Cells.Count; j++)
+                            {
+                                var c = row.Cells[j];
+                                var errors = k.ErrorsAt(i, c.Day);
+                                var warnings = k.WarningsAt(i, c.Day);
+                                var name = $"Periods[{i}].Cells[{j}]";
+                                var id = $"c{i}-{j}";
+                                var teachers = c.Subject is not null ? Model.Teachers.GetValueOrDefault(c.Subject) ?? [] : [];
+                                var where = $"{ScheduleRules.DayName(c.Day)}, {label}";
+                                <td class="ti-cell ti-cell--k@((int)c.Kind) @(errors.Count > 0 ? "is-error" : warnings.Count > 0 ? "is-warn" : "")" data-kind="@((int)c.Kind)">
+                                    <input type="hidden" name="@(name).Day" value="@c.Day" />
+                                    <input type="hidden" name="@(name).Raw" value="@c.Raw" />
+                                    <input type="hidden" name="@(name).TeacherText" value="@c.TeacherText" />
+                                    <input type="hidden" name="@(name).Match" value="@c.Match" />
+                                    <input type="hidden" name="@(name).MatchedFor" value="@c.MatchedFor" />
+                                    <input type="hidden" name="@(name).SuggestedId" value="@c.SuggestedId" />
+                                    <label class="visually-hidden" for="@id-kind">@where: type</label>
+                                    <select class="select select--sm ti-kind" id="@id-kind" name="@(name).Kind">
+                                        @foreach (var kind in kinds)
+                                        {
+                                            <option value="@((int)kind)" selected="@(c.Kind == kind)">@KindName(kind)</option>
+                                        }
+                                    </select>
+                                    <div class="ti-lesson">
+                                        <label class="visually-hidden" for="@id-subject">@where: subject</label>
+                                        <select class="select select--sm" id="@id-subject" name="@(name).Subject">
+                                            <option value="">Choose the subject…</option>
+                                            @foreach (var g in Model.Subjects)
+                                            {
+                                                <optgroup label="@g.Department">
+                                                    @foreach (var s in g.Subjects)
+                                                    {
+                                                        var key = ImportCellRow.SubjectKey(g.DepartmentId, s);
+                                                        <option value="@key" selected="@(c.Subject == key)">@s</option>
+                                                    }
+                                                </optgroup>
+                                            }
+                                        </select>
+                                        <label class="visually-hidden" for="@id-teacher">@where: teacher</label>
+                                        <select class="select select--sm" id="@id-teacher" name="@(name).TeacherId">
+                                            <option value="">@(c.Subject is null ? "Choose the subject first" : "Leave unassigned")</option>
+                                            @foreach (var t in teachers)
+                                            {
+                                                <option value="@t.Id" selected="@(c.TeacherId == t.Id)">@t.Name</option>
+                                            }
+                                            @if (c.TeacherId is { } chosen && teachers.All(t => t.Id != chosen))
+                                            {
+                                                <option value="@chosen" selected>@(Model.TeacherNames.GetValueOrDefault(chosen) ?? "Chosen teacher") (not set up for this subject)</option>
+                                            }
+                                        </select>
+                                        <label class="visually-hidden" for="@id-notes">@where: notes</label>
+                                        <input class="input input--sm" id="@id-notes" name="@(name).Notes" value="@c.Notes" maxlength="300" placeholder="Notes (room, group…)" dir="auto" />
+                                    </div>
+                                    <div class="ti-special">
+                                        <label class="visually-hidden" for="@id-label">@where: name of the break or activity</label>
+                                        <input class="input input--sm" id="@id-label" name="@(name).Label" value="@c.Label" maxlength="50" placeholder="Break / Assembly…" dir="auto" />
+                                    </div>
+                                    @if (c.Raw is not null)
+                                    {
+                                        <p class="ti-raw" dir="auto" title="As written in the file">@Ui.Icon("file-text", "icon--sm")@c.Raw.Replace('\n', ' ')</p>
+                                    }
+                                    @foreach (var e in errors) { <p class="ti-msg ti-msg--error">@e</p> }
+                                    @foreach (var w in warnings) { <p class="ti-msg ti-msg--warn">@w</p> }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="ti-grid-actions">
+            <button class="btn btn--secondary btn--sm" type="submit" name="Op" value="add-period" formnovalidate>@Ui.Icon("plus", "icon--sm")Add a period</button>
+            @foreach (var d in missingDays)
+            {
+                <button class="btn btn--secondary btn--sm" type="submit" name="Op" value="add-day:@((int)d)" formnovalidate>@Ui.Icon("plus", "icon--sm")Add @ScheduleRules.DayName(d)</button>
+            }
+            <span class="hint">After changing a subject, press <strong>Check again</strong> to list its teachers.</span>
+        </div>
+    </section>
+
+    @if (k.ExistingLessons > 0)
+    {
+        <section class="notice notice--warning ti-replace" aria-labelledby="ti-replace-title">
+            @Ui.Icon("alert-triangle")
+            <div class="notice__body">
+                <strong id="ti-replace-title">@Model.ClassName already has a timetable (@Ui.Plural(k.ExistingLessons, "lesson", "lessons")).</strong>
+                Saving replaces it from this week: the current lessons end (earlier weeks, attendance and workload history are kept) and the class gets the periods of this upload. Other classes are not changed.
+                <label class="switch ti-replace__switch">
+                    <input type="checkbox" name="ReplaceExisting" value="true" checked="@f.ReplaceExisting" />
+                    <span class="switch__track" aria-hidden="true"></span>
+                    <span>Replace the current timetable of @Model.ClassName</span>
+                </label>
+            </div>
+        </section>
+    }
+
+    <div class="ti-actions">
+        <a class="btn btn--ghost" href="/timetables">Cancel</a>
+        <button class="btn btn--secondary" type="submit" name="Op" value="check">@Ui.Icon("refresh")Check again</button>
+        <button class="btn btn--primary btn--lg" type="submit" name="Op" value="save" disabled="@k.HasErrors">@Ui.Icon("check")Save timetable</button>
+    </div>
+</form>

@@ -1,0 +1,34 @@
+@model MovementRow
+@* Void a movement recorded by mistake (managers): it stays in the history, marked voided, with the reason and who voided it. *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Void movement"; ViewData["Nav"] = "FloorAudit"; }
+    var back = ViewData["Back"] as string;
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/floor-audit/movements/@Model.Id/void" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        <input type="hidden" name="back" value="@back" />
+        <div class="modal__head">
+            <span class="modal__icon modal__icon--warning">@Ui.Icon("x-circle", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">Void @Model.StudentName's movement</h2>
+                <p class="modal__sub">@Model.ClassName → @Model.ToName at @FloorAuditLabels.Time(Model.ExitAt), recorded by @(Model.RecordedBy ?? "—")</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <p class="hint">Use this only for a movement recorded by mistake. It is not deleted: it stays in the history as voided, with your name and the reason.</p>
+            <div class="field">
+                <label class="label" for="void-reason">Reason <span class="req" aria-hidden="true">*</span></label>
+                <textarea class="input" id="void-reason" name="reason" rows="2" maxlength="@StudentMovement.NotesMaxLength" required dir="auto"></textarea>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            <button class="btn btn--danger" type="submit">@Ui.Icon("x-circle")Void movement</button>
+        </div>
+    </form>
+</div>

@@ -41,6 +41,10 @@
             <a class="btn btn--secondary" href="/workload/teacher/@Model.EntityId?week=@week">@Ui.Icon("chart")Workload</a>
         }
         <a class="btn btn--secondary" href="@periodsUrl">@Ui.Icon("clock")@(Model.IsClass ? "Periods of this class" : "Periods")</a>
+        @if (Model.IsClass)
+        {
+            <a class="btn btn--secondary" href="/timetables/upload?classId=@Model.EntityId">@Ui.Icon("upload")Upload timetable</a>
+        }
         <partial name="_Download" model="DownloadLink.Timetable(pdfPath)" />
     </div>
 </div>

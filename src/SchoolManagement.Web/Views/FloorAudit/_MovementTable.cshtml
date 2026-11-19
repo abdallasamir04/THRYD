@@ -1,0 +1,94 @@
+@model (IReadOnlyList<MovementRow> Rows, FloorAuditUser User, string Back, string Mode)
+@*
+    Student movements in three layouts: "live" (students outside now: from, to, destination floor, departure, time outside
+    ticking in the browser, status, recorded by, Mark Returned), "history" (closed movements: departure, return, total
+    duration, recorded / returned by, voided ones with their reason) and "floor" (a floor's movements of the day).
+    Mark Returned records the server's time when confirmed; nothing is filled in automatically.
+*@
+@{
+    var (rows, user, back, mode) = Model;
+    var live = mode == "live";
+    var history = mode == "history";
+    string From(MovementRow m) => m.FromName is { } fn ? $"Classroom {fn}" : m.ClassName;
+}
+@if (rows.Count == 0)
+{
+    <div class="empty fa-empty-pad">
+        <span class="empty__icon">@Ui.Icon(live ? "check-circle" : "users")</span>
+        <p class="empty__title">@(live ? "No students outside their classrooms" : history ? "No movements match" : "No student movements")</p>
+        <p class="empty__text">@(live ? "When a student leaves class, use Record Student Movement: they appear here until marked returned." : history ? "Returned and voided movements appear here. Try a wider date range or fewer filters." : "Students who leave a classroom on this floor or go to an area on it are listed here.")</p>
+    </div>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="table table--stack fa-moves fa-moves--@mode">
+            <thead>
+                <tr>
+                    <th scope="col">Student</th>
+                    <th scope="col">From</th>
+                    <th scope="col">To</th>
+                    <th scope="col">Departure</th>
+                    @if (!live) { <th scope="col">Return</th> }
+                    <th scope="col">@(history ? "Duration" : "Time outside")</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">@(history ? "Recorded / returned by" : "Recorded by")</th>
+                    @if (!history) { <th scope="col" class="col-actions">Action</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in rows)
+                {
+                    var canReturn = m.IsOpen && user.HasIdentity && user.CanRecordMovements(m.FromFloorId);
+                    <tr class="@(m.State == MovementState.Overdue ? "is-overdue" : "") @(m.State == MovementState.Voided ? "is-voided" : "")">
+                        <td data-label="Student"><strong dir="auto">@m.StudentName</strong><div class="person__meta">Class @m.ClassName@(m.Date != SchoolWeek.Today ? $" · {m.Date:d MMM}" : "")</div></td>
+                        <td data-label="From"><span dir="auto">@From(m)</span>@if (m.FromFloor is { } ff) { <div class="person__meta">@ff</div> }</td>
+                        <td data-label="To"><span dir="auto">@m.ToName</span><div class="person__meta">@(m.Custom ? "Custom destination" : m.ToFloor is { } tf ? $"Floor: {tf}" : "")</div></td>
+                        <td data-label="Departure" class="num nowrap">@FloorAuditLabels.Time(m.ExitAt)@if (m.Notes is { } n) { <div class="person__meta fa-reason" dir="auto" title="@n">@n</div> }</td>
+                        @if (!live)
+                        {
+                            <td data-label="Return" class="num nowrap">
+                                @if (m.ReturnAt is { } ret) { @FloorAuditLabels.Time(ret) }
+                                else if (m.State == MovementState.Voided) { <span class="faint">Voided</span><div class="person__meta" dir="auto">@m.VoidReason</div> }
+                                else { <span class="faint">Not returned</span> }
+                            </td>
+                        }
+                        <td data-label="@(history ? "Duration" : "Time outside")" class="num nowrap">
+                            @if (m.IsOpen) { <strong data-fa-since="@m.ExitAt.ToString("o")">@FloorAuditLabels.Duration(m.Duration)</strong><div class="person__meta">so far</div> }
+                            else if (m.State == MovementState.Returned) { @FloorAuditLabels.Duration(m.Duration) }
+                            else { <span class="faint">—</span> }
+                        </td>
+                        <td data-label="Status"><partial name="_Stat" model="(FloorAuditLabels.Movement(m.State), FloorAuditLabels.Tone(m.State))" /></td>
+                        <td data-label="@(history ? "Recorded / returned by" : "Recorded by")" dir="auto">@(m.RecordedBy ?? "—")
+                            @if (history) { <div class="person__meta">@(m.State == MovementState.Voided ? $"voided by {m.VoidedBy ?? "—"}" : $"returned: {m.ReturnedBy ?? "—"}")</div> }
+                        </td>
+                        @if (!history)
+                        {
+                            <td class="col-actions">
+                                <div class="row-actions fa-row-actions">
+                                    @if (canReturn)
+                                    {
+                                        <form method="post" action="/floor-audit/movements/@m.Id/return" data-ajax-form
+                                              data-confirm="Record that @m.StudentName is back now? The return time is taken from the server clock at the moment you confirm."
+                                              data-confirm-title="Mark returned" data-confirm-button="Mark Returned" data-confirm-tone="primary">
+                                            @Html.AntiForgeryToken()<input type="hidden" name="back" value="@back" />
+                                            <button class="btn btn--primary btn--sm" type="submit">@Ui.Icon("check", "icon--sm")Mark Returned</button>
+                                        </form>
+                                    }
+                                    else if (m.IsOpen)
+                                    {
+                                        <button class="btn btn--secondary btn--sm" type="button" disabled title="@(user.HasIdentity ? "Your Floor Audit role cannot record movements for this floor." : "Choose “Working as” first.")">Mark Returned</button>
+                                    }
+                                    @if (m.State != MovementState.Voided && user.CanManage && user.HasIdentity)
+                                    {
+                                        <a class="icon-btn" href="/floor-audit/movements/@m.Id/void?back=@Uri.EscapeDataString(back)" data-modal title="Void (recorded by mistake)" aria-label="Void movement">@Ui.Icon("x-circle")</a>
+                                    }
+                                </div>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

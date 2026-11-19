@@ -17,28 +17,21 @@ public sealed record CalendarEventView(int Id, int YearId, string Title, DateOnl
     public bool Covers(DateOnly d) => StartDate is { } s && d >= s && d <= (EndDate ?? s);
 }
 
-/// <summary>The first or last day of a quarter (its school calendar dates), shown on the date and listed under its month.</summary>
-public sealed record CalendarMilestone(int QuarterId, int Number, DateOnly Date, bool IsStart, DateOnly Start, DateOnly End)
-{
-    public string Label => IsStart ? $"Start of Q{Number}" : $"End of Q{Number}";
-    public string Short => $"Q{Number}";
-}
-
-/// <summary>One cell of a month grid, with the quarter milestones that fall on it.</summary>
-public sealed record CalendarDay(DateOnly Date, bool InMonth, CalendarColor Color, IReadOnlyList<CalendarMilestone> Milestones, bool IsToday, IReadOnlyList<string> Events);
+/// <summary>
+/// One cell of a month grid: its printed colour (if any) and the events on it (named in the date's tooltip only). Quarter
+/// starts and ends are not marked on dates or listed as events: the printed calendar lists only its own events (where it
+/// prints one, such as "Start of Q2" on 1 November, that is an event record).
+/// </summary>
+public sealed record CalendarDay(DateOnly Date, bool InMonth, CalendarColor Color, bool IsToday, IReadOnlyList<string> Events);
 
 /// <summary>An event line under a month. A continuation is the part of a multi-month event listed under another month.</summary>
 public sealed record CalendarRow(CalendarEventView Event, string DateText, bool Continuation, string? ContinuationText);
 
-/// <summary>A line under a month: an event line or a quarter milestone, in date order.</summary>
-public sealed record CalendarMonthItem(CalendarRow? Row, CalendarMilestone? Milestone);
-
-/// <summary>A whole month: its Sunday–Saturday grid and, underneath, its events and quarter milestones in date order.</summary>
-public sealed record CalendarMonth(DateOnly Month, IReadOnlyList<IReadOnlyList<CalendarDay>> Weeks, IReadOnlyList<CalendarMonthItem> Items)
-{
-    public IEnumerable<CalendarRow> Rows => Items.Where(i => i.Row is not null).Select(i => i.Row!);
-    public IEnumerable<CalendarMilestone> Milestones => Items.Where(i => i.Milestone is not null).Select(i => i.Milestone!);
-}
+/// <summary>
+/// A whole month: its Sunday–Saturday grid and, underneath, its event lines in date order (by start date; lines on the
+/// same date in the printed order), each event once — a multi-day event is one line with its range.
+/// </summary>
+public sealed record CalendarMonth(DateOnly Month, IReadOnlyList<IReadOnlyList<CalendarDay>> Weeks, IReadOnlyList<CalendarRow> Rows);
 
 /// <summary>A quarter's school calendar dates (the printed dates, or its 8-week dates when those are not set).</summary>
 public sealed record CalendarQuarter(int Id, int Number, string Name, DateOnly? Start, DateOnly? End);
@@ -84,6 +77,21 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
 
     // ------------------------------------------------------------------ page
 
+    /// <summary>
+    /// The app setting naming the months of a year whose event list keeps the printed order (by "Order in the month")
+    /// instead of date order: "yyyy-MM" values separated by commas, e.g. "2027-06".
+    /// </summary>
+    public static string PrintedOrderKey(int yearId) => $"SchoolCalendar.PrintedOrder.{yearId}";
+
+    private async Task<HashSet<DateOnly>> PrintedOrderMonthsAsync(int yearId, CancellationToken ct)
+    {
+        var value = await db.Settings.AsNoTracking().Where(s => s.Key == PrintedOrderKey(yearId)).Select(s => s.Value).FirstOrDefaultAsync(ct);
+        var months = new HashSet<DateOnly>();
+        foreach (var part in (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (DateOnly.TryParseExact(part + "-01", "yyyy-MM-dd", C, System.Globalization.DateTimeStyles.None, out var m)) months.Add(m);
+        return months;
+    }
+
     public async Task<SchoolCalendarPage> PageAsync(int? yearId, CancellationToken ct = default)
     {
         var years = await db.AcademicYears.AsNoTracking().OrderByDescending(y => y.Name).Select(y => new CalendarYearOption(y.Id, y.Name)).ToListAsync(ct);
@@ -99,40 +107,37 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
 
         var today = SchoolWeek.Today;
         var visible = events.Where(e => !e.IsHidden).ToList();
+        var printedOrder = await PrintedOrderMonthsAsync(year.Id, ct);
 
         // Each quarter's school calendar dates: as printed, or its 8-week dates until those are set.
         var quarterViews = mine.Select(q => q.CalendarStartDate is { } cs && q.CalendarEndDate is { } ce
                 ? new CalendarQuarter(q.Id, q.Number, q.Name, cs, ce)
                 : new CalendarQuarter(q.Id, q.Number, q.Name, q.StartDate, q.EndDate))
             .ToList();
-        var milestones = quarterViews.Where(q => q.Start is not null && q.End is not null)
-            .SelectMany(q => new[]
-            {
-                new CalendarMilestone(q.Id, q.Number, q.Start!.Value, true, q.Start.Value, q.End!.Value),
-                new CalendarMilestone(q.Id, q.Number, q.End!.Value, false, q.Start.Value, q.End.Value),
-            })
-            .ToList();
-        var byDate = milestones.ToLookup(m => m.Date);
+        // The quarters' dates decide which months the calendar shows (they are not listed as events).
+        var bounds = quarterViews.Where(q => q.Start is not null && q.End is not null)
+            .SelectMany(q => new[] { q.Start!.Value, q.End!.Value }).ToList();
 
-        // Every event line goes to exactly one month card: the month it is listed under (continuations in the others).
+        // Every event line goes to exactly one month card: the month it is listed under. As in the print, an event is listed
+        // once — a multi-day event that runs into another month is not repeated there (its dates there still carry it).
         var placements = events.SelectMany(Placements).ToList();
         var placed = new HashSet<(int, DateOnly)>();
 
         var months = new List<CalendarMonth>();
-        if (milestones.Count > 0)
+        if (bounds.Count > 0)
         {
-            for (var m = MonthOf(milestones.Min(x => x.Date)); m <= milestones.Max(x => x.Date); m = m.AddMonths(1))
+            for (var m = MonthOf(bounds.Min()); m <= bounds.Max(); m = m.AddMonths(1))
             {
                 var month = m;
-                var rows = placements.Where(p => p.Month == month && !p.Event.IsHidden).ToList();
+                var rows = placements.Where(p => p.Month == month && !p.Event.IsHidden && !p.Continuation).ToList();
                 foreach (var p in rows) placed.Add((p.Event.Id, p.Month));
-                // Date order: a quarter's start before the day's events, its end after them; then the printed order.
-                var items = rows.Select(p => (Date: p.Anchor, Kind: 1, p.Event.SortOrder, Item: new CalendarMonthItem(p.Row, null)))
-                    .Concat(milestones.Where(x => MonthOf(x.Date) == month)
-                        .Select(x => (x.Date, Kind: x.IsStart ? 0 : 2, SortOrder: x.Number, Item: new CalendarMonthItem(null, x))))
-                    .OrderBy(x => x.Date).ThenBy(x => x.Kind).ThenBy(x => x.SortOrder)
-                    .Select(x => x.Item).ToList();
-                months.Add(new CalendarMonth(month, Weeks(month, marks, byDate, visible, today), items));
+                // Date order (start date; same date: the order in the month) — or, for a month set to keep the printed
+                // order, exactly the order in the month.
+                var lines = (printedOrder.Contains(month)
+                        ? rows.OrderBy(p => p.Event.SortOrder).ThenBy(p => p.Anchor).ThenBy(p => p.Event.Id)
+                        : rows.OrderBy(p => p.Anchor).ThenBy(p => p.Event.SortOrder).ThenBy(p => p.Event.Id))
+                    .Select(p => p.Row).ToList();
+                months.Add(new CalendarMonth(month, Weeks(month, marks, visible, today), lines));
             }
         }
 
@@ -196,7 +201,7 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
     }
 
     private static List<IReadOnlyList<CalendarDay>> Weeks(DateOnly month, Dictionary<DateOnly, CalendarColor> marks,
-        ILookup<DateOnly, CalendarMilestone> milestones, List<CalendarEventView> events, DateOnly today)
+        List<CalendarEventView> events, DateOnly today)
     {
         var last = month.AddMonths(1).AddDays(-1);
         var day = month.AddDays(-(int)month.DayOfWeek); // weeks start on Sunday, like the printed calendar
@@ -210,7 +215,6 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
                 var d = day;
                 week.Add(new CalendarDay(day, inMonth,
                     inMonth && marks.TryGetValue(day, out var c) ? c : CalendarColor.None,
-                    inMonth ? milestones[day].OrderBy(x => x.IsStart ? 1 : 0).ToList() : [],
                     day == today,
                     inMonth ? events.Where(e => e.Covers(d)).OrderBy(e => e.SortOrder).Select(e => e.Title).ToList() : []));
             }
@@ -398,6 +402,14 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
         }
         foreach (var (date, color) in SchoolCalendarReference.Marks)
             db.SchoolCalendarMarks.Add(new SchoolCalendarMark { AcademicYearId = yearId, Date = date, Color = color });
+        // Months whose list keeps the printed order (June 2027), unless the year already names its own.
+        var key = PrintedOrderKey(yearId);
+        if (!await db.Settings.AnyAsync(s => s.Key == key, ct))
+            db.Settings.Add(new AppSetting
+            {
+                Key = key, UpdatedAt = DateTime.UtcNow,
+                Value = string.Join(",", SchoolCalendarReference.PrintedOrderMonths.Select(m => m.ToString("yyyy-MM", C))),
+            });
 
         await db.SaveChangesAsync(ct);
         return new(ServiceResult.Ok(yearId), SchoolCalendarReference.Events.Count, SchoolCalendarReference.Marks.Count, set, kept);

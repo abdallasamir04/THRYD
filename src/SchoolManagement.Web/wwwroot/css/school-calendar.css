@@ -45,18 +45,6 @@
 .sc-c-pink { --sc-bg: var(--sc-pink-bg); --sc-ink: var(--sc-pink-ink); }
 .sc-c-gray { --sc-bg: var(--sc-gray-bg); --sc-ink: var(--sc-gray-ink); }
 
-/* Quarter milestones: one elegant tone for every quarter start and end, apart from the printed event colours. */
-:root {
-    --sc-ms: #6d4bd8;
-    --sc-ms-soft: linear-gradient(140deg, #efe9ff 0%, #e2f4ff 100%);
-    --sc-ms-ink: #3f2a99;
-}
-:root[data-theme="dark"] {
-    --sc-ms: #a78bfa;
-    --sc-ms-soft: linear-gradient(140deg, rgb(167 139 250 / 0.24) 0%, rgb(56 189 248 / 0.16) 100%);
-    --sc-ms-ink: #ddd3ff;
-}
-
 /* ---------- Page head, notices ---------- */
 .sc-year .select { width: auto; min-width: 150px; }
 .sc-load { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
@@ -76,8 +64,9 @@
     min-width: 0; padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-card);
     background: var(--color-surface); box-shadow: var(--shadow-card);
 }
-.sc-month__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-.sc-month__title { font-size: 1.05rem; font-weight: 800; }
+/* The month and year: one heading, centred on the card (the card's padding is even on both sides). */
+.sc-month__head { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-bottom: 10px; text-align: center; }
+.sc-month__title { margin: 0; font-size: 1.05rem; font-weight: 800; white-space: nowrap; }
 .sc-month__title span { color: var(--color-text-muted); font-weight: 700; }
 /* Grid: Sunday–Saturday, real dates; Friday and Saturday shaded as printed. */
 .sc-grid { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 3px; margin: 0 -3px; width: calc(100% + 6px); }
@@ -97,27 +86,10 @@
 }
 .sc-day__btn:hover { text-decoration: none; box-shadow: inset 0 0 0 1.5px var(--color-border-strong); }
 .sc-day__btn:focus-visible { outline-offset: 0; }
-.sc-day__dot { width: 4px; height: 4px; border-radius: 50%; background: var(--color-primary-ink); }
 .sc-day.is-marked { background: var(--sc-bg); }
 .sc-day.is-marked .sc-day__btn { color: var(--sc-ink); font-weight: 800; }
 .sc-day.is-marked .sc-day__btn:hover { box-shadow: inset 0 0 0 2px rgb(0 0 0 / 0.25); }
 .sc-day.is-today .sc-day__btn { box-shadow: inset 0 0 0 2px var(--color-primary); }
-/* Quarter milestones: a soft violet-to-sky fill with a fine ring and a small Q flag (filled = start, outlined = end).
-   A printed colour on the same date keeps its fill; the ring and flag still show the milestone. */
-.sc-day.is-ms:not(.is-marked) { background: var(--sc-ms-soft); }
-.sc-day.is-ms:not(.is-marked) .sc-day__btn { color: var(--sc-ms-ink); font-weight: 800; }
-.sc-day.is-ms { box-shadow: inset 0 0 0 1.5px var(--sc-ms); }
-.sc-day.is-ms-start { box-shadow: inset 3px 0 0 0 var(--sc-ms), inset 0 0 0 1.5px var(--sc-ms); }
-.sc-day.is-ms-end { box-shadow: inset -3px 0 0 0 var(--sc-ms), inset 0 0 0 1.5px var(--sc-ms); }
-.sc-day.is-ms-start.is-ms-end { box-shadow: inset 3px 0 0 0 var(--sc-ms), inset -3px 0 0 0 var(--sc-ms), inset 0 0 0 1.5px var(--sc-ms); }
-.sc-day__flags { position: absolute; top: -6px; inset-inline-end: -4px; z-index: 1; display: flex; gap: 2px; pointer-events: none; }
-.sc-day__flag {
-    padding: 0 4px; border-radius: 5px; border: 1px solid var(--sc-ms); font-size: 0.56rem; font-weight: 800; line-height: 1.45;
-    letter-spacing: 0.02em;
-}
-.sc-day__flag--start { background: var(--sc-ms); color: #fff; }
-.sc-day__flag--end { background: var(--color-surface); color: var(--sc-ms); }
-:root[data-theme="dark"] .sc-day__flag--start { color: #1b1240; }
 
 /* ---------- Event lines under each month ---------- */
 .sc-events { display: grid; gap: 3px; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--color-border-subtle); list-style: none; }
@@ -146,17 +118,6 @@
 .sc-flag--confirm { background: var(--color-warning-soft); color: var(--color-warning-ink); }
 .sc-ev.is-colored .sc-flag { background: rgb(255 255 255 / 0.85); color: #5c3a00; }
 .sc-ev--none { padding: 6px 9px; color: var(--color-text-faint); font-size: 0.8rem; font-style: italic; }
-
-/* Quarter milestones listed with the month's events. */
-.sc-ms .sc-ev__link { background: var(--sc-ms-soft); color: var(--sc-ms-ink); box-shadow: inset 3px 0 0 var(--sc-ms); }
-.sc-ms--end .sc-ev__link { box-shadow: inset -3px 0 0 var(--sc-ms), inset 0 0 0 1px color-mix(in srgb, var(--sc-ms) 35%, transparent); }
-.sc-ms .sc-ev__link:hover { filter: brightness(0.97) saturate(1.08); }
-.sc-ms .sc-ev__title { display: inline-flex; align-items: center; gap: 7px; font-weight: 800; }
-.sc-ms .sc-ev__meta { color: inherit; opacity: 0.75; font-style: normal; }
-.sc-ms__tag { padding: 0 6px; border-radius: 5px; border: 1px solid var(--sc-ms); font-size: 0.66rem; font-weight: 800; line-height: 1.5; }
-.sc-ms--start .sc-ms__tag { background: var(--sc-ms); color: #fff; }
-.sc-ms--end .sc-ms__tag { background: var(--color-surface); color: var(--sc-ms); }
-:root[data-theme="dark"] .sc-ms--start .sc-ms__tag { color: #1b1240; }
 
 /* ---------- Unplaced / admin ---------- */
 .sc-unplaced, .sc-admin { margin-top: 26px; }
@@ -190,6 +151,12 @@
     .sc-day { height: 36px; }
 }
 @media print {
-    .sc-admin, .page-head__actions, .sc-load { display: none !important; }
+    .sc-admin, .sc-addyear, .page-head__actions, .sc-load { display: none !important; }
     .sc-month { break-inside: avoid; box-shadow: none; }
+}
+
+/* + Add year at the bottom of the calendar: one button, centred under the months, no card around it. */
+.sc-addyear { display: flex; justify-content: center; margin: 28px 0 8px; }
+@media (max-width: 640px) {
+    .sc-addyear .btn { width: 100%; justify-content: center; }
 }

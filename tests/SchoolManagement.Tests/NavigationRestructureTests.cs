@@ -24,9 +24,12 @@ public partial class HttpTests
     public async Task Sidebar_has_the_new_structure()
     {
         var sidebar = Sidebar(await fx.Factory.CreateClient().GetStringAsync("/"));
-        string[] ordered = ["href=\"/staff\"", "href=\"/students/hub\"", "href=\"/classes\"", "href=\"/duties\"", "href=\"/duties/audit\""];
+        string[] ordered = ["href=\"/staff\"", "href=\"/students/hub\"", "href=\"/classes\"", "href=\"/duties/audit\""];
         var at = ordered.Select(h => sidebar.IndexOf(h, StringComparison.Ordinal)).ToList();
         Assert.True(at.All(i => i > 0) && at.SequenceEqual(at.Order()), string.Join(",", at));
+        // Duties and Duty Audit are one entry: Duties & Audit.
+        Assert.DoesNotContain("href=\"/duties\"", sidebar);
+        Assert.Contains("<span>Duties &amp; Audit</span>", sidebar);
         Assert.Contains("<span>Students</span>", sidebar);
         // P.E. opens from Duties and the PE department page only.
         foreach (var gone in new[] { "href=\"/pe\"", "<span>P.E.</span>", "href=\"/belongings\"", "href=\"/arrivals\"", "Staff Duty Records", "view=duties", "<span>Belongings</span>", "Student Attendance" })

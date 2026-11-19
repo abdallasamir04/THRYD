@@ -1,0 +1,13 @@
+@model int
+@{
+    var steps = new[] { "Class & file", "Review & correct", "Saved" };
+}
+<ol class="steps ti-steps" aria-label="Upload steps">
+    @for (var i = 0; i < steps.Length; i++)
+    {
+        var n = i + 1;
+        <li class="step @(n < Model ? "is-done" : n == Model ? "is-current" : "")" aria-current="@(n == Model ? "step" : null)">
+            <span class="step__n">@(n < Model ? "✓" : n.ToString())</span>@steps[i]
+        </li>
+    }
+</ol>

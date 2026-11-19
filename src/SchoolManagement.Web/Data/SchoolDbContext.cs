@@ -3,7 +3,7 @@ using SchoolManagement.Web.Entities;
 
 namespace SchoolManagement.Web.Data;
 
-public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbContext(options)
+public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbContext(options)
 {
     public DbSet<SchoolClass> Classes => Set<SchoolClass>();
     public DbSet<Student> Students => Set<Student>();
@@ -39,6 +39,8 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
     public DbSet<ManagementPositionAssignment> PositionAssignments => Set<ManagementPositionAssignment>();
     public DbSet<TimeSlot> TimeSlots => Set<TimeSlot>();
     public DbSet<TimetableAssignment> TimetableAssignments => Set<TimetableAssignment>();
+    public DbSet<TimetableImport> TimetableImports => Set<TimetableImport>();
+    public DbSet<MorningRevisionRecord> MorningRevisions => Set<MorningRevisionRecord>();
     public DbSet<PeSessionDetail> PeSessionDetails => Set<PeSessionDetail>();
     public DbSet<PeEquipmentItem> PeEquipmentItems => Set<PeEquipmentItem>();
     public DbSet<AcademicYear> AcademicYears => Set<AcademicYear>();
@@ -85,6 +87,7 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
     protected override void OnModelCreating(ModelBuilder b)
     {
         ConfigureActivities(b);
+        ConfigureFloorAudit(b);
 
         b.Entity<SchoolClass>(e =>
         {
@@ -100,8 +103,19 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
 
         b.Entity<Student>(e =>
         {
-            e.ToTable("Students");
+            e.ToTable("Students", t =>
+            {
+                t.HasCheckConstraint("CK_Students_HighlightColor",
+                    "[HighlightColor] IS NULL OR [HighlightColor] LIKE '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
+                t.HasCheckConstraint("CK_Students_NameColor",
+                    "[NameColor] IS NULL OR [NameColor] LIKE '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
+            });
             e.Property(x => x.FullName).HasMaxLength(Student.NameMaxLength).IsRequired();
+            e.Property(x => x.NameMarker).HasMaxLength(StudentMarks.MarkerMaxLength);
+            e.Property(x => x.HighlightColor).HasMaxLength(StudentMarks.ColorLength).IsUnicode(false);
+            e.Property(x => x.NameColor).HasMaxLength(StudentMarks.ColorLength).IsUnicode(false);
+            e.Property(x => x.Religion).HasMaxLength(StudentMarks.ReligionMaxLength);
+            e.Property(x => x.SecondLanguage).HasMaxLength(StudentMarks.LanguageMaxLength);
             e.Property(x => x.NormalizedName).HasMaxLength(Student.NameMaxLength).IsRequired();
             // A student is never deleted with their class: the class delete is blocked or reassigns first.
             e.HasOne(x => x.SchoolClass).WithMany(c => c.Students)
@@ -304,6 +318,32 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             e.HasIndex(x => new { x.SchoolClassId, x.Day, x.TimeSlotId }).IsUnique().HasFilter("[EndedOn] IS NULL").HasDatabaseName("UX_Timetable_ClassSlot");
             e.HasIndex(x => new { x.TeacherId, x.Day, x.TimeSlotId }).IsUnique().HasFilter("[EndedOn] IS NULL").HasDatabaseName("UX_Timetable_TeacherSlot");
             e.HasIndex(x => new { x.TeacherId, x.StartsOn, x.EndedOn });
+        });
+
+        b.Entity<MorningRevisionRecord>(e =>
+        {
+            e.ToTable("MorningRevisionRecords", t => t.HasCheckConstraint("CK_MorningRevision_ExitAfterEntry",
+                "[EntryTime] IS NULL OR [ExitTime] IS NULL OR [ExitTime] > [EntryTime]"));
+            e.Property(x => x.Lesson).HasMaxLength(MorningRevisionRecord.LessonMaxLength).IsRequired();
+            e.Property(x => x.CreatedBy).HasMaxLength(150);
+            e.Property(x => x.UpdatedBy).HasMaxLength(150);
+            // A session with revision records is not deleted (they are kept as history); classes and staff are never deleted with them.
+            e.HasOne(x => x.DutyAssignment).WithMany().HasForeignKey(x => x.DutyAssignmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Teacher).WithMany().HasForeignKey(x => x.TeacherId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.DutyAssignmentId);
+            e.HasIndex(x => new { x.TeacherId, x.DutyAssignmentId });
+        });
+
+        b.Entity<TimetableImport>(e =>
+        {
+            e.ToTable("TimetableImports");
+            e.Property(x => x.FileName).HasMaxLength(TimetableImport.FileNameMaxLength).IsRequired();
+            e.Property(x => x.SheetName).HasMaxLength(TimetableImport.SheetMaxLength);
+            e.Property(x => x.ImportedBy).HasMaxLength(150);
+            e.HasOne(x => x.SchoolClass).WithMany().HasForeignKey(x => x.SchoolClassId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.SchoolClassId, x.ImportedAt });
         });
 
         b.Entity<DepartmentHeadAssignment>(e =>
@@ -535,7 +575,7 @@ public class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbCont
             var seeded = new DateTime(2026, 11, 16, 0, 0, 0, DateTimeKind.Utc);
             e.HasData(
                 new DutySection { Id = 1, DutyType = DutyType.Morning, Slug = "students-arrival", Name = "Students Arrival Check", Summary = "Staff on duty while students arrive at school.", Icon = "users", SortOrder = 1, CreatedAt = seeded },
-                new DutySection { Id = 2, DutyType = DutyType.Morning, Slug = "in-class-morning", Name = "In-Class Morning", Summary = "Staff supervising classes before the first lesson.", Icon = "door", HasClasses = true, SortOrder = 2, CreatedAt = seeded },
+                new DutySection { Id = 2, DutyType = DutyType.Morning, Slug = "in-class-morning", Name = "Morning Revision", Summary = "Classroom revision before the first lesson: which teacher revised which lesson with which class, and when they entered and left.", Icon = "door", HasClasses = true, SortOrder = 2, CreatedAt = seeded },
                 new DutySection { Id = 3, DutyType = DutyType.Morning, Slug = "morning-assembly", Name = "Morning Assembly (Line) / Proadcast", Summary = "Assembly line-up and proadcast duty.", Icon = "activity", DetailsPending = true, SortOrder = 3, CreatedAt = seeded },
                 new DutySection { Id = 8, DutyType = DutyType.Midday, Slug = "prek-kg1", Name = "Pre-K / KG1", Summary = "Break supervision for Pre-K and KG1.", Icon = "school", Grades = "Grades Pre-K and KG1", SortOrder = 1, CreatedAt = seeded },
                 new DutySection { Id = 7, DutyType = DutyType.Midday, Slug = "kg2", Name = "KG2", Summary = "Break supervision for KG2.", Icon = "school", Grades = "Grade KG2", SortOrder = 2, CreatedAt = seeded },

@@ -1,0 +1,54 @@
+@model FacilityForm
+@* Add or edit a facility (managers): name, floor, type, description, active. Changing the floor moves it for new rounds only. *@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = Model.Id is null ? "Add facility" : "Edit facility"; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/floor-audit/manage/facilities/save" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        @if (Model.Id is { } facilityId) { <input type="hidden" name="Id" value="@facilityId" /> }
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(FloorAuditLabels.FacilityIcon(Model.FacilityType), "icon--lg")</span>
+            <div><h2 class="modal__title" dir="auto">@(Model.Id is null ? "Add a facility" : $"Edit {Model.Name}")</h2><p class="modal__sub">Bathrooms, corridors, stairs, reception, library, nurse room and other areas inspected each round.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="fc-name">Facility name <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="fc-name" name="Name" value="@Model.Name" maxlength="@FloorArea.NameMaxLength" dir="auto" data-autofocus required placeholder="e.g. Boys' Bathroom A" />
+                </div>
+                <div class="field">
+                    <label class="label" for="fc-type">Facility type <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="fc-type" name="FacilityType" required>
+                        <option value="">Choose…</option>
+                        @foreach (var t in FloorAuditLabels.FacilityTypes) { <option value="@t" selected="@(Model.FacilityType == t)">@FloorAuditLabels.Facility(t)</option> }
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="label" for="fc-floor">Floor <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="fc-floor" name="FloorId" required>
+                        @foreach (var (id, name) in Model.Floors) { <option value="@id" selected="@(Model.FloorId == id)">@name</option> }
+                    </select>
+                </div>
+                <div class="field">
+                    <span class="label">Status</span>
+                    <label class="switch"><input type="checkbox" name="IsActive" value="true" checked="@Model.IsActive" /><span class="switch__track" aria-hidden="true"></span><span>Active (inspected in the rounds)</span></label>
+                    <input type="hidden" name="IsActive" value="false" />
+                </div>
+            </div>
+            <div class="field">
+                <label class="label" for="fc-desc">Description</label>
+                <input class="input" id="fc-desc" name="Description" value="@Model.Description" maxlength="@FloorArea.DescriptionMaxLength" dir="auto" placeholder="Optional: where it is, what to check" />
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-audit/manage">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+        </div>
+    </form>
+</div>

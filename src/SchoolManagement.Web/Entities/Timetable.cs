@@ -91,3 +91,47 @@ public class TimetableAssignment : IAuditable
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
+
+/// <summary>
+/// One confirmed timetable upload (Timetables → Upload Timetable): which class and academic year it was for, the file,
+/// who saved it and what it created. The timetable itself is stored as ordinary periods (<see cref="TimeSlot"/>) and
+/// lessons (<see cref="TimetableAssignment"/>) — this row is the record of the import, and keeps what could not become a
+/// lesson yet (a lesson whose teacher was left unassigned) in <see cref="Details"/> so it can be assigned later.
+/// </summary>
+public class TimetableImport
+{
+    public const int FileNameMaxLength = 260;
+    public const int SheetMaxLength = 100;
+
+    public int Id { get; set; }
+    public int SchoolClassId { get; set; }
+    public SchoolClass SchoolClass { get; set; } = null!;
+    public int? AcademicYearId { get; set; }
+    public AcademicYear? AcademicYear { get; set; }
+
+    public string FileName { get; set; } = "";
+    public string? SheetName { get; set; }
+
+    public int Days { get; set; }
+    public int Periods { get; set; }
+
+    /// <summary>Cells with a subject (saved lessons plus lessons waiting for a teacher).</summary>
+    public int SubjectAssignments { get; set; }
+
+    /// <summary>Lessons saved with their teacher (each one a weekly teaching session).</summary>
+    public int TeacherAssignments { get; set; }
+
+    /// <summary>Lessons whose teacher was not matched or was left unassigned (listed in <see cref="Details"/>).</summary>
+    public int UnassignedTeachers { get; set; }
+    public int Breaks { get; set; }
+    public int Warnings { get; set; }
+
+    /// <summary>The class's lessons that this upload replaced (ended from the import week; kept as history).</summary>
+    public int ReplacedLessons { get; set; }
+
+    /// <summary>JSON: the lessons waiting for a teacher and the warnings shown when it was saved.</summary>
+    public string? Details { get; set; }
+
+    public string? ImportedBy { get; set; }
+    public DateTime ImportedAt { get; set; }
+}

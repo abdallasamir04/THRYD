@@ -1,0 +1,195 @@
+@model InspectionFormModel
+@*
+    Inspect an area in one round: the checklist (each item answered in its own way — choice, number or text), observations
+    and photos. "Save in progress" keeps a started inspection to finish later; "Complete" needs every required item.
+    A completed inspection can only be corrected by a manager, with a reason (kept in its audit trail).
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = $"Inspect {Model.Area?.Name}"; ViewData["Nav"] = "FloorAudit"; }
+    var area = Model.Area!;
+    var label = Model.Session?.Label ?? "Session";
+    var isNew = Model.InspectionId is null;
+    var title = Model.ReadOnly ? $"{area.Name} — {FloorAuditRounds.Label(Model.Round)}"
+        : Model.IsCorrection ? $"Correct the inspection of {area.Name}"
+        : isNew ? $"Record Audit — {area.Name}" : $"Continue inspection — {area.Name}";
+    string? Err(string key) => ViewData.ModelState.TryGetValue(key, out var e) && e.Errors.Count > 0 ? string.Join(" ", e.Errors.Select(x => x.ErrorMessage)) : null;
+    var disabled = Model.ReadOnly;
+    var status = FloorAuditSchedule.AreaStatus(true, Model.Status, Model.Questions.Count(q => q.IsIssue) + Model.Extras.Count(e => e.IsIssue), true);
+    var formUrl = $"/floor-audit/inspect?area={Model.AreaId}&date={Model.Date}&slot={Model.SlotId}&round={Model.Round}";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var dateText = DateOnly.TryParseExact(Model.Date, "yyyy-MM-dd", c, System.Globalization.DateTimeStyles.None, out var d) ? d.ToString("ddd d MMM yyyy", c) : Model.Date;
+    // Rows for additional findings: the saved ones, plus one empty row to fill in (also without JavaScript).
+    var extras = Model.Extras.Where(e => !string.IsNullOrWhiteSpace(e.Text)).ToList();
+    if (!disabled) extras.Add(new ExtraFinding());
+    var abouts = Model.Questions.Select(q => q.Name).ToList();
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/floor-audit/inspect" method="post" enctype="multipart/form-data" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents" class="fa-inspect">
+        @Html.AntiForgeryToken()
+        @if (!modal) { <input type="hidden" name="_page" value="1" /> }
+        <input type="hidden" name="AreaId" value="@Model.AreaId" />
+        <input type="hidden" name="Date" value="@Model.Date" />
+        <input type="hidden" name="SlotId" value="@Model.SlotId" />
+        <input type="hidden" name="Round" value="@Model.Round" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon(area.Icon, "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">@title</h2>
+                <p class="modal__sub">@area.TypeLabel on @Model.FloorName · @label · @FloorAuditRounds.Label(Model.Round)</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <dl class="fa-context" aria-label="Inspection">
+                <div><dt>Floor</dt><dd>@Model.FloorName</dd></div>
+                <div><dt>Area</dt><dd dir="auto">@area.Name</dd></div>
+                <div><dt>Type</dt><dd>@(area.Kind == FloorAreaKind.Classroom ? "Classroom" : $"Facility · {area.TypeLabel}")</dd></div>
+                <div><dt>Date</dt><dd>@dateText</dd></div>
+                <div><dt>Session</dt><dd dir="auto">@label@(Model.Session is { } ss ? $" · {ss.Times}" : "")</dd></div>
+                <div><dt>Audit round</dt><dd>@FloorAuditRounds.Label(Model.Round) · start + @FloorAuditRounds.OffsetMinutes[Model.Round - 1] min</dd></div>
+                <div><dt>Scheduled</dt><dd class="num">@(Model.ScheduledTime is { } st ? FloorAuditLabels.Time(st) : "—")</dd></div>
+                <div><dt>Inspector</dt><dd dir="auto">@(Model.InspectorName ?? "Choose “Working as”")</dd></div>
+            </dl>
+            @if (Model.ReadOnly && Model.ReadOnlyReason is { } why)
+            {
+                <div class="notice">@Ui.Icon("lock")<div class="notice__body"><strong>Read only.</strong>@why</div></div>
+            }
+            @if (!isNew)
+            {
+                <ul class="fa-insp-meta">
+                    <li><span>Status</span><partial name="_Stat" model="(FloorAuditLabels.Area(status), FloorAuditLabels.Tone(status))" /></li>
+                    <li><span>Started</span><strong>@(Model.StartedAt is { } sa ? FloorAuditLabels.Time(sa) : "—")</strong> by @(Model.StartedBy ?? "—")</li>
+                    @if (Model.CompletedAt is { } ca) { <li><span>Completed</span><strong>@FloorAuditLabels.Time(ca)</strong> by @(Model.CompletedBy ?? "—")</li> }
+                </ul>
+            }
+            @if (Model.IsCorrection)
+            {
+                <div class="notice notice--warning">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>Correcting a completed inspection.</strong>The original completion time and inspector stay; the answers before and after the correction, your name and the reason are kept in its audit trail.</div></div>
+            }
+
+            <fieldset class="fa-checklist" @(disabled ? "disabled" : null)>
+                <legend class="fa-checklist__legend">Checklist <span class="hint">· items marked <span class="req">*</span> are required to complete</span></legend>
+                @if (Model.Questions.Count == 0)
+                {
+                    <p class="hint">No active checklist items apply to @(area.Kind == FloorAreaKind.Classroom ? "classrooms" : "facilities"). Observations can still be recorded.</p>
+                }
+                @foreach (var q in Model.Questions)
+                {
+                    var name = $"Answers[{q.ItemId}]";
+                    var id = $"fa-q-{q.ItemId}";
+                    var err = Err(name);
+                    <div class="fa-q @(q.IsIssue ? "is-issue" : "") @(err is null ? "" : "has-error")">
+                        <div class="fa-q__label">
+                            <span class="fa-q__name" id="@id-l" dir="auto">@q.Name@if (q.Required) { <span class="req" aria-hidden="true"> *</span> }</span>
+                            @if (q.Description is { } d) { <span class="fa-q__desc" dir="auto">@d</span> }
+                        </div>
+                        <div class="fa-q__answer">
+                            @if (q.Choices.Count > 0)
+                            {
+                                <div class="fa-choices" role="radiogroup" aria-labelledby="@id-l">
+                                    @foreach (var (choice, i) in q.Choices.Select((c, i) => (c, i)))
+                                    {
+                                        <label class="fa-choice fa-choice--@(i == 0 ? "good" : "bad")"><input type="radio" name="@name" value="@choice" checked="@(q.Value == choice)" /><span>@choice</span></label>
+                                    }
+                                    @if (!q.Required)
+                                    {
+                                        <label class="fa-choice fa-choice--none"><input type="radio" name="@name" value="" checked="@(q.Value is null)" /><span>Not answered</span></label>
+                                    }
+                                </div>
+                            }
+                            else if (q.Type == AuditResponseType.Number)
+                            {
+                                <input class="input fa-number" type="number" inputmode="numeric" min="0" max="@AuditResponses.MaxNumber" step="1" id="@id" name="@name" value="@q.Value" aria-labelledby="@id-l" />
+                            }
+                            else
+                            {
+                                <textarea class="input fa-text" id="@id" name="@name" rows="2" maxlength="@FloorInspectionResponse.ValueMaxLength" dir="auto" aria-labelledby="@id-l"
+                                          placeholder="@(q.Type == AuditResponseType.IssueText ? "Leave empty if there is nothing to report" : "Optional")">@q.Value</textarea>
+                            }
+                            @if (err is not null) { <span class="field-validation-error">@err</span> }
+                        </div>
+                    </div>
+                }
+            </fieldset>
+
+            <fieldset class="fa-extras" @(disabled ? "disabled" : null) data-fa-extras>
+                <legend class="fa-checklist__legend">Additional observations &amp; issues <span class="hint">· findings beyond the checklist; an issue counts as an issue of this inspection</span></legend>
+                <ol class="fa-extras__list" data-fa-extras-list>
+                    @for (var i = 0; i < extras.Count; i++)
+                    {
+                        var e = extras[i];
+                        <li class="fa-extra @(e.IsIssue ? "is-issue" : "")" data-fa-extra>
+                            <div class="fa-extra__kind" role="radiogroup" aria-label="Kind">
+                                <label class="fa-choice fa-choice--good"><input type="radio" name="Extras[@i].Kind" value="@ExtraFinding.Observation" checked="@(!e.IsIssue)" /><span>Observation</span></label>
+                                <label class="fa-choice fa-choice--bad"><input type="radio" name="Extras[@i].Kind" value="@ExtraFinding.Issue" checked="@e.IsIssue" /><span>Issue</span></label>
+                            </div>
+                            <select class="select fa-extra__about" name="Extras[@i].About" aria-label="About">
+                                <option value="">General (not about one item)</option>
+                                @foreach (var q in abouts) { <option value="@q" selected="@(e.About == q)">About: @q</option> }
+                            </select>
+                            <textarea class="input fa-extra__text" name="Extras[@i].Text" rows="2" maxlength="@FloorInspectionResponse.ValueMaxLength" dir="auto" placeholder="Describe what was seen">@e.Text</textarea>
+                            @if (!disabled) { <button class="icon-btn fa-extra__remove" type="button" data-fa-extra-remove title="Remove" aria-label="Remove this finding">@Ui.Icon("x")</button> }
+                        </li>
+                    }
+                </ol>
+                @if (!disabled) { <button class="btn btn--secondary btn--sm" type="button" data-fa-extra-add>@Ui.Icon("plus", "icon--sm")Add Observation / Issue</button> }
+                @if (Err("Extras") is { } xe) { <span class="field-validation-error">@xe</span> }
+            </fieldset>
+
+            <div class="field">
+                <label class="label" for="fa-obs">Overall observations</label>
+                <textarea class="input" id="fa-obs" name="Observations" rows="3" maxlength="@FloorAreaInspection.ObservationsMaxLength" dir="auto" disabled="@disabled"
+                          placeholder="Anything else seen during the inspection">@Model.Observations</textarea>
+            </div>
+
+            <div class="field">
+                <span class="label">Photos and attachments</span>
+                @if (Model.Attachments.Count > 0)
+                {
+                    <ul class="fa-files">
+                        @foreach (var f in Model.Attachments)
+                        {
+                            <li><a href="/floor-audit/inspections/@Model.InspectionId/files/@f.Id" target="_blank" rel="noopener">@Ui.Icon(TaskAttachmentRules.Icon(f.Extension), "icon--sm")<span dir="auto">@f.FileName</span></a><span class="faint">@f.Size · @(f.UploadedBy ?? "—")</span></li>
+                        }
+                    </ul>
+                }
+                @if (!disabled && Model.Attachments.Count < FloorAuditService.MaxAttachments)
+                {
+                    <input class="input" type="file" name="Photos" multiple accept="@FloorAuditService.AttachmentAccept" capture="environment" />
+                    <span class="hint">Optional: up to @(FloorAuditService.MaxAttachments - Model.Attachments.Count) photos (PNG, JPG) or PDFs, @TaskAttachmentRules.SizeLabel(TaskAttachmentRules.MaxBytes) each.</span>
+                }
+                @if (Err("Photos") is { } pe) { <span class="field-validation-error">@pe</span> }
+            </div>
+
+            @if (Model.IsCorrection)
+            {
+                <div class="field">
+                    <label class="label" for="fa-reason">Reason for the correction <span class="req" aria-hidden="true">*</span></label>
+                    <textarea class="input" id="fa-reason" name="Reason" rows="2" maxlength="500" dir="auto" required>@Model.Reason</textarea>
+                    @if (Err("Reason") is { } re) { <span class="field-validation-error">@re</span> }
+                </div>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>@(disabled ? "Close" : "Cancel")</button> }
+            else { <a class="btn btn--secondary" href="/floor-audit/floors/@area.FloorId?date=@Model.Date&amp;slot=@Model.SlotId&amp;round=@Model.Round">Back</a> }
+            @if (Model.InspectionId is { } iid) { <a class="btn btn--ghost" href="/floor-audit/inspections/@iid" data-modal>@Ui.Icon("clock")Audit trail</a> }
+            @if (!disabled)
+            {
+                if (Model.IsCorrection)
+                {
+                    <button class="btn btn--primary" type="submit" name="submit" value="correct">@Ui.Icon("check")Save correction</button>
+                }
+                else
+                {
+                    <button class="btn btn--secondary" type="submit" name="submit" value="save-stay" data-reopen="@formUrl" title="Save the answers so far and keep the form open">@Ui.Icon("clock")Save as In Progress</button>
+                    <button class="btn btn--secondary" type="submit" name="submit" value="save" title="Save the answers so far and close; continue from the area's card later">@Ui.Icon("arrow-right")Continue Later</button>
+                    <button class="btn btn--primary" type="submit" name="submit" value="complete">@Ui.Icon("check")Complete Inspection</button>
+                }
+            }
+        </div>
+    </form>
+</div>

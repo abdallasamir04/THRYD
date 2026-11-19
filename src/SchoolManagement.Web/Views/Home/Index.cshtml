@@ -155,7 +155,7 @@
         <nav class="quick" aria-label="Quick actions">
             <a href="/students/create" data-modal><span class="q-icon">@Ui.Icon("user-plus")</span>Add student</a>
             <a href="/staff/create" data-modal><span class="q-icon">@Ui.Icon("users")</span>Add staff</a>
-            <a href="/duties"><span class="q-icon">@Ui.Icon("shield-check")</span>Duties</a>
+            <a href="/duties/audit"><span class="q-icon">@Ui.Icon("shield-check")</span>Duties &amp; Audit</a>
             <a href="/workload"><span class="q-icon">@Ui.Icon("chart")</span>Teacher workload</a>
             <a href="/import-export"><span class="q-icon">@Ui.Icon("upload")</span>Import Excel</a>
             <a href="/classes"><span class="q-icon">@Ui.Icon("door")</span>Manage classes</a>
@@ -166,9 +166,10 @@
     @*
         Students by class: one line chart with a point per class (active classes, plus inactive classes that still have
         students), in the Classes order (Pre-K, KG1A … G10B), against one student-count scale (Services/CapacityScale.cs:
-        0–25, ticks 0, 10, 15, 20, 25, growing when needed). The points are joined by a smooth monotone line (Services/EnrolmentLine.cs:
-        no invented peaks or dips) with nothing filled under it; a point over its class's capacity (and its ratio) is red. Each class
-        also gets a subtle dashed tick at its own capacity, so equal capacities read as one reference line. The ratio
+        0–25, ticks 0, 10, 15, 20, 25, growing when needed). The ticks are evenly spaced on purpose (not proportional): each value
+        sits linearly between its two neighbouring ticks (CapacityScale.Position), the same mapping for the points, the line and
+        the capacity ticks, while the ratios and tooltips keep the real numbers. The points are joined by a smooth monotone line (Services/EnrolmentLine.cs:
+        no invented peaks or dips) with nothing filled under it; a point over its class's capacity (and its ratio) is red. The ratio
         (enrolled/capacity) sits by the point, the name below. The y-axis stays put while the plot scrolls sideways on narrow
         screens. Each class's column opens its student list; js/dashboard-chart.js shows the details (cap-pt__tip) as a tooltip
         on hover and keyboard focus.
@@ -182,7 +183,6 @@
             <div class="legend cap-legend">
                 <span><i class="l-enrolled"></i>Enrolled</span>
                 <span><i class="l-over"></i>Over capacity</span>
-                <span><i class="l-capacity"></i>Class capacity</span>
             </div>
         </div>
         @if (shown.Count == 0)
@@ -208,24 +208,26 @@
             string F(double v) => v.ToString("0.#####", inv);
             string Pct(double v) => (v * 100).ToString("0.###", inv) + "%";
             var ticks = CapacityScale.Ticks(top, step);
+            double Pos(int value) => CapacityScale.Position(value, ticks);   // the evenly spaced axis: 0 at the bottom, 1 at the top
+            const int lineTop = 100;                                         // the line's viewBox height (chart units)
             <div class="cap-chart" data-cap-chart style="--cols:@shown.Count">
                 <div class="cap-chart__y" aria-hidden="true">
-                    @foreach (var t in ticks)
+                    @for (var k = 0; k < ticks.Count; k++)
                     {
-                        <span class="num" style="bottom:@Pct(t / (double)top)">@t</span>
+                        <span class="num" style="bottom:@Pct(CapacityScale.TickPosition(k, ticks.Count))">@ticks[k]</span>
                     }
                 </div>
                 <div class="cap-chart__scroll" tabindex="0" role="region" aria-label="Students by class chart (scrolls sideways)">
                     <div class="cap-chart__inner">
                         <div class="cap-chart__grid" aria-hidden="true">
-                            @foreach (var t in ticks)
+                            @for (var k = 0; k < ticks.Count; k++)
                             {
-                                <span class="cap-chart__line @(t == 0 ? "cap-chart__line--base" : "")" style="bottom:@Pct(t / (double)top)"></span>
+                                <span class="cap-chart__line @(ticks[k] == 0 ? "cap-chart__line--base" : "")" style="bottom:@Pct(CapacityScale.TickPosition(k, ticks.Count))"></span>
                             }
                         </div>
-                        @* The line, in chart units (one unit per class across, one per student up), stretched to the plot; the stroke keeps its width. *@
-                        <svg class="cap-line" viewBox="0 0 @shown.Count @top" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-                            <path class="cap-line__path" d="@EnrolmentLine.Path(shown.Select(x => x.Count).ToList(), top)" />
+                        @* The line, in chart units (one unit per class across, 100 up for the full axis, each point at its evenly spaced axis position), stretched to the plot; the stroke keeps its width. *@
+                        <svg class="cap-line" viewBox="0 0 @shown.Count @lineTop" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                            <path class="cap-line__path" d="@EnrolmentLine.Path(shown.Select(x => Pos(x.Count) * lineTop).ToList(), lineTop)" />
                         </svg>
                         <ol class="cap-chart__cols">
                             @for (var i = 0; i < shown.Count; i++)
@@ -233,13 +235,12 @@
                                 var x = shown[i];
                                 var state = x.Over > 0 ? "over" : x.IsFull ? "full" : "open";
                                 var label = $"{x.Name}: {x.Count} of {x.Capacity} students, " + (x.Over > 0 ? $"{x.Over} over capacity" : x.IsFull ? "full" : $"{x.Available} {(x.Available == 1 ? "seat" : "seats")} available") + $", {x.Utilization}% of capacity used{(x.IsActive ? "" : ", inactive class")}. Opens the class's students.";
-                                var v = x.Count / (double)top;
+                                var v = Pos(x.Count);
                                 // The ratio goes above the point, or below it at a dip (both neighbours higher) where the line would cross it.
                                 var dip = (i == 0 || shown[i - 1].Count > x.Count) && (i == shown.Count - 1 || shown[i + 1].Count > x.Count) && shown.Count > 1 && v >= 0.16;
                                 <li class="cap-pt cap-pt--@state @(x.IsActive ? "" : "is-inactive")">
                                     <a class="cap-pt__link" href="/students?classId=@x.ClassId" aria-label="@label" data-cap-point>
-                                        <span class="cap-pt__plot" style="--v:@F(v);--c:@F(x.Capacity / (double)top)">
-                                            <span class="cap-pt__capacity" data-n="@x.Capacity"></span>
+                                        <span class="cap-pt__plot" style="--v:@F(v)">
                                             <span class="cap-pt__guide"></span>
                                             <span class="cap-pt__dot" data-n="@x.Count"></span>
                                             <span class="cap-pt__value num @(dip ? "is-below" : "") @(x.Count.ToString(inv).Length + x.Capacity.ToString(inv).Length > 4 ? "is-long" : "")">@x.Count<span class="cap-pt__cap">/@x.Capacity</span></span>

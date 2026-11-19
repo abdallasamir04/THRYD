@@ -138,6 +138,12 @@
             </ol>
         }
 
+        @if (d.Component == SchoolManagement.Web.Services.DutyService.RevisionComponent)
+        {
+            <h3 class="section-label" style="margin-top:20px">Revision records</h3>
+            <partial name="_Revisions" model="new RevisionListModel(Model.Revisions, d.DutyDate, d.Id, false, true)" />
+        }
+
         <h3 class="section-label" style="margin-top:20px">Audit trail</h3>
         @if (Model.AuditTrail.Count == 0)
         {

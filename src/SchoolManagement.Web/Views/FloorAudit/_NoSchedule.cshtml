@@ -1,0 +1,24 @@
+@model AuditDaySchedule
+@*
+    The audit schedule cannot be generated: the day has no lessons, or its periods have no start times. Times are never
+    invented — the rounds appear as soon as the timetable has them.
+*@
+<div class="notice notice--warning fa-noschedule">@Ui.Icon("alert-triangle")
+    <div class="notice__body">
+        <strong>The audit schedule cannot be generated for this day.</strong>
+        @if (Model.UntimedPeriods.Count > 0)
+        {
+            <text>The timetable has @Ui.Plural(Model.UntimedPeriods.Count, "session", "sessions") on this day (@string.Join(", ", Model.UntimedPeriods.Take(6))@(Model.UntimedPeriods.Count > 6 ? "…" : "")), but no start time is set for
+            @(Model.UntimedPeriods.Count == 1 ? "it" : "them"). Each round is calculated from its session's start time, so no time is assumed:
+            set the period times in <a href="/timetable/periods">Timetables → Periods</a> and the rounds appear here.</text>
+        }
+        else if (Model.Sessions.Count > 0)
+        {
+            <text>Every session of this day is cancelled, so there are no audit rounds.</text>
+        }
+        else
+        {
+            <text>No timetable sessions take place on this day. The audit rounds come from the timetable: once classes have lessons with period times, the rounds appear here.</text>
+        }
+    </div>
+</div>

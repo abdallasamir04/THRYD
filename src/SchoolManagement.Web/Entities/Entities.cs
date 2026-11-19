@@ -14,8 +14,9 @@ public class SchoolClass : IAuditable
     /// <summary>
     /// The standard class size for a new class (and the database default). A class's own capacity can be changed at any
     /// time and is never a hard limit: a class may hold more students than its capacity (shown as over capacity).
+    /// Changing it changes only new classes; existing classes keep their own stored capacity.
     /// </summary>
-    public const int DefaultCapacity = 20;
+    public const int DefaultCapacity = 22;
 
     public int Id { get; set; }
     public string Name { get; set; } = "";
@@ -44,8 +45,69 @@ public class Student : IAuditable
 
     public int SchoolClassId { get; set; }
     public SchoolClass SchoolClass { get; set; } = null!;
+
+    /// <summary>
+    /// The mark printed after the name in the school's official name list, exactly as printed including any space before
+    /// it ("*", " (*)", " *", " #"); null when there is none. <see cref="FullName"/> is the name without it, and
+    /// <see cref="StudentMarks.Printed"/> gives the name exactly as the list printed it. The list does not say what the
+    /// marks mean, so they are shown as they are (a star for * and (*)).
+    /// </summary>
+    public string? NameMarker { get; set; }
+
+    /// <summary>
+    /// The background colour of the student's row in the official name list ("#FBE5D6"), when the row was highlighted;
+    /// null otherwise. The list does not say what each colour means, so the colour itself is kept and shown.
+    /// </summary>
+    public string? HighlightColor { get; set; }
+
+    /// <summary>The colour of the student's name in the official name list when it is not black ("#0000FF"); null otherwise.</summary>
+    public string? NameColor { get; set; }
+
+    /// <summary>REL as printed in the official name list ("M", "CH"); null when the list gives none.</summary>
+    public string? Religion { get; set; }
+
+    /// <summary>
+    /// The second language as printed in the official name list's "Sec Lang" column ("F", "G"); null when the list gives
+    /// none (classes without the column, or a dash).
+    /// </summary>
+    public string? SecondLanguage { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>The official name list's marks on a student (see <see cref="Student.NameMarker"/> and <see cref="Student.HighlightColor"/>).</summary>
+public static class StudentMarks
+{
+    public const int MarkerMaxLength = 8;
+    public const int ColorLength = 7;
+    public const int ReligionMaxLength = 10;
+    public const int LanguageMaxLength = 20;
+
+    /// <summary>
+    /// The second language a "Sec Lang" code stands for: F = French, G = German (Deutsch) — the two languages of the
+    /// school's Second Language department; any other value is shown as printed.
+    /// </summary>
+    public static string? LanguageName(string? code) => code?.Trim().ToUpperInvariant() switch
+    {
+        null or "" => null,
+        "F" => "French",
+        "G" => "Deutsch",
+        _ => code.Trim(),
+    };
+
+    /// <summary>The name exactly as the official list printed it (name + mark).</summary>
+    public static string Printed(string fullName, string? marker) => marker is null ? fullName : fullName + marker;
+
+    /// <summary>The mark itself without the space before it ("*", "(*)", "#").</summary>
+    public static string? Symbol(string? marker) => string.IsNullOrWhiteSpace(marker) ? null : marker.Trim();
+
+    /// <summary>A star mark: "*" or "(*)".</summary>
+    public static bool IsStar(string? marker) => Symbol(marker) is "*" or "(*)";
+
+    /// <summary>A highlight colour that is safe to put in a style attribute ("#RRGGBB"), or null.</summary>
+    public static string? SafeColor(string? color) =>
+        color is { Length: ColorLength } c && c[0] == '#' && c.Skip(1).All(Uri.IsHexDigit) ? c.ToUpperInvariant() : null;
 }
 
 /// <summary>

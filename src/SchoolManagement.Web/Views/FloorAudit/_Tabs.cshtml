@@ -1,0 +1,16 @@
+@model string
+@*
+    Floor Audit sections: Floor Overview, Classroom & Facility Inspections, Student Access, Audit History and Manage.
+    Model = "home", "inspections", "movements", "history" or "manage"; the current one is highlighted.
+*@
+@{
+    var date = Context.Request.Query["date"].ToString();
+    var q = string.IsNullOrEmpty(date) ? "" : $"?date={Uri.EscapeDataString(date)}";
+}
+<nav class="audit-tabs fa-tabs" aria-label="Floor Audit sections">
+    <a class="btn btn--secondary audit-tab" href="/floor-audit@(q)" aria-current="@(Model == "home" ? "page" : null)">@Ui.Icon("school")Floor Overview</a>
+    <a class="btn btn--secondary audit-tab" href="/floor-audit/inspections@(q)" aria-current="@(Model == "inspections" ? "page" : null)">@Ui.Icon("clipboard-check")Inspections</a>
+    <a class="btn btn--secondary audit-tab" href="/floor-audit/movements" aria-current="@(Model == "movements" ? "page" : null)">@Ui.Icon("users")Student Access</a>
+    <a class="btn btn--secondary audit-tab" href="/floor-audit/history" aria-current="@(Model == "history" ? "page" : null)">@Ui.Icon("clock")Audit History</a>
+    <a class="btn btn--secondary audit-tab" href="/floor-audit/manage" aria-current="@(Model == "manage" ? "page" : null)">@Ui.Icon("settings")Manage</a>
+</nav>

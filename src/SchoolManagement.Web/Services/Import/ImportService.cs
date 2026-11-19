@@ -23,8 +23,9 @@ public interface IImportService
 /// Nothing is written before the user confirms; every row is validated again at that moment, and a
 /// row is never dropped without being reported (empty rows are the only rows not listed, and they are counted).
 /// </summary>
-/// <remarks>Tasks (ImportService.Tasks.cs) are checked and created by the Tasks module's own service.</remarks>
-public sealed partial class ImportService(SchoolDbContext db, IMemoryCache cache, ILogger<ImportService> logger, IManagementTaskService? tasks = null) : IImportService
+/// <remarks>Tasks (ImportService.Tasks.cs) and classes (ImportService.Classes.cs) are checked and created by their own module's service.</remarks>
+public sealed partial class ImportService(SchoolDbContext db, IMemoryCache cache, ILogger<ImportService> logger, IManagementTaskService? tasks = null,
+    IClassService? classes = null) : IImportService
 {
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(45);
     private static string CacheKey(Guid token) => $"import:{token:N}";
@@ -110,6 +111,7 @@ public sealed partial class ImportService(SchoolDbContext db, IMemoryCache cache
         var rows = ExtractRows(session);
         if (session.Kind == ImportKind.Students) await ValidateStudentsAsync(rows, ct);
         else if (session.Kind == ImportKind.Tasks) await ValidateTasksAsync(rows, ct);
+        else if (session.Kind == ImportKind.Classes) await ValidateClassesAsync(rows, ct);
         else await ValidateTeachersAsync(rows, ct);
         return new ImportPreview { Kind = session.Kind, Rows = rows };
     }
@@ -125,6 +127,8 @@ public sealed partial class ImportService(SchoolDbContext db, IMemoryCache cache
 
         if (ready.Count > 0 && session.Kind == ImportKind.Tasks)
             imported = await CreateTasksAsync(ready, ct); // one task at a time, through the Tasks module
+        else if (ready.Count > 0 && session.Kind == ImportKind.Classes)
+            imported = await CreateClassesAsync(ready, ct); // one class at a time, through Add Class's save
         else if (ready.Count > 0)
         {
             try

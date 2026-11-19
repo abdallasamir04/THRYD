@@ -1,0 +1,79 @@
+@model MovementPage
+@*
+    Student Access — Movement History: returned and voided movements with departure, return, total time outside, who
+    recorded the departure and the return (or the void and its reason), filtered and exported (PDF / Excel).
+*@
+@{
+    ViewData["Title"] = "Movement History · Floor Audit";
+    ViewData["Nav"] = "FloorAudit";
+    var f = Model.Filter;
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit">Floor Audit</a></li><li><a href="/floor-audit/movements">Student Access</a></li><li>Movement History</li></ol>
+        <h1 class="page-title">Movement History</h1>
+        <p class="page-sub">Every completed (returned) and voided student movement, as recorded: departure and return times from the server, total time outside, and who recorded each step.</p>
+    </div>
+    <div class="page-head__actions">
+        <partial name="_Download" model='new DownloadLink("/floor-audit/movements/history/pdf", "Download Report")' />
+        <a class="btn btn--secondary" href="/floor-audit/movements/history/excel@(Context.Request.QueryString)" data-download="/floor-audit/movements/history/excel" download>@Ui.Icon("sheet")Excel</a>
+    </div>
+</div>
+
+<partial name="_Tabs" model='"movements"' />
+
+<nav class="segmented fa-subtabs" aria-label="Student Access">
+    <a href="/floor-audit/movements">@Ui.Icon("users", "icon--sm")Outside now <span class="count">@Model.Today.Outside</span></a>
+    <a href="/floor-audit/movements/history" aria-current="true">@Ui.Icon("clock", "icon--sm")Movement History</a>
+</nav>
+
+<section class="card table-card fa-table-card" aria-label="Movement history">
+    <form class="toolbar toolbar--wrap fa-filters" action="/floor-audit/movements/history" method="get" role="search" data-list-filter="#movement-history">
+        <div class="field toolbar__date"><label class="label" for="h-from">From</label><input class="input picker" type="date" id="h-from" name="from" value="@SchoolWeek.Iso(f.From)" data-datepicker /></div>
+        <div class="field toolbar__date"><label class="label" for="h-to">To</label><input class="input picker" type="date" id="h-to" name="to" value="@SchoolWeek.Iso(f.To)" data-datepicker /></div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-student">Student</label>
+            <input class="input" type="search" id="h-student" name="student" value="@f.Student" placeholder="Any student" dir="auto" autocomplete="off" />
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-floor">Floor</label>
+            <select class="select" id="h-floor" name="floor">
+                <option value="">All floors</option>
+                @foreach (var (id, name) in Model.Floors) { <option value="@id" selected="@(f.FloorId == id)">@name</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-class">Class</label>
+            <select class="select" id="h-class" name="class" data-searchable>
+                <option value="">All classes</option>
+                @foreach (var (id, name) in Model.Classes) { <option value="@id" selected="@(f.ClassId == id)">@name</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-dest">Destination</label>
+            <select class="select" id="h-dest" name="destination">
+                <option value="">All destinations</option>
+                @foreach (var d in Model.Destinations) { <option value="@d" selected="@(f.Destination == d)">@d</option> }
+            </select>
+        </div>
+        <div class="field toolbar__filter">
+            <label class="label" for="h-status">Status</label>
+            <select class="select" id="h-status" name="status">
+                <option value="">Returned and voided</option>
+                <option value="returned" selected="@(f.Status == "returned")">Returned</option>
+                <option value="voided" selected="@(f.Status == "voided")">Voided</option>
+            </select>
+        </div>
+        <input type="hidden" name="pageSize" value="@f.PageSize" />
+        <input type="hidden" name="page" value="" />
+        <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+    </form>
+    <div id="movement-history" data-ajax-list aria-live="polite">
+        <partial name="_MovementHistoryList" model="Model" />
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/floor-audit.js" asp-append-version="true"></script>
+}
