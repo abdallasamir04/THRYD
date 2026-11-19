@@ -225,6 +225,6 @@ E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\3ma
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\7gfjytqs7x-66nged5ke5.gz
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\hv7otfj6cs-k4dn5t0hqh.gz
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\vp18mgcunj-4iydccyjks.gz
-E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\3zu913ayaz-a77gdire20.gz
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\bbulmtn4oc-5qxewvaiqd.gz
+E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\compressed\3zu913ayaz-cnm4i7lp70.gz
 E:\noo\SchoolManagement\src\SchoolManagement.Web\obj\Debug\net9.0\staticwebassets.upToDateCheck.txt

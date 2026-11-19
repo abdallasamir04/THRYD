@@ -166,8 +166,8 @@
     @*
         Students by class: one line chart with a point per class (active classes, plus inactive classes that still have
         students), in the Classes order (Pre-K, KG1A … G10B), against one student-count scale (Services/CapacityScale.cs:
-        0–25 in steps of 5, growing when needed). The points are joined by a smooth monotone line (Services/EnrolmentLine.cs:
-        no invented peaks or dips) with nothing filled under it; a point over its class's capacity is darker blue. Each class
+        0–25, ticks 0, 10, 15, 20, 25, growing when needed). The points are joined by a smooth monotone line (Services/EnrolmentLine.cs:
+        no invented peaks or dips) with nothing filled under it; a point over its class's capacity (and its ratio) is red. Each class
         also gets a subtle dashed tick at its own capacity, so equal capacities read as one reference line. The ratio
         (enrolled/capacity) sits by the point, the name below. The y-axis stays put while the plot scrolls sideways on narrow
         screens. Each class's column opens its student list; js/dashboard-chart.js shows the details (cap-pt__tip) as a tooltip
@@ -207,7 +207,7 @@
             var (top, step) = CapacityScale.For(shown.Max(x => Math.Max(x.Count, x.Capacity)));
             string F(double v) => v.ToString("0.#####", inv);
             string Pct(double v) => (v * 100).ToString("0.###", inv) + "%";
-            var ticks = Enumerable.Range(0, top / step + 1).Select(i => i * step).ToList();
+            var ticks = CapacityScale.Ticks(top, step);
             <div class="cap-chart" data-cap-chart style="--cols:@shown.Count">
                 <div class="cap-chart__y" aria-hidden="true">
                     @foreach (var t in ticks)

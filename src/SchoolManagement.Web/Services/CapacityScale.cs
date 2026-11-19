@@ -17,4 +17,11 @@ public static class CapacityScale
         var step = Steps.FirstOrDefault(s => (p + s - 1) / s <= 10, Steps[^1]);
         return ((p + step - 1) / step * step, step);
     }
+
+    /// <summary>
+    /// The labelled ticks (and gridlines) from 0 to <paramref name="top"/>: every step except 5, so the usual axis reads
+    /// 0, 10, 15, 20, 25 (and keeps going 30, 35 … when the scale grows). The scale itself is unchanged, so no point moves.
+    /// </summary>
+    public static IReadOnlyList<int> Ticks(int top, int step)
+        => Enumerable.Range(0, top / step + 1).Select(i => i * step).Where(t => t != 5).ToList();
 }

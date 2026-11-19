@@ -834,13 +834,13 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.78rem; color: var(--color-text-muted); font-weight: 600; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-/* ---- Dashboard: Students by class as a line chart (blue line and points, darker blue points over capacity, a subtle
+/* ---- Dashboard: Students by class as a line chart (blue line and points, red points and ratios over capacity, a subtle
    dashed capacity reference). Nothing is filled under the line: the card background stays clean. */
-:root { --cap-line: #2563eb; --cap-over: #172f80; --cap-over-ink: #1e3a8a; --cap-ref: #97a3c0; --cap-slot: #b3bdd6; }
-:root[data-theme="dark"] { --cap-line: #6382ff; --cap-over: #2a3db5; --cap-over-ink: #a9bbff; --cap-ref: #5d6c92; --cap-slot: #4d5d84; }
+:root { --cap-line: #2563eb; --cap-over: #172f80; --cap-over-ink: #1e3a8a; --cap-alert: #dc2626; --cap-ref: #97a3c0; --cap-slot: #b3bdd6; }
+:root[data-theme="dark"] { --cap-line: #6382ff; --cap-over: #2a3db5; --cap-over-ink: #a9bbff; --cap-alert: #f87171; --cap-ref: #5d6c92; --cap-slot: #4d5d84; }
 .legend .l-enrolled { position: relative; width: 22px !important; height: 10px; background: linear-gradient(var(--cap-line), var(--cap-line)) center / 100% 2px no-repeat; border-radius: 0 !important; }
 .legend .l-enrolled::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--cap-line); transform: translate(-50%, -50%); }
-.legend .l-over { border-radius: 50% !important; background: var(--cap-over); }
+.legend .l-over { border-radius: 50% !important; background: var(--cap-alert); }
 .legend .l-capacity { width: 18px !important; height: 0 !important; border-radius: 0 !important; border-top: 1.5px dashed var(--cap-ref); }
 .cap-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 16px 22px 0; list-style: none; }
 .cap-totals li { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-soft); }
@@ -876,8 +876,8 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
 .cap-pt__dot { position: absolute; left: 50%; bottom: calc(var(--v) * var(--plot-h)); z-index: 2; width: 11px; height: 11px; border-radius: 50%; box-sizing: border-box;
     background: var(--cap-line); box-shadow: 0 0 0 2px var(--color-surface); transform: translate(-50%, 50%); transition: transform 0.15s;
     animation: cap-dot-in 0.4s 0.5s both; }
-/* Over capacity: a darker blue point with a fine ring of the same blue. */
-.cap-pt--over .cap-pt__dot { width: 13px; height: 13px; background: var(--cap-over); box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3.5px var(--cap-over); }
+/* Over capacity: a red point with a fine ring of the same red (the line through it stays blue). */
+.cap-pt--over .cap-pt__dot { width: 13px; height: 13px; background: var(--cap-alert); box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3.5px var(--cap-alert); }
 @keyframes cap-dot-in { from { opacity: 0; transform: translate(-50%, 50%) scale(0.3); } }
 .cap-pt__value { position: absolute; left: 50%; bottom: calc(var(--v) * var(--plot-h) + 11px); z-index: 3; padding: 1px 3px; border-radius: 4px; background: var(--color-surface);
     transform: translateX(-50%); font-size: 0.7rem; font-weight: 800; line-height: 1.15; white-space: nowrap; text-align: center; color: var(--color-text-strong); letter-spacing: -0.01em;
@@ -886,7 +886,7 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
 .cap-pt__value.is-long { font-size: 0.66rem; }
 .cap-pt__value.is-long .cap-pt__cap { display: block; } /* long ratios (capacities of 100+) stack: enrolled over /capacity */
 .cap-pt__cap { font-weight: 600; color: var(--color-text-muted); }
-.cap-pt--over .cap-pt__value, .cap-pt--over .cap-pt__cap { color: var(--cap-over-ink); }
+.cap-pt--over .cap-pt__value, .cap-pt--over .cap-pt__cap { color: var(--cap-alert); }
 @keyframes cap-value-in { from { opacity: 0; } }
 .cap-pt__name { display: flex; align-items: center; justify-content: center; height: var(--name-h); font-size: 0.74rem; font-weight: 700; white-space: nowrap; color: var(--color-text-muted); }
 .cap-pt__link:hover .cap-pt__guide, .cap-pt__link:focus-visible .cap-pt__guide { opacity: 0.45; }

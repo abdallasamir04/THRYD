@@ -101,12 +101,15 @@ public sealed class DashboardCapacityTests(DbFixture fx)
                 var order = Regex.Matches(html, "class=\"cap-pt__link\" href=\"/students\\?classId=(\\d+)\"").Select(m => int.Parse(m.Groups[1].Value)).ToList();
                 Assert.Equal(shown.Select(c => c.ClassId), order);
 
-                // The y-axis: 0 … at least 25 in steps of 5 (wider steps only when far larger values need them).
+                // The y-axis: 0 … at least 25, labelled 0, 10, 15, 20, 25 (no 5), growing when larger values need it.
                 var (top, step) = CapacityScale.For(shown.Max(c => Math.Max(c.Count, c.Capacity)));
                 var axis = html[html.IndexOf("cap-chart__y", StringComparison.Ordinal)..html.IndexOf("cap-chart__scroll", StringComparison.Ordinal)];
                 var ticks = Regex.Matches(axis, "<span class=\"num\"[^>]*>(\\d+)</span>").Select(m => int.Parse(m.Groups[1].Value)).ToList();
-                Assert.Equal(Enumerable.Range(0, top / step + 1).Select(i => i * step), ticks);
-                if (step == 5) Assert.Equal([0, 5, 10, 15, 20, 25], ticks.Take(6));
+                Assert.Equal(CapacityScale.Ticks(top, step), ticks);
+                Assert.DoesNotContain(5, ticks);
+                if (step == 5) Assert.Equal([0, 10, 15, 20, 25], ticks.Take(5));
+                var grid = html[html.IndexOf("cap-chart__grid", StringComparison.Ordinal)..html.IndexOf("<svg class=\"cap-line\"", StringComparison.Ordinal)];
+                Assert.Equal(ticks.Count, Regex.Matches(grid, "class=\"cap-chart__line").Count);   // one gridline per tick
 
                 // The line goes through every point, in order: x = i + ½, y = top − enrolment (chart units of the viewBox).
                 Assert.Contains($"viewBox=\"0 0 {shown.Count} {top}\"", html);
@@ -204,4 +207,15 @@ public sealed class DashboardCapacityTests(DbFixture fx)
     [InlineData(1000, 1000, 100)]
     public void Capacity_axis_starts_at_0_to_25_in_fives_and_grows_to_fit(int peak, int top, int step)
         => Assert.Equal((top, step), CapacityScale.For(peak));
+
+    [Theory]
+    [InlineData(23, new[] { 0, 10, 15, 20, 25 })]          // the usual axis: no 5 tick
+    [InlineData(25, new[] { 0, 10, 15, 20, 25 })]
+    [InlineData(28, new[] { 0, 10, 15, 20, 25, 30 })]      // grows past 25, nothing clipped
+    [InlineData(51, new[] { 0, 10, 20, 30, 40, 50, 60 })]
+    public void Capacity_axis_ticks_skip_5(int peak, int[] expected)
+    {
+        var (top, step) = CapacityScale.For(peak);
+        Assert.Equal(expected, CapacityScale.Ticks(top, step));
+    }
 }
