@@ -224,6 +224,34 @@ public sealed class OrgStructureSeeder(SchoolDbContext db, ICurrentUser? current
                 report.People.Add(new(p.Key, p.Name, p.Mobile, null, SeedOutcome.Conflict, $"Several records match ({ids})"));
                 continue;
             }
+            // The sources confirm this person is the staff member of certain Teaching Staff 2027 rows (same name, same role):
+            // reuse that record. Its phone is filled only when empty; a different phone is never overwritten.
+            if (p.RosterRows is { Length: > 0 } rows)
+            {
+                var linked = await db.TeachingRosterEntries.Where(e => e.SourceName == TeachingRoster.TeachingStaff2027.SourceName
+                        && rows.Contains(e.RowNumber) && e.StaffMemberId != null)
+                    .Select(e => e.StaffMemberId!.Value).Distinct().ToListAsync(ct);
+                if (linked.Count == 1 && staff.FirstOrDefault(s => s.Id == linked[0]) is { } rosterStaff && PersonKey(rosterStaff.FullName) == person)
+                {
+                    if (rosterStaff.NormalizedContact.Length == 0)
+                    {
+                        rosterStaff.ContactNumber = TextNormalizer.CleanPhone(p.Mobile);
+                        rosterStaff.NormalizedContact = phone;
+                        await db.SaveChangesAsync(ct);
+                        resolved[p.Key] = rosterStaff;
+                        report.People.Add(new(p.Key, p.Name, p.Mobile, rosterStaff.Id, SeedOutcome.Reused,
+                            $"Existing record #{rosterStaff.Id} of Teaching Staff 2027 row(s) {string.Join(", ", rows)} (the sources name the same person); phone filled from the source"));
+                        continue;
+                    }
+                    report.Conflicts.Add($"{p.Name} ({p.Mobile}): the record #{rosterStaff.Id} of Teaching Staff 2027 row(s) {string.Join(", ", rows)} has another phone ({rosterStaff.ContactNumber}). Nothing was changed or assigned.");
+                    report.People.Add(new(p.Key, p.Name, p.Mobile, null, SeedOutcome.Conflict, $"Phone differs from record #{rosterStaff.Id}"));
+                    await AddFlagAsync(rosterStaff, DataQualityFlagKind.IdentityReview, $"flag:identity:{p.Key}:{rosterStaff.Id}",
+                        $"The official staff document lists {p.Name} with {p.Mobile}; this record (Teaching Staff 2027 row {string.Join(", ", rows)}) has {rosterStaff.ContactNumber}. Confirm the correct number.", report, ct);
+                    continue;
+                }
+                // No row is linked to anyone yet: a new record is created below; the reconciliation links the rows to it.
+            }
+
             // A record with the same name but no phone number may or may not be this person: never merged, never duplicated.
             var uncertain = staff.Where(s => s.NormalizedContact == "" && PersonKey(s.FullName) == person).ToList();
             if (uncertain.Count > 0)

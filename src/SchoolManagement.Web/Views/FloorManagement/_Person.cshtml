@@ -1,35 +1,47 @@
-@model (SchoolManagement.Web.Services.FloorManagement.FloorPerson Person, bool CanManage, int FloorId)
-@* One floor team member: name (profile link), position, phone(s) with a call / WhatsApp action, classes or coverage. *@
+@model (SchoolManagement.Web.Services.FloorManagement.FloorPerson Person, bool CanManage, int FloorId, string FloorName)
+@*
+    One floor team member as a card: name (opens the profile), role badge, phone number(s) as WhatsApp chat links (Ui.Phone),
+    floor and grade range. Authorized administrators can edit the grade range or end the assignment (kept in the history).
+*@
+@using SchoolManagement.Web.Services.FloorManagement
 @{
     var p = Model.Person;
-    var wa = WhatsApp.Link(p.Phone);
+    var role = FloorManagementService.Label(p.Role);
+    var slug = p.Role.ToString().ToLowerInvariant();
+    var phones = new[] { p.Phone, p.Phone2 }.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
 }
-<article class="fm-person fm-person--@p.Role.ToString().ToLowerInvariant()">
-    <span class="avatar avatar--@Ui.Tone(p.Name)" aria-hidden="true">@Ui.Initials(p.Name)</span>
-    <div class="fm-person__text">
-        <a class="fm-person__name" href="@p.ProfileHref" dir="auto">@p.Name</a>
-        <span class="fm-person__role">@SchoolManagement.Web.Services.FloorManagement.FloorManagementService.Label(p.Role)@(p.Role == FloorRole.FloatingMatron ? " · coverage across the floor" : "")</span>
-        @if (p.Scope.Length > 0)
-        {
-            <span class="fm-person__scope">@Ui.Icon(p.Classes.Count > 0 ? "door" : "graduation-cap", "icon--sm")@(p.Classes.Count > 0 ? "Classes: " : "Coverage: ")@p.Scope</span>
-        }
-        <span class="fm-person__phones">
-            @foreach (var phone in new[] { p.Phone, p.Phone2 }.Where(x => !string.IsNullOrWhiteSpace(x)))
-            {
-                var link = WhatsApp.Link(phone);
-                <a class="phone-link" href="tel:@phone!.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")@phone</a>
-                @if (link is not null) { <a class="student-wa" href="@link" target="_blank" rel="noopener noreferrer" title="WhatsApp @phone" aria-label="WhatsApp @p.Name (@phone)">@Ui.Icon("message-circle", "icon--sm")</a> }
-            }
-            @if (string.IsNullOrWhiteSpace(p.Phone)) { <span class="faint">No phone</span> }
-        </span>
-    </div>
+<article class="fm-card fm-card--@slug" aria-label="@p.Name, @role">
+    <header class="fm-card__head">
+        <span class="avatar avatar--@Ui.Tone(p.Name)" aria-hidden="true">@Ui.Initials(p.Name)</span>
+        <div class="fm-card__who">
+            <a class="fm-card__name" href="@p.ProfileHref" dir="auto" title="Open the profile of @p.Name">@p.Name</a>
+            <span class="fm-role fm-role--@slug">@role</span>
+        </div>
+    </header>
+    <dl class="fm-card__facts">
+        <div>
+            <dt>@Ui.Icon("phone", "icon--sm")@(phones.Count > 1 ? "Phones" : "Phone")</dt>
+            <dd class="fm-card__phones">
+                @foreach (var phone in phones)
+                {
+                    @Ui.Phone(phone, "fm-phone", who: p.Name)
+                }
+                @if (phones.Count == 0) { <span class="faint">No phone</span> }
+            </dd>
+        </div>
+        <div><dt>@Ui.Icon("school", "icon--sm")Floor</dt><dd>@Model.FloorName</dd></div>
+        <div><dt>@Ui.Icon("graduation-cap", "icon--sm")Grade range</dt><dd class="@(p.Scope.Length == 0 ? "faint" : "")">@(p.Scope.Length == 0 ? "Not set" : p.Scope)</dd></div>
+    </dl>
     @if (Model.CanManage)
     {
-        <form action="/floor-management/assignments/@p.AssignmentId/end" method="post" data-ajax-form
-              data-confirm="End @p.Name's role as @SchoolManagement.Web.Services.FloorManagement.FloorManagementService.Label(p.Role)? It is kept in the history." data-confirm-title="End assignment?" data-confirm-button="End">
-            @Html.AntiForgeryToken()
-            <input type="hidden" name="floor" value="@Model.FloorId" />
-            <button class="icon-btn icon-btn--danger" type="submit" title="End assignment" aria-label="End the assignment of @p.Name">@Ui.Icon("x-circle")</button>
-        </form>
+        <footer class="fm-card__actions">
+            <a class="btn btn--secondary btn--sm" href="/floor-management/assignments/@p.AssignmentId/edit" data-modal title="Edit the grade range">@Ui.Icon("pencil", "icon--sm")Edit</a>
+            <form action="/floor-management/assignments/@p.AssignmentId/end" method="post" data-ajax-form
+                  data-confirm="End @p.Name's role as @role on the @Model.FloorName? It stays in the floor history." data-confirm-title="End assignment?" data-confirm-button="End">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="floor" value="@Model.FloorId" />
+                <button class="btn btn--secondary btn--sm fm-card__end" type="submit" aria-label="End the assignment of @p.Name">@Ui.Icon("x-circle", "icon--sm")End</button>
+            </form>
+        </footer>
     }
 </article>

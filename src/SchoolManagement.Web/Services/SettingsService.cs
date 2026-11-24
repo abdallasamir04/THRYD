@@ -116,7 +116,7 @@ public sealed class SettingsService(SchoolDbContext db, IMemoryCache cache) : IS
             (await db.Database.GetAppliedMigrationsAsync(ct)).ToList(),
             (await db.Database.GetPendingMigrationsAsync(ct)).ToList(),
             await db.Students.CountAsync(ct),
-            await db.Teachers.CountAsync(ct),
+            await db.Teachers.CountAsync(t => t.ArchivedAt == null, ct),
             await db.Classes.CountAsync(ct),
             // Data check (administrative correction, not an attendance category): every student should be in an active class.
             await db.Students.CountAsync(st => !st.SchoolClass.IsActive, ct));

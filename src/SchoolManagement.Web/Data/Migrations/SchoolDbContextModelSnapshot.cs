@@ -3362,7 +3362,7 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     b.ToTable("OrgTiers", null, t =>
                         {
-                            t.HasCheckConstraint("CK_OrgTiers_Section", "[Section] BETWEEN 1 AND 2");
+                            t.HasCheckConstraint("CK_OrgTiers_Section", "[Section] BETWEEN 1 AND 3");
                         });
                 });
 
@@ -4583,6 +4583,13 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("ArchiveReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("ContactNumber")
                         .HasMaxLength(30)
                         .IsUnicode(false)
@@ -4760,7 +4767,7 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     b.ToTable("StaffPositions", null, t =>
                         {
-                            t.HasCheckConstraint("CK_StaffPositions_RoleType", "[RoleType] BETWEEN 1 AND 10");
+                            t.HasCheckConstraint("CK_StaffPositions_RoleType", "[RoleType] BETWEEN 1 AND 12");
                         });
                 });
 
@@ -5509,6 +5516,13 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Property<string>("ObservedValue")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Resolution")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("SourceKey")
                         .IsRequired()

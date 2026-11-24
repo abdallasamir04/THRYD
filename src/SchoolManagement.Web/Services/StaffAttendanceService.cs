@@ -272,12 +272,13 @@ public sealed class StaffAttendanceService(SchoolDbContext db, ICurrentUser curr
     }
 
     private sealed record StaffInfo(int Id, string Name, bool IsManagement, int? DepartmentId, string? Department, string? JobTitle,
-        TimeOnly? WorkStart, DateOnly? Start, DateOnly? End, EmploymentType? Type, List<DayOfWeek> Days, DateTime CreatedAt)
+        TimeOnly? WorkStart, DateOnly? Start, DateOnly? End, EmploymentType? Type, List<DayOfWeek> Days, DateTime CreatedAt, DateTime? ArchivedAt = null)
     {
         public string Group => IsManagement ? "Management Team" : Department ?? "No department";
         public StaffCategory Category => StaffCategories.Of(IsManagement, JobTitle);
         public bool ExpectedOn(DateOnly date) =>
-            StaffActivity.ExpectedOn(Start, End, Type, Days, SchoolTime.Current.LocalDate(CreatedAt), date);
+            StaffActivity.ExpectedOn(Start, End, Type, Days, SchoolTime.Current.LocalDate(CreatedAt), date)
+            && (ArchivedAt is not { } archived || date < SchoolTime.Current.LocalDate(archived));
     }
 
     private async Task<List<StaffInfo>> StaffAsync(CancellationToken ct) =>
@@ -285,10 +286,10 @@ public sealed class StaffAttendanceService(SchoolDbContext db, ICurrentUser curr
             {
                 s.Id, s.FullName, IsManagement = s is ManagementMember, s.DepartmentId, Department = s.Department != null ? s.Department.Name : null,
                 s.JobTitle, s.WorkStart, s.ContractStartDate, s.ContractEndDate, s.EmploymentType,
-                Days = s.WorkingDays.Select(d => d.Day).ToList(), s.CreatedAt,
+                Days = s.WorkingDays.Select(d => d.Day).ToList(), s.CreatedAt, s.ArchivedAt,
             }).ToListAsync(ct))
         .Select(s => new StaffInfo(s.Id, s.FullName, s.IsManagement, s.DepartmentId, s.Department, s.JobTitle, s.WorkStart,
-            s.ContractStartDate, s.ContractEndDate, s.EmploymentType, s.Days, s.CreatedAt)).ToList();
+            s.ContractStartDate, s.ContractEndDate, s.EmploymentType, s.Days, s.CreatedAt, s.ArchivedAt)).ToList();
 
     private static bool InDepartment(StaffInfo s, string? department) => department switch
     {

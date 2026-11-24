@@ -4,6 +4,9 @@
     var r = Model.Result;
     var classFilter = q.ClassId is { } cid ? Model.Classes.FirstOrDefault(c => c.Id == cid) : null;
     var exportUrl = "/students/export" + Context.Request.QueryString;
+    // Class Details (FixedClass) shows a compact list without the Dismissal / Parent column; both stay on each student's
+    // profile and details, and on the main Students list.
+    var showContact = !Model.FixedClass;
 }
 
 <div class="results-bar">
@@ -69,7 +72,10 @@ else
                     {
                     <th scope="col" class="col-lang" aria-sort="@(q.Sort == "lang" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "lang", "Second Language", q.Sort, q.Dir)</th>
                     }
+                    @if (showContact)
+                    {
                     <th scope="col" class="col-dismissal">Dismissal · Parent</th>
+                    }
                     <th scope="col" aria-sort="@(q.Sort == "created" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "created", "Added", q.Sort, q.Dir)</th>
                     <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
                 </tr>
@@ -96,7 +102,9 @@ else
                         {
                             <td data-label="Second Language" class="col-lang" title="@(s.SecondLanguage is { } code ? $"Sec Lang: {code}" : null)">@(s.SecondLanguageName ?? "—")</td>
                         }
-                        @* Dismissal method and the parent's WhatsApp (an icon; plain when the number has no safe link). *@
+                        @* Dismissal method and the parent's WhatsApp (an icon; plain when the number has no safe link). Not on Class Details. *@
+                        @if (showContact)
+                        {
                         <td data-label="Dismissal · Parent" class="col-dismissal">
                             <span class="student-row-contact">
                                 @if (s.DismissalMethod is { } dm)
@@ -110,6 +118,7 @@ else
                                 <partial name="~/Views/Students/_ParentContact.cshtml" model="(s.ParentContactNumber, true)" />
                             </span>
                         </td>
+                        }
                         <td data-label="Added" class="muted nowrap" title="@Ui.DateTime(s.CreatedAt)">@Ui.Date(s.CreatedAt)</td>
                         <td class="col-actions">
                             <div class="row-actions">

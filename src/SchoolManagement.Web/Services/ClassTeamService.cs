@@ -149,7 +149,7 @@ public sealed class ClassTeamService(SchoolDbContext db, ICurrentUser currentUse
     }
 
     public async Task<IReadOnlyList<StaffOption>> StaffOptionsAsync(CancellationToken ct = default) =>
-        await db.StaffMembers.AsNoTracking().OrderBy(s => s.FullName)
+        await db.StaffMembers.AsNoTracking().Where(s => s.ArchivedAt == null).OrderBy(s => s.FullName)   // current staff only
             .Select(s => new StaffOption(s.Id, s.FullName, s.JobTitle, EF.Property<string>(s, "StaffType")))
             .ToListAsync(ct);
 
@@ -196,7 +196,7 @@ public sealed class ClassTeamService(SchoolDbContext db, ICurrentUser currentUse
         if (homeroomId is { } hr) wanted.Add((hr, ClassTeachingRole.HomeroomTeacher));
         if (coTeacherId is { } co) wanted.Add((co, ClassTeachingRole.CoTeacher));
         var ids = wanted.Select(w => w.Staff).ToList();
-        if (ids.Count > 0 && await db.StaffMembers.CountAsync(s => ids.Contains(s.Id), ct) != ids.Count)
+        if (ids.Count > 0 && await db.StaffMembers.CountAsync(s => ids.Contains(s.Id) && s.ArchivedAt == null, ct) != ids.Count)
             return ServiceResult.Fail("", "Choose staff members from the list.");
 
         // ---- diff against the active team: unchanged rows stay as they are

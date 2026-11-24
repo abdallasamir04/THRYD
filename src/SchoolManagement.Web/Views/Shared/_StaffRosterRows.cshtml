@@ -1,0 +1,50 @@
+@model SchoolManagement.Web.Services.TeachingRoster.StaffRosterProfile
+@*
+    A staff profile's official-source information: an archived record's notice (not current staff, history kept) and the
+    person's Teaching Staff 2027 rows exactly as the source gives them — subject, grade levels, Number of Classes and the
+    three source columns ص, م and بريك (shown as written; a blank cell stays blank). Nothing here is calculated.
+*@
+@{
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    string Cell(int? v) => v?.ToString(c) ?? "";
+}
+@if (Model.ArchivedAt is { } archived)
+{
+    <div class="notice notice--warning" role="status" style="margin-bottom:16px">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>Not current staff (archived @SchoolTime.Current.LocalDate(archived).ToString("d MMM yyyy", c)).</strong>@(Model.ArchiveReason ?? "This record is kept for its history only.") Its attendance, duties, tasks and other history are unchanged.</div></div>
+}
+@if (Model.Rows.Count > 0)
+{
+    <section class="card" aria-labelledby="roster-title">
+        <div class="card__head">
+            <div>
+                <h2 class="card__title" id="roster-title">@Ui.Icon("list")Teaching Staff @Model.Rows[0].AcademicYear</h2>
+                <p class="card__sub">As listed in the official roster (@Ui.Plural(Model.Rows.Count, "row", "rows")). Values are shown exactly as the source gives them.</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead>
+                    <tr>
+                        <th scope="col">Row</th><th scope="col">Subject</th><th scope="col">Grade Levels</th><th scope="col">Number of Classes</th>
+                        <th scope="col" lang="ar" dir="rtl">ص</th><th scope="col" lang="ar" dir="rtl">م</th><th scope="col" lang="ar" dir="rtl">بريك</th><th scope="col">Department</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <td data-label="Row" class="num">@r.RowNumber</td>
+                            <td data-label="Subject">@(r.Role == SchoolManagement.Web.Entities.RosterRole.HomeroomTeacher ? "Homeroom Teacher" : r.Subject)</td>
+                            <td data-label="Grade Levels">@r.GradeLevels</td>
+                            <td data-label="Number of Classes" class="num">@Cell(r.NumberOfClasses)</td>
+                            <td data-label="ص" class="num">@Cell(r.Sad)</td>
+                            <td data-label="م" class="num">@Cell(r.Meem)</td>
+                            <td data-label="بريك" class="num">@Cell(r.Break)</td>
+                            <td data-label="Department">@(r.Departments.Count == 0 ? "" : string.Join(", ", r.Departments))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}

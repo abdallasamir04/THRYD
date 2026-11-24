@@ -284,7 +284,7 @@ public sealed class OrgStructureService(SchoolDbContext db, IOrgStructureAccess 
             a.ReportsToStaffMemberId, a.ReportsTo != null ? a.ReportsTo.FullName : null, a.Notes));
 
     public async Task<IReadOnlyList<OrgStaffOption>> StaffOptionsAsync(CancellationToken ct = default) =>
-        (await db.StaffMembers.AsNoTracking()
+        (await db.StaffMembers.AsNoTracking().Where(s => s.ArchivedAt == null)   // current staff only
             .Select(s => new OrgStaffOption(s.Id, s.FullName, s.ContactNumber, s is ManagementMember, s.Department != null ? s.Department.Name : null))
             .ToListAsync(ct))
         .OrderBy(s => s.FullName, StringComparer.CurrentCultureIgnoreCase).ToList();

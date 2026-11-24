@@ -37,6 +37,31 @@ public static class Ui
     public static IHtmlContent Icon(string name, string? css = null) =>
         new HtmlString($"<svg class=\"icon{(css is null ? "" : " " + HtmlEncoder.Default.Encode(css))}\" aria-hidden=\"true\" focusable=\"false\"><use href=\"#i-{HtmlEncoder.Default.Encode(name)}\"></use></svg>");
 
+    /// <summary>
+    /// A phone number as displayed everywhere: when <see cref="WhatsApp.Link"/> can determine the international number, a
+    /// link that opens a WhatsApp chat in a new tab (the number is shown exactly as stored; only the link is normalized:
+    /// 01111219254 → https://wa.me/201111219254). Otherwise the number as plain text, never a broken link. Missing number:
+    /// <paramref name="empty"/> (e.g. "No phone"), or nothing.
+    /// </summary>
+    /// <param name="css">The page's own phone class (keeps its existing look: phone-link, dir-row__contact…).</param>
+    /// <param name="icon">Show the WhatsApp icon before the number (off in dense tables).</param>
+    /// <param name="iconCss">Icon size class.</param>
+    /// <param name="who">Whose number it is, for the link's accessible name ("Open a WhatsApp chat with Dr. Noha Osama").</param>
+    public static IHtmlContent Phone(string? phone, string? css = null, bool icon = true, string? iconCss = "icon--sm", string? empty = null, string? who = null)
+    {
+        var enc = HtmlEncoder.Default;
+        if (string.IsNullOrWhiteSpace(phone))
+            return empty is null ? HtmlString.Empty : new HtmlString($"<span class=\"{enc.Encode(css ?? "")} is-empty\">{enc.Encode(empty)}</span>");
+        var text = enc.Encode(phone.Trim());
+        var classes = enc.Encode(css is null ? "wa-link" : "wa-link " + css);
+        if (WhatsApp.Link(phone) is not { } link)
+            return new HtmlString($"<span class=\"{enc.Encode(css is null ? "wa-plain" : "wa-plain " + css)}\" dir=\"ltr\" title=\"No WhatsApp link: the number's country is not certain\">{(icon ? Icon("phone", iconCss).ToString() : "")}<span>{text}</span></span>");
+        var label = enc.Encode(who is null ? $"Open a WhatsApp chat with {phone.Trim()}" : $"Open a WhatsApp chat with {who} ({phone.Trim()})");
+        return new HtmlString(
+            $"<a class=\"{classes}\" href=\"{enc.Encode(link)}\" target=\"_blank\" rel=\"noopener noreferrer\" dir=\"ltr\" title=\"Chat on WhatsApp\" aria-label=\"{label}\">" +
+            $"{(icon ? Icon("whatsapp", iconCss is null ? "wa-link__icon" : iconCss + " wa-link__icon").ToString() : "")}<span>{text}</span></a>");
+    }
+
     public static string Initials(string? name)
     {
         var all = TextNormalizer.CleanText(name).Split(' ', StringSplitOptions.RemoveEmptyEntries);

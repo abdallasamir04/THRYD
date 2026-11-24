@@ -1,0 +1,36 @@
+warn: Microsoft.EntityFrameworkCore.Model.Validation[20601]
+      The 'DutyType' property 'DutyType' on entity type 'DutyAssignment' is configured with a database-generated default, but has no configured sentinel value. The database-generated default will always be used for inserts when the property has the value '0', since this is the CLR default for the 'DutyType' type. Consider using a nullable type, using a nullable backing field, or setting the sentinel value for the property to ensure the database default is used when, and only when, appropriate. See https://aka.ms/efcore-docs-default-values for more information.
+warn: Microsoft.EntityFrameworkCore.Model.Validation[20601]
+      The 'DutyStatus' property 'Status' on entity type 'DutyAssignment' is configured with a database-generated default, but has no configured sentinel value. The database-generated default will always be used for inserts when the property has the value '0', since this is the CLR default for the 'DutyStatus' type. Consider using a nullable type, using a nullable backing field, or setting the sentinel value for the property to ensure the database default is used when, and only when, appropriate. See https://aka.ms/efcore-docs-default-values for more information.
+warn: Microsoft.EntityFrameworkCore.Model.Validation[20601]
+      The 'IncidentApproval' property 'Approval' on entity type 'Incident' is configured with a database-generated default, but has no configured sentinel value. The database-generated default will always be used for inserts when the property has the value '0', since this is the CLR default for the 'IncidentApproval' type. Consider using a nullable type, using a nullable backing field, or setting the sentinel value for the property to ensure the database default is used when, and only when, appropriate. See https://aka.ms/efcore-docs-default-values for more information.
+warn: Microsoft.EntityFrameworkCore.Model.Validation[20601]
+      The 'TaskPriority' property 'Priority' on entity type 'ManagementTask' is configured with a database-generated default, but has no configured sentinel value. The database-generated default will always be used for inserts when the property has the value '0', since this is the CLR default for the 'TaskPriority' type. Consider using a nullable type, using a nullable backing field, or setting the sentinel value for the property to ensure the database default is used when, and only when, appropriate. See https://aka.ms/efcore-docs-default-values for more information.
+warn: Microsoft.EntityFrameworkCore.Model.Validation[20601]
+      The 'ManagementTaskStatus' property 'Status' on entity type 'ManagementTask' is configured with a database-generated default, but has no configured sentinel value. The database-generated default will always be used for inserts when the property has the value '0', since this is the CLR default for the 'ManagementTaskStatus' type. Consider using a nullable type, using a nullable backing field, or setting the sentinel value for the property to ensure the database default is used when, and only when, appropriate. See https://aka.ms/efcore-docs-default-values for more information.
+info: Microsoft.EntityFrameworkCore.Migrations[20411]
+      Acquiring an exclusive lock for migration application. See https://aka.ms/efcore-docs-migrations-lock for more information if this takes too long.
+info: Microsoft.EntityFrameworkCore.Migrations[20405]
+      No migrations were applied. The database is already up to date.
+warn: Microsoft.EntityFrameworkCore.Query[20504]
+      Compiling a query which loads related collections for more than one collection navigation, either via 'Include' or through projection, but no 'QuerySplittingBehavior' has been configured. By default, Entity Framework will use 'QuerySplittingBehavior.SingleQuery', which can potentially result in slow query performance. See https://go.microsoft.com/fwlink/?linkid=2134277 for more information. To identify the query that's triggering this warning call 'ConfigureWarnings(w => w.Throw(RelationalEventId.MultipleCollectionIncludeWarning))'.
+Official staff reconciliation
+  Staff records: 172 before (91 current) → 172 after (91 current); allowlist 91
+  Staff document: tiers +0, units +0, positions +0, people created 0, reused 53, assignments +0 (already 63), flags +0
+  Teaching Staff 2027: rows created 0, rows corrected 0, department links +0, reviews +0 / resolved 0, homeroom assigned 0 (already 5)
+  Outside the sources: 81 (0 archived/removed now)
+  OK   Active staff = allowlist (91 people)
+  OK   No authorized person is archived
+  OK   All 53 staff-document entries resolve to exactly one active record with the source phone
+  OK   Staff-document identities: 53 distinct name+phone → 53 staff records
+  OK   The two Mohamed Ali entries are 2 distinct records
+  OK   01025172837 is held by 2 separate records (Mahmoud Brakat, Mohamed Abdelrasol)
+  OK   Duplicate current position assignments: 0
+  OK   Source position assignments current: 63 of 63
+  OK   Teaching Staff 2027 rows recorded: 64 (1–64 each once)
+  OK   Rows without a name create no staff: 31, 49, 51, 55
+  OK   Row 42 stays unlinked with open review items
+  OK   Every linked roster row points at an active record
+  OK   All 64 rows' cells (incl. ص, م, بريك) equal the transcription
+  OK   Current Homeroom Teachers: KG1A=Nada, KG1B=Jane, KG2A=Milka, KG2B=Adrea, PreK=Nessly
+  OK   Current roles held by archived records: 0

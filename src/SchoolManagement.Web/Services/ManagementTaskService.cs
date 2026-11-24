@@ -380,7 +380,7 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
             {
                 s.Id, s.FullName, s.JobTitle, s.DepartmentId, Department = s.Department != null ? s.Department.Name : null,
                 IsManagement = s is ManagementMember, Position = s is ManagementMember ? ((ManagementMember)s).Position : null,
-                Active = s.ContractEndDate == null || s.ContractEndDate >= today,
+                Active = s.ArchivedAt == null && (s.ContractEndDate == null || s.ContractEndDate >= today),
             })
             .ToListAsync(ct);
         return rows

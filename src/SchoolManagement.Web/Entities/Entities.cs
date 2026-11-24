@@ -183,6 +183,20 @@ public abstract class StaffMember : IAuditable
     public TimeOnly? WorkStart { get; set; }
     public TimeOnly? WorkEnd { get; set; }
 
+    // ---- Archive (not current staff) ----
+    public const int ArchiveReasonMaxLength = 300;
+
+    /// <summary>
+    /// When the record stopped being current staff (e.g. not in the school's official staff sources). An archived record is
+    /// kept, with everything that refers to it (attendance, duties, tasks, audits…), but it is no longer listed as current
+    /// staff and holds no current role. Null = current staff.
+    /// </summary>
+    public DateTime? ArchivedAt { get; set; }
+    public string? ArchiveReason { get; set; }
+
+    /// <summary>Not current staff (see <see cref="ArchivedAt"/>). Not mapped.</summary>
+    public bool IsArchived => ArchivedAt is not null;
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

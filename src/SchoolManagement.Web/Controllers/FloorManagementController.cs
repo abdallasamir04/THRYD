@@ -38,7 +38,7 @@ public class FloorManagementController(IFloorManagementService floors) : AppCont
         if (!u.CanView(id)) return Denied();
         var floor = await floors.FloorAsync(id, ct);
         if (floor is null) return NotFound();
-        return View(new FloorDetailsViewModel { User = u, Floor = floor, Consultant = await floors.ConsultantAsync(ct) });
+        return View(new FloorDetailsViewModel { User = u, Floor = floor, Consultant = await floors.ConsultantAsync(ct), History = await floors.HistoryAsync(id, ct) });
     }
 
     [HttpGet("floors/new")]
@@ -107,6 +107,34 @@ public class FloorManagementController(IFloorManagementService floors) : AppCont
         m.Staff = await floors.StaffOptionsAsync(ct);
         m.Classes = await floors.ClassOptionsAsync(ct);
         return m;
+    }
+
+    /// <summary>Edit a current assignment's grade range / classes (the person and role stay; a different person is a new assignment).</summary>
+    [HttpGet("assignments/{id:int}/edit")]
+    public async Task<IActionResult> EditAssignment(int id, CancellationToken ct)
+    {
+        var a = await floors.AssignmentAsync(id, ct);
+        if (a is null) return NotFoundResult("This assignment has ended.");
+        if (!(await floors.CurrentAsync(ct)).CanManageTeam(a.FloorId)) return Denied();
+        return PageOrPartial("EditAssignmentForm", new FloorAssignmentEditFormModel
+        {
+            Id = a.Id, FloorId = a.FloorId, FloorName = a.FloorName, StaffName = a.StaffName, Role = a.Role, Coverage = a.Coverage, ClassIds = a.ClassIds.ToList(),
+            Classes = await floors.ClassOptionsAsync(ct),
+        });
+    }
+
+    [HttpPost("assignments/{id:int}/edit"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditAssignment(int id, FloorAssignmentEditFormModel model, CancellationToken ct)
+    {
+        var a = await floors.AssignmentAsync(id, ct);
+        if (a is null) return NotFoundResult("This assignment has ended.");
+        if (!(await floors.CurrentAsync(ct)).CanManageTeam(a.FloorId)) return Denied();
+        var result = await floors.UpdateAssignmentAsync(id, model.Coverage, model.ClassIds, ct);
+        if (result.Succeeded) return Saved($"{a.StaffName}'s grade range was saved.", $"/floor-management/floors/{a.FloorId}");
+        AddErrors(result);
+        (model.Id, model.FloorId, model.FloorName, model.StaffName, model.Role) = (a.Id, a.FloorId, a.FloorName, a.StaffName, a.Role);
+        model.Classes = await floors.ClassOptionsAsync(ct);
+        return FormView("EditAssignmentForm", model);
     }
 
     [HttpPost("assignments/{id:int}/end"), ValidateAntiForgeryToken]

@@ -20,7 +20,7 @@
                     <span class="badge @(m.HasPosition ? "badge--primary" : m.PendingConfirmation ? "badge--warning" : "badge--neutral")">@Ui.Icon(m.Position is { } p ? ManagementPositions.Icon(p) : m.PendingConfirmation ? "alert-triangle" : "briefcase")@m.PositionName</span>
                     @if (m.OtherPositions.Any()) { <span class="muted">+ @Ui.Plural(m.OtherPositions.Count(), "other position", "other positions")</span> }
                     <span>@ManagementTeams.Name(m)</span>
-                    @if (!string.IsNullOrEmpty(m.ContactNumber)) { <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@m.ContactNumber</a> }
+                    @if (!string.IsNullOrEmpty(m.ContactNumber)) { @Ui.Phone(m.ContactNumber, "phone-link", who: m.FullName) }
                 </p>
             </div>
         </div>
@@ -36,6 +36,8 @@
         <a class="btn btn--primary" href="/management/tasks/create?memberId=@m.Id" data-modal>@Ui.Icon("plus")New task</a>
     </div>
 </div>
+
+<partial name="~/Views/Shared/_StaffRosterRows.cshtml" model="Model.Roster" />
 
 @if (Model.Org.Current.Count > 0 || Model.Org.Ended.Count > 0 || Model.Org.Flags.Count > 0)
 {
@@ -71,7 +73,7 @@
                 <dl class="dl" style="font-size:0.875rem">
                     <dt>Position</dt><dd>@if (m.Position is { } cp) { <a href="@ManagementPositions.Href(cp)">@m.PositionName</a> } else if (m.HasPosition) { @m.PositionName } else { <span class="faint">@m.PositionName</span> }@foreach (var other in m.OtherPositions) { <div class="muted">@other</div> }</dd>
                     <dt>Contact</dt>
-                    <dd>@if (!string.IsNullOrEmpty(m.ContactNumber)) { <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@m.ContactNumber</a> } else { <span class="faint">Not set</span> }</dd>
+                    <dd>@if (!string.IsNullOrEmpty(m.ContactNumber)) { @Ui.Phone(m.ContactNumber, "phone-link", who: m.FullName) } else { <span class="faint">Not set</span> }</dd>
                     <dt>Email</dt>
                     <dd>@if (!string.IsNullOrEmpty(m.Email)) { <a href="mailto:@m.Email" dir="ltr" style="overflow-wrap:anywhere">@m.Email</a> } else { <span class="faint">Not set</span> }</dd>
                     <dt>Appointed on</dt><dd>@(m.AppointedOn?.ToString("d MMM yyyy", c) ?? "Not set")</dd>

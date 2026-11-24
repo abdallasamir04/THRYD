@@ -62,8 +62,27 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
     /// once, with search and filters. Cards open the person's existing profile.
     /// </summary>
     [HttpGet("all")]
-    public async Task<IActionResult> All([FromQuery] StaffDirectoryQuery query, CancellationToken ct) =>
-        View("All", new StaffDirectoryViewModel { Query = query, Directory = await directory.LoadAsync(query, ct) });
+    public async Task<IActionResult> All([FromQuery] StaffDirectoryQuery query, [FromServices] Services.TeachingRoster.IStaffRosterQuery roster, CancellationToken ct) =>
+        View("All", new StaffDirectoryViewModel
+        {
+            Query = query, Directory = await directory.LoadAsync(query, ct),
+            OpenReviewItems = await orgAccess.CanManageAsync(ct) ? await roster.OpenCountAsync(ct) : null,
+        });
+
+    /// <summary>
+    /// Staff → Data review: open data-quality flags, unresolved Teaching Staff 2027 rows and records that are not current
+    /// staff (archived with their history). Only for people who may manage the organizational structure.
+    /// </summary>
+    [HttpGet("data-review")]
+    public async Task<IActionResult> DataReview([FromServices] Services.TeachingRoster.IStaffRosterQuery roster, CancellationToken ct)
+    {
+        if (!await orgAccess.CanManageAsync(ct))
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return View("~/Views/OrgStructure/Denied.cshtml");
+        }
+        return View(new StaffDataReviewViewModel { Review = await roster.ReviewAsync(ct) });
+    }
 
     /// <summary>
     /// All School Staff → Download PDF: "All School Staff Directory" with exactly the staff the page shows for the same query
@@ -299,6 +318,7 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
             ClassAssignments = await classTeams.ForStaffAsync(id, ct),
             Org = await org.StaffAsync(id, ct),
             CanManageOrg = await orgAccess.CanManageAsync(ct),
+            Roster = await HttpContext.RequestServices.GetRequiredService<Services.TeachingRoster.IStaffRosterQuery>().ProfileAsync(id, ct),
         });
     }
 

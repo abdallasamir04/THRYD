@@ -7,19 +7,24 @@ using SchoolManagement.Web.Services.OrgStructure;
 namespace SchoolManagement.Web.Services.FloorManagement;
 
 /// <summary>
-/// The school's floor teams for 2026/2027, as given (names, positions, classes, phone numbers exactly as written). The
-/// Social Workers are not in the source: none is created.
+/// The school's floor teams for 2026/2027, as given by the Royal Kings floor-management charts (names, positions, classes,
+/// phone numbers exactly as written). An authorized source for the floor staff. The Social Workers are not in the source:
+/// none is created. <see cref="Person.Unconfirmed"/>: the person's identity is not confirmed (no record is matched,
+/// created or assigned; the floor shows the role as pending until an administrator assigns someone).
 /// </summary>
 public static class FloorManagementSource
 {
-    public sealed record Person(string Key, string Name, FloorRole Role, string Phone, string? Phone2 = null, string? Coverage = null, string[]? Classes = null);
+    public sealed record Person(string Key, string Name, FloorRole Role, string Phone, string? Phone2 = null, string? Coverage = null, string[]? Classes = null,
+        string? Unconfirmed = null);
     public sealed record Floor(string Name, string GradeRange, int Sort, Person[] Team);
 
     public static readonly Floor[] Floors =
     [
         new("Ground Floor", "PreK – G1B", 0,
         [
-            new("sarah-mostafa", "Mrs. Sarah Mostafa", FloorRole.StageCoordinator, "201096247514", Coverage: "PreK – G1B"),
+            // Same number as the official staff member Ms. Sara Mostafa (01096247514), but not confirmed to be her (decision 2026-11-24).
+            new("sarah-mostafa", "Mrs. Sarah Mostafa", FloorRole.StageCoordinator, "201096247514", Coverage: "PreK – G1B",
+                Unconfirmed: "Same phone number as Ms. Sara Mostafa (Bookstore & Student Distribution Coordinator); not confirmed to be the same person."),
             new("donia-mostafa", "Mrs. Donia Mostafa", FloorRole.FloorSupervisor, "201145309275", Coverage: "PreK – G1B"),
             new("israa-farid", "Ms. Israa Farid", FloorRole.Matron, "201278997659", Classes: ["PreK", "KG1A", "KG1B", "KG2A"]),
             new("aliaa-abo-raya", "Ms. Aliaa Abo Raya", FloorRole.Matron, "201228133625", Classes: ["KG2B", "G1A", "G1B"]),
@@ -73,7 +78,7 @@ public sealed class FloorManagementSeeder(SchoolDbContext db) : IFloorManagement
     public async Task<FloorSeedReport> SeedAsync(CancellationToken ct = default)
     {
         var report = new FloorSeedReport();
-        var staff = await db.StaffMembers.AsNoTracking().Select(s => new { s.Id, s.FullName, s.NormalizedContact }).ToListAsync(ct);
+        var staff = await db.StaffMembers.AsNoTracking().Where(s => s.ArchivedAt == null).Select(s => new { s.Id, s.FullName, s.NormalizedContact }).ToListAsync(ct);
         var classes = await db.Classes.AsNoTracking().Select(c => new { c.Id, c.NormalizedName }).ToDictionaryAsync(c => c.NormalizedName, c => c.Id, ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
@@ -96,6 +101,16 @@ public sealed class FloorManagementSeeder(SchoolDbContext db) : IFloorManagement
                 if (await db.FloorStaffAssignments.AnyAsync(a => a.SourceKey == assignmentKey, ct)) { report.AlreadyAssigned++; continue; }
 
                 var phone = Canonical(p.Phone);
+                if (p.Unconfirmed is not null)
+                {
+                    // Never matched, created or assigned while unconfirmed; the record sharing the number is flagged.
+                    if (staff.FirstOrDefault(s => Canonical(s.NormalizedContact) == phone && phone.Length > 0) is { } holder)
+                        await FlagAsync(holder.Id, $"{KeyPrefix}:identity:{p.Key}",
+                            $"The Floor Management chart names {p.Name} ({p.Phone}) as {Label(p.Role)} of the {src.Name}. {p.Unconfirmed} The role stays pending until an administrator confirms who she is.", ct);
+                    report.Flagged++;
+                    report.Lines.Add($"PENDING {p.Name} ({Label(p.Role)}, {src.Name}): {p.Unconfirmed}");
+                    continue;
+                }
                 var person = OrgStructureSeeder.PersonKey(p.Name);
                 var byPhone = staff.Where(s => Canonical(s.NormalizedContact) == phone && phone.Length > 0).ToList();
                 var match = byPhone.Where(s => Compatible(OrgStructureSeeder.PersonKey(s.FullName), person)).ToList();

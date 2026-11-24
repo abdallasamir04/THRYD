@@ -122,7 +122,7 @@ public sealed class DepartmentService(SchoolDbContext db, ICurrentUser currentUs
     {
         var depts = await db.Departments.AsNoTracking().Where(d => id == null || d.Id == id).OrderBy(d => d.SortOrder).ThenBy(d => d.Name).ToListAsync(ct);
         var counts = await db.StaffMembers.AsNoTracking()
-            .Where(s => s.DepartmentId != null && (id == null || s.DepartmentId == id))
+            .Where(s => s.DepartmentId != null && s.ArchivedAt == null && (id == null || s.DepartmentId == id))
             .GroupBy(s => new { s.DepartmentId, s.Subcategory, s.Subject })
             .Select(g => new { g.Key.DepartmentId, g.Key.Subcategory, g.Key.Subject, Count = g.Count() })
             .ToListAsync(ct);
@@ -131,6 +131,8 @@ public sealed class DepartmentService(SchoolDbContext db, ICurrentUser currentUs
             .Select(h => new { h.DepartmentId, Info = new DepartmentHeadInfo(h.Id, h.TeacherId, h.Teacher.FullName, h.Teacher.JobTitle, h.Teacher.ContactNumber, h.StartDate, h.AssignedAt, h.AssignedBy, h.Note) })
             .ToDictionaryAsync(h => h.DepartmentId, h => h.Info, ct);
         var rules = await DepartmentCatalog.LoadAsync(db, id, ct);
+        // Members through a combined Teaching Staff 2027 subject (e.g. "Arabic + Rel" → also Religion), whose own department is another.
+        var secondary = await SecondaryMembers(id).Select(m => new { m.DepartmentId, m.StaffId }).Distinct().ToListAsync(ct);
 
         return depts.Select(d =>
         {
@@ -141,7 +143,7 @@ public sealed class DepartmentService(SchoolDbContext db, ICurrentUser currentUs
                 Name = d.Name,
                 Description = d.Description,
                 SortOrder = d.SortOrder,
-                MemberCount = mine.Sum(c => c.Count),
+                MemberCount = mine.Sum(c => c.Count) + secondary.Count(s => s.DepartmentId == d.Id),
                 Head = heads.GetValueOrDefault(d.Id),
                 Breakdown = mine.Where(c => c.Subcategory != null).Select(c => new SubcategoryCount(c.Subcategory!, c.Subject, c.Count)).ToList(),
                 Rules = rules.GetValueOrDefault(d.Id),
@@ -151,7 +153,9 @@ public sealed class DepartmentService(SchoolDbContext db, ICurrentUser currentUs
 
     public async Task<IReadOnlyList<DepartmentMember>> MembersAsync(int id, DepartmentMemberQuery q, CancellationToken ct = default)
     {
-        var query = db.Teachers.AsNoTracking().Where(t => t.DepartmentId == id);
+        // Current staff of the department: its own members and those who teach one of its subjects in Teaching Staff 2027.
+        var secondary = SecondaryMembers(id).Select(m => m.StaffId);
+        var query = db.Teachers.AsNoTracking().Where(t => t.ArchivedAt == null && (t.DepartmentId == id || secondary.Contains(t.Id)));
         var term = TextNormalizer.NameKey(q.Search);
         if (term.Length > 0) query = query.Where(t => t.NormalizedName.Contains(term) || (t.JobTitle != null && t.JobTitle.Contains(q.Search!.Trim())));
         if (!string.IsNullOrWhiteSpace(q.Subcategory))
@@ -175,6 +179,19 @@ public sealed class DepartmentService(SchoolDbContext db, ICurrentUser currentUs
             db.DepartmentHeads.Any(h => h.IsCurrent && h.DepartmentId == id && h.TeacherId == t.Id), t.CreatedAt)).ToListAsync(ct);
         // The HOD always leads the list.
         return rows.OrderByDescending(r => r.IsHead).ToList();
+    }
+
+    /// <summary>Current staff linked to a department only through a Teaching Staff 2027 subject (their own department is another).</summary>
+    private IQueryable<SecondaryMember> SecondaryMembers(int? id) =>
+        db.TeachingRosterDepartments.AsNoTracking()
+            .Where(d => (id == null || d.DepartmentId == id) && d.Entry.StaffMemberId != null && d.Entry.StaffMember!.ArchivedAt == null
+                && d.Entry.StaffMember.DepartmentId != d.DepartmentId)
+            .Select(d => new SecondaryMember { DepartmentId = d.DepartmentId, StaffId = d.Entry.StaffMemberId!.Value });
+
+    private sealed class SecondaryMember
+    {
+        public int DepartmentId { get; init; }
+        public int StaffId { get; init; }
     }
 
     public async Task<IReadOnlyList<HeadHistoryRow>> HeadHistoryAsync(int id, CancellationToken ct = default) =>
@@ -269,7 +286,7 @@ public sealed class DepartmentService(SchoolDbContext db, ICurrentUser currentUs
             .OrderBy(s => s.SortOrder).ThenBy(s => s.Name)
             .Select(s => new { s.Id, s.ParentId, s.Name, s.IsActive, s.SortOrder, ParentName = s.Parent != null ? s.Parent.Name : null })
             .ToListAsync(ct);
-        var staff = await db.Teachers.AsNoTracking().Where(t => t.DepartmentId == departmentId)
+        var staff = await db.Teachers.AsNoTracking().Where(t => t.DepartmentId == departmentId && t.ArchivedAt == null)
             .Select(t => new { t.Subcategory, t.Subject }).ToListAsync(ct);
         return rows.Select(r => new SubcategoryItem(r.Id, r.ParentId, r.Name, r.IsActive, r.SortOrder,
             r.ParentId is null

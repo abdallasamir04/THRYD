@@ -46,7 +46,7 @@
                 }
                 else
                 {
-                    <a class="phone-link" href="tel:@t.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@t.ContactNumber</a>
+                    @Ui.Phone(t.ContactNumber, "phone-link", who: t.FullName)
                 }
             </dd>
             <dt>Added</dt>

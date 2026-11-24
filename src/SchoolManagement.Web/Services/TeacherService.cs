@@ -58,7 +58,7 @@ public interface ITeacherService
 /// </summary>
 public sealed class TeacherService(SchoolDbContext db) : ITeacherService
 {
-    public Task<int> CountAsync(CancellationToken ct = default) => db.Teachers.CountAsync(ct);
+    public Task<int> CountAsync(CancellationToken ct = default) => db.Teachers.CountAsync(t => t.ArchivedAt == null, ct);
 
     public async Task<PagedResult<TeacherRow>> ListAsync(TeacherListQuery q, CancellationToken ct = default)
     {
@@ -75,7 +75,7 @@ public sealed class TeacherService(SchoolDbContext db) : ITeacherService
 
     public async Task<IReadOnlyList<JobTitleCount>> JobTitlesAsync(CancellationToken ct = default) =>
         await db.Teachers.AsNoTracking()
-            .Where(t => t.JobTitle != null && t.JobTitle != "")
+            .Where(t => t.ArchivedAt == null && t.JobTitle != null && t.JobTitle != "")
             .GroupBy(t => t.JobTitle!)
             .OrderBy(g => g.Key) // sort before projecting: EF cannot order by a record's property
             .Select(g => new JobTitleCount(g.Key, g.Count()))
@@ -84,7 +84,7 @@ public sealed class TeacherService(SchoolDbContext db) : ITeacherService
     public async Task<IReadOnlyList<DepartmentSummary>> DepartmentSummariesAsync(CancellationToken ct = default)
     {
         var depts = await db.Departments.AsNoTracking().OrderBy(d => d.SortOrder).ToListAsync(ct);
-        var counts = await db.StaffMembers.AsNoTracking().Where(s => s.DepartmentId != null)
+        var counts = await db.StaffMembers.AsNoTracking().Where(s => s.DepartmentId != null && s.ArchivedAt == null)
             .GroupBy(s => s.DepartmentId!.Value).Select(g => new { Id = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Id, x => x.Count, ct);
         return depts.Select(d => new DepartmentSummary
         {
@@ -259,7 +259,8 @@ public sealed class TeacherService(SchoolDbContext db) : ITeacherService
 
     private IQueryable<Teacher> Filter(TeacherListQuery q)
     {
-        var query = db.Teachers.AsNoTracking();
+        // Current staff only: archived records (not in the school's official staff sources) keep their history but are not listed.
+        var query = db.Teachers.AsNoTracking().Where(t => t.ArchivedAt == null);
         var term = TextNormalizer.NameKey(q.Search);
         if (term.Length > 0)
         {

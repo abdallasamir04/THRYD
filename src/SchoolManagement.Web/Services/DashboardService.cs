@@ -53,8 +53,8 @@ public interface IDashboardService
 public sealed class DashboardService(SchoolDbContext db) : IDashboardService
 {
     public async Task<NavCounts> NavCountsAsync(CancellationToken ct = default) =>
-        new(await db.Students.CountAsync(ct), await db.Teachers.CountAsync(ct), await db.Classes.CountAsync(ct),
-            await db.Departments.CountAsync(ct), await db.ManagementMembers.CountAsync(ct),
+        new(await db.Students.CountAsync(ct), await db.Teachers.CountAsync(t => t.ArchivedAt == null, ct), await db.Classes.CountAsync(ct),
+            await db.Departments.CountAsync(ct), await db.ManagementMembers.CountAsync(m => m.ArchivedAt == null, ct),
             await db.ManagementTasks.CountAsync(t => t.Status != ManagementTaskStatus.Completed && t.Status != ManagementTaskStatus.Cancelled, ct));
 
     public async Task<DashboardData> GetAsync(CancellationToken ct = default)
@@ -67,13 +67,13 @@ public sealed class DashboardService(SchoolDbContext db) : IDashboardService
         return new DashboardData
         {
             TotalStudents = distribution.Sum(d => d.Count),
-            TotalTeachers = await db.Teachers.CountAsync(ct),
+            TotalTeachers = await db.Teachers.CountAsync(t => t.ArchivedAt == null, ct),
             // All staff records (teachers and management members); staff have no inactive state.
             TotalClasses = distribution.Count,
             ActiveClasses = distribution.Count(d => d.IsActive),
             StudentsInInactiveClasses = distribution.Where(d => !d.IsActive).Sum(d => d.Count),
             ClassesWithoutStudents = distribution.Count(d => d.IsActive && d.Count == 0),
-            TeachersWithoutContact = await db.Teachers.CountAsync(t => t.NormalizedContact == "", ct),
+            TeachersWithoutContact = await db.Teachers.CountAsync(t => t.ArchivedAt == null && t.NormalizedContact == "", ct),
             Distribution = distribution,
             GeneratedAtUtc = DateTime.UtcNow,
         };

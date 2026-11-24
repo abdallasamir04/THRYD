@@ -51,6 +51,7 @@ public partial class SchoolDbContext
             e.Property(x => x.SourceValue).HasMaxLength(TeachingRosterReviewItem.ValueMaxLength);
             e.Property(x => x.ObservedValue).HasMaxLength(TeachingRosterReviewItem.ValueMaxLength);
             e.Property(x => x.Note).HasMaxLength(TeachingRosterReviewItem.NoteMaxLength).IsRequired();
+            e.Property(x => x.Resolution).HasMaxLength(TeachingRosterReviewItem.ResolutionMaxLength);
             e.HasOne(x => x.Entry).WithMany(r => r.ReviewItems).HasForeignKey(x => x.TeachingRosterEntryId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => x.SourceKey).IsUnique();
             e.HasIndex(x => new { x.TeachingRosterEntryId, x.IsResolved });

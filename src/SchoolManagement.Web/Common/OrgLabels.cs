@@ -22,10 +22,16 @@ public static class OrgLabels
     {
         OrgSection.SchoolLeadership => ManagementTeams.LeadershipName,
         OrgSection.OperationTeam => ManagementTeams.OperationName,
+        OrgSection.AcademicStaff => "Academic Staff",
         _ => s.ToString(),
     };
 
-    public static string SectionHref(OrgSection s) => s == OrgSection.OperationTeam ? ManagementTeams.OperationHref : ManagementTeams.LeadershipHref;
+    public static string SectionHref(OrgSection s) => s switch
+    {
+        OrgSection.OperationTeam => ManagementTeams.OperationHref,
+        OrgSection.AcademicStaff => "/staff/all?category=academic",
+        _ => ManagementTeams.LeadershipHref,
+    };
 
     public static string RoleType(LeadershipRoleType r) => r switch
     {
@@ -39,6 +45,8 @@ public static class OrgLabels
         LeadershipRoleType.Specialist => "Specialist",
         LeadershipRoleType.Support => "Support",
         LeadershipRoleType.Operational => "Operational",
+        LeadershipRoleType.HomeroomTeacher => "Homeroom Teacher",
+        LeadershipRoleType.CoTeacher => "Co-Teacher",
         _ => r.ToString(),
     };
 
@@ -51,6 +59,7 @@ public static class OrgLabels
         LeadershipRoleType.Coordinator => "teal",
         LeadershipRoleType.TeamLeader => "green",
         LeadershipRoleType.FloorSupervisor => "indigo",
+        LeadershipRoleType.HomeroomTeacher or LeadershipRoleType.CoTeacher => "teal",
         _ => "rose",
     };
 
@@ -62,6 +71,7 @@ public static class OrgLabels
         LeadershipRoleType.Coordinator => "layers",
         LeadershipRoleType.TeamLeader => "users",
         LeadershipRoleType.FloorSupervisor => "school",
+        LeadershipRoleType.HomeroomTeacher or LeadershipRoleType.CoTeacher => "graduation-cap",
         _ => "briefcase",
     };
 

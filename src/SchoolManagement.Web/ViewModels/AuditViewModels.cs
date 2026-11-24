@@ -54,6 +54,9 @@ public sealed class StaffProfileViewModel
     /// <summary>Organizational positions (current, history) and data-quality warnings of this person.</summary>
     public Services.OrgStructure.StaffOrgSummary Org { get; init; } = Services.OrgStructure.StaffOrgSummary.Empty;
     public bool CanManageOrg { get; init; }
+
+    /// <summary>Teaching Staff 2027 rows of this person and the record's archive state.</summary>
+    public Services.TeachingRoster.StaffRosterProfile Roster { get; init; } = Services.TeachingRoster.StaffRosterProfile.Empty;
 }
 
 public sealed class FeedbackFormModel

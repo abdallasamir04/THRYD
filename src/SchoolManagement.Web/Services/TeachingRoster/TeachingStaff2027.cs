@@ -3,8 +3,9 @@ namespace SchoolManagement.Web.Services.TeachingRoster;
 /// <summary>
 /// Teaching Staff 2027 (Royal Kings International School, academic year 2026/2027), transcribed row by row. Every cell is
 /// kept exactly as written; a blank cell ("—") is null, never zero. Columns: No., Name, Subject, Grade Levels, Number of
-/// Classes, ص, م, بريك. Rows 31, 49, 51 and 55 are blank in the source. Row 42 carries handwritten corrections that are not
-/// confirmed: its printed values are here and the corrections are review items (see <see cref="Row42Corrections"/>).
+/// Classes, ص, م, بريك. Rows 49, 51 and 55 are blank in the source; row 31 has a subject, grade and class count but no name
+/// (no staff member is created for it). Row 42 carries handwritten corrections that are not confirmed: its printed values
+/// are here and the corrections are review items (see <see cref="Row42Corrections"/>).
 /// </summary>
 public static class TeachingStaff2027
 {
@@ -15,6 +16,9 @@ public static class TeachingStaff2027
     /// <param name="HomeroomClass">Homeroom rows only: the class the Grade Levels cell names ("KG 1 A" → KG1A, "Pre" → PreK).</param>
     public sealed record Row(int No, string? Name, string? Subject, string? Grades, int? Classes, int? Sad, int? Meem, int? Break, string? HomeroomClass = null)
     {
+        /// <summary>The row has values but no name: it is kept as an unresolved source row and never becomes a staff member.</summary>
+        public bool HasNoName => Name is null && !IsBlank;
+
         public bool IsBlank => Name is null && Subject is null && Grades is null && Classes is null && Sad is null && Meem is null && Break is null;
         public string Key => $"{KeyPrefix}:row-{No:00}";
     }
@@ -53,7 +57,7 @@ public static class TeachingStaff2027
         new(28, "Habiba", "G", "G5 to G10", 14, null, null, 3),
         new(29, "Mohamed Ali", "G", "Kg1-kg2-g1-2-3", 11, null, null, null),
         new(30, "Rawan", "G", "G4", 4, null, 5, 1),
-        new(31, null, null, null, null, null, null, null),
+        new(31, null, "G", "G4", 4, null, null, null),   // no name in the source
         new(32, "Makak Khaled", "ESS", "G6 to G10", 20, null, null, null),
         new(33, "Nagwa", "ESS+CBG3", "G2 + G4+5", 14, 5, null, 1),
         new(34, "Alaa", "ESS + ASS", "G1 + G3+G7A", 10, null, 5, 1),
@@ -64,8 +68,9 @@ public static class TeachingStaff2027
         new(39, "Shaimaa", "Arabic", "G6-7", 16, 5, null, null),
         new(40, "Adel", "Arabic +Rel", "G9-10", 18, null, 5, 1),
         new(41, "Khaled", "Arabic +Rel", "G8-7", 18, 5, 5, 1),
-        // Row 42: the printed values only (name "Mostafa", grade "G10"; no printed class count). Corrections → review.
-        new(42, "Mostafa", "Arabic +Rel", "G10", null, null, null, null),
+        // Row 42: the printed values only (name "Mostafa"; G8 and G10 printed, one of them crossed/modified; no printed
+        // class count). The handwritten corrections are review items, never confirmed data.
+        new(42, "Mostafa", "Arabic +Rel", Row42PrintedGrades, null, null, null, null),
         new(43, "Norhan", "Arabic +Rel", "G3/4-5-6", 18, 5, 5, null),
         new(44, "Ester", "Rel", "Pre to G5", 10, null, 5, 1),
         // ---- page 3
@@ -80,7 +85,7 @@ public static class TeachingStaff2027
         new(53, "Sara", "Art", "G4B to G10", 16, null, null, null),
         new(54, "Naira", "Music", "Pre -kg-g3", 16, null, 5, null),
         new(55, null, null, null, null, null, null, null),
-        new(56, "Heba Gamal", "Rel", "Pre - kg2B - G1", 6, null, 5, 1),
+        new(56, "Heba Gamal", "Rel", "Pre – kg2B – G1", 6, null, 5, 1),
         new(57, "Afaf", "Arabic + Rel", "KG2A-Rel 2-3", 14, null, null, 1),
         new(58, "Elham", "Arabic", "Pre -KG2B", 13, null, null, null),
         new(59, "Norhan", "Arabic + Rel", "KG1A-KG1B", 16, 5, 5, null),
@@ -91,11 +96,14 @@ public static class TeachingStaff2027
         new(64, "Adrea", "Home Room", "KG 2 B", 20, null, null, null, "KG2B"),
     ];
 
+    /// <summary>Row 42's Grade Levels cell as printed: two grades, one of them crossed out or modified by hand.</summary>
+    public const string Row42PrintedGrades = "G8 and G10 (one appears crossed/modified)";
+
     /// <summary>Row 42's handwritten observations (unconfirmed): field, printed value, what appears to be written.</summary>
     public static readonly (string Field, string? Printed, string Observed)[] Row42Corrections =
     [
         ("Name", "Mostafa", "Ali"),
-        ("Grade Levels", "G10", "G8"),
+        ("Grade Levels", "G8 and G10", "One of the two appears crossed/modified"),
         ("Number of Classes", null, "28"),
     ];
 

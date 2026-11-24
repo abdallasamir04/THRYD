@@ -11,6 +11,9 @@ public enum OrgSection
 {
     SchoolLeadership = 1,
     OperationTeam = 2,
+
+    /// <summary>Teaching roles of the official structure (Homeroom Teachers, Co-Teachers): not a Management area.</summary>
+    AcademicStaff = 3,
 }
 
 /// <summary>The kind of responsibility a position carries. Numbers are stored: add new values, never reuse one.</summary>
@@ -26,6 +29,8 @@ public enum LeadershipRoleType
     Specialist = 8,
     Support = 9,
     Operational = 10,
+    HomeroomTeacher = 11,
+    CoTeacher = 12,
 }
 
 /// <summary>One of the six organizational tiers (Executive Advisory &amp; Governance … Academic Department Leadership).</summary>

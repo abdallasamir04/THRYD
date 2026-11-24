@@ -10,6 +10,26 @@
 .org-nav__link[aria-current="page"] { background: var(--color-surface); color: var(--color-primary-ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
 @media (max-width: 720px) { .org-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; } }
 
+/* Management tabs (8): always one row, never wrapped. Sizes step down with the bar's own width (container queries) so all
+   tabs fit on desktop; the tabs share any spare width; when even the smallest size cannot fit (tablet / mobile) the row
+   scrolls horizontally. The active-tab style is the shared one above. */
+.org-nav--management { container: mgmtnav / inline-size; flex-wrap: nowrap; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
+.org-nav--management .org-nav__link { flex: 1 0 auto; justify-content: center; gap: 5px; padding: 7px 10px; font-size: 0.8rem; white-space: nowrap; }
+.org-nav--management .org-nav__link .icon { width: 14px; height: 14px; flex: none; }
+@container mgmtnav (max-width: 1200px) {
+    .org-nav--management .org-nav__link { padding: 7px 6px; font-size: 0.75rem; gap: 4px; }
+    .org-nav--management .org-nav__link .icon { width: 13px; height: 13px; }
+}
+@container mgmtnav (max-width: 1080px) {
+    .org-nav--management { gap: 1px; }
+    .org-nav--management .org-nav__link { padding: 7px 4px; font-size: 0.72rem; gap: 3px; }
+}
+/* Narrow desktop (about a 1280px window): labels only, so all 8 still fit in one row. Below this the icons return and the row scrolls. */
+@container mgmtnav (min-width: 860px) and (max-width: 1010px) {
+    .org-nav--management .org-nav__link { padding: 7px 5px; }
+    .org-nav--management .org-nav__link .icon { display: none; }
+}
+
 /* ---------- search / filter toolbar ---------- */
 .org-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; padding: 12px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
 .org-toolbar__search { flex: 1 1 280px; min-width: 0; }
@@ -122,6 +142,8 @@ details:not([open]) > summary .org-tree__chev { transform: rotate(-90deg); }
 .org-tree__person-text { display: grid; min-width: 0; }
 .org-tree__person-text strong { font-size: 0.84rem; color: var(--color-text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .org-tree__person-text .muted { font-size: 0.72rem; }
+.org-tree__person-name { color: inherit; text-decoration: none; min-width: 0; overflow: hidden; }
+.org-tree__person-name:hover strong { color: var(--color-primary-ink); }
 .org-tree__reports { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: 42px; color: var(--color-text-muted); font-size: 0.72rem; }
 @media (max-width: 640px) {
     .org-tree__units { margin-inline-start: 12px; padding-inline-start: 10px; }

@@ -118,7 +118,8 @@ public sealed class StaffDirectoryService(SchoolDbContext db, IClassTeamService 
 {
     public async Task<StaffDirectory> LoadAsync(StaffDirectoryQuery q, CancellationToken ct = default)
     {
-        var people = await db.StaffMembers.AsNoTracking()
+        // Current staff only: an archived record (not in the official staff sources) keeps its history but is not listed.
+        var people = await db.StaffMembers.AsNoTracking().Where(s => s.ArchivedAt == null)
             .Select(s => new
             {
                 s.Id, s.FullName, s.NormalizedName, s.JobTitle, s.DepartmentId, Department = s.Department != null ? s.Department.Name : null, s.ContactNumber,
@@ -138,6 +139,10 @@ public sealed class StaffDirectoryService(SchoolDbContext db, IClassTeamService 
         var positions = await org.CurrentByStaffAsync(null, ct);
         var pending = (await org.OpenFlagsAsync(null, ct)).Where(f => f.Kind == DataQualityFlagKind.PositionRequiresConfirmation).Select(f => f.StaffId).ToHashSet();
         var year = await classTeams.CurrentYearAsync(ct);
+        // Teaching Staff 2027 subject rows (subject and grade levels as the source writes them).
+        var subjects = (await db.TeachingRosterEntries.AsNoTracking().Where(e => e.StaffMemberId != null && e.Role == RosterRole.SubjectTeacher)
+                .OrderBy(e => e.RowNumber).Select(e => new { StaffId = e.StaffMemberId!.Value, e.Subject, e.GradeLevels }).ToListAsync(ct))
+            .ToLookup(e => e.StaffId);
         var kg = year is null ? Enumerable.Empty<(int StaffId, ClassTeachingRole Role, string Class)>().ToLookup(k => k.StaffId)
             : (await db.ClassTeachingAssignments.AsNoTracking().Where(a => a.IsActive && a.AcademicYearId == year.Id)
                     .Select(a => new { a.StaffMemberId, a.Role, Class = a.SchoolClass.Name }).ToListAsync(ct))
@@ -151,6 +156,8 @@ public sealed class StaffDirectoryService(SchoolDbContext db, IClassTeamService 
             foreach (var k in kg[p.Id].OrderBy(k => k.Role).ThenBy(k => k.Class))
                 roles.Add(new(k.Role == ClassTeachingRole.HomeroomTeacher ? "kg-homeroom" : "kg-co",
                     $"{(k.Role == ClassTeachingRole.HomeroomTeacher ? "Homeroom" : "Co-Teacher")} · {k.Class}", "graduation-cap", "secondary"));
+            foreach (var sub in subjects[p.Id])
+                roles.Add(new("subject", $"{sub.Subject} · {sub.GradeLevels}", "list", "secondary"));
             var teaches = teaching.Contains(p.Id);
             // Lessons or workload hours are shown by the Timetable / Workload actions; they do not change the category.
             var held = positions.TryGetValue(p.Id, out var list) ? list : [];

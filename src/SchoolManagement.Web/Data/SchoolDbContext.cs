@@ -159,6 +159,8 @@ public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) 
             e.Property(x => x.NormalizedContact).HasMaxLength(StaffMember.ContactMaxLength).IsUnicode(false).HasDefaultValue("");
             e.Property(x => x.SecondaryContactNumber).HasMaxLength(StaffMember.ContactMaxLength).IsUnicode(false);
             e.Property(x => x.Subcategory).HasMaxLength(50);
+            e.Property(x => x.ArchiveReason).HasMaxLength(StaffMember.ArchiveReasonMaxLength);
+            e.Ignore(x => x.IsArchived);
             e.HasOne(x => x.Department).WithMany(d => d.StaffMembers).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
             e.HasMany(x => x.WorkingDays).WithOne(d => d.StaffMember).HasForeignKey(d => d.StaffMemberId).OnDelete(DeleteBehavior.Cascade);
             // Backstop for duplicate prevention (the service also treats a missing number as a match).

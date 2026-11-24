@@ -86,7 +86,7 @@
                     </div>
                     <dl class="dl" style="font-size:0.875rem">
                         <dt>Contact</dt>
-                        <dd>@if (!string.IsNullOrEmpty(m.ContactNumber)) { <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@m.ContactNumber</a> } else { <span class="faint">Not set</span> }</dd>
+                        <dd>@if (!string.IsNullOrEmpty(m.ContactNumber)) { @Ui.Phone(m.ContactNumber, "phone-link", who: m.FullName) } else { <span class="faint">Not set</span> }</dd>
                         <dt>Email</dt>
                         <dd>@if (!string.IsNullOrEmpty(m.Email)) { <a href="mailto:@m.Email" dir="ltr" style="overflow-wrap:anywhere">@m.Email</a> } else { <span class="faint">Not set</span> }</dd>
                         <dt>Tasks</dt>

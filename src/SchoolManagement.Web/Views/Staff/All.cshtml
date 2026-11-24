@@ -39,6 +39,10 @@
         <a class="btn btn--secondary btn--download dl-xlsx" href="/staff/all/excel@(Context.Request.QueryString)" data-download="/staff/all/excel" download
            title="The staff shown, as an Excel workbook (.xlsx)" aria-label="Download Excel">@Ui.Icon("sheet")Download Excel</a>
         <a class="btn btn--secondary" href="/staff">@Ui.Icon("arrow-left")Staff Management</a>
+        @if (Model.OpenReviewItems is { } review)
+        {
+            <a class="btn btn--secondary" href="/staff/data-review" title="Staff data that still needs a person to confirm">@Ui.Icon(review > 0 ? "alert-triangle" : "check-circle")Data review@(review > 0 ? $" ({review})" : "")</a>
+        }
         <a class="btn btn--primary" href="/staff/create" data-modal>@Ui.Icon("user-plus")Add staff member</a>
     </div>
 </div>
@@ -245,7 +249,7 @@
                                     <span class="dir-row__label">Contact</span>
                                     @if (!string.IsNullOrEmpty(s.ContactNumber))
                                     {
-                                        <a class="dir-row__contact" href="tel:@s.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")<span>@s.ContactNumber</span></a>
+                                        @Ui.Phone(s.ContactNumber, "dir-row__contact", who: s.FullName)
                                     }
                                     else if (!string.IsNullOrEmpty(s.Email))
                                     {

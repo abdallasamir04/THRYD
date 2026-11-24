@@ -44,7 +44,7 @@
                     }
                     @if (!string.IsNullOrEmpty(st.ContactNumber))
                     {
-                        <span> · </span><a class="phone-link" href="tel:@st.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@st.ContactNumber</a>
+                        <span> · </span>@Ui.Phone(st.ContactNumber, "phone-link", who: st.FullName)
                     }
                 </p>
             </div>
@@ -70,6 +70,8 @@
         }
     </div>
 </div>
+
+<partial name="~/Views/Shared/_StaffRosterRows.cshtml" model="Model.Roster" />
 
 @if (Model.Org.Current.Count > 0 || Model.Org.Ended.Count > 0 || Model.Org.Flags.Count > 0)
 {

@@ -21,9 +21,11 @@ public static class OrgStructureSource
 
     /// <summary>
     /// A person in the source. <see cref="Department"/> (Tier 6 teachers only): the existing department they belong to,
-    /// optionally "Department/Subcategory".
+    /// optionally "Department/Subcategory". <see cref="RosterRows"/>: the Teaching Staff 2027 rows that the sources confirm
+    /// are this same person (same name and the same role, e.g. a Homeroom Teacher's Home Room row) — the roster row's staff
+    /// record is reused (its empty phone filled from this source) instead of creating a second record.
     /// </summary>
-    public sealed record Person(string Key, string Name, string Mobile, PersonKind Kind, string? Department = null);
+    public sealed record Person(string Key, string Name, string Mobile, PersonKind Kind, string? Department = null, int[]? RosterRows = null);
 
     public sealed record Assignment(string PersonKey, string PositionKey, bool Primary)
     {
@@ -41,6 +43,7 @@ public static class OrgStructureSource
         new("tier-4", "Floor Supervisors", "Tier 4 — floor supervision. The source does not say which supervisor covers which floor.", OrgSection.OperationTeam, 4),
         new("tier-5", "Administrative & Operational Management", "Tier 5 — administrative and operational units.", OrgSection.OperationTeam, 5),
         new("tier-6", "Academic Department Leadership", "Tier 6 — Heads of Department, coordinators and team leaders (not the full teaching staff).", OrgSection.SchoolLeadership, 6),
+        new("tier-7", "Homeroom & Co-Teachers", "The Homeroom Teachers and Co-Teachers listed in the official staff document. Class allocations come only from Teaching Staff 2027.", OrgSection.AcademicStaff, 7),
     ];
 
     public static readonly Unit[] Units =
@@ -71,6 +74,8 @@ public static class OrgStructureSource
         new("unit-dept-ass", "tier-6", "Arabic Social Studies", 4, null, ["ASS"]),
         new("unit-dept-french", "tier-6", "French Department", 5, null, ["Second Language/French"]),
         new("unit-dept-german", "tier-6", "German Department", 6, null, ["Second Language/Deutsch"]),
+        new("unit-homeroom", "tier-7", "Homeroom Teachers", 1, "The source lists the Homeroom Teachers; their classes come from the Teaching Staff 2027 Home Room rows."),
+        new("unit-co-teachers", "tier-7", "Co-Teachers", 2, "The source lists the Co-Teachers without classes; none is invented."),
     ];
 
     public static readonly Position[] Positions =
@@ -115,11 +120,14 @@ public static class OrgStructureSource
         new("pos-math-hod", "unit-dept-math", "HOD", LeadershipRoleType.Hod, 1, "PreK to Grade 9"),
         new("pos-math-coordinator", "unit-dept-math", "Math Coordinator", LeadershipRoleType.Coordinator, 2, "Grades 2–9"),
         new("pos-math-tl", "unit-dept-math", "Team Leader", LeadershipRoleType.TeamLeader, 3, "PreK to Grade 1"),
-        new("pos-arabic-religion-tl", "unit-dept-arabic-religion", "Team Leaders", LeadershipRoleType.TeamLeader, 1, "PreK to G3"),
+        new("pos-arabic-religion-tl", "unit-dept-arabic-religion", "Team Leader", LeadershipRoleType.TeamLeader, 1, "PreK to G3"),
         new("pos-ass-hod", "unit-dept-ass", "HOD", LeadershipRoleType.Hod, 1),
         new("pos-french-hod", "unit-dept-french", "HOD", LeadershipRoleType.Hod, 1),
         new("pos-german-hod-4-10", "unit-dept-german", "HOD", LeadershipRoleType.Hod, 1, "Grades 4–10"),
         new("pos-german-hod-prek-3", "unit-dept-german", "HOD", LeadershipRoleType.Hod, 2, "PreK to Grade 3"),
+        // Tier 7
+        new("pos-homeroom", "unit-homeroom", "Homeroom Teacher", LeadershipRoleType.HomeroomTeacher, 1),
+        new("pos-co-teacher", "unit-co-teachers", "Co-Teacher", LeadershipRoleType.CoTeacher, 1),
     ];
 
     public static readonly Person[] People =
@@ -170,6 +178,22 @@ public static class OrgStructureSource
         new("p-mohamed-ali-german", "Mr. Mohamed Ali", "01032853184", PersonKind.Teacher, "Second Language/Deutsch"),
         // Listed without a readable job title
         new("p-nour-tarek", "Mr. Nour Tarek", "01020492629", PersonKind.Management),
+        // Homeroom Teachers — the same people as Teaching Staff 2027 rows 60–64 (same name, Home Room role)
+        new("p-hr-nada", "Nada", "01002032387", PersonKind.Teacher, RosterRows: [61]),
+        new("p-hr-jane", "Jane", "01272436333", PersonKind.Teacher, RosterRows: [62]),
+        new("p-hr-adrea", "Adrea", "01153608554", PersonKind.Teacher, RosterRows: [64]),
+        new("p-hr-nessly", "Nessly", "01016136554", PersonKind.Teacher, RosterRows: [60]),
+        new("p-hr-milka", "Milka", "01065942767", PersonKind.Teacher, RosterRows: [63]),
+        // Co-Teachers (no classes in the source). Heba Gamal is also Teaching Staff 2027 row 56 (exact full name).
+        new("p-co-rawan-mahmoud", "Rawan Mahmoud", "01094400902", PersonKind.Teacher),
+        new("p-co-sara-khaled", "Sara Khaled", "01156017785", PersonKind.Teacher),
+        new("p-co-nourhan-ahmed", "Nourhan Ahmed", "01021928595", PersonKind.Teacher),
+        new("p-co-elham-kassem", "Elham Kassem", "01002005475", PersonKind.Teacher),
+        new("p-co-heba-gamal", "Heba Gamal", "01007991592", PersonKind.Teacher, RosterRows: [56]),
+        new("p-co-habiba-hussain", "Habiba Hussain", "01154314646", PersonKind.Teacher),
+        new("p-co-basmala-atef", "Basmala Atef", "01103862265", PersonKind.Teacher),
+        new("p-co-heba-ibrahim", "Heba Ibrahim", "01157595821", PersonKind.Teacher),
+        new("p-co-huda-mohamed", "Huda Mohamed", "01117404597", PersonKind.Teacher),
     ];
 
     public static readonly Assignment[] Assignments =
@@ -229,6 +253,21 @@ public static class OrgStructureSource
         new("p-enjy-salah", "pos-french-hod", true),
         new("p-habiba-essam", "pos-german-hod-4-10", true),
         new("p-mohamed-ali-german", "pos-german-hod-prek-3", true),
+        // Tier 7 — a Homeroom / Co-Teacher position is the person's primary one only when they hold no other
+        new("p-hr-nada", "pos-homeroom", true),
+        new("p-hr-jane", "pos-homeroom", true),
+        new("p-hr-adrea", "pos-homeroom", true),
+        new("p-hr-nessly", "pos-homeroom", true),
+        new("p-hr-milka", "pos-homeroom", true),
+        new("p-co-rawan-mahmoud", "pos-co-teacher", true),
+        new("p-co-sara-khaled", "pos-co-teacher", true),
+        new("p-co-nourhan-ahmed", "pos-co-teacher", true),
+        new("p-co-elham-kassem", "pos-co-teacher", true),
+        new("p-co-heba-gamal", "pos-co-teacher", true),
+        new("p-co-habiba-hussain", "pos-co-teacher", true),
+        new("p-co-basmala-atef", "pos-co-teacher", true),
+        new("p-co-heba-ibrahim", "pos-co-teacher", true),
+        new("p-co-huda-mohamed", "pos-co-teacher", true),
     ];
 
     public static readonly Pending[] PendingConfirmation =

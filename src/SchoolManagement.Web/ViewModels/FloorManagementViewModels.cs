@@ -19,6 +19,22 @@ public sealed class FloorDetailsViewModel
     public required FloorUser User { get; init; }
     public required FloorTeamCard Floor { get; init; }
     public ConsultantRef? Consultant { get; init; }
+
+    /// <summary>The floor's team assignments, current and ended (history).</summary>
+    public IReadOnlyList<FloorHistoryRow> History { get; init; } = [];
+}
+
+/// <summary>Edit a floor assignment's grade range / classes.</summary>
+public sealed class FloorAssignmentEditFormModel
+{
+    public int Id { get; set; }
+    public int FloorId { get; set; }
+    public string FloorName { get; set; } = "";
+    public string StaffName { get; set; } = "";
+    public FloorRole Role { get; set; }
+    public string? Coverage { get; set; }
+    public List<int> ClassIds { get; set; } = [];
+    public IReadOnlyList<Option> Classes { get; set; } = [];
 }
 
 public sealed class FloorFormModel

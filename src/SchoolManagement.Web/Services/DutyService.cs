@@ -524,7 +524,7 @@ public sealed partial class DutyService(SchoolDbContext db, ICurrentUser current
 
     /// <summary>All staff members (teachers today; other staff types will appear here too).</summary>
     public async Task<IReadOnlyList<StaffOption>> StaffOptionsAsync(CancellationToken ct = default) =>
-        await db.StaffMembers.AsNoTracking().OrderBy(s => s.FullName)
+        await db.StaffMembers.AsNoTracking().Where(s => s.ArchivedAt == null).OrderBy(s => s.FullName)   // current staff only
             .Select(s => new StaffOption(s.Id, s.FullName, s.JobTitle, EF.Property<string>(s, "StaffType")))
             .ToListAsync(ct);
 

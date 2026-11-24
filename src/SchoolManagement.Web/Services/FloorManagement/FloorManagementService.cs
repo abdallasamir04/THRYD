@@ -42,13 +42,29 @@ public sealed record FloorPerson(int AssignmentId, int StaffId, string Name, str
     string? Coverage, IReadOnlyList<string> Classes, DateOnly Since)
 {
     public string ProfileHref => OrgLabels.ProfileHref(StaffId, IsManagement);
-    public string Scope => Classes.Count > 0 ? string.Join(", ", Classes) : Coverage ?? "";
+
+    /// <summary>The grades the person covers, written as the source does: "G7A – G7B – G8A – G8B" (classes) or the coverage.</summary>
+    public string Scope => Classes.Count > 0 ? string.Join(" – ", Classes) : Coverage ?? "";
 }
+
+/// <summary>A floor role the source names whose person is not confirmed: shown as pending, never assigned automatically.</summary>
+public sealed record FloorPendingEntry(FloorRole Role, string Name, string Phone, string? Coverage, string Reason);
+
+/// <summary>One assignment of the floor's team, current or ended (the floor's history).</summary>
+public sealed record FloorHistoryRow(int AssignmentId, int StaffId, string Name, FloorRole Role, string Scope, bool IsCurrent, DateOnly Start, DateOnly? End,
+    string? EndReason, string? AssignedBy);
+
+/// <summary>An assignment being edited (grade range / classes only; the person and role are changed by a new assignment).</summary>
+public sealed record FloorAssignmentEdit(int Id, int FloorId, string FloorName, string StaffName, FloorRole Role, string? Coverage, IReadOnlyList<int> ClassIds);
 
 public sealed record FloorTeamCard(int Id, string Name, string? GradeRange, bool IsActive, int SortOrder, IReadOnlyList<FloorPerson> Team, int OpenReports, int OpenTickets)
 {
     public FloorPerson? Lead(FloorRole r) => Team.FirstOrDefault(p => p.Role == r);
     public IReadOnlyList<FloorPerson> Of(FloorRole r) => Team.Where(p => p.Role == r).ToList();
+
+    /// <summary>Roles the source names with an unconfirmed person (e.g. a Stage Coordinator awaiting identity confirmation).</summary>
+    public IReadOnlyList<FloorPendingEntry> Pending { get; init; } = [];
+    public FloorPendingEntry? PendingFor(FloorRole r) => Pending.FirstOrDefault(p => p.Role == r);
 }
 
 public sealed record ConsultantRef(int StaffId, string Name, bool IsManagement);
@@ -118,6 +134,13 @@ public interface IFloorManagementService
     Task<ServiceResult> AssignAsync(int floorId, FloorAssignInput input, CancellationToken ct = default);
     Task<ServiceResult> EndAssignmentAsync(int assignmentId, string? reason, CancellationToken ct = default);
 
+    /// <summary>The floor's team assignments, current and ended, newest first.</summary>
+    Task<IReadOnlyList<FloorHistoryRow>> HistoryAsync(int floorId, CancellationToken ct = default);
+    Task<FloorAssignmentEdit?> AssignmentAsync(int assignmentId, CancellationToken ct = default);
+
+    /// <summary>Changes a current assignment's grade range / classes (who and which role stay the same).</summary>
+    Task<ServiceResult> UpdateAssignmentAsync(int assignmentId, string? coverage, IReadOnlyList<int> classIds, CancellationToken ct = default);
+
     /// <summary>Whom this person may address a report to on the floor (their reporting line, and the escalation route).</summary>
     Task<IReadOnlyList<FloorReportRecipient>> RecipientsAsync(int floorId, CancellationToken ct = default);
     Task<IReadOnlyList<FloorReportRow>> ReportsAsync(CancellationToken ct = default);
@@ -176,8 +199,58 @@ public sealed class FloorManagementService(SchoolDbContext db, ICurrentUser curr
             .GroupBy(r => r.FloorId).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
         var tickets = await db.FloorTickets.AsNoTracking().Where(t => ids.Contains(t.FloorId) && t.Status != FloorTicketStatus.Resolved && t.Status != FloorTicketStatus.Closed)
             .GroupBy(t => t.FloorId).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
-        return floors.Select(f => new FloorTeamCard(f.Id, f.Name, f.GradeRange, f.IsActive, f.SortOrder, team[f.Id].ToList(),
-            reports.GetValueOrDefault(f.Id), tickets.GetValueOrDefault(f.Id))).ToList();
+        return floors.Select(f =>
+        {
+            var members = team[f.Id].ToList();
+            // Source roles whose person is not confirmed, while nobody holds that role on the floor.
+            var pending = FloorManagementSource.Floors.Where(s => TextNormalizer.NameKey(s.Name) == f.NormalizedName)
+                .SelectMany(s => s.Team).Where(p => p.Unconfirmed is not null && members.All(m => m.Role != p.Role))
+                .Select(p => new FloorPendingEntry(p.Role, p.Name, p.Phone, p.Coverage, p.Unconfirmed!)).ToList();
+            return new FloorTeamCard(f.Id, f.Name, f.GradeRange, f.IsActive, f.SortOrder, members, reports.GetValueOrDefault(f.Id), tickets.GetValueOrDefault(f.Id))
+            {
+                Pending = pending,
+            };
+        }).ToList();
+    }
+
+    public async Task<IReadOnlyList<FloorHistoryRow>> HistoryAsync(int floorId, CancellationToken ct = default)
+    {
+        if (!(await CurrentAsync(ct)).CanView(floorId)) return [];
+        var rows = await db.FloorStaffAssignments.AsNoTracking().Where(a => a.FloorId == floorId)
+            .OrderByDescending(a => a.IsCurrent).ThenByDescending(a => a.EndDate).ThenByDescending(a => a.StartDate).ThenBy(a => a.Role)
+            .Select(a => new
+            {
+                a.Id, a.StaffMemberId, a.StaffMember.FullName, a.Role, a.Coverage, a.IsCurrent, a.StartDate, a.EndDate, a.EndReason, a.AssignedBy,
+                Classes = a.Classes.OrderBy(c => c.SchoolClass.SortOrder).Select(c => c.SchoolClass.Name).ToList(),
+            }).ToListAsync(ct);
+        return rows.Select(r => new FloorHistoryRow(r.Id, r.StaffMemberId, r.FullName, r.Role, r.Classes.Count > 0 ? string.Join(" – ", r.Classes) : r.Coverage ?? "",
+            r.IsCurrent, r.StartDate, r.EndDate, r.EndReason, r.AssignedBy)).ToList();
+    }
+
+    public async Task<FloorAssignmentEdit?> AssignmentAsync(int assignmentId, CancellationToken ct = default)
+    {
+        var a = await db.FloorStaffAssignments.AsNoTracking().Where(x => x.Id == assignmentId && x.IsCurrent)
+            .Select(x => new { x.Id, x.FloorId, Floor = x.Floor.Name, x.StaffMember.FullName, x.Role, x.Coverage, Classes = x.Classes.Select(c => c.SchoolClassId).ToList() })
+            .FirstOrDefaultAsync(ct);
+        return a is null ? null : new FloorAssignmentEdit(a.Id, a.FloorId, a.Floor, a.FullName, a.Role, a.Coverage, a.Classes);
+    }
+
+    public async Task<ServiceResult> UpdateAssignmentAsync(int assignmentId, string? coverage, IReadOnlyList<int> classIds, CancellationToken ct = default)
+    {
+        var row = await db.FloorStaffAssignments.Include(a => a.Classes).FirstOrDefaultAsync(a => a.Id == assignmentId, ct);
+        if (row is null || !row.IsCurrent) return ServiceResult.Fail("", "This assignment has ended.");
+        if (await DenyUnlessAsync(u => u.CanManageTeam(row.FloorId), ct) is { } denied) return denied;
+        var text = TextNormalizer.CleanText(coverage);
+        if (text.Length > FloorStaffAssignment.CoverageMaxLength) return ServiceResult.Fail("Coverage", $"Use {FloorStaffAssignment.CoverageMaxLength} characters or fewer.");
+        var ids = classIds.Distinct().ToList();
+        if (ids.Count > 0 && await db.Classes.CountAsync(c => ids.Contains(c.Id), ct) != ids.Count) return ServiceResult.Fail("ClassIds", "Choose classes from the list.");
+        if (row.Role == FloorRole.Matron && ids.Count == 0) return ServiceResult.Fail("ClassIds", "Choose the grades / classes the Matron is assigned to.");
+        row.Coverage = text.Length == 0 ? null : text;
+        row.Classes.Clear();
+        foreach (var c in ids) row.Classes.Add(new FloorStaffClass { SchoolClassId = c });
+        row.Note = $"Grade range updated by {currentUser.AccountName() ?? "an administrator"} on {SchoolWeek.Today:yyyy-MM-dd}.";
+        await db.SaveChangesAsync(ct);
+        return ServiceResult.Ok(row.Id);
     }
 
     public async Task<FloorTeamCard?> FloorAsync(int id, CancellationToken ct = default)
@@ -206,7 +279,7 @@ public sealed class FloorManagementService(SchoolDbContext db, ICurrentUser curr
             .FirstOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<Option>> StaffOptionsAsync(CancellationToken ct = default) =>
-        (await db.StaffMembers.AsNoTracking().OrderBy(s => s.FullName).Select(s => new { s.Id, s.FullName, s.ContactNumber, s.JobTitle }).ToListAsync(ct))
+        (await db.StaffMembers.AsNoTracking().Where(s => s.ArchivedAt == null).OrderBy(s => s.FullName).Select(s => new { s.Id, s.FullName, s.ContactNumber, s.JobTitle }).ToListAsync(ct))
         .Select(s => new Option(s.Id, s.FullName, string.Join(" · ", new[] { s.JobTitle, s.ContactNumber }.Where(x => !string.IsNullOrWhiteSpace(x))))).ToList();
 
     public async Task<IReadOnlyList<Option>> ClassOptionsAsync(CancellationToken ct = default) =>
@@ -242,7 +315,7 @@ public sealed class FloorManagementService(SchoolDbContext db, ICurrentUser curr
         if (await DenyUnlessAsync(u => u.CanManageTeam(floorId), ct) is { } denied) return denied;
         if (!await db.Floors.AnyAsync(f => f.Id == floorId, ct)) return ServiceResult.Fail("", "This floor no longer exists.");
         if (!Enum.IsDefined(input.Role)) return ServiceResult.Fail("Role", "Choose a role.");
-        var name = await db.StaffMembers.Where(s => s.Id == input.StaffMemberId).Select(s => s.FullName).FirstOrDefaultAsync(ct);
+        var name = await db.StaffMembers.Where(s => s.Id == input.StaffMemberId && s.ArchivedAt == null).Select(s => s.FullName).FirstOrDefaultAsync(ct);
         if (name is null) return ServiceResult.Fail("StaffMemberId", "Choose a staff member from the list.");
         var coverage = TextNormalizer.CleanText(input.Coverage);
         if (coverage.Length > FloorStaffAssignment.CoverageMaxLength) return ServiceResult.Fail("Coverage", $"Use {FloorStaffAssignment.CoverageMaxLength} characters or fewer.");
@@ -254,8 +327,8 @@ public sealed class FloorManagementService(SchoolDbContext db, ICurrentUser curr
             return ServiceResult.Fail("StaffMemberId", $"{name} already has this role on the floor.");
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        // One Stage Coordinator and one Floor Supervisor per floor: the previous holder's assignment ends (kept as history).
-        if (input.Role is FloorRole.StageCoordinator or FloorRole.FloorSupervisor)
+        // One Stage Coordinator, one Floor Supervisor and one Floating Matron per floor: the previous holder's assignment ends (kept as history).
+        if (input.Role is FloorRole.StageCoordinator or FloorRole.FloorSupervisor or FloorRole.FloatingMatron)
         {
             foreach (var old in await db.FloorStaffAssignments.Where(a => a.FloorId == floorId && a.Role == input.Role && a.IsCurrent).ToListAsync(ct))
                 End(old, $"Replaced by {name}");

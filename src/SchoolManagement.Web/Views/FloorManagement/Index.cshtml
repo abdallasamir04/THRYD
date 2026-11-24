@@ -1,12 +1,13 @@
 ﻿@model FloorDashboardViewModel
 @*
-    Floor Management: one card per floor with a management team (grade range set) — its Stage Coordinator, Floor Supervisor,
-    Matrons, Floating Matron and Social Worker — and live counts of open reports and tickets. Add Floor for administrators.
+    Floor Management: each floor with a management team (grade range set) as its own full-width section, in floor order
+    (Ground → 1st → 2nd), showing its organization: Stage Coordinator → Floor Supervisor → Matrons + Floating Matron, and the
+    Floor Social Worker as a separate support role. Live counts of open reports and tickets. Administrators add and edit
+    floors and assign the team (checked again on the server).
 *@
 @{
     ViewData["Title"] = "Floor Management";
     ViewData["Nav"] = "FloorAudit";
-    string Names(IEnumerable<SchoolManagement.Web.Services.FloorManagement.FloorPerson> people) => string.Join(", ", people.Select(p => p.Name));
 }
 <span data-refresh-on-save hidden></span>
 
@@ -14,7 +15,7 @@
     <div class="page-head__text">
         <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><span aria-current="page">Floor Management</span></li></ol>
         <h1 class="page-title">Floor Management</h1>
-        <p class="page-sub">Each floor's team — Stage Coordinator, Floor Supervisor, Matrons, Floating Matron and Floor Social Worker — with its reports, escalations and student tickets.</p>
+        <p class="page-sub">Each floor's team — Stage Coordinator, Floor Supervisor, Matrons and Floating Matron — with the Floor Social Worker, reports, escalations and student tickets.</p>
     </div>
     <div class="page-head__actions">
         <a class="btn btn--secondary" href="/floor-management/reports/new" data-modal>@Ui.Icon("flag")New report</a>
@@ -37,7 +38,7 @@
 
 @if (Model.Consultant is { } consultant)
 {
-    <p class="fm-chain">@Ui.Icon("crown", "icon--sm")Stage Coordinators report to the School Consultant, <a href="@SchoolManagement.Web.Common.OrgLabels.ProfileHref(consultant.StaffId, consultant.IsManagement)">@consultant.Name</a>.</p>
+    <p class="fm-chain">@Ui.Icon("crown", "icon--sm")<span>Every Stage Coordinator reports to the School Consultant, <a href="@SchoolManagement.Web.Common.OrgLabels.ProfileHref(consultant.StaffId, consultant.IsManagement)">@consultant.Name</a>, who can access all Floor Management areas.</span></p>
 }
 
 @if (Model.Floors.Count == 0)
@@ -47,38 +48,37 @@
 }
 else
 {
-    <div class="fm-floors">
+    <nav class="fm-jump" aria-label="Floors">
         @foreach (var f in Model.Floors)
         {
-            var sc = f.Lead(FloorRole.StageCoordinator);
-            var fs = f.Lead(FloorRole.FloorSupervisor);
-            var matrons = f.Of(FloorRole.Matron);
-            var floating = f.Of(FloorRole.FloatingMatron);
-            var social = f.Of(FloorRole.SocialWorker);
-            <a class="card fm-floor@(f.IsActive ? "" : " is-inactive")" href="/floor-management/floors/@f.Id">
-                <header class="fm-floor__head">
-                    <span class="fm-floor__icon" aria-hidden="true">@Ui.Icon("school")</span>
-                    <div>
-                        <h2 class="fm-floor__name">@f.Name</h2>
-                        <span class="fm-floor__range">@Ui.Icon("graduation-cap", "icon--sm")@f.GradeRange</span>
-                    </div>
-                    @if (!f.IsActive) { <span class="badge badge--neutral">Inactive</span> }
-                </header>
-                <dl class="fm-floor__team">
-                    <div><dt>Stage Coordinator</dt><dd>@(sc?.Name ?? "Not assigned")</dd></div>
-                    <div><dt>Floor Supervisor</dt><dd>@(fs?.Name ?? "Not assigned")</dd></div>
-                    <div><dt>Matrons</dt><dd>@(matrons.Count == 0 ? "Not assigned" : Names(matrons))</dd></div>
-                    <div><dt>Floating Matron</dt><dd>@(floating.Count == 0 ? "Not assigned" : Names(floating))</dd></div>
-                    <div><dt>Floor Social Worker</dt><dd class="@(social.Count == 0 ? "faint" : "")">@(social.Count == 0 ? "Not assigned yet" : Names(social))</dd></div>
-                </dl>
-                <footer class="fm-floor__foot">
-                    <span>@Ui.Plural(f.OpenReports, "open report", "open reports")</span>
-                    <span>@Ui.Plural(f.OpenTickets, "open ticket", "open tickets")</span>
-                    <span class="fm-floor__go">Open floor @Ui.Icon("arrow-right", "icon--sm")</span>
-                </footer>
-            </a>
+            <a href="#floor-@f.Id">@f.Name<span class="fm-jump__range">@f.GradeRange</span></a>
         }
-    </div>
+    </nav>
+
+    @foreach (var f in Model.Floors)
+    {
+        var manage = Model.User.CanManageTeam(f.Id);
+        <section class="card fm-section@(f.IsActive ? "" : " is-inactive")" id="floor-@f.Id" aria-labelledby="floor-@f.Id-title">
+            <header class="fm-section__head">
+                <span class="fm-section__icon" aria-hidden="true">@Ui.Icon("school")</span>
+                <div class="fm-section__titles">
+                    <h2 class="fm-section__name" id="floor-@f.Id-title">@f.Name @if (!f.IsActive) { <span class="badge badge--neutral">Inactive</span> }</h2>
+                    <p class="fm-section__meta">
+                        <span class="fm-range">@Ui.Icon("graduation-cap", "icon--sm")@f.GradeRange</span>
+                        <span>@Ui.Plural(f.Team.Count, "team member", "team members")</span>
+                        <a href="/floor-management/reports">@Ui.Plural(f.OpenReports, "open report", "open reports")</a>
+                        <a href="/floor-management/tickets">@Ui.Plural(f.OpenTickets, "open ticket", "open tickets")</a>
+                    </p>
+                </div>
+                <div class="fm-section__actions">
+                    @if (Model.User.CanAddFloor) { <a class="btn btn--secondary btn--sm" href="/floor-management/floors/@f.Id/edit" data-modal>@Ui.Icon("pencil", "icon--sm")Edit floor</a> }
+                    @if (manage) { <a class="btn btn--secondary btn--sm" href="/floor-management/floors/@f.Id/assign" data-modal>@Ui.Icon("user-plus", "icon--sm")Assign staff</a> }
+                    <a class="btn btn--primary btn--sm" href="/floor-management/floors/@f.Id">Floor page &amp; history @(Ui.Icon("arrow-right", "icon--sm"))</a>
+                </div>
+            </header>
+            <partial name="~/Views/FloorManagement/_FloorHierarchy.cshtml" model="(f, manage, (SchoolManagement.Web.Services.FloorManagement.ConsultantRef?)Model.Consultant)" />
+        </section>
+    }
 }
 
 @if (Model.Unconfigured.Count > 0)

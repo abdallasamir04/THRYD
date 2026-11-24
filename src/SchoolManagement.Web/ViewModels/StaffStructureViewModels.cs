@@ -189,6 +189,15 @@ public sealed class StaffDirectoryViewModel
 {
     public required StaffDirectoryQuery Query { get; init; }
     public required StaffDirectory Directory { get; init; }
+
+    /// <summary>Open staff data-review items; null when the viewer may not see the review.</summary>
+    public int? OpenReviewItems { get; init; }
+}
+
+/// <summary>Staff → Data review: what in the staff records still needs a person's decision.</summary>
+public sealed class StaffDataReviewViewModel
+{
+    public required Services.TeachingRoster.StaffDataReview Review { get; init; }
 }
 
 // ---------- Management Team ----------
@@ -319,6 +328,9 @@ public sealed class ManagementProfileViewModel
     /// <summary>Organizational positions (current, history) and data-quality warnings of this member.</summary>
     public Services.OrgStructure.StaffOrgSummary Org { get; init; } = Services.OrgStructure.StaffOrgSummary.Empty;
     public bool CanManageOrg { get; init; }
+
+    /// <summary>Teaching Staff 2027 rows of this person and the record's archive state.</summary>
+    public Services.TeachingRoster.StaffRosterProfile Roster { get; init; } = Services.TeachingRoster.StaffRosterProfile.Empty;
 }
 
 // ---------- Management Team tasks ----------

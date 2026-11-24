@@ -203,7 +203,7 @@
                                 }
                                 foreach (var holder in p.Holders)
                                 {
-                                    <li><span class="badge badge--job">@p.Title</span>@if (p.GradeRange is not null) { <span class="org-grade">@p.GradeRange</span> } <a href="@holder.ProfileHref" dir="auto">@holder.FullName</a>@if (holder.Phone is not null) { <span class="muted" dir="ltr"> · @holder.Phone</span> }</li>
+                                    <li><span class="badge badge--job">@p.Title</span>@if (p.GradeRange is not null) { <span class="org-grade">@p.GradeRange</span> } <a href="@holder.ProfileHref" dir="auto">@holder.FullName</a>@if (holder.Phone is not null) { <span class="muted"> · </span>@Ui.Phone(holder.Phone, "muted", who: holder.FullName) }</li>
                                 }
                             }
                         </ul>
@@ -227,7 +227,7 @@
                         <dt>Since</dt><dd>@h.StartDate.ToString("d MMM yyyy", c)</dd>
                         @if (!string.IsNullOrEmpty(h.ContactNumber))
                         {
-                            <dt>Contact</dt><dd><a class="phone-link" href="tel:@h.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@h.ContactNumber</a></dd>
+                            <dt>Contact</dt><dd>@Ui.Phone(h.ContactNumber, "phone-link", who: h.FullName)</dd>
                         }
                         @if (!string.IsNullOrEmpty(h.Note))
                         {

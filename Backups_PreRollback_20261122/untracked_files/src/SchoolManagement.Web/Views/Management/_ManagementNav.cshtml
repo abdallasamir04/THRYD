@@ -1,0 +1,33 @@
+@*
+    Phase 1: Management module sub-navigation bar linking all organizational structure sections.
+*@
+@{
+    var path = Context.Request.Path.Value?.ToLowerInvariant() ?? "";
+    string IsActive(string segment) => path.Contains(segment, StringComparison.OrdinalIgnoreCase) ? "btn--primary" : "btn--secondary";
+}
+
+<nav class="org-sub-nav" aria-label="Management sub-sections" style="margin: 0.5rem 0 1.5rem 0;">
+    <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+        <a class="btn btn--sm @(path.EndsWith("/leadership", StringComparison.OrdinalIgnoreCase) ? "btn--primary" : "btn--secondary")" href="/management/leadership">
+            @Ui.Icon("crown", "icon--sm")School Leadership
+        </a>
+        <a class="btn btn--sm @(path.Contains("org-chart", StringComparison.OrdinalIgnoreCase) ? "btn--primary" : "btn--secondary")" href="/management/org-chart">
+            @Ui.Icon("git-merge", "icon--sm")Organizational Chart
+        </a>
+        <a class="btn btn--sm @(path.Contains("executive", StringComparison.OrdinalIgnoreCase) ? "btn--primary" : "btn--secondary")" href="/management/executive">
+            @Ui.Icon("shield", "icon--sm")Executive Management
+        </a>
+        <a class="btn btn--sm @(path.Contains("academic-leadership", StringComparison.OrdinalIgnoreCase) ? "btn--primary" : "btn--secondary")" href="/management/academic-leadership">
+            @Ui.Icon("award", "icon--sm")Academic Leadership
+        </a>
+        <a class="btn btn--sm @(path.Contains("operations", StringComparison.OrdinalIgnoreCase) ? "btn--primary" : "btn--secondary")" href="/management/operations">
+            @Ui.Icon("settings", "icon--sm")Operations &amp; Admin
+        </a>
+        <a class="btn btn--sm @(path.Contains("departments-leadership", StringComparison.OrdinalIgnoreCase) ? "btn--primary" : "btn--secondary")" href="/management/departments-leadership">
+            @Ui.Icon("book-open", "icon--sm")Academic Departments
+        </a>
+        <a class="btn btn--sm @(path.Contains("positions-management", StringComparison.OrdinalIgnoreCase) ? "btn--primary" : "btn--secondary")" href="/management/positions-management">
+            @Ui.Icon("users", "icon--sm")Positions &amp; Assignments
+        </a>
+    </div>
+</nav>

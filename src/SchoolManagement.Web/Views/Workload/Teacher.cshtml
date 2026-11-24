@@ -18,7 +18,7 @@
                     <span dir="auto">@(t.JobTitle ?? "Job title not set")</span>
                     @if (!string.IsNullOrEmpty(t.ContactNumber))
                     {
-                        <span> · </span><a class="phone-link" href="tel:@t.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@t.ContactNumber</a>
+                        <span> · </span>@Ui.Phone(t.ContactNumber, "phone-link", who: t.FullName)
                     }
                 </p>
             </div>

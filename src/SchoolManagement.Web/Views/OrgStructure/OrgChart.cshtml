@@ -94,10 +94,10 @@ else
                                                             @foreach (var h in p.Holders)
                                                             {
                                                                 <li>
-                                                                    <a class="org-tree__person" href="@h.ProfileHref" title="Open the profile of @h.FullName">
+                                                                    <div class="org-tree__person">
                                                                         <span class="avatar avatar--@Ui.Tone(h.FullName) org-person__avatar" aria-hidden="true">@Ui.Initials(h.FullName)</span>
-                                                                        <span class="org-tree__person-text"><strong dir="auto">@h.FullName</strong><span class="muted" dir="ltr">@(h.Phone ?? "No phone")@(h.Scope is null ? "" : " · " + h.Scope)</span></span>
-                                                                    </a>
+                                                                        <span class="org-tree__person-text"><a class="org-tree__person-name" href="@h.ProfileHref" title="Open the profile of @h.FullName"><strong dir="auto">@h.FullName</strong></a><span class="muted">@Ui.Phone(h.Phone, "org-tree__phone", icon: false, empty: "No phone", who: h.FullName)@(h.Scope is null ? "" : " · " + h.Scope)</span></span>
+                                                                    </div>
                                                                     @if (h.ReportsToName is not null)
                                                                     {
                                                                         <span class="org-tree__reports">@Ui.Icon("arrow-up", "icon--sm")Reports to @h.ReportsToName</span>

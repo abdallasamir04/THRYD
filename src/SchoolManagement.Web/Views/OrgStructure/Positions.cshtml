@@ -148,7 +148,7 @@
                                 <td data-label="Staff member">
                                     <div class="person">
                                         <span class="avatar avatar--@Ui.Tone(a.FullName)" aria-hidden="true">@Ui.Initials(a.FullName)</span>
-                                        <div><div class="person__name" dir="auto"><a href="@a.ProfileHref">@a.FullName</a></div><div class="person__meta" dir="ltr">@(a.Phone ?? "No phone")</div></div>
+                                        <div><div class="person__name" dir="auto"><a href="@a.ProfileHref">@a.FullName</a></div><div class="person__meta">@Ui.Phone(a.Phone, empty: "No phone", who: a.FullName)</div></div>
                                     </div>
                                 </td>
                                 <td data-label="Position">

@@ -78,7 +78,7 @@
                                     <span class="org-person__meta">
                                         @if (!string.IsNullOrEmpty(h.Phone))
                                         {
-                                            <a class="org-person__phone" href="tel:@h.Phone.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")@h.Phone</a>
+                                            @Ui.Phone(h.Phone, "org-person__phone", who: h.FullName)
                                         }
                                         else
                                         {

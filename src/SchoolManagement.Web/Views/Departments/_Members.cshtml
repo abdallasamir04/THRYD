@@ -73,7 +73,7 @@ else
                 <div class="member-card__foot">
                     @if (!string.IsNullOrEmpty(m.ContactNumber))
                     {
-                        <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr" style="position:relative;z-index:1">@Ui.Icon("phone")@m.ContactNumber</a>
+                        <span style="position:relative;z-index:1">@Ui.Phone(m.ContactNumber, "phone-link", who: m.FullName)</span>
                     }
                     else
                     {

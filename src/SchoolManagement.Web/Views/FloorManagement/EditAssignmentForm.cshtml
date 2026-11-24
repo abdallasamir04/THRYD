@@ -1,0 +1,37 @@
+@model FloorAssignmentEditFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var role = SchoolManagement.Web.Services.FloorManagement.FloorManagementService.Label(Model.Role);
+    var heading = $"Edit grade range — {Model.StaffName}";
+    if (modal) { Layout = null; } else { ViewData["Title"] = heading; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/floor-management/assignments/@Model.Id/edit" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("pencil", "icon--lg")</span>
+            <div><h2 class="modal__title">@heading</h2><p class="modal__sub">@role · @Model.FloorName. To give the role to someone else, assign the new person instead (this assignment then ends and stays in the history).</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field field--full">
+                <label class="label" for="Coverage">Coverage / grade range</label>
+                <input class="input" id="Coverage" name="Coverage" value="@Model.Coverage" maxlength="60" placeholder="e.g. G2A – G6B" />
+            </div>
+            <div class="field field--full">
+                <span class="label" id="fm-edit-classes">Classes@(Model.Role == FloorRole.Matron ? " (required for a Matron)" : "")</span>
+                <div class="check-chips" role="group" aria-labelledby="fm-edit-classes">
+                    @foreach (var c in Model.Classes)
+                    {
+                        <label class="check-chip"><input type="checkbox" name="ClassIds" value="@c.Id" checked="@Model.ClassIds.Contains(c.Id)" /><span>@c.Name</span></label>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-management/floors/@Model.FloorId">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+        </div>
+    </form>
+</div>

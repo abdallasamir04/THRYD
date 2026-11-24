@@ -1,0 +1,118 @@
+@model (SchoolManagement.Web.Services.FloorManagement.FloorTeamCard Floor, bool CanManage, SchoolManagement.Web.Services.FloorManagement.ConsultantRef? Consultant)
+@*
+    One floor's organization, top to bottom: Stage Coordinator → Floor Supervisor → Matrons and the Floating Matron. The
+    Floating Matron's escalation route (straight to the Stage Coordinator when the issue concerns the Floor Supervisor) is a
+    route for reports, not a reporting line. The Floor Social Worker sits beside the hierarchy as a support role connected to
+    Discipline / Behaviour. A role whose person the source does not confirm is shown as pending, never filled in.
+*@
+@using SchoolManagement.Web.Services.FloorManagement
+@{
+    var f = Model.Floor;
+    var manage = Model.CanManage;
+    var sc = f.Lead(FloorRole.StageCoordinator);
+    var fs = f.Lead(FloorRole.FloorSupervisor);
+    var matrons = f.Of(FloorRole.Matron);
+    var floating = f.Of(FloorRole.FloatingMatron);
+    var social = f.Of(FloorRole.SocialWorker);
+    string Assign(FloorRole r) => $"/floor-management/floors/{f.Id}/assign?role={r}";
+}
+<div class="fm-org">
+    <div class="fm-org__chain">
+        @* ---- level 1 *@
+        <section class="fm-tier fm-tier--lead" aria-label="Stage Coordinator">
+            <header class="fm-tier__head">
+                <h3 class="fm-tier__title">@Ui.Icon("crown", "icon--sm")Stage Coordinator</h3>
+                <p class="fm-tier__hint">Oversees the whole floor and supervises the Floor Supervisor@(Model.Consultant is { } c ? $" · reports to the School Consultant, {c.Name}" : "").</p>
+            </header>
+            <div class="fm-grid fm-grid--single">
+                @if (sc is not null)
+                {
+                    <partial name="~/Views/FloorManagement/_Person.cshtml" model="(sc, manage, f.Id, f.Name)" />
+                }
+                else if (f.PendingFor(FloorRole.StageCoordinator) is { } pending)
+                {
+                    <article class="fm-card fm-card--pending" aria-label="@pending.Name, identity needs confirmation">
+                        <header class="fm-card__head">
+                            <span class="avatar avatar--@Ui.Tone(pending.Name)" aria-hidden="true">@Ui.Initials(pending.Name)</span>
+                            <div class="fm-card__who">
+                                <span class="fm-card__name" dir="auto">@pending.Name</span>
+                                <span class="fm-role fm-role--pending">@Ui.Icon("alert-triangle", "icon--sm")Identity needs confirmation</span>
+                            </div>
+                        </header>
+                        <dl class="fm-card__facts">
+                            <div><dt>@Ui.Icon("phone", "icon--sm")Phone</dt><dd>@Ui.Phone(pending.Phone, "fm-phone", who: pending.Name)</dd></div>
+                            <div><dt>@Ui.Icon("school", "icon--sm")Floor</dt><dd>@f.Name</dd></div>
+                            <div><dt>@Ui.Icon("graduation-cap", "icon--sm")Grade range</dt><dd>@(pending.Coverage ?? f.GradeRange)</dd></div>
+                        </dl>
+                        <p class="fm-card__note">@pending.Reason Not assigned until an administrator confirms who this is.</p>
+                        @if (manage) { <footer class="fm-card__actions"><a class="btn btn--secondary btn--sm" href="@Assign(FloorRole.StageCoordinator)" data-modal>@Ui.Icon("user-plus", "icon--sm")Assign Stage Coordinator</a></footer> }
+                    </article>
+                }
+                else
+                {
+                    <div class="fm-empty">No Stage Coordinator assigned. @if (manage) { <a href="@Assign(FloorRole.StageCoordinator)" data-modal>Assign one</a> }</div>
+                }
+            </div>
+        </section>
+
+        <div class="fm-connector" aria-hidden="true"></div>
+
+        @* ---- level 2 *@
+        <section class="fm-tier" aria-label="Floor Supervisor">
+            <header class="fm-tier__head">
+                <h3 class="fm-tier__title">@Ui.Icon("shield-check", "icon--sm")Floor Supervisor</h3>
+                <p class="fm-tier__hint">Runs the floor's daily matron operations, receives the team's reports and escalates to the Stage Coordinator when needed.</p>
+            </header>
+            <div class="fm-grid fm-grid--single">
+                @if (fs is not null) { <partial name="~/Views/FloorManagement/_Person.cshtml" model="(fs, manage, f.Id, f.Name)" /> }
+                else { <div class="fm-empty">No Floor Supervisor assigned. @if (manage) { <a href="@Assign(FloorRole.FloorSupervisor)" data-modal>Assign one</a> }</div> }
+            </div>
+        </section>
+
+        <div class="fm-connector" aria-hidden="true"></div>
+
+        @* ---- level 3 *@
+        <section class="fm-tier" aria-label="Matrons and Floating Matron">
+            <header class="fm-tier__head">
+                <h3 class="fm-tier__title">@Ui.Icon("users", "icon--sm")Matrons &amp; Floating Matron</h3>
+                <p class="fm-tier__hint">Report to the Floor Supervisor. Matrons cover their assigned grades; the Floating Matron covers the whole floor and supports them.</p>
+            </header>
+            <div class="fm-grid">
+                @foreach (var m in matrons) { <partial name="~/Views/FloorManagement/_Person.cshtml" model="(m, manage, f.Id, f.Name)" /> }
+                @foreach (var m in floating)
+                {
+                    <div class="fm-floating">
+                        <partial name="~/Views/FloorManagement/_Person.cshtml" model="(m, manage, f.Id, f.Name)" />
+                        <p class="fm-escalation">
+                            @Ui.Icon("arrow-up", "icon--sm")<span><strong>Escalation route:</strong> if the issue concerns a mistake by the Floor Supervisor, the Floating Matron may report it directly to the Stage Coordinator@(sc is null ? "" : $" ({sc.Name})"). Her reporting line stays the Floor Supervisor.</span>
+                        </p>
+                    </div>
+                }
+                @if (matrons.Count == 0 && floating.Count == 0) { <div class="fm-empty">No Matrons assigned.</div> }
+            </div>
+            @if (manage)
+            {
+                <div class="fm-tier__actions">
+                    <a class="btn btn--secondary btn--sm" href="@Assign(FloorRole.Matron)" data-modal>@Ui.Icon("plus", "icon--sm")Add Matron</a>
+                    <a class="btn btn--secondary btn--sm" href="@Assign(FloorRole.FloatingMatron)" data-modal>@Ui.Icon("plus", "icon--sm")@(floating.Count == 0 ? "Assign Floating Matron" : "Replace Floating Matron")</a>
+                </div>
+            }
+        </section>
+    </div>
+
+    @* ---- support role, outside the matron reporting line *@
+    <aside class="fm-support" aria-label="Floor Social Worker">
+        <header class="fm-tier__head">
+            <h3 class="fm-tier__title">@Ui.Icon("clipboard-check", "icon--sm")Floor Social Worker</h3>
+            <p class="fm-tier__hint">Support role for discipline, behaviour, student conduct and student support cases. Opens tickets and routes them to the Discipline / Behaviour workflow.</p>
+        </header>
+        @foreach (var s in social) { <partial name="~/Views/FloorManagement/_Person.cshtml" model="(s, manage, f.Id, f.Name)" /> }
+        @if (social.Count == 0)
+        {
+            <div class="fm-empty">
+                <strong>Not assigned.</strong> The floor charts do not name a Social Worker, so nobody is assigned until an authorized administrator chooses a staff member.
+            </div>
+        }
+        @if (manage) { <a class="btn btn--secondary btn--sm" href="@Assign(FloorRole.SocialWorker)" data-modal>@Ui.Icon("user-plus", "icon--sm")Assign Social Worker</a> }
+    </aside>
+</div>

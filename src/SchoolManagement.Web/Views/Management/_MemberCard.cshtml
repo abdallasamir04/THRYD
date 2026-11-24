@@ -37,7 +37,7 @@
     <div class="leader-card__foot">
         @if (!string.IsNullOrEmpty(m.ContactNumber))
         {
-            <a class="leader-card__contact" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")<span>@m.ContactNumber</span></a>
+            @Ui.Phone(m.ContactNumber, "leader-card__contact", who: m.FullName)
         }
         else if (!string.IsNullOrEmpty(m.Email))
         {

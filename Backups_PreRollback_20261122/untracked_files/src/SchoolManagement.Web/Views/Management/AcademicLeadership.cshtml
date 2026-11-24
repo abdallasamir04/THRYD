@@ -1,0 +1,205 @@
+@model AcademicLeadershipViewModel
+@{
+    ViewData["Title"] = "Academic Leadership";
+    ViewData["Nav"] = "Management";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs">
+            <li><a href="/">Dashboard</a></li>
+            <li><a href="/staff">Staff</a></li>
+            <li><a href="/management">Management Team</a></li>
+            <li><a href="/management/org-chart">Org Chart</a></li>
+            <li><span aria-current="page">Academic Leadership</span></li>
+        </ol>
+        <h1 class="page-title">Academic Leadership &amp; Stage Governance</h1>
+        <p class="page-sub">Academic directors, stage coordinators, curriculum heads, and academic quality assurance (Royal Kings 2026/2027).</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/management/departments-leadership">@Ui.Icon("book-open")Department Leadership</a>
+        <a class="btn btn--primary" href="/management/assignments/create" data-modal>@Ui.Icon("user-plus")Assign Academic Role</a>
+    </div>
+</div>
+
+<partial name="_ManagementNav" />
+
+<ul class="kpis" aria-label="Academic leadership totals">
+    <li>
+        <div class="kpi kpi--purple">
+            <span class="kpi__icon">@Ui.Icon("award")</span>
+            <p class="kpi__label">Tier 2 Leaders</p>
+            <p class="kpi__value">@Model.TierLeadership.Count</p>
+            <p class="kpi__meta">Academic Head &amp; Stage Heads</p>
+        </div>
+    </li>
+    <li>
+        <div class="kpi kpi--teal">
+            <span class="kpi__icon">@Ui.Icon("shield-check")</span>
+            <p class="kpi__label">Academic HODs</p>
+            <p class="kpi__value">@Model.DepartmentLeaders.Count(l => l.RoleType == LeadershipRoleType.HOD)</p>
+            <p class="kpi__meta">Across @Model.AcademicDepartments.Count Subject Areas</p>
+        </div>
+    </li>
+    <li>
+        <div class="kpi kpi--blue">
+            <span class="kpi__icon">@Ui.Icon("layers")</span>
+            <p class="kpi__label">Coordinators &amp; Leads</p>
+            <p class="kpi__value">@Model.DepartmentLeaders.Count(l => l.RoleType == LeadershipRoleType.Coordinator || l.RoleType == LeadershipRoleType.TeamLeader)</p>
+            <p class="kpi__meta">Stage-specific (G1-2, G3-6)</p>
+        </div>
+    </li>
+    <li>
+        <div class="kpi kpi--ok">
+            <span class="kpi__icon">@Ui.Icon("users")</span>
+            <p class="kpi__label">Total Academic Leaders</p>
+            <p class="kpi__value">@(Model.TierLeadership.Count + Model.DepartmentLeaders.Count)</p>
+            <p class="kpi__meta">Active Leadership Appointments</p>
+        </div>
+    </li>
+</ul>
+
+@* Stage Governance & Central Academic Leadership (Level 2) *@
+<section class="card table-card" style="margin-top:1.5rem">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title">@Ui.Icon("award")Central Academic Directorate &amp; Stage Heads (Level 2)</h2>
+            <p class="card__sub">Academic Head, Stage Heads (G2-6, G7-12), and Academic LMS Quality Reviser.</p>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Academic Leader</th>
+                    <th>Leadership Position</th>
+                    <th>Grade Range</th>
+                    <th>Role Type</th>
+                    <th>Contact Phone</th>
+                    <th>Status</th>
+                    <th style="text-align:right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in Model.TierLeadership)
+                {
+                    <tr>
+                        <td>
+                            <div style="display:flex; align-items:center; gap:0.75rem">
+                                <span class="avatar avatar--sm avatar--@Ui.Tone(l.StaffFullName)">@Ui.Initials(l.StaffFullName)</span>
+                                <div>
+                                    <strong><a href="/staff/@l.StaffMemberId" style="text-decoration:none">@l.StaffFullName</a></strong>
+                                    @if (!l.IsPrimary)
+                                    {
+                                        <span class="badge badge--neutral" style="margin-left:0.25rem; font-size:0.75rem" title="Dual Appointment">Dual Role</span>
+                                    }
+                                </div>
+                            </div>
+                        </td>
+                        <td><strong>@l.PositionTitle</strong></td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(l.GradeRange))
+                            {
+                                <span class="badge badge--secondary" style="font-weight:700">@l.GradeRange</span>
+                            }
+                            else
+                            {
+                                <span class="faint">School-wide</span>
+                            }
+                        </td>
+                        <td><span class="badge badge--primary">@l.RoleType</span></td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(l.ContactNumber))
+                            {
+                                <a class="phone-link" href="tel:@l.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@l.ContactNumber</a>
+                            }
+                            else
+                            {
+                                <span class="faint">—</span>
+                            }
+                        </td>
+                        <td><span class="badge badge--ok">Active</span></td>
+                        <td style="text-align:right">
+                            <a class="btn btn--xs btn--secondary" href="/management/assignments/@l.Id/edit" data-modal title="Edit Assignment">@Ui.Icon("pencil")Edit</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+@* Department Leadership Breakdown (Level 6) *@
+<section class="card table-card" style="margin-top:2rem">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title">@Ui.Icon("book-open")Academic Department Leadership (HODs, Coordinators, Team Leaders)</h2>
+            <p class="card__sub">Subject department leadership distributed by grade stage bands (G1-2, G3-6, G7-12).</p>
+        </div>
+        <a class="btn btn--sm btn--secondary" href="/management/departments-leadership">Manage Departments</a>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Department</th>
+                    <th>Leader</th>
+                    <th>Role Title</th>
+                    <th>Grade Band</th>
+                    <th>Contact Phone</th>
+                    <th style="text-align:right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var dl in Model.DepartmentLeaders)
+                {
+                    var roleBadgeClass = dl.RoleType switch
+                    {
+                        LeadershipRoleType.HOD => "badge--warning",
+                        LeadershipRoleType.Coordinator => "badge--primary",
+                        LeadershipRoleType.TeamLeader => "badge--secondary",
+                        _ => "badge--neutral"
+                    };
+                    <tr>
+                        <td><strong>@(dl.OrgUnitName ?? "Academic")</strong></td>
+                        <td>
+                            <div style="display:flex; align-items:center; gap:0.5rem">
+                                <span class="avatar avatar--xs avatar--@Ui.Tone(dl.StaffFullName)">@Ui.Initials(dl.StaffFullName)</span>
+                                <a href="/staff/@dl.StaffMemberId" style="text-decoration:none">@dl.StaffFullName</a>
+                                @if (!dl.IsPrimary)
+                                {
+                                    <span class="badge badge--neutral" style="font-size:0.7rem">Dual</span>
+                                }
+                            </div>
+                        </td>
+                        <td><span class="badge @roleBadgeClass">@dl.PositionTitle</span></td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(dl.GradeRange))
+                            {
+                                <span class="badge badge--neutral" style="font-weight:700">@dl.GradeRange</span>
+                            }
+                            else
+                            {
+                                <span class="faint">All Grades</span>
+                            }
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(dl.ContactNumber))
+                            {
+                                <a class="phone-link" href="tel:@dl.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@dl.ContactNumber</a>
+                            }
+                            else
+                            {
+                                <span class="faint">—</span>
+                            }
+                        </td>
+                        <td style="text-align:right">
+                            <a class="btn btn--xs btn--secondary" href="/management/assignments/@dl.Id/edit" data-modal title="Edit Assignment">@Ui.Icon("pencil")Edit</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

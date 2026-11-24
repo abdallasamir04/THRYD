@@ -252,6 +252,7 @@ public class ManagementController(IManagementService members, IManagementTaskSer
             Positions = await members.PositionHistoryAsync(id, ct),
             Org = await org.StaffAsync(id, ct),
             CanManageOrg = await orgAccess.CanManageAsync(ct),
+            Roster = await HttpContext.RequestServices.GetRequiredService<Services.TeachingRoster.IStaffRosterQuery>().ProfileAsync(id, ct),
         });
     }
 

@@ -84,11 +84,11 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
 {
     public static readonly DateOnly EarliestAppointment = new(1980, 1, 1);
 
-    public Task<int> CountAsync(CancellationToken ct = default) => db.ManagementMembers.CountAsync(ct);
+    public Task<int> CountAsync(CancellationToken ct = default) => db.ManagementMembers.CountAsync(m => m.ArchivedAt == null, ct);
 
     public async Task<IReadOnlyList<ManagementMemberRow>> ListAsync(string? search, CancellationToken ct = default)
     {
-        var query = db.ManagementMembers.AsNoTracking();
+        var query = db.ManagementMembers.AsNoTracking().Where(m => m.ArchivedAt == null);   // current staff only
         var term = TextNormalizer.NameKey(search);
         if (term.Length > 0) query = query.Where(m => m.NormalizedName.Contains(term));
         var rows = await EnrichAsync(await Project(query).ToListAsync(ct), ct);
@@ -206,7 +206,7 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
     }
 
     public async Task<IReadOnlyList<ManagementMemberOption>> OptionsAsync(CancellationToken ct = default) =>
-        (await db.ManagementMembers.AsNoTracking()
+        (await db.ManagementMembers.AsNoTracking().Where(m => m.ArchivedAt == null)
             .Select(m => new ManagementMemberOption(m.Id, m.FullName, m.Position, m.CustomPosition != null ? m.CustomPosition.Title : null)).ToListAsync(ct))
             .OrderBy(m => m.Position is null).ThenBy(m => m.Position).ThenBy(m => m.FullName).ToList();
 

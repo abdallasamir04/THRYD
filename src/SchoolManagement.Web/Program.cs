@@ -18,7 +18,9 @@ var orgSeedCommand = args.Length > 0 && args[0] == SchoolManagement.Web.Services
 var rosterCommand = args.Length > 0 && args[0] == SchoolManagement.Web.Services.TeachingRoster.TeachingRosterCommand.Name;
 // "seed-floor-management": records the floors' teams for 2026/2027 (idempotent), prints the report and exits.
 var floorCommand = args.Length > 0 && args[0] == "seed-floor-management";
-var builder = WebApplication.CreateBuilder(testDataCommand is null && !orgSeedCommand && !rosterCommand && !floorCommand ? args : []);
+// "reconcile-official-staff": reconciles the staff records with the two official sources (idempotent), prints the report and exits.
+var officialStaffCommand = args.Length > 0 && args[0] == SchoolManagement.Web.Services.OrgStructure.OfficialStaffCommand.Name;
+var builder = WebApplication.CreateBuilder(testDataCommand is null && !orgSeedCommand && !rosterCommand && !floorCommand && !officialStaffCommand ? args : []);
 
 var connectionString = builder.Configuration.GetConnectionString("SchoolDb")
     ?? throw new InvalidOperationException("Connection string 'SchoolDb' is not configured.");
@@ -58,6 +60,8 @@ builder.Services.AddScoped<SchoolManagement.Web.Services.OrgStructure.IOrgStruct
 builder.Services.AddScoped<SchoolManagement.Web.Services.OrgStructure.IOrgStructureService, SchoolManagement.Web.Services.OrgStructure.OrgStructureService>();
 builder.Services.AddScoped<SchoolManagement.Web.Services.OrgStructure.IOrgStructureSeeder, SchoolManagement.Web.Services.OrgStructure.OrgStructureSeeder>();
 builder.Services.AddScoped<SchoolManagement.Web.Services.TeachingRoster.ITeachingRosterImporter, SchoolManagement.Web.Services.TeachingRoster.TeachingRosterImporter>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.OrgStructure.IOfficialStaffReconciler, SchoolManagement.Web.Services.OrgStructure.OfficialStaffReconciler>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.TeachingRoster.IStaffRosterQuery, SchoolManagement.Web.Services.TeachingRoster.StaffRosterQuery>();
 // Floor Management: floors' teams, reports / escalations, Social Worker tickets.
 builder.Services.AddScoped<SchoolManagement.Web.Services.FloorManagement.IFloorManagementService, SchoolManagement.Web.Services.FloorManagement.FloorManagementService>();
 builder.Services.AddScoped<SchoolManagement.Web.Services.FloorManagement.IFloorManagementSeeder, SchoolManagement.Web.Services.FloorManagement.FloorManagementSeeder>();
@@ -177,6 +181,12 @@ if (floorCommand)
 if (rosterCommand)
 {
     Environment.ExitCode = await SchoolManagement.Web.Services.TeachingRoster.TeachingRosterCommand.RunAsync(app);
+    return;
+}
+
+if (officialStaffCommand)
+{
+    Environment.ExitCode = await SchoolManagement.Web.Services.OrgStructure.OfficialStaffCommand.RunAsync(app);
     return;
 }
 

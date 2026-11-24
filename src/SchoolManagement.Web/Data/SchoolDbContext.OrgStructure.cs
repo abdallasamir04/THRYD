@@ -20,7 +20,7 @@ public partial class SchoolDbContext
     {
         b.Entity<OrgTier>(e =>
         {
-            e.ToTable("OrgTiers", t => t.HasCheckConstraint("CK_OrgTiers_Section", "[Section] BETWEEN 1 AND 2"));
+            e.ToTable("OrgTiers", t => t.HasCheckConstraint("CK_OrgTiers_Section", "[Section] BETWEEN 1 AND 3"));
             e.Property(x => x.SourceKey).HasMaxLength(OrgTier.KeyMaxLength).IsUnicode(false);
             e.Property(x => x.Name).HasMaxLength(OrgTier.NameMaxLength).IsRequired();
             e.Property(x => x.NormalizedName).HasMaxLength(OrgTier.NameMaxLength).IsRequired();
@@ -57,7 +57,7 @@ public partial class SchoolDbContext
 
         b.Entity<StaffPosition>(e =>
         {
-            e.ToTable("StaffPositions", t => t.HasCheckConstraint("CK_StaffPositions_RoleType", "[RoleType] BETWEEN 1 AND 10"));
+            e.ToTable("StaffPositions", t => t.HasCheckConstraint("CK_StaffPositions_RoleType", "[RoleType] BETWEEN 1 AND 12"));
             e.Property(x => x.SourceKey).HasMaxLength(OrgTier.KeyMaxLength).IsUnicode(false);
             e.Property(x => x.Title).HasMaxLength(StaffPosition.TitleMaxLength).IsRequired();
             e.Property(x => x.NormalizedTitle).HasMaxLength(StaffPosition.TitleMaxLength).IsRequired();

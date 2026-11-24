@@ -95,7 +95,7 @@ else
                                         <td data-label="Responsibility"><span class="badge badge--job">@p.Title</span> <span class="muted">@OrgLabels.RoleType(p.RoleType)</span></td>
                                         <td data-label="Grades" class="nowrap">@(h.GradeRange ?? p.GradeRange ?? "All grades")</td>
                                         <td data-label="Staff member" dir="auto"><a href="@h.ProfileHref">@h.FullName</a></td>
-                                        <td data-label="Mobile" dir="ltr">@if (h.Phone is not null) { <a href="tel:@h.Phone.Replace(" ", "")">@h.Phone</a> } else { <span class="faint">—</span> }</td>
+                                        <td data-label="Mobile" dir="ltr">@if (h.Phone is not null) { @Ui.Phone(h.Phone, icon: true, who: h.FullName) } else { <span class="faint">—</span> }</td>
                                     </tr>
                                 }
                             }

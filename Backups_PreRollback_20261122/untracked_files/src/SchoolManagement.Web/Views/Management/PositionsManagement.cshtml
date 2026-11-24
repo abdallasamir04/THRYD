@@ -1,0 +1,208 @@
+@model PositionIndexViewModel
+@{
+    ViewData["Title"] = "Positions & Assignments Management";
+    ViewData["Nav"] = "Management";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs">
+            <li><a href="/">Dashboard</a></li>
+            <li><a href="/staff">Staff</a></li>
+            <li><a href="/management">Management Team</a></li>
+            <li><a href="/management/org-chart">Org Chart</a></li>
+            <li><span aria-current="page">Positions &amp; Assignments</span></li>
+        </ol>
+        <h1 class="page-title">Positions &amp; Leadership Assignments</h1>
+        <p class="page-sub">Manage all defined leadership positions, operational roles, and employee appointments across all tiers.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/management/positions/create" data-modal>@Ui.Icon("plus")New Position</a>
+        <a class="btn btn--primary" href="/management/assignments/create" data-modal>@Ui.Icon("user-plus")Assign Member</a>
+    </div>
+</div>
+
+<partial name="_ManagementNav" />
+
+<ul class="summary-tiles summary-tiles--4" aria-label="Positions totals">
+    <li>
+        <a class="summary-tile" href="/management/positions-management">
+            <span class="summary-tile__value num">@Model.TotalPositions</span>
+            <span class="summary-tile__label">@Ui.Icon("briefcase", "icon--sm")Total positions</span>
+        </a>
+    </li>
+    <li>
+        <a class="summary-tile summary-tile--ok" href="/management/positions-management?status=active">
+            <span class="summary-tile__value num">@Model.FilledPositions</span>
+            <span class="summary-tile__label">@Ui.Icon("check-circle", "icon--sm")Filled positions</span>
+        </a>
+    </li>
+    <li>
+        <a class="summary-tile @(Model.VacantPositions > 0 ? "summary-tile--bad" : "")" href="/management/positions-management?status=vacant">
+            <span class="summary-tile__value num">@Model.VacantPositions</span>
+            <span class="summary-tile__label">@Ui.Icon("alert-circle", "icon--sm")Vacancies</span>
+        </a>
+    </li>
+    <li>
+        <a class="summary-tile summary-tile--muted" href="/management/org-chart">
+            <span class="summary-tile__value num">@Model.Tiers.Count</span>
+            <span class="summary-tile__label">@Ui.Icon("layers", "icon--sm")Organizational Tiers</span>
+        </a>
+    </li>
+</ul>
+
+@* Search & Filter Toolbar *@
+<section class="card" style="margin-top:1.5rem">
+    <div class="card__body" style="padding:1rem 1.25rem">
+        <form method="get" action="/management/positions-management" style="display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between">
+            <div style="display:flex; flex:1; min-width:280px; gap:0.5rem; align-items:center">
+                <input type="text" name="search" value="@Model.Query.Search" placeholder="Search by position title or department..." class="form-control" style="flex:1" />
+                <button type="submit" class="btn btn--secondary">@Ui.Icon("search")Filter</button>
+                @if (Model.Query.HasFilters)
+                {
+                    <a href="/management/positions-management" class="btn btn--ghost">Clear</a>
+                }
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center">
+                <div style="display:flex; align-items:center; gap:0.35rem">
+                    <label style="font-size:0.8125rem; font-weight:600">Tier:</label>
+                    <select name="tierId" onchange="this.form.submit()" class="form-control" style="width:auto; font-size:0.875rem">
+                        <option value="">All Tiers</option>
+                        @foreach (var t in Model.Tiers)
+                        {
+                            <option value="@t.Id" selected="@(Model.Query.TierId == t.Id ? "selected" : null)">Level @t.TierLevel: @t.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:0.35rem">
+                    <label style="font-size:0.8125rem; font-weight:600">Unit:</label>
+                    <select name="orgUnitId" onchange="this.form.submit()" class="form-control" style="width:auto; font-size:0.875rem">
+                        <option value="">All Units</option>
+                        @foreach (var u in Model.Units)
+                        {
+                            <option value="@u.Id" selected="@(Model.Query.OrgUnitId == u.Id ? "selected" : null)">@u.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+
+@* Positions & Assignments Table *@
+<section class="card table-card" style="margin-top:1.5rem">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title">@Ui.Icon("list")Positions &amp; Appointed Holders</h2>
+            <p class="card__sub">@Ui.Plural(Model.Positions.Count, "position", "positions") defined. Positions can have one or more staff members assigned.</p>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Position Title</th>
+                    <th>Tier</th>
+                    <th>Department / Unit</th>
+                    <th>Role Type</th>
+                    <th>Current Holder(s)</th>
+                    <th style="width:180px; text-align:right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Positions.Count == 0)
+                {
+                    <tr>
+                        <td colspan="6" style="text-align:center; padding:2.5rem 1rem">
+                            <span class="faint">No positions found matching your filter criteria.</span>
+                        </td>
+                    </tr>
+                }
+                @foreach (var p in Model.Positions)
+                {
+                    <tr>
+                        <td>
+                            <strong>@p.Title</strong>
+                            @if (!string.IsNullOrEmpty(p.DefaultGradeRange))
+                            {
+                                <span class="badge badge--secondary" style="font-size:0.75rem; margin-left:0.35rem">@p.DefaultGradeRange</span>
+                            }
+                            @if (!p.IsActive)
+                            {
+                                <span class="badge badge--bad" style="font-size:0.7rem; margin-left:0.25rem">Inactive</span>
+                            }
+                        </td>
+                        <td><span class="badge badge--neutral">@(p.TierName ?? "—")</span></td>
+                        <td class="faint">@(p.OrgUnitName ?? "School-wide")</td>
+                        <td><span class="badge badge--primary">@p.RoleType</span></td>
+                        <td>
+                            @if (p.CurrentHolders.Count == 0)
+                            {
+                                <span class="badge badge--bad">Vacant</span>
+                            }
+                            else
+                            {
+                                <div style="display:flex; flex-direction:column; gap:0.35rem">
+                                    @foreach (var h in p.CurrentHolders)
+                                    {
+                                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem">
+                                            <div>
+                                                <strong><a href="/staff/@h.StaffMemberId" style="text-decoration:none">@h.StaffFullName</a></strong>
+                                                @if (!string.IsNullOrEmpty(h.GradeRange))
+                                                {
+                                                    <span class="badge badge--secondary" style="font-size:0.7rem">@h.GradeRange</span>
+                                                }
+                                                @if (!h.IsPrimary)
+                                                {
+                                                    <span class="badge badge--neutral" style="font-size:0.65rem">Dual</span>
+                                                }
+                                                @if (h.RequiresConfirmation)
+                                                {
+                                                    <span style="color:#d97706; font-size:0.75rem">@Ui.Icon("alert-triangle", "icon--sm")Confirm</span>
+                                                }
+                                            </div>
+                                            <div style="display:flex; gap:0.25rem">
+                                                @if (!string.IsNullOrEmpty(h.ContactNumber))
+                                                {
+                                                    <a class="phone-link" href="tel:@h.ContactNumber.Replace(" ", "")" dir="ltr" style="font-size:0.75rem">
+                                                        @Ui.Icon("phone", "icon--sm")@h.ContactNumber
+                                                    </a>
+                                                }
+                                                <a class="btn btn--xs btn--ghost" href="/management/assignments/@h.Id/edit" data-modal title="Edit Assignment">
+                                                    @Ui.Icon("pencil")
+                                                </a>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </td>
+                        <td style="text-align:right">
+                            <div style="display:inline-flex; gap:0.25rem">
+                                <a class="btn btn--xs btn--primary" href="/management/assignments/create?positionId=@p.Id" data-modal title="Assign Staff Member">
+                                    @Ui.Icon("user-plus")Assign
+                                </a>
+                                <a class="btn btn--xs btn--secondary" href="/management/positions/@p.Id/edit" data-modal title="Edit Position">
+                                    @Ui.Icon("pencil")
+                                </a>
+                                @if (p.CurrentHolders.Count == 0)
+                                {
+                                    <form method="post" action="/management/positions/@p.Id/delete" style="display:inline"
+                                          data-confirm="Delete position &quot;@p.Title&quot;?" data-confirm-title="Delete Position?" data-confirm-button="Delete">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn--xs btn--soft-danger" title="Delete Position">
+                                            @Ui.Icon("trash")
+                                        </button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

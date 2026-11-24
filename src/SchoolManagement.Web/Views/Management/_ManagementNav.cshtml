@@ -16,7 +16,7 @@
         (ManagementNav.Positions, OrgLabels.PositionsHref, "settings", "Positions & Assignments"),
     };
 }
-<nav class="org-nav" aria-label="Management sections">
+<nav class="org-nav org-nav--management" aria-label="Management sections">
     @foreach (var (key, href, icon, label) in items)
     {
         <a class="org-nav__link" href="@href" aria-current="@(Model == key ? "page" : null)">@Ui.Icon(icon, "icon--sm")<span>@label</span></a>

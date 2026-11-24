@@ -130,4 +130,9 @@ public class TeachingRosterReviewItem
     public string Note { get; set; } = "";
     public bool IsResolved { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>When the item was resolved, and why (the source answer or the person's decision that settled it).</summary>
+    public DateTime? ResolvedAt { get; set; }
+    public const int ResolutionMaxLength = 300;
+    public string? Resolution { get; set; }
 }

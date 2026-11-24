@@ -1,0 +1,136 @@
+@model StaffDataReviewViewModel
+@using SchoolManagement.Web.Entities
+@*
+    Staff → Data review (people who manage the organizational structure only): what the staff records still need a person
+    to decide. Open data-quality flags on current staff (shared phone numbers, an unreadable job title, possible identities),
+    open review items of Teaching Staff 2027 rows (handwritten corrections, names that cannot be matched, unmapped subjects),
+    and the records that are not current staff because neither official source lists them (kept with their history).
+*@
+@{
+    ViewData["Title"] = "Staff data review";
+    ViewData["Nav"] = "Staff";
+    var r = Model.Review;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    string Kind(RosterReviewKind k) => k switch
+    {
+        RosterReviewKind.HandwrittenCorrection => "Handwritten correction",
+        RosterReviewKind.IdentityUnresolved => "Identity not confirmed",
+        RosterReviewKind.DuplicateName => "Same name on several rows",
+        RosterReviewKind.NameMatchesOtherDepartment => "Name matches another record",
+        RosterReviewKind.UnmappedSubject => "Subject without a department",
+        RosterReviewKind.SourceValueUnclear => "Source value unclear",
+        RosterReviewKind.HomeroomNotAssigned => "Homeroom class not recorded",
+        _ => k.ToString(),
+    };
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/staff/all">All School Staff</a></li><li><span aria-current="page">Data review</span></li></ol>
+        <h1 class="page-title">Staff data review</h1>
+        <p class="page-sub">What the staff records still need a person to confirm. Sources: the Royal Kings staff document and Teaching Staff 2027. Nothing listed here was guessed or changed automatically.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/staff/all">@Ui.Icon("arrow-left")All School Staff</a>
+    </div>
+</div>
+
+<ul class="summary-tiles" aria-label="Review totals">
+    <li><span class="summary-tile"><span class="summary-tile__value num">@r.Flags.Count</span><span class="summary-tile__label">@Ui.Icon("flag", "icon--sm")Staff record flags</span></span></li>
+    <li><span class="summary-tile"><span class="summary-tile__value num">@r.RosterReviews.Count</span><span class="summary-tile__label">@Ui.Icon("list-checks", "icon--sm")Open roster items</span></span></li>
+    <li><span class="summary-tile"><span class="summary-tile__value num">@r.UnlinkedRows.Count</span><span class="summary-tile__label">@Ui.Icon("user", "icon--sm")Roster rows without a person</span></span></li>
+    <li><span class="summary-tile"><span class="summary-tile__value num">@r.Archived.Count</span><span class="summary-tile__label">@Ui.Icon("inbox", "icon--sm")Not current staff</span></span></li>
+</ul>
+
+<section class="card" aria-labelledby="dr-flags">
+    <div class="card__head"><div><h2 class="card__title" id="dr-flags">@Ui.Icon("flag")Staff record flags</h2><p class="card__sub">Warnings on current staff records, also shown on each profile.</p></div></div>
+    @if (r.Flags.Count == 0)
+    {
+        <div class="card__body"><p class="muted">No open flags.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Staff member</th><th scope="col">Phone</th><th scope="col">Issue</th><th scope="col">Details and what to confirm</th></tr></thead>
+                <tbody>
+                    @foreach (var f in r.Flags)
+                    {
+                        <tr>
+                            <td data-label="Staff member"><a href="/staff/@f.StaffId">@f.StaffName</a></td>
+                            <td data-label="Phone" class="num">@Ui.Phone(f.Phone, icon: false, who: f.StaffName)</td>
+                            <td data-label="Issue">@OrgLabels.FlagKind(f.Kind)</td>
+                            <td data-label="Details">@f.Message</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="card" aria-labelledby="dr-roster">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title" id="dr-roster">@Ui.Icon("list-checks")Teaching Staff 2027 — open items</h2>
+            <p class="card__sub">
+                Rows without a confirmed person: @(r.UnlinkedRows.Count == 0 ? "none" : string.Join(", ", r.UnlinkedRows)).
+                Blank source rows (no person, nothing to confirm): @(r.BlankRows.Count == 0 ? "none" : string.Join(", ", r.BlankRows)).
+                @(r.ResolvedRosterReviews > 0 ? $"{r.ResolvedRosterReviews} earlier items are resolved." : "")
+            </p>
+        </div>
+    </div>
+    @if (r.RosterReviews.Count == 0)
+    {
+        <div class="card__body"><p class="muted">No open items.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Row</th><th scope="col">Source entry</th><th scope="col">Issue</th><th scope="col">Field</th><th scope="col">Source value</th><th scope="col">Observed / candidate</th><th scope="col">Recorded as</th><th scope="col">What to confirm</th></tr></thead>
+                <tbody>
+                    @foreach (var i in r.RosterReviews)
+                    {
+                        <tr>
+                            <td data-label="Row" class="num">@i.RowNumber</td>
+                            <td data-label="Source entry">@(i.Name ?? "(no name)")@(i.Subject is null ? "" : $" · {i.Subject}")</td>
+                            <td data-label="Issue">@Kind(i.Kind)</td>
+                            <td data-label="Field">@i.Field</td>
+                            <td data-label="Source value">@i.SourceValue</td>
+                            <td data-label="Observed / candidate">@i.ObservedValue</td>
+                            <td data-label="Recorded as">@if (i.StaffId is { } sid) { <a href="/staff/@sid">@i.StaffName</a> } else { <span class="muted">No person linked</span> }</td>
+                            <td data-label="What to confirm">@i.Note</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="card" aria-labelledby="dr-archived">
+    <div class="card__head"><div><h2 class="card__title" id="dr-archived">@Ui.Icon("inbox")Not current staff</h2><p class="card__sub">Records neither official source lists. They no longer appear as staff or hold any current role, but are kept because attendance, duties, tasks, timetables or audits refer to them. Confirm whether any should be removed permanently with their history.</p></div></div>
+    @if (r.Archived.Count == 0)
+    {
+        <div class="card__body"><p class="muted">None.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Name</th><th scope="col">Phone</th><th scope="col">Last job title</th><th scope="col">Archived</th></tr></thead>
+                <tbody>
+                    @foreach (var a in r.Archived)
+                    {
+                        <tr>
+                            <td data-label="Name"><a href="/staff/@a.Id">@a.FullName</a></td>
+                            <td data-label="Phone" class="num">@Ui.Phone(a.Phone, icon: false, who: a.FullName)</td>
+                            <td data-label="Last job title">@a.JobTitle</td>
+                            <td data-label="Archived">@SchoolTime.Current.LocalDate(a.ArchivedAt).ToString("d MMM yyyy", c)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
