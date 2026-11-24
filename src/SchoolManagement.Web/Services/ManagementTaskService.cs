@@ -250,8 +250,10 @@ public sealed class ManagementTaskService(SchoolDbContext db, ICurrentUser curre
         var staged = await StagedRowsAsync(input.AttachmentKeys, ct);
         if (AttachmentError(staged.Count, input.AttachmentKeys.Count) is { } attachError) return ServiceResult.Fail("Attachments", attachError);
 
-        // The creator is whoever is "Working as" now; an edit never changes it.
-        var task = new ManagementTask { CreatedById = currentUser.StaffId, CreatedBy = currentUser.Name, UpdatedBy = currentUser.Name };
+        // The creator is the current account (server side, never a posted value): the signed-in user / "Working as" staff
+        // member, or the Super Admin without a staff record (CreatedById stays empty). An edit never changes it.
+        var creator = currentUser.AccountName();
+        var task = new ManagementTask { CreatedById = currentUser.StaffId, CreatedBy = creator, UpdatedBy = creator };
         Apply(task, input);
         if (task.Status == ManagementTaskStatus.Completed) task.CompletedAt = DateTime.UtcNow;
 

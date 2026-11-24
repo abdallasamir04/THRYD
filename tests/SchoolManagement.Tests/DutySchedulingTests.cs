@@ -241,14 +241,15 @@ public class DutySchedulingTests(DbFixture fx) : IAsyncLifetime
     public async Task Pages_show_the_schedule_status_and_coverage_report()
     {
         var client = fx.Factory.CreateClient();
-        foreach (var url in new[] { "/duties", "/duties?type=morning", "/duties?type=dismissal&date=2024-05-14", "/duties/morning/students-arrival",
+        foreach (var url in new[] { "/duties", "/duties/board", "/duties?type=morning", "/duties?type=dismissal&date=2024-05-14", "/duties/morning/students-arrival",
                      "/duties/morning/schedule", "/duties/departments", "/duties/sections/new?type=midday", "/duties/sections/1/edit",
-                     "/duties/report-uncovered?component=students-arrival", "/duties/audit" })
+                     "/duties/report-uncovered?component=students-arrival" })
         {
             var r = await client.GetAsync(url);
             Assert.True(r.StatusCode == HttpStatusCode.OK, $"{url} → {(int)r.StatusCode}");
         }
-        var hub = WebUtility.HtmlDecode(await client.GetStringAsync("/duties"));
+        Assert.Equal(HttpStatusCode.OK, (await (await fx.DutyAuditClientAsync()).GetAsync("/duties/audit")).StatusCode);
+        var hub = WebUtility.HtmlDecode(await client.GetStringAsync("/duties/board"));
         foreach (var part in new[] { "Morning Duty", "Midday Duty", "Dismissal Duty", "Activities", "data-duty-live" }) Assert.Contains(part, hub);
         var morning = WebUtility.HtmlDecode(await client.GetStringAsync("/duties?type=morning"));
         Assert.Contains("Coverage", morning);

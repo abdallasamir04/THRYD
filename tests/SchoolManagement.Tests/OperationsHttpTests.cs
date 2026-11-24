@@ -13,6 +13,8 @@ namespace SchoolManagement.Tests;
 public partial class OperationsHttpTests(DbFixture fx)
 {
     [Theory]
+    [InlineData("/duties")]
+    [InlineData("/duties/board")]
     [InlineData("/duties/audit")]
     [InlineData("/duties/audit?status=not-covered&type=Morning&component=students-arrival&followUp=true")]
     [InlineData("/staff")]
@@ -25,7 +27,9 @@ public partial class OperationsHttpTests(DbFixture fx)
     [InlineData("/")]
     public async Task New_pages_render(string url)
     {
-        var response = await fx.Factory.CreateClient().GetAsync(url);
+        // Duty Audit pages: an authorized user (everyone else gets 403, EnhancementsTests).
+        var client = url.StartsWith("/duties/audit", StringComparison.Ordinal) ? await fx.DutyAuditClientAsync() : fx.Factory.CreateClient();
+        var response = await client.GetAsync(url);
         var html = await response.Content.ReadAsStringAsync();
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"{url} → {(int)response.StatusCode}\n{html[..Math.Min(2000, html.Length)]}");
     }
@@ -46,7 +50,7 @@ public partial class OperationsHttpTests(DbFixture fx)
             recordId = (await db.StudentArrivals.SingleAsync(r => r.StudentId == student)).Id;
         }
 
-        var client = fx.Factory.CreateClient();
+        var client = await fx.DutyAuditClientAsync();   // the audit record form is part of Duty Audit
         foreach (var url in new[]
         {
             $"/staff/{primary}", $"/students/profile/{student}", $"/students/profile/{student}?from=2020-01-01&order=oldest",
@@ -169,10 +173,10 @@ public partial class OperationsHttpTests(DbFixture fx)
         // Quick actions: exactly six, Add student only here, Duties opens the main Duties page.
         var quick = Regex.Match(html, "<nav class=\"quick\"[^>]*>(.*?)</nav>", RegexOptions.Singleline).Groups[1].Value;
         Assert.Equal(6, Regex.Matches(quick, "<a ").Count);
-        foreach (var action in new[] { "Add student", "Add staff", "Duties &amp; Audit", "Teacher workload", "Import Excel", "Manage classes" }) Assert.Contains($"</span>{action}</a>", quick);
+        foreach (var action in new[] { "Add student", "Add staff", "Duties", "Teacher workload", "Import Excel", "Manage classes" }) Assert.Contains($"</span>{action}</a>", quick);
         Assert.Contains("<a href=\"/staff/create\" data-modal>", quick);
         Assert.DoesNotContain("Add teacher", html);
-        Assert.Contains("<a href=\"/duties/audit\"><span class=\"q-icon\">", quick);
+        Assert.Contains("<a href=\"/duties\"><span class=\"q-icon\">", quick);
         Assert.Single(Regex.Matches(html, ">Add student<"));
 
         // Removed sections; still no "without a valid class" card and no individual feedback on the general dashboard.

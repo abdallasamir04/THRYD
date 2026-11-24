@@ -1,0 +1,12 @@
+@model IReadOnlyList<SchoolManagement.Web.Services.FloorManagement.CaseEvent>
+@* The audit trail of a report or ticket: who created, reviewed, escalated, assigned or updated it, and when. *@
+<ol class="timeline">
+    @foreach (var e in Model)
+    {
+        <li class="timeline__item @(e.Action == FloorCaseAction.Escalated || e.Action == FloorCaseAction.Forwarded ? "timeline__item--rejected" : e.Action == FloorCaseAction.Created ? "timeline__item--audit" : "")">
+            <span class="timeline__when">@Ui.DateTime(e.At)@(e.By is null ? "" : " · " + e.By)</span>
+            <span><strong>@e.Action</strong> → @e.Status@(e.Detail is null ? "" : " · " + e.Detail)</span>
+            @if (e.Note is not null) { <span class="timeline__note" dir="auto" style="font-style:normal">@e.Note</span> }
+        </li>
+    }
+</ol>

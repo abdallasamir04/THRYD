@@ -79,6 +79,9 @@ public class ManagementTasksController(IManagementTaskService tasks, ICurrentUse
     {
         model.Id = null;
         model.RemoveAttachmentIds = [];
+        // New Task has no Status field: every new task starts as To Do, whatever a request posts (status changes come later).
+        model.Status = ManagementTaskStatus.ToDo;
+        ModelState.Remove(nameof(model.Status));
         if (model.DepartmentMode && model.DepartmentId is null) ModelState.AddModelError(nameof(model.DepartmentId), "Choose a department.");
         if (ModelState.IsValid)
         {
@@ -202,7 +205,7 @@ public class ManagementTasksController(IManagementTaskService tasks, ICurrentUse
         else
         {
             var me = currentUser.StaffId is { } sid ? model.Staff.FirstOrDefault(s => s.Id == sid) : null;
-            model.CreatorName = currentUser.Name;
+            model.CreatorName = currentUser.AccountName();   // "Super Admin" in Administration mode
             model.Creator = me is null ? null : new TaskPerson(me.Id, me.FullName, null, null, null, me.IsManagement);
         }
     }

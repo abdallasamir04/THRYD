@@ -561,11 +561,12 @@ public static class PdfReports
 
     // ================================================================== management team
 
-    public static PdfReport ManagementMembers(IReadOnlyList<ManagementMemberRow> rows, string? search, string? position) => new()
+    /// <param name="section">School Leadership / Operation Team when the report is one section's members.</param>
+    public static PdfReport ManagementMembers(IReadOnlyList<ManagementMemberRow> rows, string? search, string? position, string? section = null) => new()
     {
         Title = "Management Team",
         Subtitle = position == "none" ? "Members without a position"
-            : Enum.TryParse<ManagementPosition>(position, out var p) ? $"Position: {ManagementPositions.Name(p)}" : "Team members",
+            : Enum.TryParse<ManagementPosition>(position, out var p) ? $"Position: {ManagementPositions.Name(p)}" : section ?? "Team members",
         Meta = [new("Search", string.IsNullOrWhiteSpace(search) ? null : search.Trim()), new("Members", rows.Count.ToString(C))],
         Sections =
         [

@@ -8,7 +8,7 @@
     var modal = Context.Request.IsAjax();
     var locked = Model.IsClassLocked ? Model.LockedClass : null;
     var heading = Model.IsEdit ? "Edit student" : locked is not null ? $"Add student to {locked.Name}" : "Add student";
-    var lockedFull = locked is not null && locked.StudentCount >= locked.Capacity;
+    var lockedFull = locked is not null && ClassCapacity.IsFull(locked.StudentCount, locked.Capacity);
     if (modal) { Layout = null; }
     else { ViewData["Title"] = heading; ViewData["Nav"] = "Students"; }
 }
@@ -31,7 +31,7 @@
             <span class="modal__icon">@Ui.Icon(Model.IsEdit ? "pencil" : "user-plus", "icon--lg")</span>
             <div>
                 <h2 class="modal__title">@heading</h2>
-                <p class="modal__sub">@(Model.IsEdit ? "Change the name or move the student to another class." : locked is not null ? $"The student is added to {locked.Name}." : "The student is added to the class you choose.")</p>
+                <p class="modal__sub">@(Model.IsEdit ? "Change the name, class or profile details." : locked is not null ? $"The student is added to {locked.Name}." : "The student is added to the class you choose.")</p>
             </div>
             <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
         </div>
@@ -88,6 +88,42 @@
                 </div>
                 }
             </div>
+
+            @* Student profile details: all optional, so a student whose information is not known yet is still saved as is. *@
+            <fieldset class="student-details">
+                <legend class="student-details__legend">@Ui.Icon("user", "icon--sm")Profile details <span class="muted">— optional</span></legend>
+                <div class="form-grid">
+                    <div class="field">
+                        <label class="label" asp-for="BirthDate">Birth date</label>
+                        <input class="input picker" type="date" id="BirthDate" name="BirthDate" value="@(Model.BirthDate is { } bd ? SchoolWeek.Iso(bd) : "")"
+                               min="@SchoolWeek.Iso(StudentProfileRules.EarliestBirth)" max="@SchoolWeek.Iso(SchoolWeek.Today)" />
+                        <span asp-validation-for="BirthDate" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="AdmissionApplicationDate">Admission application date</label>
+                        <input class="input picker" type="date" id="AdmissionApplicationDate" name="AdmissionApplicationDate" value="@(Model.AdmissionApplicationDate is { } ad ? SchoolWeek.Iso(ad) : "")"
+                               min="@SchoolWeek.Iso(StudentProfileRules.EarliestApplication)" max="@SchoolWeek.Iso(SchoolWeek.Today.AddYears(1))" />
+                        <span asp-validation-for="AdmissionApplicationDate" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="DismissalMethod">Dismissal method</label>
+                        <select class="select" id="DismissalMethod" name="DismissalMethod">
+                            <option value="">Not recorded</option>
+                            @foreach (var m in StudentProfileRules.DismissalMethods)
+                            {
+                                <option value="@m" selected="@(Model.DismissalMethod == m)">@StudentProfileRules.Dismissal(m)</option>
+                            }
+                        </select>
+                        <span asp-validation-for="DismissalMethod" class="field-validation-error"></span>
+                    </div>
+                    <div class="field">
+                        <label class="label" asp-for="ParentContactNumber">Parent contact number</label>
+                        <input class="input" asp-for="ParentContactNumber" type="tel" inputmode="tel" dir="ltr" placeholder="e.g. 0100 123 4567 or +971 50 123 4567" maxlength="@Student.ParentContactMaxLength" />
+                        <span class="hint">Egyptian mobiles (01…) open in WhatsApp directly; for another country, start with + and the country code.</span>
+                        <span asp-validation-for="ParentContactNumber" class="field-validation-error"></span>
+                    </div>
+                </div>
+            </fieldset>
         </div>
 
         <div class="modal__foot">

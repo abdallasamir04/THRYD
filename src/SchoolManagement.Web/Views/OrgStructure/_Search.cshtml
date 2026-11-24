@@ -1,0 +1,36 @@
+@model (string Target, IReadOnlyList<SchoolManagement.Web.Services.OrgStructure.OrgTierNode> Tiers, int? Tier, string? Search, bool Expand)
+@*
+    Search and tier filter of an organizational view (js/org-structure.js): filters the positions inside Target by
+    employee name, position, unit / department or phone number, and the tiers by the chosen tier. Works on the loaded page.
+*@
+<form class="toolbar org-toolbar" role="search" data-org-filter="@Model.Target" onsubmit="return false">
+    <div class="input-icon org-toolbar__search">
+        @Ui.Icon("search")
+        <label class="visually-hidden" for="org-search">Search the structure</label>
+        <input class="input" type="search" id="org-search" value="@Model.Search" placeholder="Search by name, position, department, unit or phone…" autocomplete="off" dir="auto" data-org-search />
+    </div>
+    @if (Model.Tiers.Count > 1)
+    {
+        <label class="visually-hidden" for="org-tier">Tier</label>
+        <select class="select org-toolbar__tier" id="org-tier" data-org-tier-filter>
+            <option value="">All tiers</option>
+            @foreach (var t in Model.Tiers)
+            {
+                <option value="@t.Id" selected="@(Model.Tier == t.Id)">Tier @t.Number · @t.Name</option>
+            }
+        </select>
+    }
+    @if (Model.Expand)
+    {
+        <div class="page-head__group org-toolbar__expand" role="group" aria-label="Expand or collapse">
+            <button class="btn btn--secondary btn--sm" type="button" data-org-expand>@Ui.Icon("chevron-down", "icon--sm")Expand all</button>
+            <button class="btn btn--secondary btn--sm" type="button" data-org-collapse>@Ui.Icon("arrow-up", "icon--sm")Collapse all</button>
+        </div>
+    }
+    <span class="org-toolbar__count muted" data-org-count aria-live="polite"></span>
+</form>
+<div class="empty org-nomatch" data-org-empty hidden>
+    <span class="empty__icon">@Ui.Icon("search")</span>
+    <p class="empty__title">No matches</p>
+    <p class="empty__text">Try another name, position, department or phone number, or choose all tiers.</p>
+</div>

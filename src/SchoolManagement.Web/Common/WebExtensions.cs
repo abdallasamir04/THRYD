@@ -39,7 +39,10 @@ public static class Ui
 
     public static string Initials(string? name)
     {
-        var parts = TextNormalizer.CleanText(name).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var all = TextNormalizer.CleanText(name).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // "Dr. Noha Osama" → "NO": a leading honorific (Mr., Ms., Mrs., Miss, Dr.) is not part of the initials.
+        var parts = all.SkipWhile(p => p.TrimEnd('.').ToUpperInvariant() is "MR" or "MS" or "MRS" or "MISS" or "DR").ToArray();
+        if (parts.Length == 0) parts = all;
         if (parts.Length == 0) return "?";
         var first = char.ToUpperInvariant(parts[0][0]);
         return parts.Length == 1 ? first.ToString() : $"{first}{char.ToUpperInvariant(parts[^1][0])}";

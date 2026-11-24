@@ -12,7 +12,13 @@ Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 // "seed-test-data" / "test-data-status" / "remove-test-data": runs the command and exits (see TestDataCommand).
 var testDataCommand = TestDataCommand.Parse(args);
-var builder = WebApplication.CreateBuilder(testDataCommand is null ? args : []);
+// "seed-org-structure": records the official organizational structure (idempotent), prints the report and exits.
+var orgSeedCommand = args.Length > 0 && args[0] == SchoolManagement.Web.Services.OrgStructure.OrgStructureCommand.Name;
+// "import-teaching-staff-2027": records the Teaching Staff 2027 roster (idempotent), prints the report and exits.
+var rosterCommand = args.Length > 0 && args[0] == SchoolManagement.Web.Services.TeachingRoster.TeachingRosterCommand.Name;
+// "seed-floor-management": records the floors' teams for 2026/2027 (idempotent), prints the report and exits.
+var floorCommand = args.Length > 0 && args[0] == "seed-floor-management";
+var builder = WebApplication.CreateBuilder(testDataCommand is null && !orgSeedCommand && !rosterCommand && !floorCommand ? args : []);
 
 var connectionString = builder.Configuration.GetConnectionString("SchoolDb")
     ?? throw new InvalidOperationException("Connection string 'SchoolDb' is not configured.");
@@ -33,12 +39,28 @@ builder.Services.AddSingleton<ISchoolTimeService>(sp => SchoolTimeService.FromCo
     message => sp.GetRequiredService<ILogger<SchoolTimeService>>().LogError("{Message}", message)));
 builder.Services.AddScoped<IClassService, ClassService>();
 builder.Services.AddScoped<IStudentService, StudentService>();
+// Who may add / edit / transfer / delete students ("StudentRecords" section; unrestricted until configured).
+builder.Services.Configure<StudentRecordsOptions>(builder.Configuration.GetSection(StudentRecordsOptions.Section));
+builder.Services.AddScoped<IStudentRecordsAccess, StudentRecordsAccess>();
 builder.Services.AddScoped<ITeacherService, TeacherService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IImportService, ImportService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
+// Duty Audit is open only to the staff / positions / roles configured in "DutyAudit" (none by default).
+builder.Services.Configure<DutyAuditOptions>(builder.Configuration.GetSection(DutyAuditOptions.Section));
+builder.Services.AddScoped<IDutyAuditAccess, DutyAuditAccess>();
+// Organizational structure (tiers, units, positions, assignments): viewing is open; changes need OrgStructure access.
+builder.Services.Configure<SchoolManagement.Web.Services.OrgStructure.OrgStructureOptions>(
+    builder.Configuration.GetSection(SchoolManagement.Web.Services.OrgStructure.OrgStructureOptions.Section));
+builder.Services.AddScoped<SchoolManagement.Web.Services.OrgStructure.IOrgStructureAccess, SchoolManagement.Web.Services.OrgStructure.OrgStructureAccess>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.OrgStructure.IOrgStructureService, SchoolManagement.Web.Services.OrgStructure.OrgStructureService>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.OrgStructure.IOrgStructureSeeder, SchoolManagement.Web.Services.OrgStructure.OrgStructureSeeder>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.TeachingRoster.ITeachingRosterImporter, SchoolManagement.Web.Services.TeachingRoster.TeachingRosterImporter>();
+// Floor Management: floors' teams, reports / escalations, Social Worker tickets.
+builder.Services.AddScoped<SchoolManagement.Web.Services.FloorManagement.IFloorManagementService, SchoolManagement.Web.Services.FloorManagement.FloorManagementService>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.FloorManagement.IFloorManagementSeeder, SchoolManagement.Web.Services.FloorManagement.FloorManagementSeeder>();
 builder.Services.AddScoped<IDutyService, DutyService>();
 builder.Services.AddScoped<IDutyBoardService, DutyBoardService>();
 builder.Services.AddScoped<IWorkloadService, WorkloadService>();
@@ -109,7 +131,12 @@ builder.Services.AddControllersWithViews(options =>
     options.ModelBindingMessageProvider.SetValueMustBeANumberAccessor(field => $"{field} must be a number.");
     options.ModelBindingMessageProvider.SetAttemptedValueIsInvalidAccessor((value, field) => $"\"{value}\" is not valid for {field}.");
 });
-builder.Services.AddRouting(options => options.LowercaseUrls = true);
+builder.Services.AddRouting(options =>
+{
+    options.LowercaseUrls = true;
+    // /duties/{type:dutytype}/…: any Main Duty in the catalog (the original three and duties added with Add Duty).
+    options.ConstraintMap[DutyTypeRouteConstraint.Name] = typeof(DutyTypeRouteConstraint);
+});
 
 var app = builder.Build();
 
@@ -134,6 +161,28 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
 if (testDataCommand is not null)
 {
     Environment.ExitCode = await TestDataCommand.RunAsync(app, testDataCommand);
+    return;
+}
+
+if (floorCommand)
+{
+    using var scope = app.Services.CreateScope();
+    var floorReport = await scope.ServiceProvider.GetRequiredService<SchoolManagement.Web.Services.FloorManagement.IFloorManagementSeeder>().SeedAsync();
+    Console.WriteLine($"Floor Management setup: floors created {floorReport.FloorsCreated}, grade ranges set {floorReport.FloorsUpdated}, staff reused {floorReport.StaffReused}, "
+        + $"staff created {floorReport.StaffCreated}, assignments created {floorReport.AssignmentsCreated} (already {floorReport.AlreadyAssigned}), flagged {floorReport.Flagged}");
+    foreach (var line in floorReport.Lines) Console.WriteLine("  " + line);
+    return;
+}
+
+if (rosterCommand)
+{
+    Environment.ExitCode = await SchoolManagement.Web.Services.TeachingRoster.TeachingRosterCommand.RunAsync(app);
+    return;
+}
+
+if (orgSeedCommand)
+{
+    Environment.ExitCode = await SchoolManagement.Web.Services.OrgStructure.OrgStructureCommand.RunAsync(app);
     return;
 }
 

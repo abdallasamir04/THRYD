@@ -1,0 +1,93 @@
+﻿@model OperationTeamViewModel
+@*
+    Staff → Management Team → Operation Team: the Management Team members holding a position added by the school
+    (ManagementTeams.IsOperation). Same member records, cards, profiles, forms and tasks as School Leadership — nothing is
+    copied. Add Member opens the shared member form; the position chosen there decides the member's section.
+*@
+@{
+    ViewData["Title"] = ManagementTeams.OperationName;
+    ViewData["Nav"] = "Management";
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><span aria-current="page">@ManagementTeams.OperationName</span></li></ol>
+        <h1 class="page-title">@ManagementTeams.OperationName</h1>
+        <p class="page-sub">Floor supervisors and the administrative and operational units: their positions, the people holding them, their responsibilities and their tasks.</p>
+    </div>
+    <div class="page-head__actions">
+        <div class="page-head__group" role="group" aria-label="Tasks">
+            <a class="btn btn--secondary" href="@SchoolManagement.Web.Controllers.TasksController.Url">@Ui.Icon("clipboard-check")All Tasks</a>
+            <a class="btn btn--secondary" href="/management/tasks/create" data-modal>@Ui.Icon("plus")Add Task</a>
+        </div>
+        <partial name="_Download" model='DownloadLink.Report("/management/operation-team/pdf")' />
+        <a class="btn btn--primary" href="/management/members/create" data-modal>@Ui.Icon("user-plus")Add Member</a>
+    </div>
+</div>
+
+<partial name="~/Views/Management/_ManagementNav.cshtml" model="ManagementNav.Operation" />
+
+<ul class="kpis leadership-kpis" aria-label="Operation Team totals">
+    <li><a class="kpi kpi--teal" href="#members" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Members</p><p class="kpi__value">@Model.Members.Count</p><p class="kpi__meta">Organizational and school-added positions</p></a></li>
+    <li><a class="kpi kpi--blue" href="/tasks?status=open" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("list")</span><p class="kpi__label">Open tasks</p><p class="kpi__value">@Model.Members.Sum(m => m.OpenTasks)</p><p class="kpi__meta">Assigned to these members</p></a></li>
+    <li><a class="kpi @(Model.Members.Sum(m => m.OverdueTasks) > 0 ? "kpi--full" : "kpi--ok")" href="/tasks?status=overdue" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("alert-circle")</span><p class="kpi__label">Overdue</p><p class="kpi__value">@Model.Members.Sum(m => m.OverdueTasks)</p><p class="kpi__meta">Past their due date</p></a></li>
+    <li><a class="kpi kpi--ok" href="/tasks?status=completed" style="text-decoration:none"><span class="kpi__icon">@Ui.Icon("check")</span><p class="kpi__label">Completed</p><p class="kpi__value">@Model.Members.Sum(m => m.CompletedTasks)</p><p class="kpi__meta">Tasks done by these members</p></a></li>
+</ul>
+
+@* The Operation Team tiers of the organizational structure: Floor Supervisors and Administrative & Operational Management. *@
+@if (Model.Org is { Tiers.Count: > 0 } org)
+{
+    <partial name="~/Views/OrgStructure/_Flags.cshtml" model="(org.Flags, Model.CanManageOrg)" />
+    <partial name="~/Views/OrgStructure/_Search.cshtml" model='("#ot-structure", org.Tiers, (int?)null, (string?)null, false)' />
+    <div class="org-stack" id="ot-structure">
+        @foreach (var tier in org.Tiers)
+        {
+            <partial name="~/Views/OrgStructure/_Tier.cshtml" model="(tier, Model.CanManageOrg)" />
+        }
+    </div>
+}
+
+<section class="card leadership" aria-labelledby="ot-title">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title" id="ot-title">@Ui.Icon("briefcase")@ManagementTeams.OperationName</h2>
+            <p class="card__sub">@Ui.Plural(Model.Members.Count, "member", "members"). Open a member for their tasks and history.</p>
+        </div>
+    </div>
+
+    <div class="leadership__part" id="members" role="group" aria-labelledby="ot-members-title">
+        <div class="leadership__part-head">
+            <h3 class="leadership__part-title" id="ot-members-title">@Ui.Icon("users")@(Model.Org is { Tiers.Count: > 0 } ? "Members in School-Added Positions" : "Operation Team Members") <span class="leadership__tally">@Model.OtherMembers.Count</span></h3>
+        </div>
+
+        @if (Model.OtherMembers.Count == 0 && Model.Org is { Tiers.Count: > 0 })
+        {
+            <p class="muted" style="margin:0">Every Operation Team member is shown in the structure above. Members given a position added by the school (Add Member) appear here.</p>
+        }
+        else if (Model.OtherMembers.Count == 0)
+        {
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon("briefcase")</span>
+                <p class="empty__title">No Operation Team members yet</p>
+                <p class="empty__text">Add a member and choose a position added by the school (or “+ Add New Position”) — leadership positions belong to School Leadership.</p>
+                <div class="empty__actions">
+                    <a class="btn btn--primary" href="/management/members/create" data-modal>@Ui.Icon("user-plus")Add member</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="leader-grid">
+                @foreach (var m in Model.OtherMembers)
+                {
+                    <partial name="_MemberCard" model="(m, (DateOnly?)null)" />
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script src="~/js/org-structure.js" asp-append-version="true"></script>
+}

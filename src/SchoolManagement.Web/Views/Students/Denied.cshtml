@@ -1,0 +1,19 @@
+@{
+    ViewData["Title"] = "Access needed";
+    ViewData["Nav"] = "Students";
+    ViewData["BackButtonHref"] = "/students";
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/students">Students</a></li><li>Access needed</li></ol>
+        <h1 class="page-title">Access needed</h1>
+    </div>
+</div>
+<section class="card">
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("lock")</span>
+        <p class="empty__title">You cannot change student records</p>
+        <p class="empty__text">@StudentRecordsAccess.DeniedMessage</p>
+        <div class="empty__actions"><a class="btn btn--secondary" href="/students">@Ui.Icon("users")Student list</a></div>
+    </div>
+</section>

@@ -164,7 +164,7 @@ public class PdfExportTests(DbFixture fx)
             }
         }
 
-        var client = fx.Factory.CreateClient();
+        var client = await fx.DutyAuditClientAsync();   // Duty Audit is open to authorized users only
         Assert.Contains("data-download=\"/duties/audit/pdf\"", await client.GetStringAsync("/duties/audit"));
         // The page shows 25 per page; the download has all 30.
         var pdf = await DownloadAsync(client, $"/duties/audit/pdf?from={SchoolWeek.Iso(day)}&to={SchoolWeek.Iso(day)}&staffId={staff}&page=1&pageSize=25", "duty-audit");
@@ -180,7 +180,7 @@ public class PdfExportTests(DbFixture fx)
     {
         var (teacher, _) = await fx.NewTeacherAsync();
         var classId = await fx.NewClassAsync();
-        var client = fx.Factory.CreateClient();
+        var client = await fx.DutyAuditClientAsync();   // includes Staff Duty Records (Duty Audit)
         foreach (var (page, export) in new[]
         {
             ("/staff?view=duties", "/staff/duty-records/pdf"),
@@ -189,7 +189,8 @@ public class PdfExportTests(DbFixture fx)
             ("/staff/departments/heads", "/staff/departments/heads/pdf"),
             ("/staff/members", "/staff/members/pdf"),
             ("/students", "/students/pdf"),
-            ("/management/leadership", "/management/members/pdf"),
+            ("/management/leadership", "/management/leadership/pdf"),
+            ("/management/operation-team", "/management/operation-team/pdf"),
             ("/tasks", "/management/tasks/pdf"),
             ("/pe", "/pe/pdf"),
             ($"/timetable/classes/{classId}", $"/timetable/classes/{classId}/pdf"),

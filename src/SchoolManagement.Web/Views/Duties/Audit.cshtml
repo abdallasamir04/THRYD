@@ -1,31 +1,25 @@
 @model DutyAuditViewModel
 @*
-    Duties & Audit: managing the school's duties (top: every Main Duty as a card; the selected one's full board below
-    the cards) and auditing their execution (below: Duty Audit and Staff Duty Records, filters and tables unchanged).
+    Duties → Duty Audit (authorized users only, IDutyAuditAccess): auditing how duties are carried out — Duty Audit and
+    Staff Duty Records (tabs), filters and tables unchanged. The duty board is the other card of the Duties landing page.
 *@
 @{
-    ViewData["Title"] = DutiesAudit.Title;
+    ViewData["Title"] = DutiesPages.AuditTitle;
     ViewData["Nav"] = "DutyAudit";
     var q = Model.Query;
-    var day = Model.Duties is { } d ? SchoolWeek.Iso(d.Day.Date) : null;
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li>Duties &amp; Audit</li></ol>
-        <h1 class="page-title">Duties &amp; Audit</h1>
-        <p class="page-sub">Manage the school's duties and track how they are carried out: every duty with its Sub-Duties, staff and coverage, then every duty session with its status, staffing, attendance and audit notes.</p>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="@DutiesPages.Landing">@DutiesPages.Title</a></li><li><span aria-current="page">@DutiesPages.AuditTitle</span></li></ol>
+        <h1 class="page-title">@DutiesPages.AuditTitle</h1>
+        <p class="page-sub">Track how duties are carried out: every duty session with its status, staffing, attendance and audit notes.</p>
     </div>
     <div class="page-head__actions">
-        <a class="btn btn--secondary" href="@DutiesAudit.For("morning", day)">@Ui.Icon("shield-check")Morning Duty</a>
+        <a class="btn btn--secondary" href="@DutiesPages.BoardUrl">@Ui.Icon("shield-check")Duties</a>
         <partial name="_Download" model='DownloadLink.Report("/duties/audit/pdf")' />
     </div>
 </div>
-
-@if (Model.Duties is { } duties)
-{
-    <partial name="_DutiesSection" model="duties" />
-}
 
 <section class="ops-section" id="duty-audit" aria-labelledby="duty-audit-title">
 <header class="ops-section__head">
@@ -93,12 +87,6 @@
         </label>
         <input type="hidden" name="pageSize" value="@q.PageSize" />
         <input type="hidden" name="page" value="" />
-        @* The Duties section's day and selected duty stay in the address while filtering. *@
-        @if (Model.Duties is { } kept)
-        {
-            <input type="hidden" name="date" value="@SchoolWeek.Iso(kept.Day.Date)" />
-            @if (kept.Selected is { } sel) { <input type="hidden" name="duty" value="@DutyComponents.TypeSlug(sel)" /> }
-        }
         <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
     </form>
     <div id="audit-list" data-ajax-list aria-live="polite">

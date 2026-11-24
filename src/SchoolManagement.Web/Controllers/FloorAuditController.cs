@@ -9,7 +9,7 @@ using SchoolManagement.Web.ViewModels;
 namespace SchoolManagement.Web.Controllers;
 
 /// <summary>
-/// Floor Audit &amp; Student Movement (Daily Operations): the floors and their areas, the three audit rounds of every
+/// Floor Management &amp; Student Movement (Daily Operations): the floors and their areas, the three audit rounds of every
 /// timetable session, inspections with their checklist, student access (leaving class and returning), history and
 /// reports, and the configuration (managers). Permissions are checked by the services; the pages only hide what the
 /// current person cannot do.
@@ -19,7 +19,7 @@ public class FloorAuditController(
     IFloorAuditService audit, IFloorConfigService config, IStudentMovementService movements, IFloorAuditAccessService access,
     IExcelExportService excel, ISettingsService settings) : AppController
 {
-    public const string Title = "Floor Audit";
+    public const string Title = "Floor Management";
 
     private static DateOnly? Date(string? value) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
@@ -183,7 +183,7 @@ public class FloorAuditController(
         var school = (await settings.GetProfileAsync(ct)).SchoolName;
         var bytes = excel.FloorAudit(rows, FilterSummary(page), school);
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            PdfFileName.From(["Floor Audit Report", SchoolWeek.Iso(filter.From), SchoolWeek.Iso(filter.To)]).Replace(".pdf", ".xlsx"));
+            PdfFileName.From(["Floor Inspection Report", SchoolWeek.Iso(filter.From), SchoolWeek.Iso(filter.To)]).Replace(".pdf", ".xlsx"));
     }
 
     private static string FilterSummary(InspectionHistoryPage p)
@@ -284,8 +284,8 @@ public class FloorAuditController(
     public async Task<IActionResult> NewMovement(int? floor, int? student, CancellationToken ct)
     {
         var user = await access.CurrentAsync(ct);
-        if (!user.HasIdentity) return Denied("Choose who you are under “Working as” (the panel at the top of the Floor Audit pages) to record student movements.");
-        if (!user.CanRecordAnyMovement) return Denied("You are not allowed to record student movements. A Floor Audit manager can give you access.");
+        if (!user.HasIdentity) return Denied("Choose who you are under “Working as” (the panel at the top of the Floor Management pages) to record student movements.");
+        if (!user.CanRecordAnyMovement) return Denied("You are not allowed to record student movements. A Floor Management administrator can give you access.");
         var model = await movements.FormAsync(new MovementFormModel { Floor = floor, StudentId = student }, ct);
         model.RecordedBy = user.Name;
         return PageOrPartial("MovementForm", model);
@@ -321,7 +321,7 @@ public class FloorAuditController(
     public async Task<IActionResult> VoidForm(int id, string? back, CancellationToken ct)
     {
         var user = await access.CurrentAsync(ct);
-        if (!user.CanManage) return Denied("Only a Floor Audit manager can void a movement.");
+        if (!user.CanManage) return Denied("Only a Floor Management administrator can void a movement.");
         var row = await movements.RowAsync(id, ct);
         if (row is null) return NotFoundResult("This movement no longer exists.");
         ViewData["Back"] = back;
@@ -337,7 +337,7 @@ public class FloorAuditController(
     private async Task<IActionResult?> ManagersOnlyAsync(CancellationToken ct)
     {
         var user = await access.CurrentAsync(ct);
-        return user.CanManage && user.HasIdentity ? null : Denied("Only a Floor Audit manager (a Management Team member, or staff given the Manager role) can change the floor configuration.");
+        return user.CanAdminister ? null : Denied("Only a Floor Management administrator (a Management Team member, or staff given the Manager role) can change the floor configuration.");
     }
 
     [HttpGet("manage")]

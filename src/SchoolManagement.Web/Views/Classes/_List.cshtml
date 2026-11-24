@@ -36,8 +36,7 @@ else if (Model.View == "table")
             <tbody>
                 @foreach (var c in Model.Classes)
                 {
-                    var isFull = c.StudentCount >= c.Capacity;
-                    var isNear = !isFull && (c.StudentCount >= c.Capacity - 3 || c.StudentCount >= (int)(c.Capacity * 0.85));
+                    var isFull = ClassCapacity.IsFull(c.StudentCount, c.Capacity);
                     <tr>
                         <td data-label="Class"><a href="/students?classId=@c.Id"><span class="badge badge--class" style="font-size:0.85rem">@c.Name</span></a></td>
                         <td data-label="Enrollment / Capacity"><a href="/students?classId=@c.Id"><strong class="num">@c.StudentCount</strong> / @c.Capacity students</a></td>
@@ -45,10 +44,6 @@ else if (Model.View == "table")
                             @if (isFull)
                             {
                                 <span class="badge badge--error">Full</span>
-                            }
-                            else if (isNear)
-                            {
-                                <span class="badge badge--warning">Near capacity</span>
                             }
                             else
                             {

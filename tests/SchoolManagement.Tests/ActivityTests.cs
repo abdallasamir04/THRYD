@@ -37,7 +37,7 @@ public class ActivityTests(DbFixture fx)
     public async Task Duties_leads_to_Activities_which_holds_PE_and_Add_Activity()
     {
         var client = fx.Factory.CreateClient();
-        var duties = WebUtility.HtmlDecode(await client.GetStringAsync("/duties"));
+        var duties = WebUtility.HtmlDecode(await client.GetStringAsync("/duties/board"));
         foreach (var title in new[] { "Morning Duty", "Midday Duty", "Dismissal Duty", "Activities" })
             Assert.Matches($"<h2[^>]*><a href=\"[^\"]+\"[^>]*>{System.Text.RegularExpressions.Regex.Escape(title)}</a></h2>", duties);
         Assert.DoesNotContain("<span class=\"hub-card__title\">P.E.</span>", duties);

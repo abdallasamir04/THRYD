@@ -1,0 +1,84 @@
+@model OrgUnitFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit unit" : "Add unit";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Management"; }
+    var action = Model.IsEdit ? $"/management/org/units/{Model.Id}/edit" : "/management/org/units/create";
+}
+@if (!modal)
+{
+    <div class="page-head"><div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/management">Management Team</a></li><li><a href="@OrgLabels.PositionsHref?tab=units">Positions &amp; Assignments</a></li><li>@heading</li></ol>
+        <h1 class="page-title">@heading</h1>
+    </div></div>
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("grid", "icon--lg")</span>
+            <div><h2 class="modal__title">@heading</h2><p class="modal__sub">A unit inside a tier. Link it to academic departments when it is a department's leadership.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field field--full">
+                <label class="label" asp-for="Name">Unit name <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Name" maxlength="@SchoolManagement.Web.Entities.OrgUnit.NameMaxLength" />
+                <span asp-validation-for="Name" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="TierId">Tier <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" asp-for="TierId">
+                    <option value="0">Choose a tier…</option>
+                    @foreach (var t in Model.Tiers) { <option value="@t.Id" selected="@(Model.TierId == t.Id)">Tier @t.Number · @t.Name</option> }
+                </select>
+                <span asp-validation-for="TierId" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="ParentUnitId">Inside unit (optional)</label>
+                <select class="select" asp-for="ParentUnitId">
+                    <option value="">None — directly in the tier</option>
+                    @foreach (var t in Model.Tiers)
+                    {
+                        <optgroup label="@t.Name">
+                            @foreach (var u in t.AllUnits.Where(u => u.Id != Model.Id)) { <option value="@u.Id" selected="@(Model.ParentUnitId == u.Id)">@u.Name</option> }
+                        </optgroup>
+                    }
+                </select>
+                <p class="hint">Must be in the same tier.</p>
+                <span asp-validation-for="ParentUnitId" class="field-validation-error"></span>
+            </div>
+            <div class="field field--full">
+                <span class="label" id="unit-depts">Academic departments led by this unit</span>
+                <div class="check-chips" role="group" aria-labelledby="unit-depts">
+                    @foreach (var (id, name) in Model.Departments)
+                    {
+                        <label class="check-chip"><input type="checkbox" name="DepartmentIds" value="@id" checked="@Model.DepartmentIds.Contains(id)" /><span>@name</span></label>
+                    }
+                </div>
+                <p class="hint">Leave all unticked for an operational or administrative unit. Departments are never created or changed here.</p>
+                <span asp-validation-for="DepartmentIds" class="field-validation-error"></span>
+            </div>
+            <div class="field field--full">
+                <label class="label" asp-for="Description">Description</label>
+                <textarea class="textarea" asp-for="Description" rows="2" maxlength="@SchoolManagement.Web.Entities.OrgUnit.DescriptionMaxLength"></textarea>
+                <span asp-validation-for="Description" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="SortOrder">Order</label>
+                <input class="input" asp-for="SortOrder" type="number" min="0" max="999" />
+                <span asp-validation-for="SortOrder" class="field-validation-error"></span>
+            </div>
+            <div class="field" style="align-self:end">
+                <label class="switch"><input type="checkbox" asp-for="IsActive" /><span class="switch__track" aria-hidden="true"></span><span>Active</span></label>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@OrgLabels.PositionsHref?tab=units">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+        </div>
+    </form>
+</div>

@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -35,18 +35,20 @@ public class LeadershipTests(DbFixture fx)
     private HttpClient NoRedirects() => fx.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
     [Fact]
-    public async Task Management_Team_shows_one_School_Leadership_card_and_the_old_pages_lead_to_it()
+    public async Task Management_Team_shows_School_Leadership_and_Operation_Team_cards_and_the_old_pages_lead_to_them()
     {
         var client = NoRedirects();
         var landing = await client.GetStringAsync("/management");
         Assert.Matches("<a class=\"hub-card hub-card--\\w+\" href=\"/management/leadership\">", landing);
+        Assert.Matches("<a class=\"hub-card hub-card--\\w+\" href=\"/management/operation-team\">", landing);
         Assert.Contains("School Leadership", landing);
+        Assert.Contains("Operation Team", landing);
         Assert.Contains("Manage school leadership members, positions, responsibilities, and appointment history in one place.", landing);
         Assert.DoesNotContain("Team Members", landing);
         Assert.DoesNotContain("Management Positions", landing);
-        // Only the School Leadership card: tasks are reached from School Leadership (All Tasks / Add Task).
-        Assert.Single(Regex.Matches(landing, "class=\"hub-card "));
-        Assert.Contains("class=\"hub hub--large hub--single\"", landing);
+        // Two section cards; tasks are reached from the sections (All Tasks / Add Task).
+        Assert.Equal(2, Regex.Matches(landing, "class=\"hub-card ").Count);
+        Assert.Contains("class=\"hub hub--large \"", landing);
         Assert.DoesNotContain("href=\"/management/tasks\"", landing);
 
         // The navigation path is unchanged: still Staff → Management Team, with Staff highlighted in the sidebar.
@@ -78,7 +80,7 @@ public class LeadershipTests(DbFixture fx)
         int At(string s) => head.IndexOf(s, StringComparison.Ordinal);
         var allTasks = At("href=\"/tasks\">");
         var addTask = At("href=\"/management/tasks/create\" data-modal>");
-        var report = At("/management/members/pdf");
+        var report = At("/management/leadership/pdf");
         var addMember = At("href=\"/management/members/create\" data-modal>");
         Assert.True(allTasks > 0 && allTasks < addTask && addTask < report && report < addMember, head);
         var group = head[At("class=\"page-head__group\"")..report];
@@ -89,8 +91,9 @@ public class LeadershipTests(DbFixture fx)
         // All Tasks opens the existing global Tasks page; Add Task opens the Tasks module's own form.
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/tasks")).StatusCode);
         var form = await client.GetStringAsync("/management/tasks/create");
-        foreach (var field in new[] { "name=\"Title\"", "name=\"AssignedToId\"", "name=\"Priority\"", "name=\"DueDate\"", "name=\"Description\"", "name=\"Status\"" })
+        foreach (var field in new[] { "name=\"Title\"", "name=\"AssignedToId\"", "name=\"Priority\"", "name=\"DueDate\"", "name=\"Description\"" })
             Assert.Contains(field, form);
+        Assert.DoesNotContain("name=\"Status\"", form);   // a new task always starts as To Do (set on the server)
 
         // Saving from School Leadership (the modal posts the same form): one normal task, listed on the global Tasks page once.
         var (teacher, _) = await fx.NewTeacherAsync();
@@ -130,25 +133,30 @@ public class LeadershipTests(DbFixture fx)
         await using var db = fx.NewContext();
         var mgmt = DbFixture.Management(db);
         await mgmt.CreateAsync(new ManagementMemberInput { FullName = "Leader " + DbFixture.Unique() });
-        var memberIds = await db.ManagementMembers.Select(m => m.Id).ToListAsync();
+        // School Leadership's members: everyone but the Operation Team (members holding a school-added position).
+        var memberIds = await db.ManagementMembers.Where(m => !(m.Position == null && m.CustomPositionId != null)).Select(m => m.Id).ToListAsync();
         var appointments = await db.PositionAssignments.CountAsync();
         var client = fx.Factory.CreateClient();
 
-        // One School Leadership section with every member's card (no tabs).
+        // School Leadership shows its organizational structure only: no member-card section (no tabs).
         var page = await client.GetStringAsync("/management/leadership");
-        Assert.Equal(1, Regex.Matches(page, "class=\"card leadership\"").Count);
+        Assert.Empty(Regex.Matches(page, "class=\"card leadership\""));
         Assert.DoesNotContain("?tab=", page);
-        foreach (var id in memberIds) Assert.Contains($"href=\"/management/members/{id}\"", page);
-        Assert.Equal(memberIds.Count, Regex.Matches(page, "<article class=\"leader-card ").Count);
-        Assert.Contains("data-download=\"/management/members/pdf\"", page);
+        Assert.DoesNotContain("Other Leadership Members", page);
+        Assert.DoesNotContain("<article class=\"leader-card ", page);
+        Assert.Contains("data-download=\"/management/leadership/pdf\"", page);
+        // The members are still recorded and still listed in the Staff Directory with their profiles.
+        Assert.Equal(memberIds.Count, await db.ManagementMembers.CountAsync(m => memberIds.Contains(m.Id)));
+        var directory = await client.GetStringAsync("/staff/all?category=management");
+        foreach (var id in memberIds) Assert.Contains($"href=\"/management/members/{id}\"", directory);
 
         // Removed: Current Leadership Positions (table, Replace / Remove), Appointment History, and the search / position filters.
         foreach (var gone in new[] { "id=\"positions\"", "leadership-table", "Leadership Positions", "Current holder", "leadership__history", "Appointment history",
                      "leadership__filters", "Search members", "All positions", "name=\"search\"", "name=\"position\"" })
             Assert.DoesNotContain(gone, page);
         foreach (var p in ManagementPositions.All) Assert.DoesNotContain($"/management/positions/{p}/assign", page);
-        // A stale search link still shows every member (the page has no filter any more).
-        Assert.Equal(memberIds.Count, Regex.Matches(await client.GetStringAsync("/management/leadership?search=zzzz&position=none"), "<article class=\"leader-card ").Count);
+        // A stale search link still opens the page (it has no filter any more).
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/management/leadership?search=zzzz&position=none")).StatusCode);
 
         // Nothing was deleted: positions keep their own pages, with holder actions and the appointment history.
         Assert.Equal(appointments, await db.PositionAssignments.CountAsync());
@@ -212,7 +220,7 @@ public class LeadershipTests(DbFixture fx)
 
             // The member profile links back to the position and keeps the appointment history.
             var profile = await client.GetStringAsync($"/management/members/{a}");
-            Assert.Contains("<a href=\"/management/leadership\">School Leadership</a>", profile);
+            Assert.Contains("<a href=\"/management/leadership\">School Leadership</a>", profile);   // a leadership member's section
             Assert.Contains($"href=\"{ManagementPositions.Href(position)}\"", profile);
             Assert.Contains("Replaced by " + second, profile);
         }

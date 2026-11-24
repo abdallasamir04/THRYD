@@ -1,0 +1,114 @@
+@model (SchoolManagement.Web.Services.OrgStructure.OrgUnitNode Unit, SchoolManagement.Web.Services.OrgStructure.OrgTierNode Tier, bool CanManage)
+@*
+    One organizational unit: its positions and the people holding them (each person is their own staff record and opens
+    their existing profile). Sub-units are nested. Every position is one searchable item (data-org-item) whose search text
+    holds the position, unit, tier, departments and the holders' names and phone numbers.
+*@
+@{
+    var u = Model.Unit;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    string Search(SchoolManagement.Web.Services.OrgStructure.OrgPositionNode p) =>
+        string.Join(" ", new[] { p.DisplayTitle, OrgLabels.RoleType(p.RoleType), u.Name, Model.Tier.Name }
+            .Concat(u.Departments.Select(d => d.Label))
+            .Concat(p.Holders.SelectMany(h => new[] { h.FullName, h.Phone ?? "", h.Scope ?? "" }))
+            .Concat(p.IsVacant ? ["vacant"] : [])).ToLowerInvariant();
+}
+<article class="org-unit@(u.IsActive ? "" : " is-inactive")" data-org-group aria-labelledby="unit-@u.Id">
+    <header class="org-unit__head">
+        <div class="org-unit__title-wrap">
+            <h3 class="org-unit__title" id="unit-@u.Id">@Ui.Icon(u.IsAcademicDepartment ? "graduation-cap" : "layers", "icon--sm")<span>@u.Name</span></h3>
+            @if (u.Departments.Count > 0)
+            {
+                <span class="org-unit__depts">
+                    @foreach (var d in u.Departments)
+                    {
+                        <a class="org-chip" href="/staff/departments/@d.DepartmentId" title="Open the @d.Department department">@d.Label</a>
+                    }
+                </span>
+            }
+            @if (!string.IsNullOrWhiteSpace(u.Description))
+            {
+                <p class="org-unit__desc">@u.Description</p>
+            }
+        </div>
+        @if (Model.CanManage)
+        {
+            <div class="row-actions">
+                <a class="icon-btn icon-btn--primary" href="/management/org/positions/create?unit=@u.Id" data-modal title="Add position" aria-label="Add a position to @u.Name">@Ui.Icon("plus")</a>
+                <a class="icon-btn icon-btn--primary" href="/management/org/units/@u.Id/edit" data-modal title="Edit unit" aria-label="Edit @u.Name">@Ui.Icon("pencil")</a>
+            </div>
+        }
+    </header>
+
+    @if (u.Positions.Count == 0 && u.Children.Count == 0)
+    {
+        <p class="org-empty-line">No positions in this unit yet.</p>
+    }
+    <ul class="org-positions">
+        @foreach (var p in u.Positions)
+        {
+            <li class="org-pos@(p.IsVacant ? " is-vacant" : "")" data-org-item data-search="@Search(p)">
+                <div class="org-pos__head">
+                    <span class="org-role org-role--@OrgLabels.RoleTone(p.RoleType)" title="@OrgLabels.RoleType(p.RoleType)">@Ui.Icon(OrgLabels.RoleIcon(p.RoleType), "icon--sm")</span>
+                    <div class="org-pos__title-wrap">
+                        <strong class="org-pos__title">@p.Title</strong>
+                        <span class="org-pos__meta">
+                            @if (!string.IsNullOrWhiteSpace(p.GradeRange)) { <span class="org-grade">@Ui.Icon("graduation-cap", "icon--sm")@p.GradeRange</span> }
+                            <span>@OrgLabels.RoleType(p.RoleType)</span>
+                        </span>
+                    </div>
+                    @if (p.IsVacant)
+                    {
+                        <span class="badge badge--warning">Vacant</span>
+                    }
+                    else if (p.Holders.Count > 1)
+                    {
+                        <span class="badge badge--neutral">@p.Holders.Count holders</span>
+                    }
+                </div>
+                @if (p.Holders.Count > 0)
+                {
+                    <ul class="org-people">
+                        @foreach (var h in p.Holders)
+                        {
+                            <li class="org-person">
+                                <span class="avatar avatar--@Ui.Tone(h.FullName) org-person__avatar" aria-hidden="true">@Ui.Initials(h.FullName)</span>
+                                <div class="org-person__text">
+                                    <a class="org-person__name" href="@h.ProfileHref" dir="auto">@h.FullName</a>
+                                    <span class="org-person__meta">
+                                        @if (!string.IsNullOrEmpty(h.Phone))
+                                        {
+                                            <a class="org-person__phone" href="tel:@h.Phone.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")@h.Phone</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="faint">No phone</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(h.GradeRange) && h.GradeRange != p.GradeRange) { <span>@h.GradeRange</span> }
+                                        @if (!string.IsNullOrWhiteSpace(h.Scope)) { <span>@Ui.Icon("door", "icon--sm")@h.Scope</span> }
+                                        @if (h.ReportsToName is not null) { <span>Reports to @h.ReportsToName</span> }
+                                        <span class="org-tag@(h.IsPrimary ? " org-tag--primary" : "")">@(h.IsPrimary ? "Primary" : "Additional")</span>
+                                    </span>
+                                </div>
+                                @if (Model.CanManage)
+                                {
+                                    <a class="icon-btn org-person__edit" href="/management/org/assignments/@h.AssignmentId/edit" data-modal title="Edit assignment" aria-label="Edit the assignment of @h.FullName">@Ui.Icon("pencil")</a>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                @if (Model.CanManage)
+                {
+                    <a class="org-pos__assign" href="/management/org/assignments/create?position=@p.Id" data-modal>@Ui.Icon("user-plus", "icon--sm")@(p.IsVacant ? "Assign" : "Assign another")</a>
+                }
+            </li>
+        }
+    </ul>
+    @foreach (var child in u.Children)
+    {
+        <div class="org-unit__children">
+            <partial name="~/Views/OrgStructure/_Unit.cshtml" model="(child, Model.Tier, Model.CanManage)" />
+        </div>
+    }
+</article>

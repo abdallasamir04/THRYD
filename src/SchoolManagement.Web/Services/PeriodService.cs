@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Linq.Expressions;
 using System.Security.Cryptography;
 using System.Text;
@@ -148,6 +148,15 @@ public sealed class PeriodPlan
     public required string Fingerprint { get; init; }
 }
 
+/// <summary>
+/// A class in Timetables → Create Table: <see cref="Existing"/> says why it already has a timetable (current lessons, or a
+/// period structure of its own) — a new one then replaces it after the user confirms — and is null when it has none yet.
+/// </summary>
+public sealed record ClassTableOption(int Id, string Name, bool IsActive, string? Existing)
+{
+    public bool HasTimetable => Existing is not null;
+}
+
 public sealed record PeriodOutcome(ServiceResult Result, PeriodPlan? Plan, string? Message = null)
 {
     public bool NeedsConfirmation => Result.Errors.Any(e => e.Key == PeriodService.ConfirmKey);
@@ -166,6 +175,19 @@ public interface IPeriodService
 
     /// <summary>A class uses the school-wide period again instead of its own version / removal.</summary>
     Task<ServiceResult> RestoreAsync(int replacementId, CancellationToken ct = default);
+
+    /// <summary>Every class for Timetables → Create Table, with whether it already has a timetable.</summary>
+    Task<IReadOnlyList<ClassTableOption>> ClassTableOptionsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Timetables → Create Table: a new, empty timetable for a class — its own <see cref="PeriodService.NewTablePeriods"/>
+    /// period slots on every school day, no lessons. When the class already has one, nothing changes until the user confirms
+    /// the replacement (<see cref="PeriodOutcome.NeedsConfirmation"/>; pass the plan's fingerprint as <paramref name="confirmation"/>).
+    /// </summary>
+    Task<PeriodOutcome> CreateClassTableAsync(int classId, CancellationToken ct = default);
+
+    /// <inheritdoc cref="CreateClassTableAsync(int, CancellationToken)"/>
+    Task<PeriodOutcome> CreateClassTableAsync(int classId, string? confirmation, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -430,6 +452,128 @@ public sealed class PeriodService(SchoolDbContext db, ICurrentUser currentUser) 
         }, ct);
         return outcome.Result;
     }
+
+    // ================================================================== create a class timetable
+
+    /// <summary>Period slots of a timetable created with Create Table (each school day); slots can then be added and removed.</summary>
+    public const int NewTablePeriods = 10;
+
+    public async Task<IReadOnlyList<ClassTableOption>> ClassTableOptionsAsync(CancellationToken ct = default)
+    {
+        var map = await PeriodMap.LoadAsync(db, ct);
+        var lessons = await db.TimetableAssignments.AsNoTracking().Where(t => t.EndedOn == null)
+            .GroupBy(t => t.SchoolClassId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.Key, g => g.Count, ct);
+        var current = SchoolWeek.Current;
+        var singleWeek = (await db.WorkloadAssignments.AsNoTracking().Where(w => w.SchoolClassId != null && w.WeekStart >= current)
+            .Select(w => w.SchoolClassId!.Value).Distinct().ToListAsync(ct)).ToHashSet();
+        return map.Classes.Select(c => new ClassTableOption(c.Id, c.Name, c.IsActive,
+            ExistingTable(map, c.Id, lessons.GetValueOrDefault(c.Id), singleWeek.Contains(c.Id)))).ToList();
+    }
+
+    public Task<PeriodOutcome> CreateClassTableAsync(int classId, CancellationToken ct = default) => CreateClassTableAsync(classId, null, ct);
+
+    public async Task<PeriodOutcome> CreateClassTableAsync(int classId, string? confirmation, CancellationToken ct = default)
+    {
+        return await InTransactionAsync(async map =>
+        {
+            var cls = map.Classes.FirstOrDefault(c => c.Id == classId);
+            if (cls.Name is null) return new PeriodOutcome(ServiceResult.Fail("ClassId", "Choose a class."), null);
+            if (!cls.IsActive) return new PeriodOutcome(ServiceResult.Fail("ClassId", $"{cls.Name} is inactive. Activate the class before creating its timetable."), null);
+            // Checked here, under the exclusive period lock: two requests cannot both build the class's timetable.
+            var current = SchoolWeek.Current;
+            var lessons = await Refs(db.TimetableAssignments.Where(t => t.SchoolClassId == classId && t.EndedOn == null), ct);
+            var singleWeek = await db.WorkloadAssignments.CountAsync(w => w.SchoolClassId == classId && w.WeekStart >= current, ct);
+            var replaced = false;
+            if (ExistingTable(map, classId, lessons.Count, singleWeek > 0) is { } existing)
+            {
+                // One timetable per class: the new one replaces the current one, only once the user confirmed exactly this plan.
+                var own = map.All.Where(x => x.ClassId == classId && (!x.Archived || x.ReplacesId is not null)).OrderBy(x => x.Id).ToList();
+                var plan = new PeriodPlan
+                {
+                    Summary = $"{cls.Name} already has a timetable ({existing}). Creating a new one replaces it: the class gets "
+                        + $"{ScheduleRules.Days.Length} school days × {NewTablePeriods} new period slots and no lessons."
+                        + (own.Count == 0 ? "" : $" Its {Ui.Plural(own.Count(x => !x.Archived), "current period", "current periods")} are archived (kept for the history of earlier weeks).")
+                        + (singleWeek == 0 ? "" : $" {Ui.Plural(singleWeek, "single-week period", "single-week periods")} already scheduled stay in the teachers' workload records.")
+                        + " Other classes and the school's periods are not changed.",
+                    Classes = [cls.Name],
+                    Lessons = lessons,
+                    LessonsNote = lessons.Count == 0 ? null
+                        : $"{Ui.Plural(lessons.Count, "lesson ends", "lessons end")} from this week. Earlier weeks, attendance and workload history are kept.",
+                    Fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("|", "create-table", classId,
+                        string.Join(",", lessons.Select(l => l.Id)), string.Join(",", own.Select(x => $"{x.Id}:{x.Archived}:{x.ReplacesId}")), singleWeek))))[..16],
+                };
+                if (confirmation != plan.Fingerprint) return Confirm(plan);
+
+                // 1. The class's current lessons end from this week (rows kept: earlier weeks, attendance and workload stay).
+                if (lessons.Count > 0)
+                {
+                    await LockTeachersAsync(lessons.Select(l => l.TeacherId), ct);
+                    foreach (var row in await db.TimetableAssignments.Where(t => t.SchoolClassId == classId && t.EndedOn == null).ToListAsync(ct))
+                        End(row, "Timetable replaced (Create Table)");
+                    await db.SaveChangesAsync(ct);
+                }
+                // 2. The class's own period structure is retired, never deleted: its slots are archived (earlier weeks keep their
+                // periods and times) and no longer stand in for a school period, so the new structure starts from the school's
+                // periods exactly as a class without a timetable does.
+                var now = DateTime.UtcNow;
+                foreach (var slot in await db.TimeSlots.Where(x => x.SchoolClassId == classId && (x.ArchivedAt == null || x.ReplacesTimeSlotId != null)).ToListAsync(ct))
+                {
+                    (slot.ReplacesTimeSlotId, slot.IsActive, slot.UpdatedAt, slot.UpdatedBy) = (null, false, now, currentUser.Name);
+                    slot.ArchivedAt ??= now;
+                }
+                await db.SaveChangesAsync(ct);
+                replaced = true;
+            }
+
+            BuildClassStructure(map, classId);
+            await db.SaveChangesAsync(ct);
+            var shape = $"{ScheduleRules.Days.Length} school days × {NewTablePeriods} period slots, no lessons yet";
+            return new PeriodOutcome(ServiceResult.Ok(classId), null, replaced
+                ? $"Timetable replaced for {cls.Name}: {shape}.{(lessons.Count == 0 ? "" : $" {Ui.Plural(lessons.Count, "lesson", "lessons")} of the previous timetable ended (kept in its history).")}"
+                : $"Timetable created for {cls.Name}: {shape}.");
+        }, ct);
+    }
+
+    /// <summary>
+    /// Adds the class's own structure: slot n is the class's own version of the school's n-th period (same times when that
+    /// period runs every day and is enabled, else no times yet), on every school day. School periods beyond the slots are
+    /// removed for this class only (an archived replacement, as "Delete → this class only" does), so the class shows exactly
+    /// its slots; the school periods and every other class are unchanged. The class must have no structure of its own.
+    /// </summary>
+    private void BuildClassStructure(PeriodMap map, int classId)
+    {
+        var school = map.SchoolWide;
+        var now = DateTime.UtcNow;
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < Math.Max(NewTablePeriods, school.Count); i++)
+        {
+            var p = i < school.Count ? school[i] : null;
+            if (i >= NewTablePeriods)
+            {
+                db.TimeSlots.Add(new TimeSlot
+                {
+                    Number = p!.Number, Name = p.Name, StartTime = p.Start, EndTime = p.End, DayMask = p.DayMask, IsActive = false,
+                    SchoolClassId = classId, ReplacesTimeSlotId = p.Id, ArchivedAt = now, UpdatedAt = now, UpdatedBy = currentUser.Name,
+                });
+                continue;
+            }
+            var times = p is { IsActive: true, AllDays: true, HasTimes: true };
+            var name = string.IsNullOrWhiteSpace(p?.Name) || !names.Add(p!.Name!) ? null : p.Name;
+            if (name is null) { name = $"Period {i + 1}"; for (var k = 2; !names.Add(name); k++) name = $"Period {i + 1} ({k})"; }
+            db.TimeSlots.Add(new TimeSlot
+            {
+                Number = i + 1, Name = name, StartTime = times ? p!.Start : null, EndTime = times ? p!.End : null, IsActive = true, DayMask = 0,
+                SchoolClassId = classId, ReplacesTimeSlotId = p?.Id, UpdatedAt = now, UpdatedBy = currentUser.Name,
+            });
+        }
+    }
+
+    /// <summary>Why the class already has a timetable, or null: current lessons, a period structure of its own, single-week periods ahead.</summary>
+    private static string? ExistingTable(PeriodMap map, int classId, int lessons, bool singleWeek) =>
+        lessons > 0 ? Ui.Plural(lessons, "lesson", "lessons") + " scheduled"
+        : map.All.Any(s => s.ClassId == classId) ? "its own periods"
+        : singleWeek ? "single-week periods scheduled"
+        : null;
 
     // ================================================================== validation
 

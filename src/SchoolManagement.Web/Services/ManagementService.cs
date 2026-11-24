@@ -1,4 +1,4 @@
-using System.Net.Mail;
+﻿using System.Net.Mail;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Data;
@@ -9,9 +9,30 @@ namespace SchoolManagement.Web.Services;
 public sealed record ManagementMemberRow(int Id, string FullName, ManagementPosition? Position, string? ContactNumber, string? Email,
     DateOnly? AppointedOn, DateTime CreatedAt, int OpenTasks, int OverdueTasks, int CompletedTasks, int? CustomPositionId, string? CustomPosition)
 {
-    /// <summary>The leadership position's name, the custom position's title, or "No position assigned".</summary>
-    public string PositionName => Position is { } p ? ManagementPositions.Name(p) : CustomPosition ?? ManagementPositions.Name((ManagementPosition?)null);
-    public bool HasPosition => Position is not null || CustomPosition is not null;
+    /// <summary>
+    /// The member's current organizational positions (Positions &amp; Assignments), primary first, as display titles
+    /// ("Academic Head (Grades 2–10)"). Filled from the StaffPositionAssignments of the member's own record.
+    /// </summary>
+    public IReadOnlyList<string> OrgPositions { get; init; } = [];
+
+    /// <summary>The section of the member's primary organizational position, when they hold one.</summary>
+    public OrgSection? OrgSection { get; init; }
+
+    /// <summary>The source's job title for this person could not be read: the position awaits confirmation.</summary>
+    public bool PendingConfirmation { get; init; }
+
+    /// <summary>
+    /// The leadership position's name, the custom position's title, the primary organizational position, "Position requires
+    /// confirmation" (flagged records), or "No position assigned".
+    /// </summary>
+    public string PositionName => Position is { } p ? ManagementPositions.Name(p)
+        : CustomPosition ?? (OrgPositions.Count > 0 ? OrgPositions[0]
+        : PendingConfirmation ? OrgLabels.PendingPosition : ManagementPositions.Name((ManagementPosition?)null));
+
+    public bool HasPosition => Position is not null || CustomPosition is not null || OrgPositions.Count > 0;
+
+    /// <summary>Organizational positions held besides the one shown as <see cref="PositionName"/>.</summary>
+    public IEnumerable<string> OtherPositions => Position is null && CustomPosition is null ? OrgPositions.Skip(1) : OrgPositions;
 }
 
 /// <summary>A school-added Management Team position and its holder (null = vacant).</summary>
@@ -70,7 +91,7 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
         var query = db.ManagementMembers.AsNoTracking();
         var term = TextNormalizer.NameKey(search);
         if (term.Length > 0) query = query.Where(m => m.NormalizedName.Contains(term));
-        var rows = await Project(query).ToListAsync(ct);
+        var rows = await EnrichAsync(await Project(query).ToListAsync(ct), ct);
         // Position order (Director first), then school-added positions by title, then members without a position by name.
         return rows.OrderBy(r => r.Position is null).ThenBy(r => r.Position).ThenBy(r => r.CustomPosition is null).ThenBy(r => r.CustomPosition)
             .ThenBy(r => r.FullName).ToList();
@@ -78,7 +99,7 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
 
     public async Task<IReadOnlyList<PositionSlot>> PositionsAsync(CancellationToken ct = default)
     {
-        var holders = await Project(db.ManagementMembers.AsNoTracking().Where(m => m.Position != null)).ToListAsync(ct);
+        var holders = await EnrichAsync(await Project(db.ManagementMembers.AsNoTracking().Where(m => m.Position != null)).ToListAsync(ct), ct);
         var since = await db.PositionAssignments.AsNoTracking().Where(a => a.IsCurrent).ToDictionaryAsync(a => a.Position, a => a.StartDate, ct);
         return ManagementPositions.All.Select(p => new PositionSlot(p, holders.FirstOrDefault(h => h.Position == p), since.TryGetValue(p, out var s) ? s : null)).ToList();
     }
@@ -153,8 +174,36 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
         }
     }
 
-    public Task<ManagementMemberRow?> GetAsync(int id, CancellationToken ct = default) =>
-        Project(db.ManagementMembers.AsNoTracking().Where(m => m.Id == id)).FirstOrDefaultAsync(ct);
+    public async Task<ManagementMemberRow?> GetAsync(int id, CancellationToken ct = default) =>
+        (await EnrichAsync(await Project(db.ManagementMembers.AsNoTracking().Where(m => m.Id == id)).ToListAsync(ct), ct)).FirstOrDefault();
+
+    /// <summary>
+    /// Adds each member's current organizational positions (primary first) and pending-confirmation flag, read from the
+    /// assignments of the member's own staff record (database → rows; no titles are taken from the view).
+    /// </summary>
+    private async Task<List<ManagementMemberRow>> EnrichAsync(List<ManagementMemberRow> rows, CancellationToken ct)
+    {
+        if (rows.Count == 0) return rows;
+        var ids = rows.Select(r => r.Id).ToList();
+        var positions = (await db.StaffPositionAssignments.AsNoTracking().Where(a => a.IsCurrent && ids.Contains(a.StaffMemberId))
+                .Select(a => new { a.StaffMemberId, a.IsPrimary, a.Position.Title, Grade = a.GradeRange ?? a.Position.GradeRange, a.Position.Unit.Tier.Section,
+                    TierSort = a.Position.Unit.Tier.SortOrder, a.Position.SortOrder, a.Id })
+                .ToListAsync(ct))
+            .ToLookup(a => a.StaffMemberId);
+        var pending = (await db.StaffDataQualityFlags.AsNoTracking()
+                .Where(f => !f.IsResolved && f.Kind == DataQualityFlagKind.PositionRequiresConfirmation && ids.Contains(f.StaffMemberId))
+                .Select(f => f.StaffMemberId).ToListAsync(ct)).ToHashSet();
+        return rows.Select(r =>
+        {
+            var held = positions[r.Id].OrderByDescending(a => a.IsPrimary).ThenBy(a => a.TierSort).ThenBy(a => a.SortOrder).ThenBy(a => a.Id).ToList();
+            return r with
+            {
+                OrgPositions = held.Select(a => OrgLabels.PositionTitle(a.Title, a.Grade)).ToList(),
+                OrgSection = held.Count > 0 ? held[0].Section : null,
+                PendingConfirmation = pending.Contains(r.Id),
+            };
+        }).ToList();
+    }
 
     public async Task<IReadOnlyList<ManagementMemberOption>> OptionsAsync(CancellationToken ct = default) =>
         (await db.ManagementMembers.AsNoTracking()
@@ -230,7 +279,8 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
                     await ChangePositionAsync(entity, null, SchoolWeek.Today, newTitle is null ? "Position removed" : $"Moved to {newTitle}", ct);
                 if (created is not null) entity.CustomPosition = created;
                 else entity.CustomPositionId = input.CustomPositionId;
-                entity.JobTitle = newTitle ?? "Management Team";
+                // Without a leadership or school-added position, the job title mirrors the primary organizational position.
+                entity.JobTitle = newTitle ?? await OrgTitleAsync(entity.Id, ct) ?? "Management Team";
                 if (created is not null || input.CustomPositionId != oldCustom) await db.SaveChangesAsync(ct);
             }
         }
@@ -257,6 +307,9 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
             + await db.StaffFeedback.CountAsync(f => f.EvaluatorStaffId == id, ct)
             + await db.StudentArrivals.CountAsync(a => a.ReceivedByStaffId == id, ct);
         if (history > 0) return ServiceResult.Fail("", "This member appears in duty, evaluation or student arrival records, so the record is kept for history.");
+        if (await db.StaffPositionAssignments.AnyAsync(a => a.StaffMemberId == id || a.ReportsToStaffMemberId == id, ct)
+            || await db.StaffDataQualityFlags.AnyAsync(f => f.StaffMemberId == id, ct))
+            return ServiceResult.Fail("", "This member has organizational positions (current or past), so the record is kept for history. End the positions on Positions & Assignments instead.");
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await db.ManagementTaskHistory.Where(h => h.StaffMemberId == id).ExecuteDeleteAsync(ct);
@@ -338,6 +391,16 @@ public sealed class ManagementService(SchoolDbContext db, ICurrentUser? currentU
         if (duplicate is not null)
             return ServiceResult.Fail("FullName", $"\"{duplicate.FullName}\" is already on the Management Team{(duplicate.ContactNumber is null ? "" : $" ({duplicate.ContactNumber})")}. Edit that record instead.");
         return result;
+    }
+
+    /// <summary>The member's primary organizational position as a job title, or null.</summary>
+    private async Task<string?> OrgTitleAsync(int staffId, CancellationToken ct)
+    {
+        var primary = await db.StaffPositionAssignments.AsNoTracking().Where(a => a.StaffMemberId == staffId && a.IsCurrent && a.IsPrimary)
+            .Select(a => new { a.Position.Title, Grade = a.GradeRange ?? a.Position.GradeRange }).FirstOrDefaultAsync(ct);
+        if (primary is null) return null;
+        var title = OrgLabels.PositionTitle(primary.Title, primary.Grade);
+        return title.Length > StaffMember.JobTitleMaxLength ? title[..StaffMember.JobTitleMaxLength] : title;
     }
 
     /// <summary>The position to create for <see cref="ManagementMemberInput.NewPositionTitle"/> (validated before).</summary>

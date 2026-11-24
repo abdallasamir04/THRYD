@@ -1,4 +1,5 @@
-@model StaffProfileViewModel
+﻿@model StaffProfileViewModel
+@inject SchoolManagement.Web.Services.IDutyAuditAccess DutyAudit
 @*
     Staff profile → Duty History: one row per assignment (primary or backup), the person's own
     outcome (an absent person never counts as having covered the duty; a declined backup request
@@ -28,7 +29,19 @@
                         <a class="badge badge--class" href="/staff/departments/@Model.Teacher.DepartmentId" style="text-decoration:none">@Model.Teacher.DepartmentName@(Model.Teacher.SubcategoryLabel.Length == 0 ? "" : $" · {Model.Teacher.SubcategoryLabel}")</a>
                         @if (Model.Teacher.IsHead) { <span class="hod-badge">@Ui.Icon("crown")Head of Department</span> }
                     }
-                    <span dir="auto">@(st.JobTitle ?? st.StaffType)</span>
+                    @if (Model.Org.Primary is { } primaryPosition)
+                    {
+                        <span class="badge badge--primary">@Ui.Icon(OrgLabels.RoleIcon(primaryPosition.RoleType))@primaryPosition.DisplayTitle</span>
+                        @if (Model.Org.Current.Count > 1) { <span class="muted">+ @Ui.Plural(Model.Org.Current.Count - 1, "other position", "other positions")</span> }
+                    }
+                    else if (Model.Org.PendingConfirmation)
+                    {
+                        <span class="badge badge--warning">@Ui.Icon("alert-triangle")@OrgLabels.PendingPosition</span>
+                    }
+                    else
+                    {
+                        <span dir="auto">@(st.JobTitle ?? st.StaffType)</span>
+                    }
                     @if (!string.IsNullOrEmpty(st.ContactNumber))
                     {
                         <span> · </span><a class="phone-link" href="tel:@st.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@st.ContactNumber</a>
@@ -51,9 +64,17 @@
             <a class="btn btn--secondary" href="/timetable/teachers/@st.Id">@Ui.Icon("calendar")Timetable</a>
             <a class="btn btn--secondary" href="/workload/teacher/@st.Id">@Ui.Icon("chart")Workload</a>
         }
-        <a class="btn btn--secondary" href="/duties/audit?staffId=@st.Id">@Ui.Icon("clipboard-check")Duty audit</a>
+        @if (await DutyAudit.CanAccessAsync())
+        {
+            <a class="btn btn--secondary" href="/duties/audit?staffId=@st.Id">@Ui.Icon("clipboard-check")Duty audit</a>
+        }
     </div>
 </div>
+
+@if (Model.Org.Current.Count > 0 || Model.Org.Ended.Count > 0 || Model.Org.Flags.Count > 0)
+{
+    <partial name="~/Views/Shared/_StaffOrgPositions.cshtml" model="(Model.Org, st.Id, Model.CanManageOrg)" />
+}
 
 <ul class="kpis kpis--5" aria-label="Duty history totals">
     <li class="kpi"><span class="kpi__icon">@Ui.Icon("shield-check")</span><p class="kpi__label">Assigned duties</p><p class="kpi__value">@s.TotalAssigned</p><p class="kpi__meta">As assigned staff or accepted backup</p></li>

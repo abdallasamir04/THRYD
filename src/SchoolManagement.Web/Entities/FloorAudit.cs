@@ -1,4 +1,4 @@
-namespace SchoolManagement.Web.Entities;
+﻿namespace SchoolManagement.Web.Entities;
 
 // ============================================================ Floor Audit & Student Movement
 //
@@ -21,6 +21,12 @@ public class SchoolFloor : IAuditable
 
     /// <summary>Display order (0 = ground floor, 1, 2…).</summary>
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Floor Management: the grades the floor's management team is responsible for, as written ("PreK – G1B"). A floor with a
+    /// grade range is shown on the Floor Management dashboard. Independent of which classrooms are on the floor (inspections).
+    /// </summary>
+    public string? GradeRange { get; set; }
     public bool IsActive { get; set; } = true;
     public string? CreatedBy { get; set; }
     public string? UpdatedBy { get; set; }

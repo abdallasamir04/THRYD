@@ -1,0 +1,50 @@
+@model FloorTicketFormModel
+@using SchoolManagement.Web.Services.FloorManagement
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; } else { ViewData["Title"] = "Open ticket"; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/floor-management/tickets/new" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("clipboard-check", "icon--lg")</span>
+            <div><h2 class="modal__title">Open a Social Worker ticket</h2><p class="modal__sub">A discipline or behavioural case about an existing student, for the floor's Social Worker.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="FloorId">Floor</label>
+                <select class="select" id="FloorId" name="FloorId">
+                    @foreach (var f in Model.Floors) { <option value="@f.Id" selected="@(Model.FloorId == f.Id)">@f.Name (@f.GradeRange)</option> }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="StudentId">Student <span class="req">*</span></label>
+                <select class="select" id="StudentId" name="StudentId" data-searchable required>
+                    <option value="">Choose a student…</option>
+                    @foreach (var s in Model.Students) { <option value="@s.Id" selected="@(Model.StudentId == s.Id)" data-note="@s.Note">@s.Name</option> }
+                </select>
+                <span class="hint">The grade / class is taken from the student's record.</span>
+            </div>
+            <div class="field">
+                <label class="label" for="Category">Category</label>
+                <select class="select" id="Category" name="Category">
+                    @foreach (var c in Enum.GetValues<FloorTicketCategory>()) { <option value="@c" selected="@(Model.Category == c)">@FloorManagementService.Label(c)</option> }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="Priority">Priority</label>
+                <select class="select" id="Priority" name="Priority">
+                    @foreach (var p in TaskLabels.Priorities) { <option value="@p" selected="@(Model.Priority == p)">@TaskLabels.Priority(p)</option> }
+                </select>
+            </div>
+            <div class="field field--full"><label class="label" for="Description">Description <span class="req">*</span></label><textarea class="textarea" id="Description" name="Description" rows="5" maxlength="2000" required>@Model.Description</textarea></div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-management/tickets">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("plus")Open ticket</button>
+        </div>
+    </form>
+</div>

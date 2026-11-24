@@ -1,0 +1,24 @@
+@model string
+@*
+    The Management area's sections: School Leadership and Operation Team (the two halves of the Management Team), then
+    the organizational structure views that read the same records. Model = the active entry (ManagementNav).
+*@
+@{
+    var items = new (string Key, string Href, string Icon, string Label)[]
+    {
+        (ManagementNav.Leadership, ManagementTeams.LeadershipHref, "crown", ManagementTeams.LeadershipName),
+        (ManagementNav.Operation, ManagementTeams.OperationHref, "briefcase", ManagementTeams.OperationName),
+        (ManagementNav.OrgChart, OrgLabels.OrgChartHref, "layers", "Org Chart"),
+        (ManagementNav.Executive, OrgLabels.ExecutiveHref, "shield-check", "Executive"),
+        (ManagementNav.Academic, OrgLabels.AcademicLeadershipHref, "graduation-cap", "Academic Leadership"),
+        (ManagementNav.Operations, OrgLabels.OperationsHref, "clipboard-check", "Operations & Admin"),
+        (ManagementNav.Departments, OrgLabels.DepartmentsLeadershipHref, "users", "Departments Leadership"),
+        (ManagementNav.Positions, OrgLabels.PositionsHref, "settings", "Positions & Assignments"),
+    };
+}
+<nav class="org-nav" aria-label="Management sections">
+    @foreach (var (key, href, icon, label) in items)
+    {
+        <a class="org-nav__link" href="@href" aria-current="@(Model == key ? "page" : null)">@Ui.Icon(icon, "icon--sm")<span>@label</span></a>
+    }
+</nav>

@@ -1,4 +1,4 @@
-using SchoolManagement.Web.Common;
+﻿using SchoolManagement.Web.Common;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.Services.Excel;
@@ -6,7 +6,8 @@ using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
-public class StudentsController(IStudentService students, IClassService classes, IExcelExportService excel, IArrivalService arrivals) : AppController
+public class StudentsController(IStudentService students, IClassService classes, IExcelExportService excel, IArrivalService arrivals,
+    IStudentRecordsAccess access) : AppController
 {
     public const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -58,12 +59,14 @@ public class StudentsController(IStudentService students, IClassService classes,
             From = from,
             To = to,
             NewestFirst = newestFirst,
+            CanEdit = await access.CanEditAsync(ct),
         });
     }
 
     [HttpGet]
     public async Task<IActionResult> Transfer(int id, CancellationToken ct)
     {
+        if (!await access.CanEditAsync(ct)) return Denied();
         var student = await students.GetAsync(id, ct);
         if (student is null) return NotFoundResult("This student no longer exists.");
 
@@ -79,6 +82,7 @@ public class StudentsController(IStudentService students, IClassService classes,
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Transfer(int id, StudentTransferModel model, [FromServices] ICurrentUser currentUser, CancellationToken ct)
     {
+        if (!await access.CanEditAsync(ct)) return Denied();
         var student = await students.GetAsync(id, ct);
         if (student is null) return NotFoundResult("This student no longer exists.");
 
@@ -109,6 +113,7 @@ public class StudentsController(IStudentService students, IClassService classes,
             ShowSecondLanguage = await students.AnySecondLanguageAsync(query, ct),
             Classes = await classes.AllOptionsAsync(ct),
             TotalStudents = await students.CountAsync(ct),
+            CanEdit = await access.CanEditAsync(ct),
         };
         return IsAjax ? PartialView("_Table", model) : View(model);
     }
@@ -124,6 +129,7 @@ public class StudentsController(IStudentService students, IClassService classes,
     [HttpGet]
     public async Task<IActionResult> Create(int? classId, CancellationToken ct)
     {
+        if (!await access.CanEditAsync(ct)) return Denied();
         var model = new StudentFormModel { SchoolClassId = classId, ClassOptions = await classes.OptionsAsync(null, ct) };
         return PageOrPartial("Form", model);
     }
@@ -131,10 +137,11 @@ public class StudentsController(IStudentService students, IClassService classes,
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(StudentFormModel model, CancellationToken ct)
     {
+        if (!await access.CanEditAsync(ct)) return Denied();
         model.Id = null;
         if (ModelState.IsValid)
         {
-            var result = await students.CreateAsync(model.FullName, model.SchoolClassId!.Value, ct);
+            var result = await students.CreateAsync(model.FullName, model.SchoolClassId!.Value, ct, model.Details());
             if (result.Succeeded) return Saved($"{model.FullName.Trim()} was added.");
             AddErrors(result);
         }
@@ -149,6 +156,7 @@ public class StudentsController(IStudentService students, IClassService classes,
     [HttpGet("/classes/{classId:int}/students/create")]
     public async Task<IActionResult> CreateInClass(int classId, CancellationToken ct)
     {
+        if (!await access.CanEditAsync(ct)) return Denied();
         var cls = await classes.GetAsync(classId, ct);
         if (cls is null) return NotFoundResult("This class no longer exists.");
         return PageOrPartial("Form", new StudentFormModel { SchoolClassId = classId, LockedClass = cls });
@@ -157,6 +165,7 @@ public class StudentsController(IStudentService students, IClassService classes,
     [HttpPost("/classes/{classId:int}/students/create"), ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateInClass(int classId, StudentFormModel model, CancellationToken ct)
     {
+        if (!await access.CanEditAsync(ct)) return Denied();
         var cls = await classes.GetAsync(classId, ct);
         if (cls is null) return NotFoundResult("This class no longer exists.");
         model.Id = null;
@@ -164,7 +173,7 @@ public class StudentsController(IStudentService students, IClassService classes,
         ModelState.Remove(nameof(StudentFormModel.SchoolClassId));
         if (ModelState.IsValid)
         {
-            var result = await students.CreateAsync(model.FullName, classId, ct);
+            var result = await students.CreateAsync(model.FullName, classId, ct, model.Details());
             if (result.Succeeded)
             {
                 var message = $"{model.FullName.Trim()} was added to {cls.Name}.";
@@ -181,13 +190,19 @@ public class StudentsController(IStudentService students, IClassService classes,
     [HttpGet]
     public async Task<IActionResult> Edit(int id, CancellationToken ct)
     {
+        if (!await access.CanEditAsync(ct)) return Denied();
         var student = await students.GetAsync(id, ct);
         if (student is null) return NotFoundResult("This student no longer exists.");
+        // Every stored value is put back in the form, so saving an unrelated change never empties a field.
         var model = new StudentFormModel
         {
             Id = student.Id,
             FullName = student.FullName,
             SchoolClassId = student.ClassId,
+            BirthDate = student.BirthDate,
+            AdmissionApplicationDate = student.AdmissionApplicationDate,
+            DismissalMethod = student.DismissalMethod,
+            ParentContactNumber = student.ParentContactNumber,
             ClassOptions = await classes.OptionsAsync(student.ClassId, ct),
         };
         return PageOrPartial("Form", model);
@@ -196,10 +211,11 @@ public class StudentsController(IStudentService students, IClassService classes,
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(int id, StudentFormModel model, CancellationToken ct)
     {
+        if (!await access.CanEditAsync(ct)) return Denied();
         model.Id = id;
         if (ModelState.IsValid)
         {
-            var result = await students.UpdateAsync(id, model.FullName, model.SchoolClassId!.Value, ct);
+            var result = await students.UpdateAsync(id, model.FullName, model.SchoolClassId!.Value, ct, model.Details());
             if (result.Succeeded) return Saved($"{model.FullName.Trim()} was updated.");
             AddErrors(result);
         }
@@ -211,6 +227,7 @@ public class StudentsController(IStudentService students, IClassService classes,
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
+        if (!await access.CanEditAsync(ct)) return Denied();
         var student = await students.GetAsync(id, ct);
         var result = await students.DeleteAsync(id, ct);
         var message = result.Succeeded ? $"{student?.FullName} was deleted." : result.Errors[0].Value;
@@ -253,6 +270,14 @@ public class StudentsController(IStudentService students, IClassService classes,
         if (string.IsNullOrWhiteSpace(fullName) || schoolClassId is not > 0) return Json(true);
         var duplicate = await students.FindDuplicateAsync(fullName, schoolClassId.Value, id, ct);
         return duplicate is null ? Json(true) : Json($"\"{duplicate.FullName}\" is already in {duplicate.ClassName}.");
+    }
+
+    /// <summary>403: changing student records needs StudentRecords access (checked on the server for every change).</summary>
+    private IActionResult Denied()
+    {
+        if (IsAjax) return AjaxFailure(StudentRecordsAccess.DeniedMessage, StatusCodes.Status403Forbidden);
+        Response.StatusCode = StatusCodes.Status403Forbidden;
+        return View("Denied");
     }
 
     private IActionResult Saved(string message)

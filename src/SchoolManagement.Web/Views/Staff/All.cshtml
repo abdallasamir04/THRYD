@@ -1,4 +1,4 @@
-@model StaffDirectoryViewModel
+﻿@model StaffDirectoryViewModel
 @*
     Staff → All School Staff: the whole workforce in one directory, grouped by staff category (Management Team, Academic
     Staff, Administrative & Support Staff). One full-width row per staff record (each person once): name, job title or
@@ -16,6 +16,8 @@
     string? DeptName(string? value) => value == "none" ? "No department" : int.TryParse(value, out var id) ? d.Departments.FirstOrDefault(x => x.Id == id).Name : null;
     var roleOptions = new List<(string Value, string Label)> { ("hod", "Head of Department"), ("kg-homeroom", "KG Homeroom Teacher"), ("kg-co", "KG Co-Teacher") };
     roleOptions.AddRange(ManagementPositions.All.Select(p => (p.ToString(), ManagementPositions.Name(p))));
+    // Organizational tiers (Positions & Assignments): staff holding a position in the tier.
+    roleOptions.AddRange(d.Tiers.Select(t => ($"tier-{t.Id}", t.Name)));
     string? RoleName(string? value) => roleOptions.FirstOrDefault(r => r.Value == value).Label;
     string CategoryIcon(StaffCategory c) => c switch { StaffCategory.Academic => "graduation-cap", StaffCategory.Management => "crown", _ => "briefcase" };
     StaffCategory[] GroupOrder = [StaffCategory.Management, StaffCategory.Academic, StaffCategory.Support];
@@ -186,8 +188,12 @@
                         @foreach (var s in people)
                         {
                             var tone = Ui.Tone(s.FullName);
-                            var noPosition = s.IsManagement && s.Position is null && (s.JobTitle is null || s.JobTitle == "Management Team");
-                            var title = noPosition ? null : s.JobTitle;
+                            // The position comes from the person's organizational assignments when they hold one (primary first);
+                            // otherwise the leadership position / job title as before.
+                            var primary = s.Position is null ? s.PrimaryOrg : null;
+                            var noPosition = s.IsManagement && s.Position is null && primary is null && (s.JobTitle is null || s.JobTitle == "Management Team");
+                            var title = primary?.DisplayTitle ?? (noPosition ? null : s.JobTitle);
+                            var extra = (s.Position is null ? s.AdditionalOrg : s.Org).ToList();
                             // The position is already in the Position column; other roles (HOD, KG teaching team) sit with the department.
                             var roles = s.Roles.Where(r => !string.Equals(r.Label, title, StringComparison.OrdinalIgnoreCase)).ToList();
                             <article class="dir-row" aria-labelledby="sd-@s.Id">
@@ -199,8 +205,28 @@
                                     </div>
                                 </div>
                                 <div class="dir-row__field dir-row__field--job">
-                                    <span class="dir-row__label">@(s.IsManagement ? "Position" : "Job title")</span>
-                                    <span class="dir-row__value@(title is null ? " is-empty" : "")" title="@(title ?? "")">@(title ?? (s.IsManagement ? "No position yet" : "Not set"))</span>
+                                    <span class="dir-row__label">@(s.IsManagement || primary is not null ? "Position" : "Job title")</span>
+                                    @if (title is null && s.PendingConfirmation)
+                                    {
+                                        <span class="dir-row__value org-pending" title="The source's job title could not be read">@Ui.Icon("alert-triangle", "icon--sm")@OrgLabels.PendingPosition</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="dir-row__value@(title is null ? " is-empty" : "")" title="@(title ?? "")">@(title ?? (s.IsManagement ? "No position yet" : "Not set"))</span>
+                                    }
+                                    @if (primary is not null)
+                                    {
+                                        <span class="dir-row__meta" title="@primary.Tier">@primary.Unit · @primary.Tier</span>
+                                    }
+                                    @if (extra.Count > 0)
+                                    {
+                                        <span class="dir-row__roles" aria-label="Additional positions">
+                                            @foreach (var o in extra)
+                                            {
+                                                <span class="dir-badge dir-badge--@OrgLabels.RoleTone(o.RoleType)" title="@o.DisplayTitle · @o.Unit">@Ui.Icon(OrgLabels.RoleIcon(o.RoleType), "icon--sm")<span>@o.DisplayTitle</span></span>
+                                            }
+                                        </span>
+                                    }
                                 </div>
                                 <div class="dir-row__field dir-row__field--dept">
                                     <span class="dir-row__label">@(roles.Count > 0 ? "Department / role" : "Department")</span>

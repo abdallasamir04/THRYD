@@ -262,7 +262,9 @@ public sealed partial class StaffCreateAndAttendanceHttpTests(DbFixture fx)
             Assert.Equal(appointments, await db.PositionAssignments.CountAsync());
             Assert.Equal(positions, await db.ManagementMembers.CountAsync(m => m.Position != null));
         }
-        Assert.Contains(title, WebUtility.HtmlDecode(await client.GetStringAsync("/management/leadership")));
+        // A school-added position belongs to the Operation Team section, not School Leadership.
+        Assert.Contains(title, WebUtility.HtmlDecode(await client.GetStringAsync("/management/operation-team")));
+        Assert.DoesNotContain(title, WebUtility.HtmlDecode(await client.GetStringAsync("/management/leadership")));
     }
 
     [Fact]

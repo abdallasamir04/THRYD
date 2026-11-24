@@ -2,7 +2,8 @@
 @*
     School Calendar (formerly Academic Calendar): the year's teachers' calendar as one continuous run of months, side by
     side in date order, as printed by the school: each month lists only the printed calendar's events. The quarters' dates
-    decide which months are shown (they are kept and used as they are). At the bottom, + Add year (a dialog).
+    decide which months are shown (they are kept and used as they are). + Add year (a dialog) sits beside + Add event in the
+    toolbar; the calendar months are the last section of the page.
 *@
 @{
     ViewData["Title"] = "School Calendar";
@@ -25,7 +26,7 @@
             }
             else
             {
-                <text>Add an academic year below to start the school calendar.</text>
+                <text>Add an academic year to start the school calendar.</text>
             }
         </p>
     </div>
@@ -42,6 +43,9 @@
                 </select>
             </form>
         }
+        @* Academic years: only + Add year (a dialog with the year's name). The years' quarters and dates are kept as they are
+           (Belongings, attendance, timetables and teaching teams use them); a quarter's dates open from its start / end on the calendar. *@
+        <a class="btn @(cal.YearId is null ? "btn--primary" : "btn--secondary")" href="/school-calendar/years/new" data-modal>@Ui.Icon("plus")Add year</a>
         @if (cal.YearId is not null)
         {
             <a class="btn btn--primary" href="/school-calendar/events/new?year=@cal.YearId" data-modal>@Ui.Icon("plus")Add event</a>
@@ -71,20 +75,6 @@
 
 @if (cal.YearId is not null)
 {
-    @if (cal.Months.Count == 0)
-    {
-        <div class="card empty empty--boxed sc-nomonths"><span class="empty__icon">@Ui.Icon("calendar")</span><p class="empty__title">No quarter dates yet</p><p class="empty__text">The year’s months appear here once its quarter dates are set.</p></div>
-    }
-    else
-    {
-        <div class="sc-months">
-            @foreach (var m in cal.Months)
-            {
-                <partial name="_Month" model="(m, cal.YearId!.Value)" />
-            }
-        </div>
-    }
-
     @if (cal.Unplaced.Count > 0)
     {
         <section class="card sc-unplaced" aria-labelledby="sc-unplaced-title">
@@ -100,10 +90,18 @@
             </div>
         </section>
     }
-}
 
-@* Academic years: only + Add year here (a dialog with the year's name). The years' quarters and dates are kept as they are
-   (Belongings, attendance, timetables and teaching teams use them); a quarter's dates open from its start / end on the calendar. *@
-<div class="sc-addyear">
-    <a class="btn btn--primary" href="/school-calendar/years/new" data-modal>@Ui.Icon("plus")Add year</a>
-</div>
+    @if (cal.Months.Count == 0)
+    {
+        <div class="card empty empty--boxed sc-nomonths"><span class="empty__icon">@Ui.Icon("calendar")</span><p class="empty__title">No quarter dates yet</p><p class="empty__text">The year’s months appear here once its quarter dates are set.</p></div>
+    }
+    else
+    {
+        <div class="sc-months">
+            @foreach (var m in cal.Months)
+            {
+                <partial name="_Month" model="(m, cal.YearId!.Value)" />
+            }
+        </div>
+    }
+}

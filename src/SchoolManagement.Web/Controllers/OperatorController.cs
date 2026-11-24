@@ -29,7 +29,7 @@ public class OperatorController(SchoolDbContext db) : AppController
         else
         {
             Response.Cookies.Delete(HttpCurrentUser.OperatorCookie);
-            Toast("Cleared. Changes will be recorded without a name.", "info");
+            Toast("You are the Super Admin (full access). Changes are recorded without a staff name.", "info");
         }
         return LocalRedirect(Url.IsLocalUrl(returnUrl) ? returnUrl! : "/settings");
     }

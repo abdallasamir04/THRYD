@@ -1,4 +1,4 @@
-/*
+﻿/*
  * School Management design system.
  * Modelled on the CodeRa admin dashboard (E:\CodRa\ramy v2): the same token structure
  * (fill / soft / ink per colour), soft-light and dark-navy themes, 256px grouped sidebar,
@@ -290,7 +290,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
     background: var(--color-surface-soft); color: var(--color-text-muted); font-size: 0.72rem; font-weight: 800; text-align: center;
 }
 .nav__link[aria-current="page"] .nav__count { background: var(--color-surface); color: var(--color-primary-ink); }
-.nav__link--planned { color: var(--color-text-faint); cursor: default; }
+.nav__link--planned { color: var(--color-text-faint); cursor: not-allowed; user-select: none; }
+.nav__link--planned > .icon { opacity: 0.7; }
 .nav__link--planned:hover { background: none; }
 .nav__soon {
     margin-inline-start: auto; padding: 2px 8px; border-radius: var(--radius-pill);
@@ -303,7 +304,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .sidebar__foot strong { color: var(--color-text); display: block; }
 .sidebar__head { display: flex; align-items: center; gap: 6px; }
-.sidebar__close { display: none; margin-inline-start: auto; }
 
 .main { min-width: 0; display: flex; flex-direction: column; }
 .topbar {
@@ -316,7 +316,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
     backdrop-filter: saturate(1.4) blur(10px);
 }
 .topbar__start, .topbar__actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.topbar__menu { display: none; }
+/* Global Back button (layout): a small secondary button before the trail; icon only on phones (its title and label stay). */
+.topbar__back { flex: none; }
+.topbar__back .icon { width: 16px; height: 16px; }
+@media (max-width: 720px) { .topbar__back { padding-inline: 9px; } .topbar__back-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 .trail { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 0.875rem; min-width: 0; }
 .trail__group { color: var(--color-text-muted); font-weight: 600; }
 .trail__sep { color: var(--color-text-faint); }
@@ -358,7 +361,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .workspace { width: 100%; max-width: 1360px; padding: 28px 36px 24px; display: flex; flex-direction: column; gap: 24px; }
 .footer { margin-top: auto; padding: 18px 36px 24px; color: var(--color-text-faint); font-size: 0.78rem; }
 
-.scrim { display: none; }
 
 /* ---------- Page header ---------- */
 .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; }
@@ -876,7 +878,7 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
     background: var(--cap-line); box-shadow: 0 0 0 2px var(--color-surface); transform: translate(-50%, 50%); transition: transform 0.15s;
     animation: cap-dot-in 0.4s 0.5s both; }
 /* Over capacity: a red point with a fine ring of the same red (the line through it stays blue). */
-.cap-pt--over .cap-pt__dot { width: 13px; height: 13px; background: var(--cap-alert); box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3.5px var(--cap-alert); }
+.cap-pt--full .cap-pt__dot, .cap-pt--over .cap-pt__dot { width: 13px; height: 13px; background: var(--cap-alert); box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3.5px var(--cap-alert); }
 @keyframes cap-dot-in { from { opacity: 0; transform: translate(-50%, 50%) scale(0.3); } }
 .cap-pt__value { position: absolute; left: 50%; bottom: calc(var(--v) * var(--plot-h) + 11px); z-index: 3; padding: 1px 2px; border-radius: 4px; background: var(--color-surface);
     transform: translateX(-50%); font-size: 0.66rem; font-weight: 800; line-height: 1.15; white-space: nowrap; text-align: center; color: var(--color-text-strong); letter-spacing: -0.02em;
@@ -885,7 +887,7 @@ dialog.modal--confirm { width: min(460px, calc(100vw - 24px)); }
 .cap-pt__value.is-long { font-size: 0.62rem; }
 .cap-pt__value.is-long .cap-pt__cap { display: block; } /* long ratios (capacities of 100+) stack: enrolled over /capacity */
 .cap-pt__cap { font-weight: 600; color: var(--color-text-muted); }
-.cap-pt--over .cap-pt__value, .cap-pt--over .cap-pt__cap { color: var(--cap-alert); }
+.cap-pt--full .cap-pt__value, .cap-pt--full .cap-pt__cap, .cap-pt--over .cap-pt__value, .cap-pt--over .cap-pt__cap { color: var(--cap-alert); }
 @keyframes cap-value-in { from { opacity: 0; } }
 .cap-pt__name { display: flex; align-items: center; justify-content: center; height: var(--name-h); font-size: 0.72rem; font-weight: 700; white-space: nowrap; color: var(--color-text-muted); }
 .cap-pt__link:hover .cap-pt__guide, .cap-pt__link:focus-visible .cap-pt__guide { opacity: 0.45; }
@@ -1040,15 +1042,24 @@ a.summary-tile:hover { border-color: var(--color-border-strong); text-decoration
     .grid-3-1 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 1024px) {
+    /* The sidebar becomes a compact strip above the page: the brand, then every link in one horizontally scrollable
+       row (same links, same states; the section headings are not needed in one row). No toggle is needed. */
     .shell { grid-template-columns: minmax(0, 1fr); }
     .sidebar {
-        position: fixed; inset-block: 0; inset-inline-start: 0; width: min(300px, 86vw);
-        transform: translateX(-102%); transition: transform 0.25s var(--ease); box-shadow: var(--shadow-pop); z-index: 60;
+        position: static; height: auto; overflow: visible; gap: 8px; padding: 10px 16px 8px;
+        border-inline-end: 0; border-bottom: 1px solid var(--color-border);
     }
-    [dir="rtl"] .sidebar { transform: translateX(102%); }
-    body.nav-open .sidebar { transform: none; }
-    body.nav-open .scrim { display: block; position: fixed; inset: 0; z-index: 55; background: var(--color-overlay); }
-    .sidebar__close, .topbar__menu { display: inline-grid; }
+    .sidebar__head { justify-content: flex-start; }
+    .brand--logo { flex: none; align-items: flex-start; padding: 0; }
+    .brand__logo { width: 132px; }
+    .sidebar__foot { display: none; }
+    .nav { flex-direction: row; align-items: center; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 4px; }
+    .nav > .nav__list, .nav__section { display: contents; }
+    .nav__summary { display: none; }
+    .nav__list { flex-direction: row; margin: 0; }
+    .nav__list > li { flex: none; }
+    .nav__link { min-height: 36px; padding: 6px 10px; gap: 8px; white-space: nowrap; font-size: 0.84rem; }
+    .nav__link[aria-current="page"]::before { display: none; }
     .workspace { padding: 22px 20px; }
     .topbar { padding: 10px 20px; }
     .footer { padding: 16px 20px 22px; }

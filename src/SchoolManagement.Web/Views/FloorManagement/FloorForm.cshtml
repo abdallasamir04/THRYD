@@ -1,0 +1,42 @@
+﻿@model FloorFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit floor" : "Add Floor";
+    if (modal) { Layout = null; } else { ViewData["Title"] = heading; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/floor-management/floors/save" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Id" value="@Model.Id" />
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("school", "icon--lg")</span>
+            <div><h2 class="modal__title">@heading</h2><p class="modal__sub">A floor and the grades its management team is responsible for.@(Model.IsEdit ? " The team is changed on the floor page." : " Matrons are added on the floor page with their classes.")</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field"><label class="label" for="Name">Floor name <span class="req">*</span></label><input class="input" id="Name" name="Name" value="@Model.Name" maxlength="50" required /></div>
+            <div class="field"><label class="label" for="GradeRange">Grade range <span class="req">*</span></label><input class="input" id="GradeRange" name="GradeRange" value="@Model.GradeRange" maxlength="60" placeholder="e.g. PreK – G1B" required /></div>
+            <div class="field"><label class="label" for="SortOrder">Order</label><input class="input" id="SortOrder" name="SortOrder" type="number" min="0" max="99" value="@Model.SortOrder" /></div>
+            <div class="field" style="align-self:end"><label class="switch"><input type="checkbox" name="IsActive" value="true" checked="@Model.IsActive" /><span class="switch__track" aria-hidden="true"></span><span>Active (deactivating keeps every assignment and record)</span></label><input type="hidden" name="IsActive" value="false" /></div>
+            @if (!Model.IsEdit)
+            {
+                foreach (var (name, label, value) in new[] { ("StageCoordinatorId", "Stage Coordinator", Model.StageCoordinatorId), ("FloorSupervisorId", "Floor Supervisor", Model.FloorSupervisorId),
+                             ("FloatingMatronId", "Floating Matron", Model.FloatingMatronId), ("SocialWorkerId", "Floor Social Worker", Model.SocialWorkerId) })
+                {
+                    <div class="field">
+                        <label class="label" for="@name">@label</label>
+                        <select class="select" id="@name" name="@name" data-searchable>
+                            <option value="">Not assigned yet</option>
+                            @foreach (var s in Model.Staff) { <option value="@s.Id" selected="@(value == s.Id)" data-note="@s.Note">@s.Name</option> }
+                        </select>
+                    </div>
+                }
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-management">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+        </div>
+    </form>
+</div>

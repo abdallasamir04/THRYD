@@ -1,0 +1,43 @@
+@model FloorReportsViewModel
+@using SchoolManagement.Web.Services.FloorManagement
+@{
+    ViewData["Title"] = "Reports & escalations";
+    ViewData["Nav"] = "FloorAudit";
+}
+<span data-refresh-on-save hidden></span>
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/floor-management">Floor Management</a></li><li><span aria-current="page">Reports &amp; escalations</span></li></ol>
+        <h1 class="page-title">Reports &amp; escalations</h1>
+        <p class="page-sub">Reports you sent or received along the floor's reporting lines. A report is closed only by its reviewer.</p>
+    </div>
+    <div class="page-head__actions"><a class="btn btn--primary" href="/floor-management/reports/new" data-modal>@Ui.Icon("flag")New report</a></div>
+</div>
+<partial name="~/Views/FloorManagement/_Nav.cshtml" model='"reports"' />
+<section class="card table-card">
+    @if (Model.Reports.Count == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("flag")</span><p class="empty__title">No reports</p><p class="empty__text">Reports and escalations you can see appear here.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Report</th><th scope="col">Floor</th><th scope="col">Category</th><th scope="col">With</th><th scope="col">Status</th><th scope="col">Updated</th></tr></thead>
+                <tbody>
+                    @foreach (var r in Model.Reports)
+                    {
+                        <tr>
+                            <td data-label="Report"><a href="/floor-management/reports/@r.Id"><strong>@r.Title</strong></a><div class="muted" style="font-size:0.78rem">by @(r.CreatedBy ?? "—")@(r.RelatedName is null ? "" : $" · concerns {r.RelatedName}")</div></td>
+                            <td data-label="Floor">@r.Floor</td>
+                            <td data-label="Category">@FloorManagementService.Label(r.Category)</td>
+                            <td data-label="With">@FloorManagementService.Label(r.Recipient)<div class="muted" style="font-size:0.78rem">@(r.RecipientName ?? "no current holder")</div></td>
+                            <td data-label="Status"><span class="badge @(r.Status is FloorReportStatus.Resolved or FloorReportStatus.Closed ? "badge--success" : r.Status == FloorReportStatus.Escalated ? "badge--warning" : "badge--primary")">@FloorManagementService.Label(r.Status)</span></td>
+                            <td data-label="Updated" class="nowrap muted">@Ui.DateTime(r.UpdatedAt)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

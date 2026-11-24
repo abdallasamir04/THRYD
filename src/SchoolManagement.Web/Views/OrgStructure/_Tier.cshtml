@@ -1,0 +1,52 @@
+@model (SchoolManagement.Web.Services.OrgStructure.OrgTierNode Tier, bool CanManage)
+@*
+    One organizational tier: its units (cards), positions and people. Used by School Leadership, Operation Team and the
+    tier views; a group for the search filter (data-org-group).
+*@
+@{
+    var t = Model.Tier;
+    var positions = t.AllPositions.ToList();
+    var people = positions.SelectMany(p => p.Holders).Select(h => h.StaffId).Distinct().Count();
+    var vacant = positions.Count(p => p.IsVacant);
+}
+<section class="card org-tier" id="tier-@t.Id" data-org-group data-org-tier-id="@t.Id" aria-labelledby="tier-title-@t.Id">
+    <header class="org-tier__head">
+        <span class="org-tier__num" aria-hidden="true">@t.Number</span>
+        <div class="org-tier__text">
+            <p class="org-tier__eyebrow">Tier @t.Number · @OrgLabels.Section(t.Section)</p>
+            <h2 class="org-tier__title" id="tier-title-@t.Id">@t.Name</h2>
+            @if (!string.IsNullOrWhiteSpace(t.Description))
+            {
+                <p class="org-tier__sub">@t.Description</p>
+            }
+        </div>
+        <ul class="org-tier__stats" aria-label="Tier totals">
+            <li><strong>@t.AllUnits.Count()</strong> @(t.AllUnits.Count() == 1 ? "unit" : "units")</li>
+            <li><strong>@positions.Count</strong> @(positions.Count == 1 ? "position" : "positions")</li>
+            <li><strong>@people</strong> @(people == 1 ? "person" : "people")</li>
+            @if (vacant > 0)
+            {
+                <li class="is-warn"><strong>@vacant</strong> vacant</li>
+            }
+        </ul>
+    </header>
+    @if (t.Units.Count == 0)
+    {
+        <div class="empty" style="padding:24px">
+            <p class="empty__title">No units in this tier yet</p>
+            @if (Model.CanManage)
+            {
+                <div class="empty__actions"><a class="btn btn--secondary btn--sm" href="/management/org/units/create?tier=@t.Id" data-modal>@Ui.Icon("plus")Add unit</a></div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="org-units">
+            @foreach (var u in t.Units)
+            {
+                <partial name="~/Views/OrgStructure/_Unit.cshtml" model="(u, t, Model.CanManage)" />
+            }
+        </div>
+    }
+</section>

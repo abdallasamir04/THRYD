@@ -1,0 +1,93 @@
+@model MainDutyFormModel
+@*
+    Duties → Add Duty (Super Admin): a new Main Duty from scratch — name, description, icon, its time range and days from a
+    date — with its first Sub-Duties (rows added and removed in place, duties.js; a row's empty times take the duty's).
+    Everything is saved together (DutyBoardService.CreateMainDutyAsync). Coverage points and staff are then added from each
+    Sub-Duty's page, exactly as for Morning, Midday and Dismissal.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Add Duty"; ViewData["Nav"] = "DutyAudit"; }
+    var today = SchoolWeek.Iso(SchoolWeek.Today);
+    var mask = Model.AllDays ? 0 : PeriodDays.Mask(false, Model.Days);
+    var rows = Model.SubDuties.Count == 0 ? [new SubDutyRowModel()] : Model.SubDuties;
+}
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="@DutiesPages.Landing">Duties</a></li><li><a href="@DutiesPages.BoardUrl">Duties</a></li><li>Add Duty</li></ol>
+            <h1 class="page-title">Add Duty</h1>
+        </div>
+    </div>
+}
+<div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
+    <form action="/duties/main/new" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("plus", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">Add Duty</h2>
+                <p class="modal__sub">A new main duty beside Morning, Midday and Dismissal, with its schedule and Sub-Duties.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="form-grid form-grid--2">
+                <div class="field">
+                    <label class="label" for="md-name">Duty name <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="md-name" name="Name" value="@Model.Name" maxlength="@DutyMainDuty.NameMaxLength" required dir="auto" placeholder="e.g. Lunch Duty" data-autofocus />
+                </div>
+                <div class="field">
+                    <label class="label" for="md-icon">Icon</label>
+                    <select class="select" id="md-icon" name="Icon">
+                        @foreach (var (icon, label) in DutyBoardService.MainDutyIcons)
+                        {
+                            <option value="@icon" selected="@(Model.Icon == icon)">@label</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label" for="md-summary">Description</label>
+                <input class="input" id="md-summary" name="Summary" value="@Model.Summary" maxlength="@DutyMainDuty.SummaryMaxLength" dir="auto" placeholder="What this duty covers (shown on its card)" />
+            </div>
+            <div class="form-grid form-grid--3">
+                <div class="field">
+                    <label class="label" for="md-start">Start time <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input picker" type="time" id="md-start" name="StartTime" value="@Model.StartTime" required data-timepicker data-empty-text="Choose the start" />
+                </div>
+                <div class="field">
+                    <label class="label" for="md-end">End time <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input picker" type="time" id="md-end" name="EndTime" value="@Model.EndTime" required data-timepicker data-empty-text="Choose the end" />
+                </div>
+                <div class="field">
+                    <label class="label" for="md-from">Starts on</label>
+                    <input class="input picker" type="date" id="md-from" name="EffectiveFrom" value="@(Model.EffectiveFrom ?? today)" min="@today" data-datepicker data-empty-text="Today" />
+                </div>
+            </div>
+            <partial name="_DaysField" model='(Prefix: "md", Mask: mask)' />
+
+            <fieldset class="field md-subs" data-subduty-list>
+                <legend class="label">Sub-Duties</legend>
+                <p class="hint" style="margin:0 0 6px">The responsibilities of this duty. Leave a row's times empty to use the duty's time. Coverage points and staff are added later from each Sub-Duty's page.</p>
+                @for (var i = 0; i < rows.Count; i++)
+                {
+                    <partial name="_SubDutyRow" model="(i.ToString(System.Globalization.CultureInfo.InvariantCulture), rows[i])" />
+                }
+                <template data-subduty-template><partial name="_SubDutyRow" model='("__i__", new SubDutyRowModel())' /></template>
+                <div><button class="btn btn--secondary btn--sm" type="button" data-subduty-add>@Ui.Icon("plus", "icon--sm")Add Sub-Duty</button></div>
+            </fieldset>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@DutiesPages.BoardUrl">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Add Duty</button>
+        </div>
+    </form>
+</div>
+@section Scripts {
+    <script src="~/js/duties.js" asp-append-version="true"></script>
+}

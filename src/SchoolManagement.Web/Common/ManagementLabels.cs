@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using SchoolManagement.Web.Entities;
 
 namespace SchoolManagement.Web.Common;
@@ -46,6 +46,33 @@ public static class ManagementPositions
 }
 
 /// <summary>
+/// The two sections of the Management Team, read from each member's existing position (no separate team field, no copy):
+/// <b>School Leadership</b> — holders of the seven leadership positions, and members not yet given a position (they are the
+/// candidates for those positions); <b>Operation Team</b> — holders of a position added by the school (e.g. "Student Affairs
+/// Manager"). A member is always in exactly one section and moves with a change of position.
+/// </summary>
+public static class ManagementTeams
+{
+    public const string LeadershipName = "School Leadership";
+    public const string OperationName = "Operation Team";
+    public const string LeadershipHref = "/management/leadership";
+    public const string OperationHref = "/management/operation-team";
+
+    public static bool IsOperation(ManagementPosition? position, int? customPositionId) => position is null && customPositionId is not null;
+
+    /// <summary>
+    /// A school-added position, or — for members without a leadership or school-added position — a primary organizational
+    /// position in an Operation Team tier (Floor Supervisors, Administrative &amp; Operational Management).
+    /// </summary>
+    public static bool IsOperation(Services.ManagementMemberRow m) =>
+        IsOperation(m.Position, m.CustomPositionId) || (m.Position is null && m.CustomPositionId is null && m.OrgSection == OrgSection.OperationTeam);
+
+    public static string Name(Services.ManagementMemberRow m) => IsOperation(m) ? OperationName : LeadershipName;
+
+    public static string Href(Services.ManagementMemberRow m) => IsOperation(m) ? OperationHref : LeadershipHref;
+}
+
+/// <summary>
 /// Values of the Position dropdowns (Add Staff, Management Team member form): "" none, a leadership position's name
 /// (e.g. "Sqam"), "custom-12" for a school-added position, and "new" for + Add New Position.
 /// </summary>
@@ -55,6 +82,11 @@ public static class PositionChoices
     private const string CustomPrefix = "custom-";
 
     public static string Custom(int id) => CustomPrefix + id.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>The school-added position id of a dropdown value ("custom-12" → 12), else null.</summary>
+    public static int? CustomId(string? choice) =>
+        choice is not null && choice.StartsWith(CustomPrefix, StringComparison.Ordinal)
+        && int.TryParse(choice[CustomPrefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : null;
 
     public static string Of(ManagementPosition? position, int? customPositionId) =>
         position is { } p ? p.ToString() : customPositionId is { } c ? Custom(c) : "";

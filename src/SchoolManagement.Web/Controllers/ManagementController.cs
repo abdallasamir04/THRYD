@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
@@ -7,14 +7,20 @@ using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
-/// <summary>Management Team → School Leadership: leadership members, the seven positions, appointments and member profiles.</summary>
+/// <summary>
+/// Management Team, in two sections: School Leadership (the seven leadership positions, their holders, appointments) and
+/// the Operation Team (members holding a position added by the school). Both read the same member records
+/// (<see cref="ManagementTeams"/>); member profiles, forms, tasks and permissions are shared.
+/// </summary>
 [Route("management")]
-public class ManagementController(IManagementService members, IManagementTaskService tasks) : AppController
+public class ManagementController(IManagementService members, IManagementTaskService tasks,
+    Services.OrgStructure.IOrgStructureService org, Services.OrgStructure.IOrgStructureAccess orgAccess) : AppController
 {
-    public const string LeadershipHref = "/management/leadership";
+    public const string LeadershipHref = ManagementTeams.LeadershipHref;
+    public const string OperationHref = ManagementTeams.OperationHref;
 
     /// <summary>
-    /// Management Team landing page: the School Leadership card, full width. Tasks are reached from School Leadership
+    /// Management Team landing page: two cards, School Leadership and Operation Team. Tasks are reached from the sections
     /// (All Tasks / Add Task), not from a card of their own.
     /// </summary>
     [HttpGet("")]
@@ -23,21 +29,63 @@ public class ManagementController(IManagementService members, IManagementTaskSer
         var all = await members.ListAsync(null, ct);
         var slots = await members.PositionsAsync(ct);
         var filled = slots.Count(s => s.Holder is not null);
+        var operation = all.Count(ManagementTeams.IsOperation);
+        var structure = await org.StructureAsync(false, ct);
         return View("~/Views/Staff/Hub.cshtml", new HubViewModel
         {
             Title = "Management Team",
-            Subtitle = "School leadership: its members, the seven positions, and each member's tasks. Separate from academic staff.",
+            Subtitle = "School Leadership and the Operation Team: their members, positions and each member's tasks. Separate from academic staff.",
             Crumbs = [("Dashboard", "/"), ("Staff", "/staff"), ("Management Team", null)],
             Large = true,
-            Variant = "single",
             Cards =
             [
-                new(LeadershipHref, "crown", "School Leadership",
+                new(LeadershipHref, "crown", ManagementTeams.LeadershipName,
                     "Manage school leadership members, positions, responsibilities, and appointment history in one place.",
-                    $"{Ui.Plural(all.Count, "member", "members")} · {filled} of {slots.Count} positions filled", "violet"),
+                    $"{Ui.Plural(all.Count - operation, "member", "members")} · {filled} of {slots.Count} positions filled", "violet"),
+                new(OperationHref, "briefcase", ManagementTeams.OperationName,
+                    "Management Team members in the positions added by the school, with their responsibilities and tasks.",
+                    Ui.Plural(operation, "member", "members"), "teal"),
+            ],
+            // The organizational structure views read the same records; the two section cards stay the landing page.
+            Extra =
+            [
+                ("Organizational Chart", OrgLabels.OrgChartHref, "layers"),
+                ("Executive Management", OrgLabels.ExecutiveHref, "shield-check"),
+                ("Academic Leadership", OrgLabels.AcademicLeadershipHref, "graduation-cap"),
+                ("Operations & Administration", OrgLabels.OperationsHref, "clipboard-check"),
+                ("Departments Leadership", OrgLabels.DepartmentsLeadershipHref, "users"),
+                ($"Positions & Assignments · {structure.AllPositions.Count(p => p.IsVacant)} vacant", OrgLabels.PositionsHref, "settings"),
             ],
         });
     }
+
+    /// <summary>
+    /// Management Team → Operation Team: the members holding a school-added position (cards; the same profiles, forms and
+    /// tasks as School Leadership).
+    /// </summary>
+    [HttpGet("operation-team")]
+    public async Task<IActionResult> OperationTeam(CancellationToken ct)
+    {
+        var all = await members.ListAsync(null, ct);
+        return View(new OperationTeamViewModel
+        {
+            Members = all.Where(ManagementTeams.IsOperation).ToList(),
+            Org = (await org.StructureAsync(false, ct)).Only(t => t.Section == OrgSection.OperationTeam),
+            CanManageOrg = await orgAccess.CanManageAsync(ct),
+        });
+    }
+
+    /// <summary>Operation Team → Download Report: the section's members.</summary>
+    [HttpGet("operation-team/pdf")]
+    public async Task<IActionResult> OperationTeamPdf(string? search, CancellationToken ct) =>
+        await PdfFile(Services.Pdf.PdfReports.ManagementMembers((await members.ListAsync(search, ct)).Where(ManagementTeams.IsOperation).ToList(),
+            search, null, ManagementTeams.OperationName), ct);
+
+    /// <summary>School Leadership → Download Report: the section's members (same search and position filter).</summary>
+    [HttpGet("leadership/pdf")]
+    public async Task<IActionResult> LeadershipPdf(string? search, string? position, CancellationToken ct) =>
+        await PdfFile(Services.Pdf.PdfReports.ManagementMembers(Filter((await members.ListAsync(search, ct)).Where(m => !ManagementTeams.IsOperation(m)), position),
+            search, position, ManagementTeams.LeadershipName), ct);
 
     /// <summary>
     /// Management Team → School Leadership: one section with the leadership members (cards, with search and position
@@ -50,17 +98,20 @@ public class ManagementController(IManagementService members, IManagementTaskSer
         if (!string.IsNullOrEmpty(tab))
             return Redirect(QueryHelpers.AddQueryString(LeadershipHref, Params(("search", search), ("position", position), ("status", status)))
                             + (tab == LeadershipViewModel.PositionsTab ? "#positions" : "#members"));
-        var all = await members.ListAsync(null, ct);
+        // Leadership members only: the Operation Team's members (school-added positions) have their own section.
+        var all = (await members.ListAsync(null, ct)).Where(m => !ManagementTeams.IsOperation(m)).ToList();
         return View(new LeadershipViewModel
         {
             AllMembers = all,
             Positions = await members.PositionsAsync(ct),
             Tasks = await tasks.CountsAsync(null, ct),
-            Members = Filter(string.IsNullOrWhiteSpace(search) ? all : await members.ListAsync(search, ct), position),
+            Members = Filter(string.IsNullOrWhiteSpace(search) ? all : (await members.ListAsync(search, ct)).Where(m => !ManagementTeams.IsOperation(m)), position),
             Search = search,
             Position = position,
             Status = status is "filled" or "vacant" ? status : null,
             History = await members.PositionHistoryAsync(null, ct),
+            Org = (await org.StructureAsync(false, ct)).Only(t => t.Section == OrgSection.SchoolLeadership),
+            CanManageOrg = await orgAccess.CanManageAsync(ct),
         });
     }
 
@@ -96,7 +147,7 @@ public class ManagementController(IManagementService members, IManagementTaskSer
     [HttpGet("positions")]
     public IActionResult Positions() => Redirect($"{LeadershipHref}#positions");
 
-    /// <summary>Leadership Members → Download Report (same search and position filter).</summary>
+    /// <summary>Every Management Team member (both sections) → Download Report (same search and position filter).</summary>
     [HttpGet("members/pdf")]
     public async Task<IActionResult> MembersPdf(string? search, string? position, CancellationToken ct) =>
         await PdfFile(Services.Pdf.PdfReports.ManagementMembers(Filter(await members.ListAsync(search, ct), position), search, position), ct);
@@ -199,6 +250,8 @@ public class ManagementController(IManagementService members, IManagementTaskSer
             Tasks = list,
             History = await tasks.HistoryAsync(id, 40, ct),
             Positions = await members.PositionHistoryAsync(id, ct),
+            Org = await org.StaffAsync(id, ct),
+            CanManageOrg = await orgAccess.CanManageAsync(ct),
         });
     }
 
@@ -230,7 +283,8 @@ public class ManagementController(IManagementService members, IManagementTaskSer
         if (ModelState.IsValid && input is not null)
         {
             var result = await members.UpdateAsync(id, input, ct);
-            if (result.Succeeded) return Saved($"{model.FullName.Trim()} was updated.", null);
+            if (result.Succeeded)
+                return Saved($"{model.FullName.Trim()} was updated.", IsAjax ? null : (await members.GetAsync(id, ct)) is { } saved ? ManagementTeams.Href(saved) : null);
             AddErrors(result);
         }
         model.Holders = await members.PositionHoldersAsync(id, ct);
@@ -245,9 +299,10 @@ public class ManagementController(IManagementService members, IManagementTaskSer
         var member = await members.GetAsync(id, ct);
         var result = await members.DeleteAsync(id, ct);
         var message = result.Succeeded ? $"{member?.FullName} was removed from the Management Team." : result.Errors[0].Value;
-        if (IsAjax) return result.Succeeded ? AjaxSuccess(message, LeadershipHref) : AjaxFailure(message, 409);
+        var section = member is null ? LeadershipHref : ManagementTeams.Href(member);
+        if (IsAjax) return result.Succeeded ? AjaxSuccess(message, section) : AjaxFailure(message, 409);
         Toast(message, result.Succeeded ? "success" : "error");
-        return Redirect(result.Succeeded ? LeadershipHref : $"/management/members/{id}");
+        return Redirect(result.Succeeded ? section : $"/management/members/{id}");
     }
 
     [HttpGet("members/check-duplicate")]

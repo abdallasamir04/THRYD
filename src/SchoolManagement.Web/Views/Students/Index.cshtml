@@ -12,12 +12,15 @@
         <h1 class="page-title">Students</h1>
         <p class="page-sub">@Ui.Plural(Model.TotalStudents, "student", "students") across @Ui.Plural(activeClasses, "active class", "active classes"). Search, filter by class, and keep every record in the right class.</p>
     </div>
-    <div class="page-head__actions">
-        <a class="btn btn--secondary" href="/import-export?kind=Students">@Ui.Icon("upload")Import from Excel</a>
-        @* Inside a class (classId in the URL) the form opens fixed to that class; otherwise it shows the class dropdown. *@
-        <a class="btn btn--primary" href="@(q.ClassId is { } cid ? $"/classes/{cid}/students/create" : "/students/create")" data-modal
-           data-class-context="#students-class-filter">@Ui.Icon("user-plus")Add student</a>
-    </div>
+    @if (Model.CanEdit)
+    {
+        <div class="page-head__actions">
+            <a class="btn btn--secondary" href="/import-export?kind=Students">@Ui.Icon("upload")Import from Excel</a>
+            @* Inside a class (classId in the URL) the form opens fixed to that class; otherwise it shows the class dropdown. *@
+            <a class="btn btn--primary" href="@(q.ClassId is { } cid ? $"/classes/{cid}/students/create" : "/students/create")" data-modal
+               data-class-context="#students-class-filter">@Ui.Icon("user-plus")Add student</a>
+        </div>
+    }
 </div>
 
 <section class="card table-card" aria-label="Student list">

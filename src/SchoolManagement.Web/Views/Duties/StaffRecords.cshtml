@@ -1,30 +1,24 @@
 @model StaffOverviewViewModel
 @*
-    Duty Audit → Staff Duty Records tab (formerly the separate Staff Duty Records page, /staff?view=duties).
+    Duty Audit → Staff Duty Records tab (formerly the separate Staff Duty Records page, /staff?view=duties); authorized users only.
     Same rows (StaffDutyService.OverviewAsync), table (_Overview) and PDF; each person opens /staff/{id}.
 *@
 @{
     ViewData["Title"] = "Staff Duty Records";
     ViewData["Nav"] = "DutyAudit";
-    var day = Model.Duties is { } d ? SchoolWeek.Iso(d.Day.Date) : null;
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/duties/audit">Duties &amp; Audit</a></li><li>Staff Duty Records</li></ol>
-        <h1 class="page-title">Duties &amp; Audit</h1>
-        <p class="page-sub">Manage the school's duties and track how they are carried out. Staff Duty Records: each staff member's duties and evaluations; open a person for their full duty history.</p>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="@DutiesPages.Landing">@DutiesPages.Title</a></li><li><a href="@DutiesPages.AuditUrl">@DutiesPages.AuditTitle</a></li><li>Staff Duty Records</li></ol>
+        <h1 class="page-title">@DutiesPages.AuditTitle</h1>
+        <p class="page-sub">Staff Duty Records: each staff member's duties and evaluations; open a person for their full duty history.</p>
     </div>
     <div class="page-head__actions">
-        <a class="btn btn--secondary" href="@DutiesAudit.For("morning", day)">@Ui.Icon("shield-check")Morning Duty</a>
+        <a class="btn btn--secondary" href="@DutiesPages.BoardUrl">@Ui.Icon("shield-check")Duties</a>
         <partial name="_Download" model='DownloadLink.Report("/staff/duty-records/pdf")' />
     </div>
 </div>
-
-@if (Model.Duties is { } duties)
-{
-    <partial name="_DutiesSection" model="duties" />
-}
 
 <section class="ops-section" id="duty-audit" aria-labelledby="duty-audit-title">
 <header class="ops-section__head">

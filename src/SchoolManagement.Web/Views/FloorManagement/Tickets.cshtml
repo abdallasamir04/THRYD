@@ -1,0 +1,44 @@
+@model FloorTicketsViewModel
+@using SchoolManagement.Web.Services.FloorManagement
+@{
+    ViewData["Title"] = "Social Worker tickets";
+    ViewData["Nav"] = "FloorAudit";
+}
+<span data-refresh-on-save hidden></span>
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/floor-management">Floor Management</a></li><li><span aria-current="page">Social Worker tickets</span></li></ol>
+        <h1 class="page-title">Social Worker tickets</h1>
+        <p class="page-sub">Discipline and behavioural cases of your floors (or assigned to you), with their status and history.</p>
+    </div>
+    <div class="page-head__actions"><a class="btn btn--primary" href="/floor-management/tickets/new" data-modal>@Ui.Icon("plus")Open ticket</a></div>
+</div>
+<partial name="~/Views/FloorManagement/_Nav.cshtml" model='"tickets"' />
+<section class="card table-card">
+    @if (Model.Tickets.Count == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("clipboard-check")</span><p class="empty__title">No tickets</p><p class="empty__text">Tickets opened for students of your floors appear here.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Ticket</th><th scope="col">Student</th><th scope="col">Floor</th><th scope="col">Category</th><th scope="col">Priority</th><th scope="col">Social Worker</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                    @foreach (var t in Model.Tickets)
+                    {
+                        <tr>
+                            <td data-label="Ticket"><a href="/floor-management/tickets/@t.Id"><strong>@t.Number</strong></a><div class="muted" style="font-size:0.78rem">@Ui.Date(t.CreatedAt) · @(t.CreatedBy ?? "—")</div></td>
+                            <td data-label="Student" dir="auto"><a href="/students/profile/@t.StudentId">@t.Student</a> <span class="badge badge--class">@t.ClassName</span></td>
+                            <td data-label="Floor">@t.Floor</td>
+                            <td data-label="Category">@FloorManagementService.Label(t.Category)</td>
+                            <td data-label="Priority"><span class="task-priority task-priority--@TaskLabels.PrioritySlug(t.Priority)">@TaskLabels.Priority(t.Priority)</span></td>
+                            <td data-label="Social Worker">@(t.SocialWorker ?? "Not assigned")</td>
+                            <td data-label="Status"><span class="badge @(t.Status is FloorTicketStatus.Resolved or FloorTicketStatus.Closed ? "badge--success" : t.Status == FloorTicketStatus.Escalated ? "badge--warning" : "badge--primary")">@FloorManagementService.Label(t.Status)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

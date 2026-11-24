@@ -6,6 +6,7 @@
  *    PENDING → IN PROGRESS → COVERED / NOT COVERED follow the clock without a page reload. Paused while the tab is
  *    hidden or a dialog is open.
  *  - [data-days]: "Every school day" switch hides / shows the weekday choices.
+ *  - [data-subduty-list]: Add Duty's Sub-Duty rows (Add Sub-Duty / remove).
  */
 (function () {
     "use strict";
@@ -35,6 +36,34 @@
     });
     doc.addEventListener("visibilitychange", function () {
         if (!doc.hidden) Array.prototype.forEach.call(doc.querySelectorAll("[data-duty-live]"), refresh);
+    });
+
+    // Add Duty: Sub-Duty rows. A new row is the <template> with a fresh key (SubDuties.Index keeps keys free-form),
+    // enhanced like the rest of the form (time pickers). The last row is cleared instead of removed.
+    var rowKey = 0;
+    doc.addEventListener("click", function (e) {
+        var add = e.target.closest("[data-subduty-add]");
+        if (add) {
+            var list = add.closest("[data-subduty-list]");
+            var tpl = list && list.querySelector("template[data-subduty-template]");
+            if (!tpl) return;
+            var key = "n" + (++rowKey) + "x" + Date.now().toString(36);
+            var holder = doc.createElement("div");
+            holder.innerHTML = tpl.innerHTML.replace(/__i__/g, key);
+            var row = holder.firstElementChild;
+            tpl.parentNode.insertBefore(row, tpl);
+            if (window.App && App.enhance) App.enhance(row);
+            var name = row.querySelector("input[type=text], input:not([type])");
+            if (name) name.focus();
+            return;
+        }
+        var remove = e.target.closest("[data-subduty-remove]");
+        if (remove) {
+            var current = remove.closest("[data-subduty-row]");
+            var all = current.parentNode.querySelectorAll("[data-subduty-row]");
+            if (all.length > 1) { current.remove(); return; }
+            Array.prototype.forEach.call(current.querySelectorAll("input:not([type=hidden]):not([type=checkbox])"), function (i) { i.value = ""; });
+        }
     });
 
     doc.addEventListener("change", function (e) {

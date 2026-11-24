@@ -71,7 +71,9 @@ public partial class HttpTests
     [InlineData("/duties/create?component=pickup")]
     public async Task Staff_structure_pages_render(string url)
     {
-        var response = await fx.Factory.CreateClient().GetAsync(url);
+        // The old Staff Duty Records address leads into Duty Audit: an authorized user (everyone else gets 403).
+        var client = url.Contains("view=duties", StringComparison.Ordinal) ? await fx.DutyAuditClientAsync() : fx.Factory.CreateClient();
+        var response = await client.GetAsync(url);
         var html = await response.Content.ReadAsStringAsync();
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"{url} → {(int)response.StatusCode}\n{html[..Math.Min(html.Length, 2000)]}");
     }
@@ -104,9 +106,10 @@ public partial class HttpTests
         Assert.Contains("<a href=\"/staff/academic\">Academic Staff</a>", deptManagement); // breadcrumb back
 
         var management = await client.GetStringAsync("/management");
-        // School Leadership only (members + positions in one card); tasks are reached from School Leadership.
-        Assert.Single(Regex.Matches(management, "class=\"hub-card "));
+        // Two sections: School Leadership and the Operation Team; tasks are reached from the sections.
+        Assert.Equal(2, Regex.Matches(management, "class=\"hub-card ").Count);
         Assert.Contains("href=\"/management/leadership\"", management);
+        Assert.Contains("href=\"/management/operation-team\"", management);
         Assert.DoesNotContain("href=\"/management/tasks\"", management);
         Assert.DoesNotContain("href=\"/management/members\"", management);
         Assert.DoesNotContain("href=\"/management/positions\"", management);
@@ -287,10 +290,10 @@ public partial class HttpTests
     public async Task Duties_page_has_three_tabs_and_new_duties_save_under_their_type()
     {
         var client = fx.Factory.CreateClient();
-        // Duties & Audit starts with four cards: each duty, then Activities (P.E. and the other activities open from there).
-        var landing = await client.GetStringAsync("/duties");
+        // The duty board starts with four cards: each duty, then Activities (P.E. and the other activities open from there).
+        var landing = await client.GetStringAsync("/duties/board");
         Assert.Equal(4, Regex.Matches(landing, "<article class=\"dmain").Count);
-        foreach (var t in new[] { "morning", "midday", "dismissal" }) Assert.Contains($"href=\"/duties/audit?duty={t}&amp;date=", landing);
+        foreach (var t in new[] { "morning", "midday", "dismissal" }) Assert.Contains($"href=\"/duties/board?duty={t}&amp;date=", landing);
         Assert.Matches("href=\"/duties/activities\\?date=[0-9-]+\"", landing);
         Assert.DoesNotContain("href=\"/pe?", landing); // no standalone P.E. card
         Assert.DoesNotContain("/duties/activities/new", landing); // Add Activity lives inside Activities only
@@ -341,7 +344,7 @@ public partial class HttpTests
 
         var page = await client.GetStringAsync("/pe?date=2026-11-20");
         var sidebar = page[..page.IndexOf("</aside>", StringComparison.Ordinal)];
-        Assert.Contains("href=\"/duties/audit\" aria-current=\"page\"", sidebar); // Duties & Audit highlighted (P.E. opens from its Activities card)
+        Assert.Contains("href=\"/duties\" aria-current=\"page\"", sidebar); // Duties highlighted (P.E. opens from its Activities card)
         Assert.DoesNotContain("href=\"/pe\"", sidebar); // no standalone P.E. sidebar item
         Assert.Equal(10, Regex.Matches(page, "class=\"tt__period\"").Count);
         Assert.Equal(5, Regex.Matches(page, "class=\"tt__day[ \"]").Count);

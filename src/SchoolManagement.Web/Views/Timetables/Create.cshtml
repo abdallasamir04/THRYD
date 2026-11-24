@@ -1,0 +1,110 @@
+@model CreateTableViewModel
+@*
+    Timetables → Create Table: choose any active class, then its new, empty timetable is created — its own period slots on every
+    school day (PeriodService.NewTablePeriods), no subjects or teachers — and its period editor opens (add / remove slots,
+    names, start and end times). A class has one timetable: for a class that already has one, the form first shows what the
+    replacement would do (lessons that end, periods archived); nothing changes until "Replace timetable" is confirmed.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = "Create Table"; ViewData["Nav"] = "Timetables"; }
+    var active = Model.Classes.Where(c => c.IsActive).ToList();
+    var days = ScheduleRules.Days.Length;
+    var plan = Model.Plan;
+    var chosen = Model.ClassId is { } id ? active.FirstOrDefault(c => c.Id == id) : null;
+}
+@if (!modal)
+{
+    <div class="page-head">
+        <div class="page-head__text">
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/timetables">Timetables</a></li><li>Create Table</li></ol>
+            <h1 class="page-title">Create Table</h1>
+        </div>
+    </div>
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/timetables/create" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon @(plan is null ? "" : "modal__icon--warning")">@Ui.Icon(plan is null ? "calendar" : "alert-triangle", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@(plan is null ? "Create Table" : $"Replace the timetable of {chosen?.Name}?")</h2>
+                <p class="modal__sub">A new, empty timetable for one class: @days school days × @PeriodService.NewTablePeriods period slots, no subjects or teachers.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body">
+            <div asp-validation-summary="All" class="validation-summary-errors" style="margin-bottom:14px"></div>
+            @if (plan is not null && chosen is not null)
+            {
+                @* Confirmation step: nothing has changed yet. The fingerprint makes sure exactly this plan is applied. *@
+                <input type="hidden" name="ClassId" value="@chosen.Id" />
+                <input type="hidden" name="Confirmation" value="@Model.Confirmation" />
+                <span data-form-notice="Review the replacement, then confirm. Nothing was changed yet." hidden></span>
+                <div class="notice notice--warning tt-replace">
+                    @Ui.Icon("alert-triangle")
+                    <div class="notice__body">
+                        <strong>The new timetable will replace the existing one.</strong>
+                        @plan.Summary
+                        @if (plan.LessonsNote is not null) { <p style="margin:8px 0 0"><strong style="display:inline">@plan.LessonsNote</strong></p> }
+                    </div>
+                </div>
+                @if (plan.Lessons.Count > 0)
+                {
+                    <details class="tt-replace__lessons" style="margin-top:12px" open="@(plan.Lessons.Count <= 8 ? "open" : null)">
+                        <summary class="muted">@Ui.Plural(plan.Lessons.Count, "current lesson", "current lessons") of @chosen.Name</summary>
+                        <ul style="margin:8px 0 0;padding-inline-start:18px;max-height:220px;overflow:auto">
+                            @foreach (var l in plan.Lessons) { <li dir="auto">@ScheduleRules.DayName(l.Day): @l.Subject <span class="muted">(@l.TeacherName)</span></li> }
+                        </ul>
+                    </details>
+                }
+                <p class="hint" style="margin:12px 0 0">
+                    Keep the current timetable instead? <a href="@CreateTableViewModel.TimetableHref(chosen.Id)">Open it</a> or
+                    <a href="@CreateTableViewModel.EditorHref(chosen.Id)">edit its periods</a>.
+                </p>
+            }
+            else if (active.Count == 0)
+            {
+                <div class="notice notice--info">
+                    @Ui.Icon("info")
+                    <div class="notice__body"><strong>There are no active classes.</strong> <a href="/classes">Add or activate a class</a> to create its timetable.</div>
+                </div>
+            }
+            else
+            {
+                <div class="field">
+                    <label class="label" for="tt-create-class">Class <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" id="tt-create-class" name="ClassId" required data-searchable data-autofocus>
+                        <option value="">Choose a class…</option>
+                        @foreach (var c in active)
+                        {
+                            <option value="@c.Id" selected="@(Model.ClassId == c.Id)"
+                                    data-note="@(c.HasTimetable ? "Has a timetable (" + c.Existing + ") — replaced after you confirm" : "No timetable yet")">@c.Name</option>
+                        }
+                    </select>
+                    <span class="hint">Any active class. If it already has a timetable, you are asked to confirm before it is replaced — nothing changes until then.</span>
+                </div>
+                <p class="hint" style="margin:12px 0 0">After it is created, its period editor opens: add or remove period slots and set each period's name, start and end time. Subjects and teachers are added later from the class timetable.</p>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (plan is not null && chosen is not null)
+            {
+                <a class="btn btn--secondary" href="/timetables/create" data-modal>@Ui.Icon("arrow-left")Choose another class</a>
+                @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+                else { <a class="btn btn--secondary" href="/timetables">Cancel</a> }
+                <button class="btn btn--danger" type="submit">@Ui.Icon("swap")Replace timetable</button>
+            }
+            else
+            {
+                @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+                else { <a class="btn btn--secondary" href="/timetables">Cancel</a> }
+                @if (active.Count > 0)
+                {
+                    <button class="btn btn--primary" type="submit">@Ui.Icon("plus")Create Table</button>
+                }
+            }
+        </div>
+    </form>
+</div>

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Data;
 using SchoolManagement.Web.Entities;
@@ -18,14 +18,30 @@ public sealed class StudentListQuery
 }
 
 public sealed record StudentRow(int Id, string FullName, int ClassId, string ClassName, bool ClassActive, DateTime CreatedAt, DateTime UpdatedAt,
-    string? NameMarker = null, string? HighlightColor = null, string? NameColor = null, string? Religion = null, string? SecondLanguage = null)
+    string? NameMarker = null, string? HighlightColor = null, string? NameColor = null, string? Religion = null, string? SecondLanguage = null,
+    DateOnly? BirthDate = null, DateOnly? AdmissionApplicationDate = null, DismissalMethod? DismissalMethod = null, string? ParentContactNumber = null)
 {
+    /// <summary>The parent's WhatsApp chat link, or null when the number is missing or its country is not certain.</summary>
+    public string? ParentWhatsApp => WhatsApp.Link(ParentContactNumber);
+
     /// <summary>The name exactly as the official name list printed it (with its mark).</summary>
     public string PrintedName => StudentMarks.Printed(FullName, NameMarker);
 
     /// <summary>The second language's name (French, Deutsch), or null.</summary>
     public string? SecondLanguageName => StudentMarks.LanguageName(SecondLanguage);
 }
+/// <summary>
+/// The student profile's details (birth date, admission application date, dismissal method, parent contact). Every value is
+/// optional; on an update the given values replace the stored ones (the edit form always sends the current values).
+/// </summary>
+public sealed class StudentDetailsInput
+{
+    public DateOnly? BirthDate { get; set; }
+    public DateOnly? AdmissionApplicationDate { get; set; }
+    public DismissalMethod? DismissalMethod { get; set; }
+    public string? ParentContactNumber { get; set; }
+}
+
 public sealed record StudentTransferHistoryRow(int Id, int StudentId, string StudentName, int FromClassId, string FromClassName, int ToClassId, string ToClassName, DateTime TransferredAt, string? TransferredBy);
 
 public interface IStudentService
@@ -40,8 +56,11 @@ public interface IStudentService
     Task<bool> AnySecondLanguageAsync(StudentListQuery query, CancellationToken ct = default);
     Task<IReadOnlyList<StudentRow>> ListAllAsync(StudentListQuery query, CancellationToken ct = default);
     Task<StudentRow?> GetAsync(int id, CancellationToken ct = default);
-    Task<ServiceResult> CreateAsync(string fullName, int classId, CancellationToken ct = default);
-    Task<ServiceResult> UpdateAsync(int id, string fullName, int classId, CancellationToken ct = default);
+    /// <param name="details">The profile details; null leaves them empty (imports, older callers).</param>
+    Task<ServiceResult> CreateAsync(string fullName, int classId, CancellationToken ct = default, StudentDetailsInput? details = null);
+
+    /// <param name="details">The profile details to store; null keeps the stored ones unchanged.</param>
+    Task<ServiceResult> UpdateAsync(int id, string fullName, int classId, CancellationToken ct = default, StudentDetailsInput? details = null);
     Task<ServiceResult> DeleteAsync(int id, CancellationToken ct = default);
     Task<StudentRow?> FindDuplicateAsync(string fullName, int classId, int? exceptId, CancellationToken ct = default);
     Task<ServiceResult> TransferClassAsync(int studentId, int targetClassId, string? operatorName, CancellationToken ct = default);
@@ -72,8 +91,10 @@ public sealed class StudentService(SchoolDbContext db) : IStudentService
     public Task<StudentRow?> GetAsync(int id, CancellationToken ct = default) =>
         Project(db.Students.AsNoTracking().Where(s => s.Id == id)).FirstOrDefaultAsync(ct);
 
-    public async Task<ServiceResult> CreateAsync(string fullName, int classId, CancellationToken ct = default)
+    public async Task<ServiceResult> CreateAsync(string fullName, int classId, CancellationToken ct = default, StudentDetailsInput? details = null)
     {
+        var detailCheck = ValidateDetails(details);
+        if (!detailCheck.Succeeded) return detailCheck;
         var check = await ValidateAsync(fullName, classId, null, null, ct);
         if (!check.Succeeded) return check;
 
@@ -83,15 +104,18 @@ public sealed class StudentService(SchoolDbContext db) : IStudentService
             NormalizedName = TextNormalizer.NameKey(fullName),
             SchoolClassId = classId,
         };
+        if (details is not null) ApplyDetails(entity, details);
         db.Students.Add(entity);
         if (!await TrySaveAsync(ct)) return Duplicate();
         return ServiceResult.Ok(entity.Id);
     }
 
-    public async Task<ServiceResult> UpdateAsync(int id, string fullName, int classId, CancellationToken ct = default)
+    public async Task<ServiceResult> UpdateAsync(int id, string fullName, int classId, CancellationToken ct = default, StudentDetailsInput? details = null)
     {
         var entity = await db.Students.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (entity is null) return ServiceResult.Fail("", "This student no longer exists.");
+        var detailCheck = ValidateDetails(details);
+        if (!detailCheck.Succeeded) return detailCheck;
 
         var check = await ValidateAsync(fullName, classId, id, entity.SchoolClassId, ct);
         if (!check.Succeeded) return check;
@@ -99,6 +123,7 @@ public sealed class StudentService(SchoolDbContext db) : IStudentService
         entity.FullName = TextNormalizer.CleanText(fullName);
         entity.NormalizedName = TextNormalizer.NameKey(fullName);
         entity.SchoolClassId = classId;
+        if (details is not null) ApplyDetails(entity, details);
         if (!await TrySaveAsync(ct)) return Duplicate();
         return ServiceResult.Ok(id);
     }
@@ -207,6 +232,35 @@ public sealed class StudentService(SchoolDbContext db) : IStudentService
         return result;
     }
 
+    /// <summary>Server-side rules of the profile details (the same messages as the form).</summary>
+    public static ServiceResult ValidateDetails(StudentDetailsInput? d)
+    {
+        var result = ServiceResult.Ok();
+        if (d is null) return result;
+        var today = SchoolWeek.Today;
+        if (d.BirthDate is { } birth && (birth < StudentProfileRules.EarliestBirth || birth > today))
+            result.AddError("BirthDate", $"Enter a birth date between {StudentProfileRules.Date(StudentProfileRules.EarliestBirth)} and today.");
+        if (d.AdmissionApplicationDate is { } applied && (applied < StudentProfileRules.EarliestApplication || applied > today.AddYears(1)))
+            result.AddError("AdmissionApplicationDate", $"Enter an application date between {StudentProfileRules.Date(StudentProfileRules.EarliestApplication)} and one year from today.");
+        else if (d.AdmissionApplicationDate is { } a && d.BirthDate is { } b && a < b)
+            result.AddError("AdmissionApplicationDate", "The application date cannot be before the birth date.");
+        if (d.DismissalMethod is { } m && !Enum.IsDefined(m)) result.AddError("DismissalMethod", "Choose Bus, Car or Not recorded.");
+        var phone = TextNormalizer.CleanPhone(d.ParentContactNumber);
+        if (phone.Length > Student.ParentContactMaxLength) result.AddError("ParentContactNumber", $"Use {Student.ParentContactMaxLength} characters or fewer.");
+        else if (!TextNormalizer.IsValidPhone(phone))
+            result.AddError("ParentContactNumber", "Enter a valid phone number: digits, spaces or dashes, optional + and country code at the start (6–15 digits).");
+        return result;
+    }
+
+    private static void ApplyDetails(Student entity, StudentDetailsInput d)
+    {
+        var phone = TextNormalizer.CleanPhone(d.ParentContactNumber);
+        entity.BirthDate = d.BirthDate;
+        entity.AdmissionApplicationDate = d.AdmissionApplicationDate;
+        entity.DismissalMethod = d.DismissalMethod;
+        entity.ParentContactNumber = phone.Length == 0 ? null : phone;
+    }
+
     private static ServiceResult Duplicate(string? name = null, string? className = null) =>
         ServiceResult.Fail("FullName", name is null
             ? "A student with this name is already in this class."
@@ -247,7 +301,8 @@ public sealed class StudentService(SchoolDbContext db) : IStudentService
 
     private static IQueryable<StudentRow> Project(IQueryable<Student> query) =>
         query.Select(s => new StudentRow(s.Id, s.FullName, s.SchoolClassId, s.SchoolClass.Name, s.SchoolClass.IsActive, s.CreatedAt, s.UpdatedAt,
-            s.NameMarker, s.HighlightColor, s.NameColor, s.Religion, s.SecondLanguage));
+            s.NameMarker, s.HighlightColor, s.NameColor, s.Religion, s.SecondLanguage,
+            s.BirthDate, s.AdmissionApplicationDate, s.DismissalMethod, s.ParentContactNumber));
 
     private async Task<bool> TrySaveAsync(CancellationToken ct)
     {

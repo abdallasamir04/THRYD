@@ -1,4 +1,4 @@
-@model ManagementProfileViewModel
+﻿@model ManagementProfileViewModel
 @{
     var m = Model.Member;
     var k = Model.Counts;
@@ -11,14 +11,16 @@
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/leadership">School Leadership</a></li><li dir="auto">@m.FullName</li></ol>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="@ManagementTeams.Href(m)">@ManagementTeams.Name(m)</a></li><li dir="auto">@m.FullName</li></ol>
         <div class="profile">
             <span class="avatar avatar--lg avatar--@Ui.Tone(m.FullName)" aria-hidden="true">@Ui.Initials(m.FullName)</span>
             <div>
                 <h1 class="page-title" dir="auto">@m.FullName</h1>
                 <p class="page-sub">
-                    <span class="badge @(m.HasPosition ? "badge--primary" : "badge--neutral")">@Ui.Icon(m.Position is { } p ? ManagementPositions.Icon(p) : "briefcase")@m.PositionName</span>
-                    <span>School Leadership</span>
+                    <span class="badge @(m.HasPosition ? "badge--primary" : m.PendingConfirmation ? "badge--warning" : "badge--neutral")">@Ui.Icon(m.Position is { } p ? ManagementPositions.Icon(p) : m.PendingConfirmation ? "alert-triangle" : "briefcase")@m.PositionName</span>
+                    @if (m.OtherPositions.Any()) { <span class="muted">+ @Ui.Plural(m.OtherPositions.Count(), "other position", "other positions")</span> }
+                    <span>@ManagementTeams.Name(m)</span>
+                    @if (!string.IsNullOrEmpty(m.ContactNumber)) { <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@m.ContactNumber</a> }
                 </p>
             </div>
         </div>
@@ -34,6 +36,11 @@
         <a class="btn btn--primary" href="/management/tasks/create?memberId=@m.Id" data-modal>@Ui.Icon("plus")New task</a>
     </div>
 </div>
+
+@if (Model.Org.Current.Count > 0 || Model.Org.Ended.Count > 0 || Model.Org.Flags.Count > 0)
+{
+    <partial name="~/Views/Shared/_StaffOrgPositions.cshtml" model="(Model.Org, m.Id, Model.CanManageOrg)" />
+}
 
 <ul class="summary-tiles summary-tiles--5" aria-label="Task totals">
     <li><a class="summary-tile" href="@baseUrl" aria-current="@Tile(null)"><span class="summary-tile__value num">@k.Total</span><span class="summary-tile__label">@Ui.Icon("list", "icon--sm")Assigned tasks</span></a></li>
@@ -62,7 +69,7 @@
             <div class="card__head"><h2 class="card__title" id="info-title">@Ui.Icon("user")Profile</h2></div>
             <div class="card__body">
                 <dl class="dl" style="font-size:0.875rem">
-                    <dt>Position</dt><dd>@if (m.Position is { } cp) { <a href="@ManagementPositions.Href(cp)">@m.PositionName</a> } else if (m.HasPosition) { @m.PositionName } else { <span class="faint">@m.PositionName</span> }</dd>
+                    <dt>Position</dt><dd>@if (m.Position is { } cp) { <a href="@ManagementPositions.Href(cp)">@m.PositionName</a> } else if (m.HasPosition) { @m.PositionName } else { <span class="faint">@m.PositionName</span> }@foreach (var other in m.OtherPositions) { <div class="muted">@other</div> }</dd>
                     <dt>Contact</dt>
                     <dd>@if (!string.IsNullOrEmpty(m.ContactNumber)) { <a class="phone-link" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone")@m.ContactNumber</a> } else { <span class="faint">Not set</span> }</dd>
                     <dt>Email</dt>

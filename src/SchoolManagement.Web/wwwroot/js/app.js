@@ -1,8 +1,8 @@
-/*
+﻿/*
  * School Management — client behaviour. No framework; jQuery is only here for the ASP.NET
  * unobtrusive validation that Razor forms use.
  *
- *  - Theme (light / dark / system) and the phone navigation drawer
+ *  - Theme (light / dark / system)
  *  - AJAX lists: filters, sorting and paging replace the table without a page reload
  *  - Modal forms: add / edit / details open in a dialog and save with fetch()
  *  - Confirm dialog for destructive actions, toast notifications, loading indicators
@@ -51,19 +51,55 @@
         });
     }
 
-    // ------------------------------------------------------------------ navigation drawer
-    function setNav(open) {
-        doc.body.classList.toggle("nav-open", open);
-        $$("[data-nav-toggle]").forEach(function (b) { b.setAttribute("aria-expanded", open ? "true" : "false"); });
-        if (open) { var first = doc.querySelector(".sidebar a, .sidebar button"); if (first) first.focus(); }
-    }
-    doc.addEventListener("click", function (e) {
-        if (e.target.closest("[data-nav-toggle]")) setNav(!doc.body.classList.contains("nav-open"));
-        else if (e.target.closest("[data-nav-close]")) setNav(false);
-    });
-    doc.addEventListener("keydown", function (e) {
-        if (e.key === "Escape" && doc.body.classList.contains("nav-open")) setNav(false);
-    });
+    // ------------------------------------------------------------------ sidebar strip (below 1024px)
+    // The sidebar is one horizontally scrollable row on narrow screens: it opens scrolled to the current page's link
+    // (only the row scrolls, never the page).
+    (function () {
+        var nav = doc.querySelector(".sidebar .nav");
+        var current = nav && nav.querySelector('.nav__link[aria-current="page"]');
+        if (!current || nav.scrollWidth <= nav.clientWidth) return;
+        nav.scrollLeft = Math.max(0, current.offsetLeft - nav.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2);
+    })();
+
+    // ------------------------------------------------------------------ Back button (global, in the layout's topbar)
+    // Rendered by _Layout on every page; there is no per-page opt-out. Returns to the previous page when the browser
+    // history has one from this application (and it is not this same page, e.g. after a form saved and reloaded it).
+    // Opened directly (bookmark, typed address, another site, new tab) it goes to its fallback instead: the page's own
+    // BackHref (data-back-fixed), else the page's parent — the last link of its breadcrumb — else the Dashboard. The
+    // fallback is always a path of this application, and the link's href is that fallback, so it also works without
+    // JavaScript. On the Dashboard opened directly there is nowhere to go back to: the button shows as unavailable.
+    (function () {
+        var back = doc.querySelector("a[data-back]");
+        if (!back) return;
+        if (!back.hasAttribute("data-back-fixed")) {
+            var crumbs = $$(".page-head .crumbs a[href]");
+            if (crumbs.length) back.setAttribute("href", crumbs[crumbs.length - 1].getAttribute("href"));
+        }
+        // Only same-origin fallbacks: anything else (absolute URL to another site, protocol-relative) becomes the Dashboard.
+        var fallback;
+        try { fallback = new URL(back.getAttribute("href") || "/", window.location.href); } catch (err) { fallback = null; }
+        if (!fallback || fallback.origin !== window.location.origin) { back.setAttribute("href", "/"); fallback = new URL("/", window.location.href); }
+        function samePage(url) { return url.pathname + url.search === window.location.pathname + window.location.search; }
+        function canGoBack() {
+            if (window.history.length < 2 || !doc.referrer) return false;
+            try {
+                var from = new URL(doc.referrer);
+                return from.origin === window.location.origin && !samePage(from);
+            } catch (err) { return false; }
+        }
+        var nowhere = !canGoBack() && samePage(fallback);
+        if (nowhere) {
+            back.setAttribute("aria-disabled", "true");
+            back.setAttribute("title", "No previous page to go back to");
+        }
+        back.addEventListener("click", function (e) {
+            if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+            if (nowhere) { e.preventDefault(); return; } // would only reload this same page
+            if (!canGoBack()) return; // follow the fallback link
+            e.preventDefault();
+            window.history.back();
+        });
+    })();
 
     // ------------------------------------------------------------------ PDF downloads
     // A download link holds its export path; on click it takes the page's current query string, so

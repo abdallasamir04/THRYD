@@ -1,0 +1,34 @@
+@model DutyHubViewModel
+@*
+    Duties → Duties (/duties/board): managing the school's duties — every Main Duty of the day as a card, the selected one's
+    full board below the cards (Sub-Duties, coverage points, staff, backups, schedules and reports). The board reloads itself
+    every 30 seconds (duties.js). Duty Audit is the other card of the Duties landing page. Add Duty (Super Admin) creates a
+    new Main Duty from scratch (MainDutyForm).
+*@
+@{
+    ViewData["Title"] = DutiesPages.BoardTitle;
+    ViewData["Nav"] = "DutyAudit";
+}
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="@DutiesPages.Landing">@DutiesPages.Title</a></li><li><span aria-current="page">@DutiesPages.BoardTitle</span></li></ol>
+        <h1 class="page-title">@DutiesPages.BoardTitle</h1>
+    </div>
+    <div class="page-head__actions">
+        @if (Model.CanAddDuty)
+        {
+            <a class="btn btn--primary" href="/duties/main/new" data-modal>@Ui.Icon("plus")Add Duty</a>
+        }
+        @if (Model.CanAudit)
+        {
+            <a class="btn btn--secondary" href="@DutiesPages.AuditUrl">@Ui.Icon("clipboard-check")Duty Audit</a>
+        }
+    </div>
+</div>
+
+<partial name="_DutiesSection" model="Model" />
+
+@section Scripts {
+    <script src="~/js/duties.js" asp-append-version="true"></script>
+}

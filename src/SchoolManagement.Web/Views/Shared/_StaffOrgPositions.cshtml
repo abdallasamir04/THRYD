@@ -1,0 +1,76 @@
+@model (SchoolManagement.Web.Services.OrgStructure.StaffOrgSummary Org, int StaffId, bool CanManage)
+@*
+    A staff profile's organizational positions (Positions & Assignments): every current position — primary first — with
+    its unit, tier, academic department, grade range, reporting line and scope; the ended ones as history; and any
+    data-quality warning on the record. Read from the person's own assignments.
+*@
+@{
+    var o = Model.Org;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+<section class="card org-profile" aria-labelledby="org-pos-title">
+    <div class="card__head">
+        <div>
+            <h2 class="card__title" id="org-pos-title">@Ui.Icon("layers")Organizational positions</h2>
+            <p class="card__sub">@(o.Current.Count == 0 ? "No current position in the organizational structure." : Ui.Plural(o.Current.Count, "current position", "current positions"))</p>
+        </div>
+        @if (Model.CanManage)
+        {
+            <a class="btn btn--secondary btn--sm" href="/management/org/assignments/create?staff=@Model.StaffId" data-modal>@Ui.Icon("plus", "icon--sm")Assign position</a>
+        }
+    </div>
+    <div class="card__body">
+        @foreach (var f in o.Flags)
+        {
+            <div class="notice notice--warning" style="margin-bottom:12px">@Ui.Icon("alert-triangle")<div class="notice__body"><strong>@OrgLabels.FlagKind(f.Kind)</strong>@f.Message</div></div>
+        }
+        @if (o.Current.Count == 0 && o.PendingConfirmation)
+        {
+            <p class="org-pending">@Ui.Icon("alert-triangle", "icon--sm")@OrgLabels.PendingPosition</p>
+        }
+        @if (o.Current.Count > 0)
+        {
+            <ul class="org-profile__list">
+                @foreach (var p in o.Current)
+                {
+                    <li class="org-profile__item@(p.IsPrimary ? " is-primary" : "")">
+                        <span class="org-role org-role--@OrgLabels.RoleTone(p.RoleType)" aria-hidden="true">@Ui.Icon(OrgLabels.RoleIcon(p.RoleType), "icon--sm")</span>
+                        <div class="org-profile__text">
+                            <div class="org-profile__title">
+                                <strong>@p.Title</strong>
+                                <span class="org-tag@(p.IsPrimary ? " org-tag--primary" : "")">@(p.IsPrimary ? "Primary position" : "Additional position")</span>
+                            </div>
+                            <dl class="org-profile__facts">
+                                <div><dt>Unit</dt><dd>@p.Unit</dd></div>
+                                <div><dt>Tier</dt><dd><a href="@OrgLabels.SectionHref(p.Section)">@p.Tier</a></dd></div>
+                                <div><dt>Leadership role</dt><dd>@OrgLabels.RoleType(p.RoleType)</dd></div>
+                                @if (p.GradeRange is not null) { <div><dt>Grade range</dt><dd>@p.GradeRange</dd></div> }
+                                @if (p.Departments.Count > 0) { <div><dt>Department</dt><dd>@string.Join(", ", p.Departments)</dd></div> }
+                                @if (p.Scope is not null) { <div><dt>Scope</dt><dd>@p.Scope</dd></div> }
+                                @if (p.ReportsToName is not null) { <div><dt>Reports to</dt><dd>@p.ReportsToName</dd></div> }
+                                <div><dt>Since</dt><dd>@p.StartDate.ToString("d MMM yyyy", c)</dd></div>
+                            </dl>
+                        </div>
+                        @if (Model.CanManage)
+                        {
+                            <a class="icon-btn icon-btn--primary" href="/management/org/assignments/@p.AssignmentId/edit" data-modal title="Edit assignment" aria-label="Edit @p.DisplayTitle">@Ui.Icon("pencil")</a>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+        @if (o.Ended.Count > 0)
+        {
+            <p class="dept-card__label" style="margin:16px 0 8px">Position history</p>
+            <ol class="timeline">
+                @foreach (var p in o.Ended)
+                {
+                    <li class="timeline__item timeline__item--withdrawn">
+                        <span class="timeline__when">@p.StartDate.ToString("d MMM yyyy", c) – @p.EndDate?.ToString("d MMM yyyy", c)</span>
+                        <span><strong>@p.DisplayTitle</strong> · @p.Unit@(p.EndReason is null ? "" : " — " + p.EndReason)</span>
+                    </li>
+                }
+            </ol>
+        }
+    </div>
+</section>

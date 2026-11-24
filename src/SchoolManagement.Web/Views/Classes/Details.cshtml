@@ -38,7 +38,7 @@
         <h1 class="page-title" dir="auto">@c.Name</h1>
         <p class="page-sub">
             @(Model.GroupTitle ?? "Outside the four stages")
-            · @c.StudentCount / @c.Capacity students
+            · @c.StudentCount / @c.Capacity students @ClassCapacity.Badge(c.StudentCount, c.Capacity)
             · @if (c.IsActive) { <span class="badge badge--success badge--dot">Active</span> } else { <span class="badge badge--neutral badge--dot">Inactive</span> }
         </p>
     </div>

@@ -24,12 +24,12 @@ public partial class HttpTests
     public async Task Sidebar_has_the_new_structure()
     {
         var sidebar = Sidebar(await fx.Factory.CreateClient().GetStringAsync("/"));
-        string[] ordered = ["href=\"/staff\"", "href=\"/students/hub\"", "href=\"/classes\"", "href=\"/duties/audit\""];
+        string[] ordered = ["href=\"/staff\"", "href=\"/students/hub\"", "href=\"/classes\"", "href=\"/duties\""];
         var at = ordered.Select(h => sidebar.IndexOf(h, StringComparison.Ordinal)).ToList();
         Assert.True(at.All(i => i > 0) && at.SequenceEqual(at.Order()), string.Join(",", at));
-        // Duties and Duty Audit are one entry: Duties & Audit.
-        Assert.DoesNotContain("href=\"/duties\"", sidebar);
-        Assert.Contains("<span>Duties &amp; Audit</span>", sidebar);
+        // Duties and Duty Audit are one entry, Duties: its landing page has the two cards.
+        Assert.DoesNotContain("href=\"/duties/audit\"", sidebar);
+        Assert.Contains("<span>Duties</span>", sidebar);
         Assert.Contains("<span>Students</span>", sidebar);
         // P.E. opens from Duties and the PE department page only.
         foreach (var gone in new[] { "href=\"/pe\"", "<span>P.E.</span>", "href=\"/belongings\"", "href=\"/arrivals\"", "Staff Duty Records", "view=duties", "<span>Belongings</span>", "Student Attendance" })
@@ -79,7 +79,7 @@ public partial class HttpTests
     public async Task Staff_duty_records_are_a_tab_of_Duty_Audit()
     {
         var (teacher, name) = await fx.NewTeacherAsync();
-        var client = fx.Factory.CreateClient();
+        var client = await fx.DutyAuditClientAsync();   // Duty Audit is open to authorized users only
 
         var audit = await client.GetStringAsync("/duties/audit");
         Assert.Contains("href=\"/duties/audit/staff-records\"", audit);
@@ -93,7 +93,7 @@ public partial class HttpTests
         Assert.Contains($"href=\"/staff/{teacher}\"", records);
         Assert.Contains("data-download=\"/staff/duty-records/pdf\"", records);
         Assert.Contains("href=\"/duties/audit/staff-records\" aria-current=\"page\"", records);
-        Assert.Contains("href=\"/duties/audit\" aria-current=\"page\"", Sidebar(records));
+        Assert.Contains("href=\"/duties\" aria-current=\"page\"", Sidebar(records));
 
         // AJAX search returns just the table.
         var ajax = new HttpRequestMessage(HttpMethod.Get, "/duties/audit/staff-records?search=" + Uri.EscapeDataString(name));
@@ -110,7 +110,7 @@ public partial class HttpTests
 
         // The staff profile is still reached from the records, and is highlighted under Duty Audit.
         var profile = await client.GetStringAsync($"/staff/{teacher}");
-        Assert.Contains("href=\"/duties/audit\" aria-current=\"page\"", Sidebar(profile));
+        Assert.Contains("href=\"/duties\" aria-current=\"page\"", Sidebar(profile));
     }
 
     // ---------- Classes: stage rules ----------

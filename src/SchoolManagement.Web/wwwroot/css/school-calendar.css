@@ -151,12 +151,7 @@
     .sc-day { height: 36px; }
 }
 @media print {
-    .sc-admin, .sc-addyear, .page-head__actions, .sc-load { display: none !important; }
+    .sc-admin, .page-head__actions, .sc-load { display: none !important; }
     .sc-month { break-inside: avoid; box-shadow: none; }
 }
 
-/* + Add year at the bottom of the calendar: one button, centred under the months, no card around it. */
-.sc-addyear { display: flex; justify-content: center; margin: 28px 0 8px; }
-@media (max-width: 640px) {
-    .sc-addyear .btn { width: 100%; justify-content: center; }
-}

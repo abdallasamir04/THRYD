@@ -1,0 +1,31 @@
+@model (IReadOnlyList<SchoolManagement.Web.Services.OrgStructure.OrgFlagRow> Flags, bool CanManage)
+@*
+    Data-quality warnings that need a person's decision (job title unreadable in the source, a phone number shared by two
+    people). Shown until an authorized administrator marks them resolved; nothing is merged or invented meanwhile.
+*@
+@if (Model.Flags.Count > 0)
+{
+    <section class="notice notice--warning org-flags" aria-labelledby="org-flags-title">
+        @Ui.Icon("alert-triangle")
+        <div class="notice__body">
+            <strong id="org-flags-title">@Ui.Plural(Model.Flags.Count, "record needs", "records need") review</strong>
+            <ul class="org-flags__list">
+                @foreach (var f in Model.Flags)
+                {
+                    <li>
+                        <span class="badge badge--warning">@OrgLabels.FlagKind(f.Kind)</span>
+                        <a href="@f.ProfileHref" dir="auto">@f.StaffName</a> — @f.Message
+                        @if (Model.CanManage)
+                        {
+                            <form action="/management/org/flags/@f.Id/resolve" method="post" data-ajax-form class="org-flags__resolve"
+                                  data-confirm="Mark this warning about @f.StaffName as resolved? Do this only after the record has been checked." data-confirm-title="Resolve warning?" data-confirm-button="Mark resolved">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn--ghost btn--sm" type="submit">@Ui.Icon("check", "icon--sm")Mark resolved</button>
+                            </form>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+    </section>
+}

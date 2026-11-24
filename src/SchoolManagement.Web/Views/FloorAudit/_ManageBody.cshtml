@@ -1,6 +1,6 @@
 @model ManagePage
 @{
-    var can = Model.User.CanManage && Model.User.HasIdentity;
+    var can = Model.User.CanAdminister;
     var tab = Model.Tab;
 }
 <nav class="segmented fa-manage-tabs" aria-label="Configuration">
@@ -172,7 +172,7 @@ else if (tab == "access")
         <div class="card__head">
             <div>
                 <h2 class="card__title" id="fa-access-title">@Ui.Icon("users")Who may inspect and record</h2>
-                <p class="card__sub">Managers configure Floor Audit and can correct records. Inspectors complete audit rounds on their floor (or every floor) and, when allowed, record student movements. Everyone else can view.</p>
+                <p class="card__sub">Managers configure Floor Management and can correct records. Inspectors complete audit rounds on their floor (or every floor) and, when allowed, record student movements. Everyone else can view.</p>
             </div>
             @if (can) { <a class="btn btn--primary btn--sm" href="/floor-audit/manage/access/new" data-modal>@Ui.Icon("plus", "icon--sm")Give access</a> }
         </div>

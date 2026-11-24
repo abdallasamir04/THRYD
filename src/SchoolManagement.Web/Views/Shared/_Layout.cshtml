@@ -1,6 +1,6 @@
-@*
+﻿@*
     Application shell: grouped sidebar (brand + navigation) next to the workspace (glass topbar + page).
-    Below 1024px the sidebar is an off-canvas drawer opened by the topbar's menu button.
+    Below 1024px the sidebar sits above the page as a compact strip (brand + one scrollable row of the same links).
     Planned modules (Daily Operations, School QA) are shown muted with "Soon": no link, no route.
 *@
 @inject ISettingsService Settings
@@ -8,6 +8,8 @@
 @inject ICurrentUser CurrentUser
 @{
     var operatorName = CurrentUser.Name;
+    // Super Admin (Administration mode: no "Working as" identity) — full access, "Working as" optional.
+    var superAdmin = CurrentUser.IsSuperAdmin;
     var profile = await Settings.GetProfileAsync();
     var counts = await Dashboard.NavCountsAsync();
     var current = ViewData["Nav"] as string ?? "";
@@ -15,8 +17,8 @@
     if (current is "Departments" or "StaffMembers" or "Teachers" or "Workload" or "Timetable" or "Management") current = "Staff";
     // Belongings, Student Attendance and Behavioural / Discipline open from the Students landing page.
     if (current is "Belongings" or "Arrivals" or "Attendance" or "Behaviour") current = "Students";
-    // Duties & Audit is the one entry for duties: the duty pages, P.E. / activities (from its cards), Staff Duty Records
-    // and staff duty profiles / evaluations all highlight it.
+    // Duties is the one entry for duties (its landing page: Duties and Duty Audit): the duty pages, P.E. / activities (from
+    // its cards), Duty Audit, Staff Duty Records and staff duty profiles / evaluations all highlight it.
     if (current is "StaffDuty" or "MorningDuty" or "PE") current = "DutyAudit";
     var title = ViewData["Title"] as string ?? "Dashboard";
 
@@ -37,8 +39,8 @@
         }),
         ("Daily Operations", new (string, string?, string, string, int?)[]
         {
-            ("DutyAudit", "/duties/audit", "Duties & Audit", "shield-check", null),
-            ("FloorAudit", "/floor-audit", "Floor Audit", "school", null),
+            ("DutyAudit", "/duties", "Duties", "shield-check", null),
+            ("FloorAudit", "/floor-management", "Floor Management", "school", null),
             ("Tasks", "/tasks", "Tasks", "list-checks", null),
         }),
         ("Data", new (string, string?, string, string, int?)[]
@@ -48,6 +50,9 @@
         ("Coming next", new (string, string?, string, string, int?)[]
         {
             ("SchoolQA", null, "School QA", "clipboard-check", null),
+            // Upcoming (no page or route yet): shown disabled with a "Soon" badge, like School QA.
+            ("PTC", null, "PTC", "users", null),
+            ("Admission", null, "Admission", "user-plus", null),
         }),
         ("System", new (string, string?, string, string, int?)[]
         {
@@ -57,6 +62,14 @@
     var group = current == "Dashboard" ? "Overview"
         : groups.FirstOrDefault(g => g.Items.Any(i => i.Key == current)).Title ?? "";
     var flash = TempData[SchoolManagement.Web.Controllers.AppController.ToastKey] as string;
+
+    // Global Back button (topbar) — a permanent part of the THRYD header, rendered on EVERY page that uses this layout.
+    // There is deliberately no per-page switch to hide it: a page's own contextual back link ("All classes", "Back to
+    // teachers"…) is shown in addition to it, never instead of it. A page may only set ViewData["BackButtonHref"] to choose
+    // where Back goes when there is no previous page of this app in the browser history. app.js (Back button section)
+    // returns to the previous page of this app when there is one; otherwise to that fallback, else the page's parent (its
+    // last breadcrumb link), else the Dashboard — it never leaves the application.
+    var backHref = ViewData["BackButtonHref"] as string;
 }
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -72,6 +85,9 @@
     <link rel="stylesheet" href="~/css/staff.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/thryd-ui.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/floor-audit.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/org-structure.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/student-profile.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/floor-management.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/skeleton.css" asp-append-version="true" />
     <link rel="icon" type="image/png" href="~/img/logo-mark.png" asp-append-version="true" />
     @await RenderSectionAsync("Head", required: false)
@@ -88,7 +104,6 @@
                     <img class="brand__logo brand__logo--light" src="~/img/logo-light.png" asp-append-version="true" alt="THRYD" width="640" height="123" />
                     <img class="brand__logo brand__logo--dark" src="~/img/logo-dark.png" asp-append-version="true" alt="THRYD" width="640" height="123" />
                 </a>
-                <button class="icon-btn sidebar__close" type="button" data-nav-close aria-label="Close navigation">@Ui.Icon("x")</button>
             </div>
 
             <nav class="nav" aria-label="Sections">
@@ -111,7 +126,7 @@
                                 <li>
                                     @if (href is null)
                                     {
-                                        <span class="nav__link nav__link--planned">
+                                        <span class="nav__link nav__link--planned" aria-disabled="true">
                                             @Ui.Icon(icon)<span>@label</span>
                                             <span class="nav__soon">Soon<span class="visually-hidden"> — not available yet</span></span>
                                         </span>
@@ -138,14 +153,23 @@
                 <p><strong>Saved to SQL Server</strong>Every change and import is stored in the school database.</p>
             </div>
         </aside>
-        <div class="scrim" data-nav-close aria-hidden="true"></div>
 
         <div class="main">
             <header class="topbar">
                 <div class="topbar__start">
-                    <button class="icon-btn icon-btn--bordered topbar__menu" type="button" data-nav-toggle aria-expanded="false" aria-controls="sidebar">
-                        @Ui.Icon("menu")<span class="visually-hidden">Open navigation</span>
-                    </button>
+                    @* Global Back button: always rendered (see the note at the top of this file). Do not wrap it in a condition. *@
+                    @if (backHref is not null)
+                    {
+                        <a class="btn btn--secondary btn--sm topbar__back" href="@backHref" data-back data-back-fixed title="Back to the previous page">
+                            @Ui.Icon("arrow-left")<span class="topbar__back-text">Back</span>
+                        </a>
+                    }
+                    else
+                    {
+                        <a class="btn btn--secondary btn--sm topbar__back" href="/" data-back title="Back to the previous page">
+                            @Ui.Icon("arrow-left")<span class="topbar__back-text">Back</span>
+                        </a>
+                    }
                     <p class="trail">
                         <span class="trail__group">@group</span>
                         <span class="trail__sep" aria-hidden="true">/</span>
@@ -162,13 +186,26 @@
                         @Ui.Icon("moon", "icon--moon")@Ui.Icon("sun", "icon--sun")
                     </button>
                     <span class="topbar__divider" aria-hidden="true"></span>
-                    <a class="account" href="/settings#operator" title="@(operatorName is null ? "Choose who you are working as" : "Working as — self-selected, not a sign-in")">
-                        <span class="avatar avatar--@Ui.Tone(operatorName ?? profile.SchoolName)" aria-hidden="true">@Ui.Initials(operatorName ?? profile.SchoolName)</span>
-                        <span class="account__text">
-                            <span class="account__name" dir="auto">@(operatorName ?? "Administration")</span>
-                            <span class="account__role">@(operatorName is null ? "Set “Working as”" : "Working as · not verified")</span>
-                        </span>
-                    </a>
+                    @if (superAdmin)
+                    {
+                        <a class="account" href="/settings#operator" title="Super Admin — full access. “Working as” is optional (Settings).">
+                            <span class="avatar avatar--violet" aria-hidden="true">SA</span>
+                            <span class="account__text">
+                                <span class="account__name">Super Admin</span>
+                                <span class="account__role">Full access</span>
+                            </span>
+                        </a>
+                    }
+                    else
+                    {
+                        <a class="account" href="/settings#operator" title="@(operatorName is null ? "Choose who you are working as" : "Working as — self-selected, not a sign-in")">
+                            <span class="avatar avatar--@Ui.Tone(operatorName ?? profile.SchoolName)" aria-hidden="true">@Ui.Initials(operatorName ?? profile.SchoolName)</span>
+                            <span class="account__text">
+                                <span class="account__name" dir="auto">@(operatorName ?? "Administration")</span>
+                                <span class="account__role">@(operatorName is null ? "Set “Working as”" : "Working as · not verified")</span>
+                            </span>
+                        </a>
+                    }
                 </div>
             </header>
 

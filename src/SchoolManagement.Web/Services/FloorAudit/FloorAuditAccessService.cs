@@ -5,8 +5,8 @@ using SchoolManagement.Web.Entities;
 namespace SchoolManagement.Web.Services;
 
 /// <summary>
-/// What the person working in this browser may do in Floor Audit. The identity is the application's current user
-/// ("Working as" until sign-in exists). Managers: current Management Team members and staff given the Floor Audit
+/// What the person working in this browser may do in Floor Management. The identity is the application's current user
+/// ("Working as" until sign-in exists). Managers: current Management Team members and staff given the Floor Management
 /// Manager role. Inspectors: staff given the Inspector role for a floor (or every floor), optionally allowed to record
 /// student movements. Everyone else can view.
 /// </summary>
@@ -16,8 +16,19 @@ public sealed record FloorAuditUser(
 {
     public static readonly FloorAuditUser Anonymous = new(null, null, false, false, false, new HashSet<int>(), false, new HashSet<int>());
 
+    /// <summary>
+    /// The Super Admin (no staff identity): a Floor Management administrator for administration — configuration, access, settings,
+    /// voiding movements. Inspections and student movements still need a staff member chosen under "Working as", because
+    /// every one of them is recorded with the person who made it.
+    /// </summary>
+    public static readonly FloorAuditUser SuperAdmin = new(null, null, true, false, false, new HashSet<int>(), false, new HashSet<int>()) { IsSuperAdmin = true };
+
+    public bool IsSuperAdmin { get; init; }
     public bool HasIdentity => StaffId is not null;
     public bool CanManage => IsManager;
+
+    /// <summary>May change the configuration, access and settings and void movements: a manager with a staff identity, or the Super Admin.</summary>
+    public bool CanAdminister => IsManager && (HasIdentity || IsSuperAdmin);
     public bool CanInspect(int floorId) => IsManager || InspectsAll || InspectFloors.Contains(floorId);
     public bool CanInspectAny => IsManager || InspectsAll || InspectFloors.Count > 0;
 
@@ -25,14 +36,14 @@ public sealed record FloorAuditUser(
     public bool CanRecordMovements(int? floorId) => IsManager || MovementsAll || (floorId is { } f && MovementFloors.Contains(f));
     public bool CanRecordAnyMovement => IsManager || MovementsAll || MovementFloors.Count > 0;
 
-    public string RoleLabel => IsManager ? (ManagerByPosition ? "Manager (Management Team)" : "Floor Audit Manager")
+    public string RoleLabel => IsSuperAdmin ? "Super Admin" : IsManager ? (ManagerByPosition ? "Manager (Management Team)" : "Floor Management Administrator")
         : CanInspectAny ? "Floor Inspector" : "View only";
 }
 
-/// <summary>A person who can be chosen under "Working as", with what they may do in Floor Audit.</summary>
+/// <summary>A person who can be chosen under "Working as", with what they may do in Floor Management.</summary>
 public sealed record IdentityOption(int Id, string Name, string Role);
 
-/// <summary>"Working as" choices grouped by Floor Audit role: managers, inspectors, everyone else (view only).</summary>
+/// <summary>"Working as" choices grouped by Floor Management role: managers, inspectors, everyone else (view only).</summary>
 public sealed record IdentityOptions(IReadOnlyList<IdentityOption> Managers, IReadOnlyList<IdentityOption> Inspectors, IReadOnlyList<IdentityOption> Others);
 
 public interface IFloorAuditAccessService
@@ -47,7 +58,7 @@ public sealed class FloorAuditAccessService(SchoolDbContext db, ICurrentUser cur
     private FloorAuditUser? _current;
 
     public async Task<FloorAuditUser> CurrentAsync(CancellationToken ct = default) =>
-        _current ??= await ForStaffAsync(currentUser.StaffId, currentUser.Name, ct);
+        _current ??= currentUser.IsSuperAdmin ? FloorAuditUser.SuperAdmin : await ForStaffAsync(currentUser.StaffId, currentUser.Name, ct);
 
     public async Task<IdentityOptions> IdentityOptionsAsync(CancellationToken ct = default)
     {
@@ -56,7 +67,7 @@ public sealed class FloorAuditAccessService(SchoolDbContext db, ICurrentUser cur
         var roles = await db.FloorAuditAccess.AsNoTracking().Where(a => a.EndedAt == null)
             .Select(a => new { a.StaffMemberId, a.Role, Floor = a.Floor!.Name, a.CanRecordMovements }).ToListAsync(ct);
         var managers = staff.Where(x => positions.Contains(x.Id) || roles.Any(r => r.StaffMemberId == x.Id && r.Role == FloorAuditRole.Manager))
-            .Select(x => new IdentityOption(x.Id, x.FullName, positions.Contains(x.Id) ? "Manager · Management Team" : "Floor Audit Manager")).ToList();
+            .Select(x => new IdentityOption(x.Id, x.FullName, positions.Contains(x.Id) ? "Manager · Management Team" : "Floor Management Administrator")).ToList();
         var managerIds = managers.Select(m => m.Id).ToHashSet();
         var inspectors = staff.Where(x => !managerIds.Contains(x.Id) && roles.Any(r => r.StaffMemberId == x.Id && r.Role == FloorAuditRole.Inspector))
             .Select(x =>
@@ -87,7 +98,7 @@ public sealed class FloorAuditAccessService(SchoolDbContext db, ICurrentUser cur
     }
 }
 
-/// <summary>Writes Floor Audit's audit trail (added to the context; saved with the change it describes).</summary>
+/// <summary>Writes Floor Management's audit trail (added to the context; saved with the change it describes).</summary>
 public static class FloorAuditLog
 {
     public static void Add(SchoolDbContext db, ICurrentUser user, string entity, int? entityId, int? floorId, string action, string text) =>

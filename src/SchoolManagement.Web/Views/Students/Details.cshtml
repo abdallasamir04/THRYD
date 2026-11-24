@@ -43,6 +43,14 @@
                     @if (StudentMarks.SafeColor(Model.NameColor) is { } nc) { <span>Name printed in @nc.</span> }
                 </dd>
             }
+            <dt>Birth date</dt>
+            <dd>@if (Model.BirthDate is { } birth) { @StudentProfileRules.Date(birth) <span class="muted">· @StudentProfileRules.Age(birth, SchoolWeek.Today) years</span> } else { <span class="faint">Not recorded</span> }</dd>
+            <dt>Admission application</dt>
+            <dd>@if (Model.AdmissionApplicationDate is { } applied) { @StudentProfileRules.Date(applied) } else { <span class="faint">Not recorded</span> }</dd>
+            <dt>Dismissal method</dt>
+            <dd>@if (Model.DismissalMethod is { } dm) { <span class="student-dismissal student-dismissal--@dm.ToString().ToLowerInvariant()">@Ui.Icon(StudentProfileRules.Icon(dm), "icon--sm")@StudentProfileRules.Dismissal(dm)</span> } else { <span class="faint">Not recorded</span> }</dd>
+            <dt>Parent contact</dt>
+            <dd class="student-contact"><partial name="~/Views/Students/_ParentContact.cshtml" model="(Model.ParentContactNumber, false)" /></dd>
             <dt>Class</dt>
             <dd>
                 <a href="/students?classId=@Model.ClassId">@Model.ClassName</a>

@@ -1,4 +1,5 @@
 @model DutyDetailsViewModel
+@inject SchoolManagement.Web.Services.IDutyAuditAccess DutyAudit
 @{
     var d = Model.Duty;
     var modal = Context.Request.IsAjax();
@@ -31,7 +32,10 @@
                 <span class="duty__role">Follow-up</span>
                 <span class="badge @(d.FollowUpRequired ? "badge--warning" : "badge--neutral")">@(d.FollowUpRequired ? "Required" : "Not required")</span>
             </div>
-            <a class="btn btn--secondary btn--sm" href="/duties/@d.Id/audit-record" data-modal>@Ui.Icon("clipboard-check", "icon--sm")Edit audit</a>
+            @if (await DutyAudit.CanAccessAsync())
+            {
+                <a class="btn btn--secondary btn--sm" href="/duties/@d.Id/audit-record" data-modal>@Ui.Icon("clipboard-check", "icon--sm")Edit audit</a>
+            }
         </div>
 
         <dl class="dl">

@@ -1,4 +1,5 @@
 @model DutyRow
+@inject SchoolManagement.Web.Services.IDutyAuditAccess DutyAudit
 @*
     One duty with its workflow controls:
     assigned staff → attendance → (absent) backup request → accept / decline → backup attendance.
@@ -137,7 +138,10 @@
     <footer class="duty__foot">
         <div class="duty__actions">
             <a class="btn btn--ghost btn--sm" href="/duties/@d.Id" data-modal>@Ui.Icon("eye", "icon--sm")Details &amp; staff</a>
-            <a class="btn btn--ghost btn--sm" href="/duties/@d.Id/audit-record" data-modal>@Ui.Icon("clipboard-check", "icon--sm")Audit</a>
+            @if (await DutyAudit.CanAccessAsync())
+            {
+                <a class="btn btn--ghost btn--sm" href="/duties/@d.Id/audit-record" data-modal>@Ui.Icon("clipboard-check", "icon--sm")Audit</a>
+            }
         </div>
         <div class="row-actions">
             <a class="icon-btn icon-btn--primary" href="/duties/@d.Id/edit" data-modal title="Edit duty" aria-label="Edit duty">@Ui.Icon("pencil")</a>

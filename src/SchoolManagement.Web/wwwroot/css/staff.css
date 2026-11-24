@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Staff structure: Academic departments (cards, members, HOD), Management Team (position board,
  * profiles) and Management Team tasks. Uses the design tokens from app.css.
  */
@@ -19,8 +19,6 @@
 :root[data-theme="dark"] .brand__logo--dark { display: block; }
 :root[data-theme="dark"] .brand__logo--light { display: none; }
 .brand--logo .brand__text { padding-inline-start: 2px; }
-/* The drawer's close button is for the phone menu only (.icon-btn's display was overriding its hide rule). */
-@media (min-width: 1025px) { .sidebar__close { display: none; } }
 
 /* Duty sections: grade line under the title */
 .duty-component__grades { display: inline-flex; align-items: center; gap: 6px; margin: -2px 0 2px; padding: 2px 10px; border-radius: var(--radius-pill);

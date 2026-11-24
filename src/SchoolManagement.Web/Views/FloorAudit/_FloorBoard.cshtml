@@ -65,7 +65,7 @@
         @if (Model.Classrooms.Count == 0)
         {
             <div class="empty empty--boxed fa-empty"><span class="empty__icon">@Ui.Icon("door")</span><p class="empty__title">No classrooms on this floor</p>
-                <p class="empty__text">@(Model.User.CanManage ? "Assign the classes taught on this floor in Manage." : "A Floor Audit manager assigns classes to floors.")</p>
+                <p class="empty__text">@(Model.User.CanManage ? "Assign the classes taught on this floor in Manage." : "A Floor Management administrator assigns classes to floors.")</p>
                 @if (Model.User.CanManage) { <div class="empty__actions"><a class="btn btn--secondary btn--sm" href="/floor-audit/manage/classrooms/assign?floor=@Model.Floor.Id" data-modal>@Ui.Icon("plus", "icon--sm")Assign classes</a></div> }</div>
         }
         else
@@ -105,7 +105,7 @@
                 }
                 else
                 {
-                    <button class="btn btn--primary btn--sm" type="button" disabled title="@(Model.User.HasIdentity ? "Your Floor Audit role cannot record movements for this floor." : "Choose “Working as” first (above).")">@Ui.Icon("plus", "icon--sm")Record Student Movement</button>
+                    <button class="btn btn--primary btn--sm" type="button" disabled title="@(Model.User.HasIdentity ? "Your Floor Management role cannot record movements for this floor." : "Choose “Working as” first (above).")">@Ui.Icon("plus", "icon--sm")Record Student Movement</button>
                 }
                 <a class="btn btn--secondary btn--sm" href="/floor-audit/movements?floor=@Model.Floor.Id">Outside now</a>
                 <a class="btn btn--ghost btn--sm" href="/floor-audit/movements/history?floor=@Model.Floor.Id&amp;from=@date&amp;to=@date">History</a>

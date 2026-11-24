@@ -1,0 +1,49 @@
+@model FloorAssignFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = $"Assign staff — {Model.FloorName}";
+    if (modal) { Layout = null; } else { ViewData["Title"] = heading; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/floor-management/floors/@Model.FloorId/assign" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("user-plus", "icon--lg")</span>
+            <div><h2 class="modal__title">@heading</h2><p class="modal__sub">An existing staff member takes a role on the floor. A new Stage Coordinator or Floor Supervisor replaces the current one (kept in the history).</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="Role">Role</label>
+                <select class="select" id="Role" name="Role">
+                    @foreach (var r in Enum.GetValues<FloorRole>()) { <option value="@r" selected="@(Model.Role == r)">@SchoolManagement.Web.Services.FloorManagement.FloorManagementService.Label(r)</option> }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="StaffMemberId">Staff member <span class="req">*</span></label>
+                <select class="select" id="StaffMemberId" name="StaffMemberId" data-searchable required>
+                    <option value="">Choose a staff member…</option>
+                    @foreach (var s in Model.Staff) { <option value="@s.Id" selected="@(Model.StaffMemberId == s.Id)" data-note="@s.Note">@s.Name</option> }
+                </select>
+            </div>
+            <div class="field field--full">
+                <label class="label" for="Coverage">Coverage / grade range</label>
+                <input class="input" id="Coverage" name="Coverage" value="@Model.Coverage" maxlength="60" placeholder="e.g. G2A – G6B" />
+            </div>
+            <div class="field field--full">
+                <span class="label" id="fm-classes">Classes (required for a Matron)</span>
+                <div class="check-chips" role="group" aria-labelledby="fm-classes">
+                    @foreach (var c in Model.Classes)
+                    {
+                        <label class="check-chip"><input type="checkbox" name="ClassIds" value="@c.Id" checked="@Model.ClassIds.Contains(c.Id)" /><span>@c.Name</span></label>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-management/floors/@Model.FloorId">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Assign</button>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,35 @@
+@model (SchoolManagement.Web.Services.FloorManagement.FloorPerson Person, bool CanManage, int FloorId)
+@* One floor team member: name (profile link), position, phone(s) with a call / WhatsApp action, classes or coverage. *@
+@{
+    var p = Model.Person;
+    var wa = WhatsApp.Link(p.Phone);
+}
+<article class="fm-person fm-person--@p.Role.ToString().ToLowerInvariant()">
+    <span class="avatar avatar--@Ui.Tone(p.Name)" aria-hidden="true">@Ui.Initials(p.Name)</span>
+    <div class="fm-person__text">
+        <a class="fm-person__name" href="@p.ProfileHref" dir="auto">@p.Name</a>
+        <span class="fm-person__role">@SchoolManagement.Web.Services.FloorManagement.FloorManagementService.Label(p.Role)@(p.Role == FloorRole.FloatingMatron ? " · coverage across the floor" : "")</span>
+        @if (p.Scope.Length > 0)
+        {
+            <span class="fm-person__scope">@Ui.Icon(p.Classes.Count > 0 ? "door" : "graduation-cap", "icon--sm")@(p.Classes.Count > 0 ? "Classes: " : "Coverage: ")@p.Scope</span>
+        }
+        <span class="fm-person__phones">
+            @foreach (var phone in new[] { p.Phone, p.Phone2 }.Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                var link = WhatsApp.Link(phone);
+                <a class="phone-link" href="tel:@phone!.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")@phone</a>
+                @if (link is not null) { <a class="student-wa" href="@link" target="_blank" rel="noopener noreferrer" title="WhatsApp @phone" aria-label="WhatsApp @p.Name (@phone)">@Ui.Icon("message-circle", "icon--sm")</a> }
+            }
+            @if (string.IsNullOrWhiteSpace(p.Phone)) { <span class="faint">No phone</span> }
+        </span>
+    </div>
+    @if (Model.CanManage)
+    {
+        <form action="/floor-management/assignments/@p.AssignmentId/end" method="post" data-ajax-form
+              data-confirm="End @p.Name's role as @SchoolManagement.Web.Services.FloorManagement.FloorManagementService.Label(p.Role)? It is kept in the history." data-confirm-title="End assignment?" data-confirm-button="End">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="floor" value="@Model.FloorId" />
+            <button class="icon-btn icon-btn--danger" type="submit" title="End assignment" aria-label="End the assignment of @p.Name">@Ui.Icon("x-circle")</button>
+        </form>
+    }
+</article>

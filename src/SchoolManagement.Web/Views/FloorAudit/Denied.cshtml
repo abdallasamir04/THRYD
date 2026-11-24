@@ -1,9 +1,9 @@
 @model string
-@* Shown (403) when the current person may not open a Floor Audit form; the reason says who can. *@
+@* Shown (403) when the current person may not open a Floor Management form; the reason says who can. *@
 @{
     var modal = Context.Request.IsAjax();
     if (modal) { Layout = null; }
-    else { ViewData["Title"] = "Not allowed · Floor Audit"; ViewData["Nav"] = "FloorAudit"; }
+    else { ViewData["Title"] = "Not allowed · Floor Management"; ViewData["Nav"] = "FloorAudit"; }
 }
 <div class="@(modal ? "modal__content" : "card form-page")">
     <div class="modal__head">
@@ -11,6 +11,6 @@
         <div><h2 class="modal__title">Not allowed</h2><p class="modal__sub">@Model</p></div>
     </div>
     <div class="modal__foot">
-        @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Close</button> } else { <a class="btn btn--secondary" href="/floor-audit">Back to Floor Audit</a> }
+        @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Close</button> } else { <a class="btn btn--secondary" href="/floor-audit">Back to Floor Management</a> }
     </div>
 </div>

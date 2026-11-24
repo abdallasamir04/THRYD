@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Web.Entities;
 
 namespace SchoolManagement.Web.Data;
@@ -16,6 +16,7 @@ public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) 
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<DutyAssignment> DutyAssignments => Set<DutyAssignment>();
+    public DbSet<DutyMainDuty> DutyMainDuties => Set<DutyMainDuty>();
     public DbSet<DutySection> DutySections => Set<DutySection>();
     public DbSet<DutySectionSchedule> DutySectionSchedules => Set<DutySectionSchedule>();
     public DbSet<DutyMainSchedule> DutyMainSchedules => Set<DutyMainSchedule>();
@@ -88,6 +89,9 @@ public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) 
     {
         ConfigureActivities(b);
         ConfigureFloorAudit(b);
+        ConfigureOrgStructure(b);
+        ConfigureTeachingRoster(b);
+        ConfigureFloorManagement(b);
 
         b.Entity<SchoolClass>(e =>
         {
@@ -109,7 +113,12 @@ public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) 
                     "[HighlightColor] IS NULL OR [HighlightColor] LIKE '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
                 t.HasCheckConstraint("CK_Students_NameColor",
                     "[NameColor] IS NULL OR [NameColor] LIKE '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
+                t.HasCheckConstraint("CK_Students_DismissalMethod", "[DismissalMethod] IS NULL OR [DismissalMethod] BETWEEN 1 AND 2");
+                // A family cannot apply before the child is born.
+                t.HasCheckConstraint("CK_Students_ApplicationAfterBirth",
+                    "[BirthDate] IS NULL OR [AdmissionApplicationDate] IS NULL OR [AdmissionApplicationDate] >= [BirthDate]");
             });
+            e.Property(x => x.ParentContactNumber).HasMaxLength(Student.ParentContactMaxLength).IsUnicode(false);
             e.Property(x => x.FullName).HasMaxLength(Student.NameMaxLength).IsRequired();
             e.Property(x => x.NameMarker).HasMaxLength(StudentMarks.MarkerMaxLength);
             e.Property(x => x.HighlightColor).HasMaxLength(StudentMarks.ColorLength).IsUnicode(false);
@@ -148,6 +157,7 @@ public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) 
             e.Property(x => x.JobTitle).HasMaxLength(StaffMember.JobTitleMaxLength);
             e.Property(x => x.ContactNumber).HasMaxLength(StaffMember.ContactMaxLength).IsUnicode(false);
             e.Property(x => x.NormalizedContact).HasMaxLength(StaffMember.ContactMaxLength).IsUnicode(false).HasDefaultValue("");
+            e.Property(x => x.SecondaryContactNumber).HasMaxLength(StaffMember.ContactMaxLength).IsUnicode(false);
             e.Property(x => x.Subcategory).HasMaxLength(50);
             e.HasOne(x => x.Department).WithMany(d => d.StaffMembers).HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.SetNull);
             e.HasMany(x => x.WorkingDays).WithOne(d => d.StaffMember).HasForeignKey(d => d.StaffMemberId).OnDelete(DeleteBehavior.Cascade);
@@ -561,6 +571,27 @@ public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) 
         });
 
         // ---- Duty schedules: Sub-Duty definitions (ids = DutyComponent codes), versioned schedules, uncovered reports.
+        // Main Duties: the original three keep their DutyType numbers, names and slugs; Add Duty adds more.
+        b.Entity<DutyMainDuty>(e =>
+        {
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.Name).HasMaxLength(DutyMainDuty.NameMaxLength).IsRequired();
+            e.Property(x => x.Slug).HasMaxLength(DutyMainDuty.SlugMaxLength).IsRequired();
+            e.Property(x => x.Summary).HasMaxLength(DutyMainDuty.SummaryMaxLength).IsRequired();
+            e.Property(x => x.Icon).HasMaxLength(DutyMainDuty.IconMaxLength).IsRequired();
+            e.Property(x => x.CreatedBy).HasMaxLength(150);
+            e.HasIndex(x => x.Slug).IsUnique();
+            e.HasIndex(x => x.Name).IsUnique();
+            var seeded = new DateTime(2026, 11, 16, 0, 0, 0, DateTimeKind.Utc);
+            e.HasData(
+                new DutyMainDuty { Id = (int)DutyType.Morning, Name = "Morning Duty", Slug = "morning", Icon = "shield-check", SortOrder = 1, CreatedAt = seeded,
+                    Summary = "Students arrival check, morning revision in the classrooms and the morning assembly line-up." },
+                new DutyMainDuty { Id = (int)DutyType.Midday, Name = "Midday Duty", Slug = "midday", Icon = "sun", SortOrder = 2, CreatedAt = seeded,
+                    Summary = "Break supervision by stage: Pre-K / KG1, KG2, Lower and Upper Elementary, Middle / High School." },
+                new DutyMainDuty { Id = (int)DutyType.Dismissal, Name = "Dismissal Duty", Slug = "dismissal", Icon = "door", SortOrder = 3, CreatedAt = seeded,
+                    Summary = "End-of-day duties: students leaving by bus and pickup at the gates." });
+        });
+
         b.Entity<DutySection>(e =>
         {
             e.ToTable("DutySections");

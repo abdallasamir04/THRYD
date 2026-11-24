@@ -1,22 +1,22 @@
 @model InspectionHistoryPage
 @*
-    Floor Audit History: every inspection with its recorded answers, filtered by date, floor, area, session, round,
-    inspector and status. The Floor Audit Report (PDF / Excel) exports exactly these filters.
+    Floor Management History: every inspection with its recorded answers, filtered by date, floor, area, session, round,
+    inspector and status. The Floor Inspection Report (PDF / Excel) exports exactly these filters.
 *@
 @{
-    ViewData["Title"] = "Audit History · Floor Audit";
+    ViewData["Title"] = "Audit History · Floor Management";
     ViewData["Nav"] = "FloorAudit";
     var f = Model.Filter;
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit">Floor Audit</a></li><li>Audit History</li></ol>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-management">Floor Management</a></li><li><a href="/floor-audit">Floor Inspections</a></li><li>Audit History</li></ol>
         <h1 class="page-title">Audit History</h1>
         <p class="page-sub">Every area inspection as it was recorded: the floor and checklist at the time, scheduled and actual times, inspector, answers and issues.</p>
     </div>
     <div class="page-head__actions">
-        <partial name="_Download" model='new DownloadLink("/floor-audit/history/pdf", "Floor Audit Report")' />
+        <partial name="_Download" model='new DownloadLink("/floor-audit/history/pdf", "Floor Inspection Report")' />
         <a class="btn btn--secondary" href="/floor-audit/history/excel@(Context.Request.QueryString)" data-download="/floor-audit/history/excel" download>@Ui.Icon("sheet")Excel</a>
     </div>
 </div>

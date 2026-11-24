@@ -1,4 +1,4 @@
-namespace SchoolManagement.Web.Entities;
+﻿namespace SchoolManagement.Web.Entities;
 
 /// <summary>Entities with CreatedAt / UpdatedAt maintained by the DbContext (UTC).</summary>
 public interface IAuditable
@@ -36,6 +36,7 @@ public class SchoolClass : IAuditable
 public class Student : IAuditable
 {
     public const int NameMaxLength = 150;
+    public const int ParentContactMaxLength = StaffMember.ContactMaxLength;
 
     public int Id { get; set; }
     public string FullName { get; set; } = "";
@@ -72,8 +73,27 @@ public class Student : IAuditable
     /// </summary>
     public string? SecondLanguage { get; set; }
 
+    // ---- Student profile (all optional: existing students without this information stay valid; nothing is invented) ----
+    public DateOnly? BirthDate { get; set; }
+
+    /// <summary>The day the family applied for admission.</summary>
+    public DateOnly? AdmissionApplicationDate { get; set; }
+
+    /// <summary>How the student leaves school (Bus / Car); null when not known.</summary>
+    public DismissalMethod? DismissalMethod { get; set; }
+
+    /// <summary>The parent's phone number as entered (cleaned); see <see cref="Common.WhatsApp"/> for the chat link.</summary>
+    public string? ParentContactNumber { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>How a student leaves school at the end of the day. Numbers are stored: add new values, never reuse one.</summary>
+public enum DismissalMethod
+{
+    Bus = 1,
+    Car = 2,
 }
 
 /// <summary>The official name list's marks on a student (see <see cref="Student.NameMarker"/> and <see cref="Student.HighlightColor"/>).</summary>
@@ -130,6 +150,9 @@ public abstract class StaffMember : IAuditable
 
     /// <summary>Digits only; empty when there is no number. Used for duplicate detection.</summary>
     public string NormalizedContact { get; set; } = "";
+
+    /// <summary>A second phone number, when the source gives two (kept as written).</summary>
+    public string? SecondaryContactNumber { get; set; }
 
     public int? DepartmentId { get; set; }
     public Department? Department { get; set; }

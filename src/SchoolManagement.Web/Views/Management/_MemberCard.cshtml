@@ -1,0 +1,55 @@
+﻿@model (SchoolManagement.Web.Services.ManagementMemberRow Member, DateOnly? Since)
+@*
+    One Management Team member card (School Leadership and Operation Team): name, position, start date, task totals, contact
+    and quick actions. Since = the start of the member's current leadership position, when it has one.
+*@
+@{
+    var m = Model.Member;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var tone = Ui.Tone(m.FullName);
+    var start = Model.Since ?? m.AppointedOn;
+}
+<article class="leader-card leader-card--@tone" aria-labelledby="lm-@m.Id">
+    <div class="leader-card__head">
+        <span class="avatar avatar--lg avatar--@tone" aria-hidden="true">@Ui.Initials(m.FullName)</span>
+        <div class="leader-card__who">
+            <h4 class="leader-card__name" id="lm-@m.Id" dir="auto"><a class="stretched" href="/management/members/@m.Id" title="@m.FullName">@m.FullName</a></h4>
+            <span class="leader-card__since">@Ui.Icon("calendar", "icon--sm")@(start is { } s ? (Model.Since is null ? "Appointed " : "Since ") + s.ToString("d MMM yyyy", c) : "No start date")</span>
+        </div>
+    </div>
+    @if (m.Position is { } pi)
+    {
+        <a class="leader-card__position" href="@ManagementPositions.Href(pi)" title="Open the @m.PositionName position">@Ui.Icon(ManagementPositions.Icon(pi), "icon--sm")<span>@m.PositionName</span></a>
+    }
+    else
+    {
+        <span class="leader-card__position@(m.HasPosition ? "" : " is-none")@(m.PendingConfirmation && !m.HasPosition ? " org-pending" : "")">@Ui.Icon(m.PendingConfirmation && !m.HasPosition ? "alert-triangle" : "briefcase", "icon--sm")<span>@m.PositionName</span></span>
+    }
+    @if (m.OtherPositions.Any())
+    {
+        <span class="leader-card__more" title="@string.Join(" · ", m.OtherPositions)">+ @Ui.Plural(m.OtherPositions.Count(), "other position", "other positions")</span>
+    }
+    <div class="leader-card__stats" aria-label="Tasks">
+        <div class="leader-card__stat"><strong>@m.OpenTasks</strong><span>Open</span></div>
+        <div class="leader-card__stat @(m.OverdueTasks > 0 ? "is-bad" : "")"><strong>@m.OverdueTasks</strong><span>Overdue</span></div>
+        <div class="leader-card__stat is-ok"><strong>@m.CompletedTasks</strong><span>Done</span></div>
+    </div>
+    <div class="leader-card__foot">
+        @if (!string.IsNullOrEmpty(m.ContactNumber))
+        {
+            <a class="leader-card__contact" href="tel:@m.ContactNumber.Replace(" ", "")" dir="ltr">@Ui.Icon("phone", "icon--sm")<span>@m.ContactNumber</span></a>
+        }
+        else if (!string.IsNullOrEmpty(m.Email))
+        {
+            <a class="leader-card__contact" href="mailto:@m.Email" dir="ltr">@Ui.Icon("send", "icon--sm")<span>@m.Email</span></a>
+        }
+        else
+        {
+            <span class="leader-card__contact is-empty">@Ui.Icon("phone", "icon--sm")<span>No phone</span></span>
+        }
+        <div class="row-actions">
+            <a class="icon-btn icon-btn--primary" href="/management/tasks/create?memberId=@m.Id" data-modal title="New task" aria-label="New task for @m.FullName">@Ui.Icon("plus")</a>
+            <a class="icon-btn icon-btn--primary" href="/management/members/@m.Id/edit" data-modal title="Edit" aria-label="Edit @m.FullName">@Ui.Icon("pencil")</a>
+        </div>
+    </div>
+</article>

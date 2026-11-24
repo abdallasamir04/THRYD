@@ -147,6 +147,13 @@ public static class DutyTiming
 public sealed record SectionInput(
     string? Name, string? Summary, DateOnly EffectiveFrom, TimeOnly? Start, TimeOnly? End, bool Required, int? DepartmentId, int DayMask);
 
+/// <summary>A Sub-Duty created with a new Main Duty (times default to the Main Duty's).</summary>
+public sealed record NewSubDutyInput(string? Name, TimeOnly? Start, TimeOnly? End, bool Required);
+
+/// <summary>Duties → Add Duty: a new Main Duty with its schedule and, optionally, its first Sub-Duties.</summary>
+public sealed record NewMainDutyInput(
+    string? Name, string? Summary, string? Icon, DateOnly EffectiveFrom, TimeOnly? Start, TimeOnly? End, int DayMask, IReadOnlyList<NewSubDutyInput> SubDuties);
+
 public sealed record CoverageReportInput(DateOnly Date, DutyComponent Component, int? PointId, string? Area, DutyUncoveredReason? Reason, string? Notes, int? SupersedesId);
 
 /// <summary>Schedule versions of a Main Duty and its Sub-Duties, for the schedule page.</summary>
@@ -169,6 +176,12 @@ public interface IDutyBoardService
     Task<ServiceResult> SaveMainScheduleAsync(DutyType type, DateOnly effectiveFrom, TimeOnly? start, TimeOnly? end, int dayMask, CancellationToken ct = default);
     Task<ServiceResult> SaveSectionAsync(DutyComponent component, SectionInput input, CancellationToken ct = default);
     Task<ServiceResult> AddSectionAsync(DutyType type, SectionInput input, CancellationToken ct = default);
+
+    /// <summary>
+    /// Duties → Add Duty (Super Admin only): a new Main Duty — name, description, icon, its time range and days from a date —
+    /// with its first Sub-Duties, all saved together or not at all. The id of the new duty's <see cref="DutyType"/> on success.
+    /// </summary>
+    Task<ServiceResult> CreateMainDutyAsync(NewMainDutyInput input, CancellationToken ct = default);
     Task<ServiceResult> RetireSectionAsync(DutyComponent component, DateOnly from, CancellationToken ct = default);
     Task<ServiceResult> RestoreSectionAsync(DutyComponent component, CancellationToken ct = default);
 
@@ -462,6 +475,130 @@ public sealed class DutyBoardService(SchoolDbContext db, ICurrentUser currentUse
         await db.SaveChangesAsync(ct);
         await DutyCatalog.LoadAsync(db, ct);
         return ServiceResult.Ok(id);
+    }
+
+    // ------------------------------------------------------------------ Add Duty
+
+    /// <summary>Icons a new Main Duty can use (all in the app's icon sprite).</summary>
+    public static readonly IReadOnlyList<(string Icon, string Label)> MainDutyIcons =
+    [
+        ("shield-check", "Shield"), ("sun", "Sun"), ("door", "Door"), ("users", "People"), ("school", "School"),
+        ("activity", "Activity"), ("clock", "Clock"), ("clipboard-check", "Clipboard"), ("calendar", "Calendar"), ("flag", "Flag"),
+    ];
+
+    /// <summary>The first segment of every fixed /duties/… address: a duty's slug may not take one.</summary>
+    private static readonly HashSet<string> ReservedSlugs =
+        ["audit", "board", "overview", "departments", "sections", "report-uncovered", "reports", "create", "revisions", "activities", "main", "new", "schedule", "report"];
+
+    public const int MaxNewSubDuties = 20;
+
+    public async Task<ServiceResult> CreateMainDutyAsync(NewMainDutyInput input, CancellationToken ct = default)
+    {
+        // Creating duties is administration: the Super Admin only (no staff permission for it is configured yet).
+        if (!currentUser.IsSuperAdmin) return ServiceResult.Fail("", "Only the Super Admin can add a duty.");
+
+        var r = ServiceResult.Ok();
+        var name = TextNormalizer.CleanText(input.Name);
+        var summary = TextNormalizer.CleanText(input.Summary);
+        if (name.Length == 0) r.AddError("Name", "Name the duty.");
+        else if (name.Length > DutyMainDuty.NameMaxLength) r.AddError("Name", $"Use {DutyMainDuty.NameMaxLength} characters or fewer.");
+        else if ((await db.DutyMainDuties.AsNoTracking().Select(m => m.Name).ToListAsync(ct)).Any(n => TextNormalizer.NameKey(n) == TextNormalizer.NameKey(name)))
+            r.AddError("Name", "A duty with this name already exists.");
+        if (summary.Length > DutyMainDuty.SummaryMaxLength) r.AddError("Summary", $"Use {DutyMainDuty.SummaryMaxLength} characters or fewer.");
+        var icon = string.IsNullOrWhiteSpace(input.Icon) ? "shield-check" : input.Icon.Trim();
+        if (MainDutyIcons.All(i => i.Icon != icon)) r.AddError("Icon", "Choose an icon from the list.");
+        if (EffectiveProblem(input.EffectiveFrom) is { } p) r.AddError("EffectiveFrom", p.Errors[0].Value);
+        if (input.Start is null) r.AddError("StartTime", "Choose the start time.");
+        if (input.End is null) r.AddError("EndTime", "Choose the end time.");
+        if (input.Start is { } ms && input.End is { } me && me <= ms) r.AddError("EndTime", "The end time must be after the start time.");
+        if (input.DayMask != 0 && (input.DayMask & PeriodDays.AllMask) == 0) r.AddError("Days", "Choose at least one school day, or every school day.");
+
+        // Sub-Duties: rows left empty are ignored; a row needs a name, and its times must fall within the duty's.
+        var subs = new List<(string Name, TimeOnly Start, TimeOnly End, bool Required)>();
+        var rows = input.SubDuties.Select((s, i) => (s, i)).Where(x => !(string.IsNullOrWhiteSpace(x.s.Name) && x.s.Start is null && x.s.End is null)).ToList();
+        if (rows.Count > MaxNewSubDuties) r.AddError("SubDuties", $"Add at most {MaxNewSubDuties} Sub-Duties here; more can be added from the duty's schedule.");
+        foreach (var (s, i) in rows)
+        {
+            var key = $"SubDuties[{i}]";
+            var subName = TextNormalizer.CleanText(s.Name);
+            if (subName.Length == 0) { r.AddError($"{key}.Name", $"Sub-Duty {i + 1}: enter its name."); continue; }
+            if (subName.Length > DutySection.NameMaxLength) { r.AddError($"{key}.Name", $"Sub-Duty {i + 1}: use {DutySection.NameMaxLength} characters or fewer."); continue; }
+            if (subs.Any(x => TextNormalizer.NameKey(x.Name) == TextNormalizer.NameKey(subName))) { r.AddError($"{key}.Name", $"“{subName}” is listed twice."); continue; }
+            var start = s.Start ?? input.Start;
+            var end = s.End ?? input.End;
+            if (start is null || end is null) continue; // the duty's own times are missing (reported above)
+            if (end <= start) { r.AddError($"{key}.EndTime", $"{subName}: the end time must be after the start time."); continue; }
+            if (input.Start is { } ds && input.End is { } de && (start < ds || end > de))
+            {
+                r.AddError($"{key}.StartTime", $"{subName} must fall within the duty's time, {ScheduleRules.Times12(ds, de)}.");
+                continue;
+            }
+            subs.Add((subName, start.Value, end.Value, s.Required));
+        }
+        if (!r.Succeeded) return r;
+
+        var slug = Slug(name, "duty");
+        if (int.TryParse(slug, out _)) slug = "duty-" + slug;          // /duties/{id:int} addresses a duty record
+        var existingMain = (await db.DutyMainDuties.AsNoTracking().Select(m => m.Slug).ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var unique = slug;
+        for (var n = 2; existingMain.Contains(unique) || ReservedSlugs.Contains(unique); n++) unique = $"{slug}-{n}";
+
+        try
+        {
+            await using var tx = await DbScope.BeginAsync(db, System.Data.IsolationLevel.Serializable, ct);
+            var now = _time.UtcNow;
+            // New numbers, never reused (the duty records, Sub-Duties and schedules store them).
+            var typeId = Math.Max(100, await db.DutyMainDuties.MaxAsync(m => (int?)m.Id, ct) ?? 0) + 1;
+            var type = (DutyType)typeId;
+            db.DutyMainDuties.Add(new DutyMainDuty
+            {
+                Id = typeId, Name = name, Slug = unique, Summary = summary, Icon = icon,
+                SortOrder = (await db.DutyMainDuties.MaxAsync(m => (int?)m.SortOrder, ct) ?? 0) + 1, CreatedAt = now, CreatedBy = currentUser.Name,
+            });
+            db.DutyMainSchedules.Add(new DutyMainSchedule
+            {
+                DutyType = type, EffectiveFrom = input.EffectiveFrom, StartTime = input.Start!.Value, EndTime = input.End!.Value, DayMask = input.DayMask,
+                CreatedAt = now, CreatedBy = currentUser.Name,
+            });
+            var sectionId = Math.Max(100, await db.DutySections.MaxAsync(s => (int?)s.Id, ct) ?? 0);
+            var sectionSlugs = (await db.DutySections.AsNoTracking().Select(s => s.Slug).ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var order = 0;
+            foreach (var (subName, start, end, required) in subs)
+            {
+                sectionId++;
+                var baseSlug = Slug(subName, "section");
+                var subSlug = baseSlug;
+                for (var n = 2; sectionSlugs.Contains(subSlug) || subSlug is "schedule" or "report"; n++) subSlug = $"{baseSlug}-{n}";
+                sectionSlugs.Add(subSlug);
+                db.DutySections.Add(new DutySection
+                {
+                    Id = sectionId, DutyType = type, Name = subName, Slug = subSlug, Summary = "", Icon = "shield-check", SortOrder = ++order,
+                    CreatedAt = now, CreatedBy = currentUser.Name,
+                });
+                db.DutySectionSchedules.Add(new DutySectionSchedule
+                {
+                    DutySectionId = sectionId, EffectiveFrom = input.EffectiveFrom, StartTime = start, EndTime = end, IsRequired = required,
+                    DayMask = input.DayMask, CreatedAt = now, CreatedBy = currentUser.Name,
+                });
+            }
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            await DutyCatalog.LoadAsync(db, ct);
+            return ServiceResult.Ok(typeId);
+        }
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
+        {
+            db.ChangeTracker.Clear();
+            return ServiceResult.Fail("Name", "A duty with this name was just added. Refresh and try again.");
+        }
+    }
+
+    /// <summary>An address segment from a name: lower case, letters and digits joined by hyphens (at most 50 characters).</summary>
+    private static string Slug(string name, string fallback)
+    {
+        var slug = Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+        if (slug.Length == 0) slug = fallback;
+        return slug.Length > 50 ? slug[..50].Trim('-') : slug;
     }
 
     public async Task<ServiceResult> RetireSectionAsync(DutyComponent component, DateOnly from, CancellationToken ct = default)

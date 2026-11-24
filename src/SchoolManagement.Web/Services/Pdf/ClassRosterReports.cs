@@ -32,15 +32,14 @@ public static class ClassRosterReports
     private static PdfCell Status(RosterClass c) =>
         c.IsActive ? PdfCell.Status("Active", PdfTone.Success) : PdfCell.Status("Inactive", PdfTone.Muted);
 
-    /// <summary>Full, near capacity (3 places or fewer, or 85 % used) or null.</summary>
-    public static string? CapacityNote(RosterClass c) =>
-        Free(c) == 0 ? "Full" : Free(c) <= 3 || c.Students.Count >= c.Capacity * 0.85 ? "Near capacity" : null;
+    /// <summary>"Full" once the class reaches or exceeds its capacity (<see cref="Common.ClassCapacity"/>), otherwise null (no warning).</summary>
+    public static string? CapacityNote(RosterClass c) => Common.ClassCapacity.IsFull(c.Students.Count, c.Capacity) ? "Full" : null;
 
     /// <summary>Active / Inactive with the capacity status underneath (the summary's former Capacity status column).</summary>
     private static PdfCell StatusWithCapacity(RosterClass c) => Status(c) with { Note = CapacityNote(c) };
 
     private static PdfCell Available(RosterClass c) =>
-        new(N(Free(c)), Tone: CapacityNote(c) switch { "Full" => PdfTone.Error, null => PdfTone.Default, _ => PdfTone.Warning });
+        new(N(Free(c)), Tone: CapacityNote(c) is null ? PdfTone.Default : PdfTone.Error);
 
     /// <summary>The class's own grade (Pre-K, KG1, G7…), read from its name like the Classes pages do.</summary>
     public static string Grade(RosterClass c) => Common.ClassStages.GradeOf(c.Name)?.Label ?? "—";

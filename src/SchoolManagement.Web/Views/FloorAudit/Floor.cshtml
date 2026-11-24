@@ -4,7 +4,7 @@
     inspection), the round's progress, Student Access for the floor and its latest inspections. Reloads itself.
 *@
 @{
-    ViewData["Title"] = $"{Model.Floor.Name} · Floor Audit";
+    ViewData["Title"] = $"{Model.Floor.Name} · Floor Management";
     ViewData["Nav"] = "FloorAudit";
     var date = SchoolWeek.Iso(Model.Date);
     var cur = Model.CurrentSession;
@@ -15,7 +15,7 @@
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit?date=@date">Floor Audit</a></li><li>@Model.Floor.Name</li></ol>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit?date=@date">Floor Management</a></li><li>@Model.Floor.Name</li></ol>
         <h1 class="page-title">@Model.Floor.Name@if (!Model.Floor.IsActive) { <span class="badge badge--neutral fa-title-badge">Inactive</span> }</h1>
         <ul class="fa-facts" aria-label="Floor information">
             <li>@Ui.Icon("calendar", "icon--sm")<span>@Model.Date.ToString("dddd d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span></li>

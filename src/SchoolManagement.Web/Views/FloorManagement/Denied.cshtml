@@ -1,0 +1,18 @@
+@{
+    ViewData["Title"] = "Access needed";
+    ViewData["Nav"] = "FloorAudit";
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/floor-management">Floor Management</a></li><li>Access needed</li></ol>
+        <h1 class="page-title">Access needed</h1>
+    </div>
+</div>
+<section class="card">
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("lock")</span>
+        <p class="empty__title">You cannot open this part of Floor Management</p>
+        <p class="empty__text">@ViewData["Message"] Choose who you are under “Working as” if you are on a floor team.</p>
+        <div class="empty__actions"><a class="btn btn--secondary" href="/settings#operator">@Ui.Icon("user")Working as</a></div>
+    </div>
+</section>

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
@@ -47,6 +47,9 @@ public sealed class DepartmentDetailsViewModel
 
     /// <summary>The P.E. module, shown under Department Staff on the PE department page only (null elsewhere).</summary>
     public PePageViewModel? Pe { get; init; }
+
+    /// <summary>Organizational units leading this department (Departments Leadership), with their positions and holders.</summary>
+    public IReadOnlyList<Services.OrgStructure.OrgUnitNode> OrgLeadership { get; init; } = [];
 
     // ---- Departments with subcategories: Department → Subcategory → Staff ----
 
@@ -216,6 +219,23 @@ public sealed class LeadershipViewModel
     public int Filled => Positions.Count(p => p.Holder is not null);
     public int Vacant => Positions.Count - Filled;
     public int Unpositioned => AllMembers.Count(m => !m.HasPosition);
+
+    /// <summary>The School Leadership tiers of the organizational structure (Tiers 1, 2, 3 and 6).</summary>
+    public Services.OrgStructure.OrgStructureTree? Org { get; init; }
+    public bool CanManageOrg { get; init; }
+}
+
+/// <summary>Management Team → Operation Team: the members holding a school-added position.</summary>
+public sealed class OperationTeamViewModel
+{
+    public required IReadOnlyList<ManagementMemberRow> Members { get; init; }
+
+    /// <summary>The Operation Team tiers of the organizational structure (Floor Supervisors, Administrative &amp; Operational Management).</summary>
+    public Services.OrgStructure.OrgStructureTree? Org { get; init; }
+    public bool CanManageOrg { get; init; }
+
+    /// <summary>Members shown as cards: those not already shown in the organizational structure above.</summary>
+    public IReadOnlyList<ManagementMemberRow> OtherMembers => Members.Where(m => m.OrgPositions.Count == 0).ToList();
 }
 
 /// <summary>School Leadership → one position: its holder, the holder's tasks and the position's appointment history.</summary>
@@ -295,6 +315,10 @@ public sealed class ManagementProfileViewModel
     public required TaskIndexViewModel Tasks { get; init; }
     public required IReadOnlyList<TaskHistoryRow> History { get; init; }
     public IReadOnlyList<PositionHistoryRow> Positions { get; init; } = [];
+
+    /// <summary>Organizational positions (current, history) and data-quality warnings of this member.</summary>
+    public Services.OrgStructure.StaffOrgSummary Org { get; init; } = Services.OrgStructure.StaffOrgSummary.Empty;
+    public bool CanManageOrg { get; init; }
 }
 
 // ---------- Management Team tasks ----------

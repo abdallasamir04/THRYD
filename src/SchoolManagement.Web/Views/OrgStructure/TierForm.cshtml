@@ -1,0 +1,58 @@
+@model OrgTierFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit tier" : "Add tier";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Management"; }
+    var action = Model.IsEdit ? $"/management/org/tiers/{Model.Id}/edit" : "/management/org/tiers/create";
+}
+@if (!modal)
+{
+    <div class="page-head"><div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/management">Management Team</a></li><li><a href="@OrgLabels.PositionsHref?tab=tiers">Positions &amp; Assignments</a></li><li>@heading</li></ol>
+        <h1 class="page-title">@heading</h1>
+    </div></div>
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("layers", "icon--lg")</span>
+            <div><h2 class="modal__title">@heading</h2><p class="modal__sub">A level of the organizational structure, shown under School Leadership or the Operation Team.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field field--full">
+                <label class="label" asp-for="Name">Tier name <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Name" maxlength="@SchoolManagement.Web.Entities.OrgTier.NameMaxLength" />
+                <span asp-validation-for="Name" class="field-validation-error"></span>
+            </div>
+            <div class="field field--full">
+                <label class="label" asp-for="Description">Description</label>
+                <textarea class="textarea" asp-for="Description" rows="2" maxlength="@SchoolManagement.Web.Entities.OrgTier.DescriptionMaxLength"></textarea>
+                <span asp-validation-for="Description" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Section">Management section</label>
+                <select class="select" asp-for="Section">
+                    @foreach (var sec in OrgLabels.Sections) { <option value="@sec" selected="@(Model.Section == sec)">@OrgLabels.Section(sec)</option> }
+                </select>
+                <span asp-validation-for="Section" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="SortOrder">Order</label>
+                <input class="input" asp-for="SortOrder" type="number" min="0" max="999" />
+                <span asp-validation-for="SortOrder" class="field-validation-error"></span>
+            </div>
+            <div class="field field--full">
+                <label class="switch"><input type="checkbox" asp-for="IsActive" /><span class="switch__track" aria-hidden="true"></span><span>Active — shown on the Management pages</span></label>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@OrgLabels.PositionsHref?tab=tiers">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+        </div>
+    </form>
+</div>

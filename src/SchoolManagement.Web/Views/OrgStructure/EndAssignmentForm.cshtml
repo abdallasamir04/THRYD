@@ -1,0 +1,50 @@
+@model EndAssignmentFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var a = Model.Current;
+    var heading = "End assignment";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Management"; }
+}
+@if (!modal)
+{
+    <div class="page-head"><div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/management">Management Team</a></li><li><a href="@OrgLabels.PositionsHref">Positions &amp; Assignments</a></li><li>@heading</li></ol>
+        <h1 class="page-title">@heading</h1>
+    </div></div>
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/management/org/assignments/@Model.Id/end" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon modal__icon--danger">@Ui.Icon("x-circle", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title">@heading</h2>
+                <p class="modal__sub" dir="auto">@(a is null ? "" : $"{a.FullName} — {a.DisplayTitle} ({a.Unit})"). The assignment is kept in the history; the staff record is not changed.</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" asp-for="EndDate">End date</label>
+                <input class="input picker" type="date" asp-for="EndDate" value="@(Model.EndDate is { } ed ? SchoolWeek.Iso(ed) : "")" min="@(a is null ? "1980-01-01" : SchoolWeek.Iso(a.StartDate))" max="@SchoolWeek.Iso(SchoolWeek.Today.AddYears(1))" />
+                <span asp-validation-for="EndDate" class="field-validation-error"></span>
+            </div>
+            <div class="field field--full">
+                <label class="label" asp-for="Reason">Reason</label>
+                <input class="input" asp-for="Reason" placeholder="e.g. Left the school, role reorganized" maxlength="@SchoolManagement.Web.Entities.StaffPositionAssignment.ReasonMaxLength" />
+                <span asp-validation-for="Reason" class="field-validation-error"></span>
+            </div>
+            @if (a?.IsPrimary == true)
+            {
+                <div class="notice notice--warning field--full">@Ui.Icon("info")<div class="notice__body"><strong>This is the primary position.</strong>Another current position (if any) becomes primary.</div></div>
+            }
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@OrgLabels.PositionsHref">Cancel</a> }
+            <button class="btn btn--danger" type="submit">@Ui.Icon("check")End assignment</button>
+        </div>
+    </form>
+</div>

@@ -77,7 +77,7 @@ else
                                     }
                                     else if (m.IsOpen)
                                     {
-                                        <button class="btn btn--secondary btn--sm" type="button" disabled title="@(user.HasIdentity ? "Your Floor Audit role cannot record movements for this floor." : "Choose “Working as” first.")">Mark Returned</button>
+                                        <button class="btn btn--secondary btn--sm" type="button" disabled title="@(user.HasIdentity ? "Your Floor Management role cannot record movements for this floor." : "Choose “Working as” first.")">Mark Returned</button>
                                     }
                                     @if (m.State != MovementState.Voided && user.CanManage && user.HasIdentity)
                                     {

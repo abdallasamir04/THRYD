@@ -1,0 +1,18 @@
+@model string
+@* Floor Management sections: the floors and teams, reports, Social Worker tickets, and the floor inspections / student movements. *@
+@{
+    var items = new (string Key, string Href, string Icon, string Label)[]
+    {
+        ("floors", "/floor-management", "school", "Floors"),
+        ("reports", "/floor-management/reports", "flag", "Reports & escalations"),
+        ("tickets", "/floor-management/tickets", "clipboard-check", "Social Worker tickets"),
+        ("inspections", "/floor-audit", "list-checks", "Inspections"),
+        ("movements", "/floor-audit/movements", "swap", "Student movements"),
+    };
+}
+<nav class="org-nav" aria-label="Floor Management sections">
+    @foreach (var (key, href, icon, label) in items)
+    {
+        <a class="org-nav__link" href="@href" aria-current="@(Model == key ? "page" : null)">@Ui.Icon(icon, "icon--sm")<span>@label</span></a>
+    }
+</nav>

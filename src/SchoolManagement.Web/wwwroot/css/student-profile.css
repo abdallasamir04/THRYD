@@ -1,0 +1,47 @@
+/*
+ * Student profile: the profile cards (student information, dismissal, parent contact), the optional details in the
+ * add / edit form, the Dismissal · Parent column of the student list and the WhatsApp actions. THRYD tokens only, so the
+ * light and dark themes both work.
+ */
+
+/* ---------- profile cards ---------- */
+.student-info { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.3fr); gap: 18px; margin-bottom: 20px; }
+.student-info__card { margin: 0; }
+.student-info__card .card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+@media (max-width: 1100px) { .student-info { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .student-info__card:first-child { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .student-info { grid-template-columns: minmax(0, 1fr); } }
+
+.student-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 14px 20px; margin: 0; }
+.student-facts > div { min-width: 0; }
+.student-facts dt { margin-bottom: 4px; color: var(--color-text-muted); font-size: 0.74rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
+.student-facts dd { margin: 0; color: var(--color-text-strong); font-weight: 700; overflow-wrap: anywhere; }
+.student-contact { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+
+/* ---------- dismissal ---------- */
+.student-dismissal { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 0.8rem; font-weight: 800; white-space: nowrap; }
+.student-dismissal--bus { background: var(--tone-amber-soft); color: var(--tone-amber); }
+.student-dismissal--car { background: var(--tone-blue-soft); color: var(--tone-blue); }
+
+/* ---------- parent phone / WhatsApp ---------- */
+.student-phone { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--color-text-strong); }
+a.student-phone--wa { color: var(--color-success-ink); }
+.student-phone__hint { flex-basis: 100%; margin: 0; }
+.btn--wa { background: var(--color-success-soft); color: var(--color-success-ink); border-color: transparent; }
+.btn--wa:hover { background: var(--color-success); color: #fff; text-decoration: none; }
+.student-wa { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--color-success-soft); color: var(--color-success-ink); flex: none; }
+.student-wa:hover { background: var(--color-success); color: #fff; }
+.student-wa--off { background: var(--color-surface-soft); color: var(--color-text-muted); cursor: help; }
+.student-wa--off:hover { background: var(--color-surface-soft); color: var(--color-text-muted); }
+
+/* ---------- list column ---------- */
+.col-dismissal { white-space: nowrap; }
+.student-row-contact { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ---------- add / edit form: optional details ---------- */
+.student-details { margin: 18px 0 0; padding: 14px 0 0; border: 0; border-top: 1px solid var(--color-border-subtle); min-width: 0; }
+.student-details__legend { display: flex; align-items: center; gap: 6px; padding: 0; margin-bottom: 12px; color: var(--color-text-strong); font-weight: 800; font-size: 0.9rem; }
+.student-details__legend .muted { font-weight: 600; }
+
+@media print {
+    .btn--wa, .student-wa { display: none !important; }
+}

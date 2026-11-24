@@ -1,17 +1,17 @@
 @model ManagePage
 @*
-    Floor Audit → Manage (managers): floors; which classes are taught on which floor; facilities; the checklist; who may
+    Floor Management → Manage (managers): floors; which classes are taught on which floor; facilities; the checklist; who may
     inspect and record student movements; the overdue threshold. Nothing is deleted: deactivated items keep their history.
 *@
 @{
-    ViewData["Title"] = "Manage · Floor Audit";
+    ViewData["Title"] = "Manage · Floor Management";
     ViewData["Nav"] = "FloorAudit";
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit">Floor Audit</a></li><li>Manage</li></ol>
-        <h1 class="page-title">Manage Floor Audit</h1>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-management">Floor Management</a></li><li><a href="/floor-audit">Floor Inspections</a></li><li>Manage</li></ol>
+        <h1 class="page-title">Manage Floor Management</h1>
         <p class="page-sub">Floors and their classrooms and facilities, the inspection checklist, and who may inspect. Changes apply to new inspections; recorded ones never change.</p>
     </div>
 </div>
@@ -20,7 +20,7 @@
 <partial name="_Identity" model="Model.User" />
 @if (!Model.User.CanManage)
 {
-    <div class="notice">@Ui.Icon("lock")<div class="notice__body"><strong>View only.</strong>Only Floor Audit managers can change this configuration: current Management Team members and staff given the Manager role below.</div></div>
+    <div class="notice">@Ui.Icon("lock")<div class="notice__body"><strong>View only.</strong>Only Floor Management administrators can change this configuration: current Management Team members and staff given the Manager role below.</div></div>
 }
 
 <div id="manage-body" data-ajax-list>

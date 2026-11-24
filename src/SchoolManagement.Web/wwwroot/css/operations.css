@@ -1012,6 +1012,25 @@ a.ses-slot__link:hover { text-decoration: none; border-color: var(--color-primar
 .dmain__icon--amber { background: var(--color-warning-soft); color: var(--color-warning-ink); }
 .dmain__icon--teal { background: var(--color-info-soft); color: var(--color-info-ink); }
 .dmain__icon--green { background: var(--color-success-soft); color: var(--color-success-ink); }
+/* Duties added with Add Duty take one of these by their number (DutyComponents.TypeTone). */
+/* Duties board: a one-line date bar (the date button sized to its content, not the full width) with By department beside it. */
+.duty-board .ses-daynav .th-trigger--date { width: auto; flex: 0 1 240px; min-width: 190px; }
+@media (max-width: 640px) { .duty-board .ses-daynav .th-trigger--date { flex: 1 1 100%; } }
+
+/* Add Duty: one Sub-Duty per row — name, start, end, required, remove (stacks on phones). */
+.md-subs { display: flex; flex-direction: column; gap: 10px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.md-sub { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto auto; align-items: end; gap: 10px;
+    padding: 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-raised); }
+.md-sub .field { margin: 0; }
+.md-sub__req { padding-bottom: 8px; white-space: nowrap; }
+.md-sub__remove { margin-bottom: 2px; }
+@media (max-width: 640px) {
+    .md-sub { grid-template-columns: 1fr 1fr; }
+    .md-sub__name { grid-column: 1 / -1; }
+}
+.dmain__icon--blue { background: var(--tone-blue-soft); color: var(--tone-blue); }
+.dmain__icon--rose { background: var(--tone-rose-soft); color: var(--tone-rose); }
+.dmain__icon--indigo { background: var(--tone-indigo-soft); color: var(--tone-indigo); }
 .dmain__title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .dmain__title h2 { margin: 0; font-size: 1.15rem; line-height: 1.3; }
 .dmain__title h2 a { color: var(--color-text-strong); }

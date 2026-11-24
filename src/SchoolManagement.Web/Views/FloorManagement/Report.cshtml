@@ -1,0 +1,68 @@
+@model FloorReportViewModel
+@using SchoolManagement.Web.Services.FloorManagement
+@{
+    var r = Model.Report;
+    ViewData["Title"] = r.Row.Title;
+    ViewData["Nav"] = "FloorAudit";
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/floor-management">Floor Management</a></li><li><a href="/floor-management/reports">Reports</a></li><li><span aria-current="page">#@r.Row.Id</span></li></ol>
+        <h1 class="page-title" dir="auto">@r.Row.Title</h1>
+        <p class="page-sub">
+            <span class="badge badge--primary">@FloorManagementService.Label(r.Row.Status)</span>
+            @r.Row.Floor · @FloorManagementService.Label(r.Row.Category) · with the @FloorManagementService.Label(r.Row.Recipient)@(r.Row.RecipientName is null ? "" : $" ({r.Row.RecipientName})")
+        </p>
+    </div>
+</div>
+<div class="grid-3-1">
+    <section class="card">
+        <div class="card__head"><h2 class="card__title">@Ui.Icon("file-text")Report</h2></div>
+        <div class="card__body">
+            <dl class="dl" style="font-size:0.875rem">
+                <dt>Submitted by</dt><dd>@(r.Row.CreatedBy ?? "—")</dd>
+                <dt>Date and time</dt><dd>@Ui.DateTime(r.Row.OccurredAt)</dd>
+                <dt>Related employee</dt><dd>@(r.Row.RelatedName ?? "—")</dd>
+            </dl>
+            <p style="white-space:pre-wrap;margin-top:14px" dir="auto">@r.Description</p>
+        </div>
+    </section>
+    <div class="stack">
+        @if (Model.CanReview)
+        {
+            <section class="card">
+                <div class="card__head"><h2 class="card__title">@Ui.Icon("check-circle")Review</h2></div>
+                <form class="card__body form-grid" action="/floor-management/reports/@r.Row.Id/review" method="post" data-ajax-form>
+                    @Html.AntiForgeryToken()
+                    <div class="field field--full">
+                        <label class="label" for="status">Status</label>
+                        <select class="select" id="status" name="status">
+                            <option value="UnderReview">Under review</option>
+                            <option value="Resolved">Resolved</option>
+                            <option value="Closed">Closed</option>
+                        </select>
+                    </div>
+                    <div class="field field--full"><label class="label" for="note">Note (required to resolve or close)</label><textarea class="textarea" id="note" name="note" rows="3" maxlength="1000"></textarea></div>
+                    <div class="field field--full"><button class="btn btn--primary" type="submit">@Ui.Icon("check")Update</button></div>
+                </form>
+            </section>
+        }
+        @if (Model.CanEscalate)
+        {
+            <section class="card">
+                <div class="card__head"><h2 class="card__title">@Ui.Icon("arrow-up")Escalate</h2></div>
+                <form class="card__body form-grid" action="/floor-management/reports/@r.Row.Id/escalate" method="post" data-ajax-form
+                      data-confirm="Send this report to the next level of the reporting line?" data-confirm-title="Escalate report?" data-confirm-button="Escalate">
+                    @Html.AntiForgeryToken()
+                    <p class="hint field--full" style="margin:0">Floor Supervisor → Stage Coordinator → School Consultant. It skips the person the report concerns.</p>
+                    <div class="field field--full"><label class="label" for="enote">Reason</label><textarea class="textarea" id="enote" name="note" rows="2" maxlength="1000"></textarea></div>
+                    <div class="field field--full"><button class="btn btn--secondary" type="submit">@Ui.Icon("arrow-up")Escalate</button></div>
+                </form>
+            </section>
+        }
+        <section class="card">
+            <div class="card__head"><h2 class="card__title">@Ui.Icon("clock")History</h2></div>
+            <div class="card__body"><partial name="~/Views/FloorManagement/_History.cshtml" model="r.Events" /></div>
+        </section>
+    </div>
+</div>

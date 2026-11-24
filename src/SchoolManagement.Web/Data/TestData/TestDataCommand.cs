@@ -23,6 +23,8 @@ public static class TestDataCommand
         services.AddSingleton<TestDataTracker>();
         services.AddSingleton<TestDataUser>();
         services.AddSingleton<ICurrentUser>(sp => sp.GetRequiredService<TestDataUser>());
+        // The command line writes the demo duty audits itself (no user request, no "Working as").
+        services.AddSingleton<IDutyAuditAccess>(TrustedDutyAuditAccess.Instance);
     }
 
     public static async Task<int> RunAsync(WebApplication app, string command)

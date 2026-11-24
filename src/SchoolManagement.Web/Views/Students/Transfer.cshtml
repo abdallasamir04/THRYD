@@ -37,7 +37,7 @@
                     <option value="">Choose a destination class…</option>
                     @foreach (var c in Model.AvailableClasses.Where(c => c.Id != Model.Student?.ClassId))
                     {
-                        var isFull = c.StudentCount >= c.Capacity;
+                        var isFull = ClassCapacity.IsFull(c.StudentCount, c.Capacity);
                         <option value="@c.Id" disabled="@(isFull || !c.IsActive ? "disabled" : null)">
                             @c.Name — @c.StudentCount / @c.Capacity students @(isFull ? "(FULL)" : (!c.IsActive ? "(Inactive)" : ""))
                         </option>

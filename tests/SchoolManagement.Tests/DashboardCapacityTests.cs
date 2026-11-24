@@ -114,7 +114,7 @@ public sealed class DashboardCapacityTests(DbFixture fx)
             Assert.Single(Regex.Matches(html, "class=\"cap-chart\" data-cap-chart"));   // exactly one chart…
             Assert.Single(Regex.Matches(html, "<path class=\"cap-line__path\""));      // …with one line
             Assert.Contains("js/dashboard-chart.js", html);
-            foreach (var key in new[] { "Enrolled", "Over capacity" }) Assert.Contains($"</i>{key}</span>", html);
+            foreach (var key in new[] { "Enrolled", "At or over capacity" }) Assert.Contains($"</i>{key}</span>", html);
             // No class capacity reference line (nor its legend item): over capacity shows as red points and ratios.
             Assert.DoesNotContain("Class capacity", html);
             Assert.DoesNotContain("cap-pt__capacity", html);
@@ -185,7 +185,7 @@ public sealed class DashboardCapacityTests(DbFixture fx)
             Assert.Contains("cap-pt--full", fullPt);
             Assert.Equal("3/3", Ratio(fullPt));
             Assert.Contains("cap-pt__dot\" data-n=\"3\"", fullPt);
-            Assert.DoesNotContain("cap-pt--over", fullPt);                  // exactly at capacity: not red
+            Assert.DoesNotContain("cap-pt--over", fullPt);                  // exactly at capacity: full (red too, see app.css), not over
             Assert.Equal(("3", "3", "0", "0", "100%"), (Tip(fullPt, "Enrolled"), Tip(fullPt, "Capacity"), Tip(fullPt, "Available"), Tip(fullPt, "Over capacity"), Tip(fullPt, "Usage")));
 
             var overPt = Point(over);

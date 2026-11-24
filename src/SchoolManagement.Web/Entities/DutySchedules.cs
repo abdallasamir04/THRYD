@@ -11,6 +11,28 @@ namespace SchoolManagement.Web.Entities;
 // day is always read with the schedule that applied to it. Nothing here is copied into the duty records.
 
 /// <summary>
+/// A Main Duty definition. <see cref="Id"/> is the <see cref="DutyType"/> value stored on the duty records, Sub-Duties and
+/// schedules: 1–3 are the original Morning, Midday and Dismissal duties (same names and slugs as before); duties added later
+/// (Duties → Add Duty) get new numbers, never reused.
+/// </summary>
+public class DutyMainDuty
+{
+    public const int NameMaxLength = 100;
+    public const int SummaryMaxLength = 300;
+    public const int SlugMaxLength = 60;
+    public const int IconMaxLength = 40;
+
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Slug { get; set; } = "";
+    public string Summary { get; set; } = "";
+    public string Icon { get; set; } = "shield-check";
+    public int SortOrder { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>
 /// A Sub-Duty definition. <see cref="Id"/> is the <see cref="DutyComponent"/> code stored on the duty records (1–10 are the
 /// original sections; sections added later get new numbers, never reused). A removed section is retired from a date and
 /// keeps all its records.

@@ -1,18 +1,18 @@
-@model FloorAuditHome
+﻿@model FloorAuditHome
 @*
-    Floor Audit: the school's floors with their live audit progress, the three rounds of every session of the day
+    Floor Management: the school's floors with their live audit progress, the three rounds of every session of the day
     (calculated from each session's own start time), Student Access and what needs attention. The board reloads itself.
 *@
 @{
-    ViewData["Title"] = "Floor Audit";
+    ViewData["Title"] = "Floor Inspections";
     ViewData["Nav"] = "FloorAudit";
     var date = SchoolWeek.Iso(Model.Date);
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li>Floor Audit</li></ol>
-        <h1 class="page-title">Floor Audit</h1>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/floor-management">Floor Management</a></li><li>Floor Inspections</li></ol>
+        <h1 class="page-title">Floor Inspections</h1>
         <p class="page-sub">Every floor, classroom and facility through the school day: three audit rounds in every timetable session, and students leaving class and returning.</p>
     </div>
     <div class="page-head__actions">

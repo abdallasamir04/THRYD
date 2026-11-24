@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Services;
@@ -10,10 +10,11 @@ namespace SchoolManagement.Web.Controllers;
 /// <summary>
 /// Academics → Timetables: one place to find and download every timetable of the school (all registered
 /// <see cref="ITimetableSource"/>s), one at a time, by group, by category or the whole school as a ZIP.
-/// The existing timetable pages are unchanged; this center only reads their data.
+/// The existing timetable pages are unchanged; this center only reads their data, except Create Table, which gives a class
+/// without a timetable its own empty one through the period service (the same periods the class timetable uses).
 /// </summary>
 [Route("timetables")]
-public class TimetablesController(ITimetableCenter center, IBelongingsService calendar) : AppController
+public class TimetablesController(ITimetableCenter center, IBelongingsService calendar, IPeriodService periods) : AppController
 {
     /// <summary>At most this many weeks in one date range.</summary>
     public const int MaxWeeks = 20;
@@ -77,6 +78,45 @@ public class TimetablesController(ITimetableCenter center, IBelongingsService ca
         var dept = (await center.OptionsAsync(request, ct)).Departments.FirstOrDefault(d => d.Id == departmentId).Name;
         if (dept is null) return Back("This department no longer exists.", request);
         return await FileAsync(items, request, $"{dept} Department Timetables", flat: true, zip: true, ct);
+    }
+
+    // ------------------------------------------------------------------ Create Table
+
+    /// <summary>Create Table: choose any active class (a class that already has a timetable is replaced only after confirmation).</summary>
+    [HttpGet("create")]
+    public async Task<IActionResult> Create(int? classId, CancellationToken ct) =>
+        PageOrPartial("Create", new CreateTableViewModel { ClassId = classId, Classes = await periods.ClassTableOptionsAsync(ct) });
+
+    /// <summary>
+    /// Creates the class's empty timetable (5 school days × 10 period slots, no lessons) and opens its period editor. For a
+    /// class that already has one, the form comes back with what the replacement would do; only the confirmed plan is applied.
+    /// </summary>
+    [HttpPost("create"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create(CreateTableViewModel model, CancellationToken ct)
+    {
+        if (model.ClassId is not { } classId) ModelState.AddModelError(nameof(model.ClassId), "Choose a class.");
+        else
+        {
+            var outcome = await periods.CreateClassTableAsync(classId, model.Confirmation, ct);
+            if (outcome.NeedsConfirmation)
+            {
+                // Nothing changed yet: show the plan (and its fingerprint) for an explicit "Replace timetable".
+                model.Plan = outcome.Plan;
+                model.Confirmation = outcome.Plan?.Fingerprint;
+                model.Classes = await periods.ClassTableOptionsAsync(ct);
+                return FormView("Create", model);
+            }
+            if (outcome.Result.Succeeded)
+            {
+                var editor = CreateTableViewModel.EditorHref(classId);
+                if (IsAjax) return AjaxSuccess(outcome.Message!, editor);
+                Toast(outcome.Message!);
+                return Redirect(editor);
+            }
+            AddErrors(outcome.Result);
+        }
+        model.Classes = await periods.ClassTableOptionsAsync(ct);
+        return FormView("Create", model);
     }
 
     // ------------------------------------------------------------------ helpers

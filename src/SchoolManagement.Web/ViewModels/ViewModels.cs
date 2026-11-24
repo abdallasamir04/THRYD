@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
@@ -30,6 +30,9 @@ public sealed class StudentIndexViewModel
 
     /// <summary>The list is embedded in one class's page (/classes/{id}): no class filter chip and no export of "all".</summary>
     public bool FixedClass { get; init; }
+
+    /// <summary>The add / edit / transfer / delete actions are shown (StudentRecordsAccess; checked again on the server).</summary>
+    public bool CanEdit { get; init; } = true;
 }
 
 public sealed class StudentFormModel
@@ -46,6 +49,25 @@ public sealed class StudentFormModel
     [Required(ErrorMessage = "Choose a class.")]
     [Range(1, int.MaxValue, ErrorMessage = "Choose a class.")]
     public int? SchoolClassId { get; set; }
+
+    // ---- Student profile details (all optional: missing information is never invented) ----
+    [Display(Name = "Birth date")]
+    public DateOnly? BirthDate { get; set; }
+
+    [Display(Name = "Admission application date")]
+    public DateOnly? AdmissionApplicationDate { get; set; }
+
+    [Display(Name = "Dismissal method")]
+    public DismissalMethod? DismissalMethod { get; set; }
+
+    [Display(Name = "Parent contact number")]
+    [StringLength(Student.ParentContactMaxLength, ErrorMessage = "Use {1} characters or fewer.")]
+    public string? ParentContactNumber { get; set; }
+
+    public Services.StudentDetailsInput Details() => new()
+    {
+        BirthDate = BirthDate, AdmissionApplicationDate = AdmissionApplicationDate, DismissalMethod = DismissalMethod, ParentContactNumber = ParentContactNumber,
+    };
 
     public IReadOnlyList<ClassOption> ClassOptions { get; set; } = [];
     public bool IsEdit => Id is > 0;

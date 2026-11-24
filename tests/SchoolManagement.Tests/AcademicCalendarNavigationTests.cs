@@ -97,7 +97,9 @@ public class AcademicCalendarNavigationTests(DbFixture fx)
         Assert.DoesNotContain("Academic years and 8-week quarters", calendar);
         Assert.DoesNotContain("bl-quarter", calendar);
         Assert.DoesNotContain("bl-weeks", calendar);
-        Assert.Contains("<a class=\"btn btn--primary\" href=\"/school-calendar/years/new\" data-modal>", calendar);
+        // + Add year sits in the toolbar beside + Add event (no longer at the bottom).
+        Assert.Matches("(?s)<div class=\"page-head__actions\">.*<a class=\"btn btn--(primary|secondary)\" href=\"/school-calendar/years/new\" data-modal>.*</div>\\s*</div>", calendar);
+        Assert.DoesNotContain("sc-addyear", calendar);
         Assert.Contains("name=\"Name\"", await client.GetStringAsync("/school-calendar/years/new"));
 
         var form = await client.GetStringAsync($"/school-calendar/quarters/{quarterId}/edit");

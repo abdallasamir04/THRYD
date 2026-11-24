@@ -1,0 +1,65 @@
+@model OrgSectionViewModel
+@*
+    A view of the organizational structure: Executive Management, Academic Leadership, or Operations & Administration.
+    The tiers it covers, with every unit, position, holder, grade range and phone number, read from the same records as the
+    Organizational Chart and Positions & Assignments (nothing copied).
+*@
+@{
+    ViewData["Title"] = Model.Title;
+    ViewData["Nav"] = "Management";
+    var s = Model.Structure;
+    var positions = s.AllPositions.ToList();
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><span aria-current="page">@Model.Title</span></li></ol>
+        <h1 class="page-title">@Model.Title</h1>
+        <p class="page-sub">@Model.Subtitle</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="@OrgLabels.OrgChartHref">@Ui.Icon("layers")Organizational Chart</a>
+        @if (Model.CanManage)
+        {
+            <a class="btn btn--primary" href="@OrgLabels.PositionsHref">@Ui.Icon("settings")Manage positions</a>
+        }
+    </div>
+</div>
+
+<partial name="~/Views/Management/_ManagementNav.cshtml" model="Model.Nav" />
+
+<ul class="kpis leadership-kpis" aria-label="@Model.Title totals">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon(Model.Icon)</span><p class="kpi__label">People</p><p class="kpi__value">@s.PeopleCount</p><p class="kpi__meta">Each person once, however many positions</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("layers")</span><p class="kpi__label">Units</p><p class="kpi__value">@s.Tiers.Sum(t => t.AllUnits.Count())</p><p class="kpi__meta">@Ui.Plural(s.Tiers.Count, "tier", "tiers")</p></div></li>
+    <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("briefcase")</span><p class="kpi__label">Positions</p><p class="kpi__value">@positions.Count</p><p class="kpi__meta">@positions.Sum(p => p.Holders.Count) assignments</p></div></li>
+    <li><div class="kpi @(positions.Any(p => p.IsVacant) ? "kpi--full" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon("alert-circle")</span><p class="kpi__label">Vacant</p><p class="kpi__value">@positions.Count(p => p.IsVacant)</p><p class="kpi__meta">Positions without a holder</p></div></li>
+</ul>
+
+<partial name="~/Views/OrgStructure/_Flags.cshtml" model="(s.Flags, Model.CanManage)" />
+
+@if (s.Tiers.Count == 0)
+{
+    <section class="card">
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("layers")</span>
+            <p class="empty__title">The organizational structure has not been recorded yet</p>
+            <p class="empty__text">Record the official structure (or add tiers, units and positions) on Positions &amp; Assignments.</p>
+            <div class="empty__actions"><a class="btn btn--primary" href="@OrgLabels.PositionsHref">@Ui.Icon("settings")Positions &amp; Assignments</a></div>
+        </div>
+    </section>
+}
+else
+{
+    <partial name="~/Views/OrgStructure/_Search.cshtml" model='("#org-section", s.Tiers, (int?)null, (string?)null, false)' />
+    <div class="org-stack" id="org-section">
+        @foreach (var t in s.Tiers)
+        {
+            <partial name="~/Views/OrgStructure/_Tier.cshtml" model="(t, Model.CanManage)" />
+        }
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/org-structure.js" asp-append-version="true"></script>
+}

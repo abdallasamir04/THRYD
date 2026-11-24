@@ -1,4 +1,4 @@
-@model TaskFormModel
+﻿@model TaskFormModel
 @*
     Create / edit a task in five sections: task information, assignment (creator, executor, reviewer — any staff member),
     schedule (THRYD date and 12-hour time pickers from tasks.js; the values posted are ISO date and 24-hour time),
@@ -14,7 +14,8 @@
     var minDue = Model.IsEdit ? SchoolWeek.Iso(ManagementTaskService.EarliestDue) : SchoolWeek.Iso(SchoolWeek.Today);
     var maxDue = SchoolWeek.Iso(SchoolWeek.Today.AddYears(ManagementTaskService.MaxYearsAhead));
     var statuses = Model.SavedStatus is { } saved ? TaskLabels.StatusesFor(saved) : TaskLabels.Statuses;
-    var creatorNote = Model.Creator?.IsManagement == true ? "Management Team" : Model.Creator is null ? null : "Staff";
+    var creatorNote = Model.Creator?.IsManagement == true ? "Management Team" : Model.Creator is not null ? "Staff"
+        : Model.CreatorName == CurrentUserNames.SuperAdmin ? "Full access" : null;
     var creatorOption = Model.Creator is { } cr ? Model.Staff.FirstOrDefault(s => s.Id == cr.Id) : null;
     var attachmentCount = Model.Attachments.Count(a => !Model.RemoveAttachmentIds.Contains(a.Id)) + Model.Staged.Count;
 }
@@ -71,16 +72,20 @@
                         </select>
                         <span asp-validation-for="Priority" class="field-validation-error"></span>
                     </div>
-                    <div class="field">
-                        <label class="label" for="Status">Status</label>
-                        <select class="select" id="Status" name="Status">
-                            @foreach (var s in statuses)
-                            {
-                                <option value="@s" selected="@(Model.Status == s)">@TaskLabels.Status(s)</option>
-                            }
-                        </select>
-                        <span asp-validation-for="Status" class="field-validation-error"></span>
-                    </div>
+                    @* Status only when editing: a new task always starts as To Do (set on the server). *@
+                    @if (Model.IsEdit)
+                    {
+                        <div class="field">
+                            <label class="label" for="Status">Status</label>
+                            <select class="select" id="Status" name="Status">
+                                @foreach (var s in statuses)
+                                {
+                                    <option value="@s" selected="@(Model.Status == s)">@TaskLabels.Status(s)</option>
+                                }
+                            </select>
+                            <span asp-validation-for="Status" class="field-validation-error"></span>
+                        </div>
+                    }
                 </div>
             </fieldset>
 
@@ -129,7 +134,7 @@
                                     <div class="person__meta">@(creatorOption?.Note ?? creatorNote ?? "Name recorded at creation")</div>
                                 </div>
                             </div>
-                            <p class="hint">@(Model.IsEdit ? "Recorded when the task was created; editing does not change it." : "Recorded automatically from “Working as”.")</p>
+                            <p class="hint">@(Model.IsEdit ? "Recorded when the task was created; editing does not change it." : "Recorded automatically from your account.")</p>
                         }
                         else
                         {

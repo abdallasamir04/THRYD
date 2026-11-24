@@ -1,4 +1,4 @@
-@model DepartmentDetailsViewModel
+﻿@model DepartmentDetailsViewModel
 @*
     A department's page. A department with subcategories (Religion: Islamic, Christian) opens on one card per subcategory
     (Academic Departments → Department → Subcategory → Staff); each card opens the subcategory's own page (?subcategory=)
@@ -180,6 +180,37 @@
     }
 
     <div class="stack">
+        @if (Model.OrgLeadership.Count > 0)
+        {
+            @* The official organizational structure's leadership of this department (several leaders by grade range are possible). *@
+            <section class="card" aria-labelledby="orgl-title">
+                <div class="card__head">
+                    <div>
+                        <h2 class="card__title" id="orgl-title">@Ui.Icon("layers")Official leadership</h2>
+                        <p class="card__sub">From the organizational structure — <a href="@OrgLabels.DepartmentsLeadershipHref">Departments Leadership</a>.</p>
+                    </div>
+                </div>
+                <div class="card__body">
+                    @foreach (var unit in Model.OrgLeadership)
+                    {
+                        <p class="dept-card__label" style="margin:0 0 6px">@unit.Name</p>
+                        <ul class="org-dept-leaders">
+                            @foreach (var p in unit.AllPositions)
+                            {
+                                if (p.IsVacant)
+                                {
+                                    <li><span class="badge badge--job">@p.DisplayTitle</span> <span class="badge badge--warning">Vacant</span></li>
+                                }
+                                foreach (var holder in p.Holders)
+                                {
+                                    <li><span class="badge badge--job">@p.Title</span>@if (p.GradeRange is not null) { <span class="org-grade">@p.GradeRange</span> } <a href="@holder.ProfileHref" dir="auto">@holder.FullName</a>@if (holder.Phone is not null) { <span class="muted" dir="ltr"> · @holder.Phone</span> }</li>
+                                }
+                            }
+                        </ul>
+                    }
+                </div>
+            </section>
+        }
         <section class="card" aria-labelledby="hod-title">
             <div class="card__head"><h2 class="card__title" id="hod-title">@Ui.Icon("crown")Head of Department</h2></div>
             <div class="card__body hod-card">

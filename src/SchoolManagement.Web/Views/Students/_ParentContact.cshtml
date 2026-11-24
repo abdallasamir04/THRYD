@@ -1,0 +1,36 @@
+@model (string? Phone, bool Compact)
+@*
+    A parent's phone number. With a number whose country is certain (WhatsApp.Link) it opens the WhatsApp chat with that
+    number in a new tab (nothing is sent); otherwise it is plain text, never a broken link. Compact = the icon button only
+    (student list).
+*@
+@{
+    var phone = Model.Phone;
+    var link = WhatsApp.Link(phone);
+}
+@if (string.IsNullOrWhiteSpace(phone))
+{
+    if (!Model.Compact) { <span class="faint">Not recorded</span> }
+    else { <span class="faint" aria-label="No parent number">—</span> }
+}
+else if (link is null)
+{
+    if (Model.Compact)
+    {
+        <span class="student-wa student-wa--off" title="@phone — add the country code (+…) to open it in WhatsApp" dir="ltr">@Ui.Icon("phone", "icon--sm")</span>
+    }
+    else
+    {
+        <span class="student-phone" dir="ltr">@phone</span>
+        <span class="hint student-phone__hint">No WhatsApp link: the country of this number is not certain. Add the country code (+…) on Edit.</span>
+    }
+}
+else if (Model.Compact)
+{
+    <a class="student-wa" href="@link" target="_blank" rel="noopener noreferrer" title="WhatsApp the parent: @phone" aria-label="Open WhatsApp chat with the parent (@phone)">@Ui.Icon("message-circle", "icon--sm")</a>
+}
+else
+{
+    <a class="student-phone student-phone--wa" href="@link" target="_blank" rel="noopener noreferrer" dir="ltr" title="Open a WhatsApp chat with this number">@phone</a>
+    <a class="btn btn--wa btn--sm" href="@link" target="_blank" rel="noopener noreferrer" aria-label="Open WhatsApp chat with the parent (@phone)">@Ui.Icon("message-circle", "icon--sm")WhatsApp</a>
+}

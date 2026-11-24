@@ -19,16 +19,59 @@
             <span class="avatar avatar--lg avatar--@Ui.Tone(st.FullName)" aria-hidden="true">@Ui.Initials(st.FullName)</span>
             <div>
                 <h1 class="page-title" dir="auto">@st.FullName<span class="profile-marks"><partial name="_StudentMarks" model="st" /></span></h1>
-                <p class="page-sub">Student · <span class="badge badge--class">@st.ClassName</span>@if (Model.CurrentClass is { } cc) { <span class="muted">(@cc.StudentCount / @cc.Capacity students)</span> }@if (!st.ClassActive) { <span class="badge badge--warning">Inactive class</span> }</p>
+                <p class="page-sub">Student · <span class="badge badge--class">@st.ClassName</span>@if (Model.CurrentClass is { } cc) { <span class="muted">(@cc.StudentCount / @cc.Capacity students)</span> @ClassCapacity.Badge(cc.StudentCount, cc.Capacity) }@if (!st.ClassActive) { <span class="badge badge--warning">Inactive class</span> }</p>
             </div>
         </div>
     </div>
     <div class="page-head__actions">
-        <a class="btn btn--secondary" href="/students/transfer/@st.Id" data-modal>@Ui.Icon("swap")Transfer class</a>
-        <a class="btn btn--secondary" href="/students/edit/@st.Id" data-modal>@Ui.Icon("pencil")Edit student</a>
+        @if (Model.CanEdit)
+        {
+            <a class="btn btn--secondary" href="/students/transfer/@st.Id" data-modal>@Ui.Icon("swap")Transfer class</a>
+            <a class="btn btn--secondary" href="/students/edit/@st.Id" data-modal>@Ui.Icon("pencil")Edit student</a>
+        }
         <a class="btn btn--secondary" href="/students/behaviour/incidents/student/@st.Id">@Ui.Icon("flag")Incident history</a>
         <a class="btn btn--primary" href="/arrivals?classId=@st.ClassId">@Ui.Icon("clock")Today's attendance</a>
     </div>
+</div>
+
+@* Student profile: identity, school, dismissal and the parent's contact (with a one-click WhatsApp chat). *@
+<div class="student-info" aria-label="Student profile">
+    <section class="card student-info__card" aria-labelledby="si-student">
+        <div class="card__head">
+            <h2 class="card__title" id="si-student">@Ui.Icon("user")Student information</h2>
+            @if (Model.CanEdit) { <a class="btn btn--ghost btn--sm" href="/students/edit/@st.Id" data-modal>@Ui.Icon("pencil", "icon--sm")Edit</a> }
+        </div>
+        <div class="card__body">
+            <dl class="student-facts">
+                <div><dt>Student name</dt><dd dir="auto">@st.FullName</dd></div>
+                <div><dt>Grade / Class</dt><dd><a class="badge badge--class" href="/classes/@st.ClassId" style="text-decoration:none">@st.ClassName</a></dd></div>
+                <div>
+                    <dt>Birth date</dt>
+                    <dd>@if (st.BirthDate is { } birth) { @StudentProfileRules.Date(birth) <span class="muted">· @StudentProfileRules.Age(birth, SchoolWeek.Today) years</span> } else { <span class="faint">Not recorded</span> }</dd>
+                </div>
+                <div><dt>Admission application date</dt><dd>@if (st.AdmissionApplicationDate is { } applied) { @StudentProfileRules.Date(applied) } else { <span class="faint">Not recorded</span> }</dd></div>
+            </dl>
+        </div>
+    </section>
+    <section class="card student-info__card" aria-labelledby="si-dismissal">
+        <div class="card__head"><h2 class="card__title" id="si-dismissal">@Ui.Icon("door")Dismissal</h2></div>
+        <div class="card__body">
+            <dl class="student-facts">
+                <div>
+                    <dt>Dismissal method</dt>
+                    <dd>@if (st.DismissalMethod is { } dm) { <span class="student-dismissal student-dismissal--@dm.ToString().ToLowerInvariant()">@Ui.Icon(StudentProfileRules.Icon(dm), "icon--sm")@StudentProfileRules.Dismissal(dm)</span> } else { <span class="faint">Not recorded</span> }</dd>
+                </div>
+            </dl>
+        </div>
+    </section>
+    <section class="card student-info__card" aria-labelledby="si-parent">
+        <div class="card__head"><h2 class="card__title" id="si-parent">@Ui.Icon("phone")Parent contact</h2></div>
+        <div class="card__body">
+            <dl class="student-facts">
+                <div><dt>Parent contact number</dt><dd class="student-contact"><partial name="~/Views/Students/_ParentContact.cshtml" model="(st.ParentContactNumber, false)" /></dd></div>
+            </dl>
+        </div>
+    </section>
 </div>
 
 <section class="card" aria-labelledby="att-title">

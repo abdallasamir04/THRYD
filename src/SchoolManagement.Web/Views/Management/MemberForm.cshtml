@@ -5,13 +5,15 @@
     if (modal) { Layout = null; }
     else { ViewData["Title"] = heading; ViewData["Nav"] = "Management"; }
     var action = Model.IsEdit ? $"/management/members/{Model.Id}/edit" : "/management/members/create";
+    // Editing: the member's section (Operation Team for a school-added position); adding: the Management Team.
+    var operation = Model.IsEdit && ManagementTeams.IsOperation(Model.Position, PositionChoices.CustomId(Model.PositionChoice));
 }
 
 @if (!modal)
 {
     <div class="page-head">
         <div class="page-head__text">
-            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><a href="/management/leadership">School Leadership</a></li><li>@(Model.IsEdit ? "Edit" : "Add")</li></ol>
+            <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li>@if (Model.IsEdit) { <li><a href="@(operation ? ManagementTeams.OperationHref : ManagementTeams.LeadershipHref)">@(operation ? ManagementTeams.OperationName : ManagementTeams.LeadershipName)</a></li> }<li>@(Model.IsEdit ? "Edit" : "Add")</li></ol>
             <h1 class="page-title">@heading</h1>
         </div>
     </div>

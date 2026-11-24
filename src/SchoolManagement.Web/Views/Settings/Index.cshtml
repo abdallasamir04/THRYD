@@ -92,15 +92,26 @@
             <div class="field">
                 <label class="label" for="operator-staff">Your name on the records you create in this browser</label>
                 <select class="select" id="operator-staff" name="staffId" data-searchable>
-                    <option value="">Not set</option>
+                    <option value="">Nobody — Super Admin (full access)</option>
                     @foreach (var st in Model.Staff)
                     {
                         <option value="@st.Id" selected="@(Model.OperatorStaffId == st.Id)" data-note="@st.JobTitle">@st.FullName</option>
                     }
                 </select>
-                <span class="hint">Used for “Created by”, “Recorded by” and “Updated by”. This is <strong>self-selected, not a sign-in</strong>: it is not verified until user accounts are added.</span>
+                <span class="hint">Optional. Used for “Created by”, “Recorded by” and “Updated by”, and the chosen person's own permissions then apply. Without a name you are the <strong>Super Admin</strong> with full access. This is <strong>self-selected, not a sign-in</strong>: it is not verified until user accounts are added.</span>
             </div>
-            <div><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+                @if (Model.OperatorStaffId is not null)
+                {
+                    <button class="btn btn--secondary" type="submit" form="operator-super-admin">@Ui.Icon("shield-check")Use as Super Admin</button>
+                }
+            </div>
+        </form>
+        @* Clears "Working as": no staff identity = the Super Admin (a separate form, so only this empty value is posted). *@
+        <form id="operator-super-admin" method="post" action="/operator" hidden>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnUrl" value="/settings#operator" />
         </form>
     </section>
 </div>

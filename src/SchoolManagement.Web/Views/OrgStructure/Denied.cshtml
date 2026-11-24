@@ -1,0 +1,21 @@
+@{
+    ViewData["Title"] = "Access needed";
+    ViewData["Nav"] = "Management";
+    ViewData["BackButtonHref"] = OrgLabels.PositionsHref;
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/management">Management Team</a></li><li><a href="@OrgLabels.PositionsHref">Positions &amp; Assignments</a></li><li>Access needed</li></ol>
+        <h1 class="page-title">Access needed</h1>
+    </div>
+</div>
+<section class="card">
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("lock")</span>
+        <p class="empty__title">You cannot change the organizational structure</p>
+        <p class="empty__text">@SchoolManagement.Web.Services.OrgStructure.OrgStructureAccess.DeniedMessage</p>
+        <div class="empty__actions">
+            <a class="btn btn--secondary" href="@OrgLabels.OrgChartHref">@Ui.Icon("layers")View the Organizational Chart</a>
+        </div>
+    </div>
+</section>

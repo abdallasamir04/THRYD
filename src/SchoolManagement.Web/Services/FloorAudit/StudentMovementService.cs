@@ -46,7 +46,7 @@ public sealed class StudentMovementService(SchoolDbContext db, ICurrentUser curr
     public async Task<ServiceResult> SaveOverdueMinutesAsync(int? minutes, CancellationToken ct = default)
     {
         var user = await access.CurrentAsync(ct);
-        if (!user.CanManage) return ServiceResult.Fail("", "Only a Floor Audit manager can change this setting.");
+        if (!user.CanManage) return ServiceResult.Fail("", "Only a Floor Management administrator can change this setting.");
         if (minutes is not { } m || m < 1 || m > MaxOverdueMinutes)
             return ServiceResult.Fail("OverdueMinutes", $"Enter a number of minutes from 1 to {MaxOverdueMinutes}.");
         var before = await OverdueMinutesAsync(ct);
@@ -243,7 +243,7 @@ public sealed class StudentMovementService(SchoolDbContext db, ICurrentUser curr
     public async Task<ServiceResult> RecordAsync(MovementFormModel form, CancellationToken ct = default)
     {
         var user = await access.CurrentAsync(ct);
-        if (!user.HasIdentity) return ServiceResult.Fail("", "Choose who you are under “Working as” (the panel at the top of the Floor Audit pages) to record student movements.");
+        if (!user.HasIdentity) return ServiceResult.Fail("", "Choose who you are under “Working as” (the panel at the top of the Floor Management pages) to record student movements.");
         if (form.StudentId is not { } studentId) return ServiceResult.Fail("StudentId", "Choose the student.");
         var student = await db.Students.AsNoTracking().Where(s => s.Id == studentId)
             .Select(s => new { s.Id, s.FullName, s.SchoolClassId, ClassName = s.SchoolClass.Name, s.SchoolClass.IsActive }).FirstOrDefaultAsync(ct);
@@ -263,7 +263,7 @@ public sealed class StudentMovementService(SchoolDbContext db, ICurrentUser curr
             fromFloorId = from.FloorId;
         }
         if (!user.CanRecordMovements(fromFloorId))
-            return ServiceResult.Fail("", "You are not allowed to record student movements for this floor. A Floor Audit manager can give you access.");
+            return ServiceResult.Fail("", "You are not allowed to record student movements for this floor. A Floor Management administrator can give you access.");
 
         // To: a configured area, or a clearly named custom destination.
         string toName;
@@ -331,12 +331,12 @@ public sealed class StudentMovementService(SchoolDbContext db, ICurrentUser curr
     private static string OpenMessage(MovementRow r) =>
         $"{r.StudentName} is already outside: left for {r.ToName} at {FloorAuditLabels.Time(r.ExitAt)}" +
         $"{(r.Date != SchoolTime.Current.Today ? $" on {r.Date:d MMM}" : "")} (recorded by {r.RecordedBy ?? "—"}). Mark them returned first" +
-        " — or, if that movement was recorded by mistake, a Floor Audit manager can void it.";
+        " — or, if that movement was recorded by mistake, a Floor Management administrator can void it.";
 
     public async Task<ServiceResult> ReturnAsync(int id, string? time, CancellationToken ct = default)
     {
         var user = await access.CurrentAsync(ct);
-        if (!user.HasIdentity) return ServiceResult.Fail("", "Choose who you are under “Working as” (the panel at the top of the Floor Audit pages) to mark students returned.");
+        if (!user.HasIdentity) return ServiceResult.Fail("", "Choose who you are under “Working as” (the panel at the top of the Floor Management pages) to mark students returned.");
         var m = await db.StudentMovements.Include(x => x.Student).FirstOrDefaultAsync(x => x.Id == id, ct);
         if (m is null) return ServiceResult.Fail("", "This movement no longer exists.");
         if (!user.CanRecordMovements(m.FromFloorId)) return ServiceResult.Fail("", "You are not allowed to mark students returned for this floor.");
@@ -360,7 +360,7 @@ public sealed class StudentMovementService(SchoolDbContext db, ICurrentUser curr
     public async Task<ServiceResult> VoidAsync(int id, string? reason, CancellationToken ct = default)
     {
         var user = await access.CurrentAsync(ct);
-        if (!user.CanManage || !user.HasIdentity) return ServiceResult.Fail("", "Only a Floor Audit manager can void a movement.");
+        if (!user.CanAdminister) return ServiceResult.Fail("", "Only a Floor Management administrator can void a movement.");
         var m = await db.StudentMovements.Include(x => x.Student).FirstOrDefaultAsync(x => x.Id == id, ct);
         if (m is null) return ServiceResult.Fail("", "This movement no longer exists.");
         if (m.VoidedAt is not null) return ServiceResult.Fail("", "This movement is already voided.");

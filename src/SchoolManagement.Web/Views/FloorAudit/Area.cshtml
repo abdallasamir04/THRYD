@@ -5,13 +5,13 @@
 *@
 @{
     var a = Model.Area;
-    ViewData["Title"] = $"{a.Name} · Floor Audit";
+    ViewData["Title"] = $"{a.Name} · Floor Management";
     ViewData["Nav"] = "FloorAudit";
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit">Floor Audit</a></li><li><a href="/floor-audit/floors/@a.FloorId">@a.FloorName</a></li><li dir="auto">@a.Name</li></ol>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-management">Floor Management</a></li><li><a href="/floor-audit">Floor Inspections</a></li><li><a href="/floor-audit/floors/@a.FloorId">@a.FloorName</a></li><li dir="auto">@a.Name</li></ol>
         <h1 class="page-title" dir="auto">@a.Name@if (!a.IsActive) { <span class="badge badge--neutral fa-title-badge">Inactive</span> }</h1>
         <p class="page-sub">@a.TypeLabel on @a.FloorName@(a.Description is { } d ? $" · {d}" : "")</p>
     </div>

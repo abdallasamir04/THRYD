@@ -1,0 +1,59 @@
+@model FloorTicketViewModel
+@using SchoolManagement.Web.Services.FloorManagement
+@{
+    var t = Model.Ticket;
+    ViewData["Title"] = t.Row.Number;
+    ViewData["Nav"] = "FloorAudit";
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/floor-management">Floor Management</a></li><li><a href="/floor-management/tickets">Tickets</a></li><li><span aria-current="page">@t.Row.Number</span></li></ol>
+        <h1 class="page-title">@t.Row.Number · <a href="/students/profile/@t.Row.StudentId" dir="auto">@t.Row.Student</a></h1>
+        <p class="page-sub"><span class="badge badge--primary">@FloorManagementService.Label(t.Row.Status)</span> @t.Row.Floor · @t.Row.ClassName · @FloorManagementService.Label(t.Row.Category) · @TaskLabels.Priority(t.Row.Priority) priority</p>
+    </div>
+</div>
+<div class="grid-3-1">
+    <section class="card">
+        <div class="card__head"><h2 class="card__title">@Ui.Icon("file-text")Case</h2></div>
+        <div class="card__body">
+            <dl class="dl" style="font-size:0.875rem">
+                <dt>Opened by</dt><dd>@(t.Row.CreatedBy ?? "—") · @Ui.DateTime(t.Row.CreatedAt)</dd>
+                <dt>Social Worker</dt><dd>@(t.Row.SocialWorker ?? "Not assigned")</dd>
+                <dt>Resolution notes</dt><dd style="white-space:pre-wrap">@(t.ResolutionNotes ?? "—")</dd>
+            </dl>
+            <p style="white-space:pre-wrap;margin-top:14px" dir="auto">@t.Description</p>
+        </div>
+    </section>
+    <div class="stack">
+        @if (Model.CanFollowUp)
+        {
+            <section class="card">
+                <div class="card__head"><h2 class="card__title">@Ui.Icon("pencil")Follow up</h2></div>
+                <form class="card__body form-grid" action="/floor-management/tickets/@t.Row.Id/update" method="post" data-ajax-form>
+                    @Html.AntiForgeryToken()
+                    <div class="field field--full">
+                        <label class="label" for="status">Status</label>
+                        <select class="select" id="status" name="status">
+                            @foreach (var s in Enum.GetValues<FloorTicketStatus>()) { <option value="@s" selected="@(t.Row.Status == s)">@FloorManagementService.Label(s)</option> }
+                        </select>
+                        <span class="hint">Escalated = forwarded to the Behavioural / Discipline follow-up (<a href="/students/behaviour/incidents/new">open an incident report</a>).</span>
+                    </div>
+                    <div class="field field--full">
+                        <label class="label" for="socialWorkerId">Social Worker</label>
+                        <select class="select" id="socialWorkerId" name="socialWorkerId">
+                            <option value="">@(Model.SocialWorkers.Count == 0 ? "None assigned to this floor yet" : "Keep as is")</option>
+                            @foreach (var s in Model.SocialWorkers) { <option value="@s.StaffId" selected="@(t.Row.SocialWorkerId == s.StaffId)">@s.Name</option> }
+                        </select>
+                    </div>
+                    <div class="field field--full"><label class="label" for="resolution">Resolution notes (required to resolve or close)</label><textarea class="textarea" id="resolution" name="resolution" rows="3" maxlength="2000">@t.ResolutionNotes</textarea></div>
+                    <div class="field field--full"><label class="label" for="note">Note for the history</label><textarea class="textarea" id="note" name="note" rows="2" maxlength="1000"></textarea></div>
+                    <div class="field field--full"><button class="btn btn--primary" type="submit">@Ui.Icon("check")Update ticket</button></div>
+                </form>
+            </section>
+        }
+        <section class="card">
+            <div class="card__head"><h2 class="card__title">@Ui.Icon("clock")History</h2></div>
+            <div class="card__body"><partial name="~/Views/FloorManagement/_History.cshtml" model="t.Events" /></div>
+        </section>
+    </div>
+</div>

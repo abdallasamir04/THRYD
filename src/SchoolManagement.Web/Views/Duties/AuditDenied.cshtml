@@ -1,0 +1,31 @@
+@*
+    Shown (403) when the person working in this browser is not authorized for Duty Audit (IDutyAuditAccess: the staff,
+    positions and roles configured in "DutyAudit"; nobody by default). Nothing of the audit is loaded.
+*@
+@{
+    ViewData["Title"] = "Not allowed · " + DutiesPages.AuditTitle;
+    ViewData["Nav"] = "DutyAudit";
+    ViewData["BackButtonHref"] = DutiesPages.Landing;
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="@DutiesPages.Landing">@DutiesPages.Title</a></li><li><span aria-current="page">@DutiesPages.AuditTitle</span></li></ol>
+        <h1 class="page-title">@DutiesPages.AuditTitle</h1>
+    </div>
+</div>
+<div class="card form-page">
+    <div class="modal__head">
+        <span class="modal__icon modal__icon--warning">@Ui.Icon("lock", "icon--lg")</span>
+        <div>
+            <h2 class="modal__title">Not allowed</h2>
+            <p class="modal__sub">@SchoolManagement.Web.Services.DutyAuditAccess.DeniedMessage</p>
+        </div>
+    </div>
+    <div class="modal__body">
+        <p class="hint" style="margin:0">You are working as a staff member (the name at the top right), so that person's permissions apply. The Super Admin works without “Working as” — clear it in Settings. If you have been given access, check that your own name is chosen there.</p>
+    </div>
+    <div class="modal__foot">
+        <a class="btn btn--secondary" href="@DutiesPages.BoardUrl">@Ui.Icon("shield-check")Open Duties</a>
+        <a class="btn btn--ghost" href="/settings#operator">Working as…</a>
+    </div>
+</div>

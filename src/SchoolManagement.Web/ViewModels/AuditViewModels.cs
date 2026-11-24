@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
@@ -13,9 +13,6 @@ public sealed class DutyAuditViewModel
     public required PagedResult<DutyRow> Result { get; init; }
     public required IReadOnlyList<StaffOption> Staff { get; init; }
     public required IReadOnlyList<string> Locations { get; init; }
-
-    /// <summary>The Duties section at the top of the page (every Main Duty card, and the selected one's details).</summary>
-    public DutyHubViewModel? Duties { get; init; }
 }
 
 public sealed class DutyAuditFormModel
@@ -41,9 +38,6 @@ public sealed class StaffOverviewViewModel
 {
     public required IReadOnlyList<StaffDutyOverviewRow> Rows { get; init; }
     public string? Search { get; init; }
-
-    /// <summary>Duties & Audit → Staff Duty Records: the Duties section at the top of the page.</summary>
-    public DutyHubViewModel? Duties { get; init; }
 }
 
 public sealed class StaffProfileViewModel
@@ -56,6 +50,10 @@ public sealed class StaffProfileViewModel
 
     /// <summary>KG class teaching-team roles (Homeroom Teacher / Co-Teacher), all academic years — not teaching periods.</summary>
     public IReadOnlyList<StaffClassAssignmentView> ClassAssignments { get; init; } = [];
+
+    /// <summary>Organizational positions (current, history) and data-quality warnings of this person.</summary>
+    public Services.OrgStructure.StaffOrgSummary Org { get; init; } = Services.OrgStructure.StaffOrgSummary.Empty;
+    public bool CanManageOrg { get; init; }
 }
 
 public sealed class FeedbackFormModel
@@ -186,6 +184,9 @@ public sealed class StudentProfileViewModel
     public string? From { get; init; }
     public string? To { get; init; }
     public bool NewestFirst { get; init; } = true;
+
+    /// <summary>The edit / transfer actions are shown (StudentRecordsAccess; checked again on the server).</summary>
+    public bool CanEdit { get; init; } = true;
 }
 
 public sealed class StudentTransferModel

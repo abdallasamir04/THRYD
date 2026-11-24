@@ -1,0 +1,55 @@
+@model FloorReportFormModel
+@using SchoolManagement.Web.Services.FloorManagement
+@{
+    var modal = Context.Request.IsAjax();
+    if (modal) { Layout = null; } else { ViewData["Title"] = "New report"; ViewData["Nav"] = "FloorAudit"; }
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="/floor-management/reports/new" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("flag", "icon--lg")</span>
+            <div><h2 class="modal__title">New report</h2><p class="modal__sub">Sent along your reporting line. A report is never sent to the person it concerns — escalate it to the next level instead.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field">
+                <label class="label" for="FloorId">Floor</label>
+                <select class="select" id="FloorId" name="FloorId">
+                    @foreach (var f in Model.Floors) { <option value="@f.Id" selected="@(Model.FloorId == f.Id)">@f.Name</option> }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="Recipient">Send to</label>
+                <select class="select" id="Recipient" name="Recipient">
+                    @foreach (var r in Model.Recipients) { <option value="@r" selected="@(Model.Recipient == r)">@FloorManagementService.Label(r)</option> }
+                </select>
+                @if (Model.Recipients.Count == 0) { <span class="hint">You have no reporting line on this floor.</span> }
+            </div>
+            <div class="field field--full"><label class="label" for="Title">Title <span class="req">*</span></label><input class="input" id="Title" name="Title" value="@Model.Title" maxlength="150" required /></div>
+            <div class="field">
+                <label class="label" for="Category">Category</label>
+                <select class="select" id="Category" name="Category">
+                    @foreach (var c in Enum.GetValues<FloorReportCategory>()) { <option value="@c" selected="@(Model.Category == c)">@FloorManagementService.Label(c)</option> }
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="OccurredAt">Date and time</label>
+                <input class="input" id="OccurredAt" name="OccurredAt" type="datetime-local" value="@(Model.OccurredAt?.ToString("yyyy-MM-ddTHH:mm"))" />
+            </div>
+            <div class="field field--full">
+                <label class="label" for="RelatedStaffId">Related employee (optional)</label>
+                <select class="select" id="RelatedStaffId" name="RelatedStaffId" data-searchable>
+                    <option value="">Nobody in particular</option>
+                    @foreach (var s in Model.Staff) { <option value="@s.Id" selected="@(Model.RelatedStaffId == s.Id)">@s.Name</option> }
+                </select>
+            </div>
+            <div class="field field--full"><label class="label" for="Description">Description <span class="req">*</span></label><textarea class="textarea" id="Description" name="Description" rows="5" maxlength="2000" required>@Model.Description</textarea></div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> } else { <a class="btn btn--secondary" href="/floor-management/reports">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("send")Submit report</button>
+        </div>
+    </form>
+</div>

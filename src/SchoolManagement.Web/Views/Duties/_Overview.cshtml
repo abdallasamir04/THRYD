@@ -1,6 +1,6 @@
 @model DutyHubViewModel
 @*
-    Duties & Audit → Duties: the Main Duty cards of the day (plus Activities), and below them the selected Main Duty's
+    Duties → the duty board: the Main Duty cards of the day (plus Activities), and below them the selected Main Duty's
     complete board — its status and coverage, every Sub-Duty with its time, required / optional designation, coverage
     points and staff, each opening its management page (assignments, backups, attendance, reports). Reloaded every
     30 seconds by duties.js from /duties/overview (same day and selection).
@@ -10,23 +10,23 @@
 }
 <partial name="_HubBoard" model="Model" />
 
-<section class="duty-details @(Model.Details is null ? "duty-details--empty" : "")" id="duty-details" aria-label="@(Model.Details is { } sel ? $"{sel.Main.Name}: details" : "Duty details")" tabindex="-1">
-    @if (Model.Details is { } d)
-    {
-        var slug = DutyComponents.TypeSlug(d.Main.Type);
+@* The selected duty's board; nothing at all (no placeholder) until a duty is selected. *@
+@if (Model.Details is { } d)
+{
+    var slug = DutyComponents.TypeSlug(d.Main.Type);
+    <section class="duty-details" id="duty-details" aria-label="@d.Main.Name: details" tabindex="-1">
         <header class="duty-details__head">
             <span class="duty-details__eyebrow">@Ui.Icon("chevron-down", "icon--sm")Selected duty · @d.Main.Name</span>
             <div class="duty-details__actions">
                 <a class="btn btn--secondary btn--sm" href="/duties/@slug/schedule">@Ui.Icon("clock", "icon--sm")Schedule</a>
                 <a class="btn btn--secondary btn--sm" href="/duties/@slug/report.pdf?date=@date" data-download-direct>@Ui.Icon("file-pdf", "icon--sm")Coverage report</a>
-                <a class="btn btn--secondary btn--sm" href="/duties/audit?date=@date&amp;duty=@slug&amp;from=@date&amp;to=@date&amp;type=@d.Main.Type#duty-audit">@Ui.Icon("clipboard-check", "icon--sm")Audit this duty</a>
-                <a class="btn btn--ghost btn--sm" href="/duties/audit?date=@date" aria-label="Close @d.Main.Name">@Ui.Icon("x", "icon--sm")Close</a>
+                @if (Model.CanAudit)
+                {
+                    <a class="btn btn--secondary btn--sm" href="@DutiesPages.AuditUrl?from=@date&amp;to=@date&amp;type=@d.Main.Type#duty-audit">@Ui.Icon("clipboard-check", "icon--sm")Audit this duty</a>
+                }
+                <a class="btn btn--ghost btn--sm" href="@DutiesPages.BoardUrl?date=@date" aria-label="Close @d.Main.Name">@Ui.Icon("x", "icon--sm")Close</a>
             </div>
         </header>
         <partial name="_MainBoard" model="d" />
-    }
-    else
-    {
-        <p class="duty-details__hint">@Ui.Icon("info", "icon--sm")Select a duty above to see its Sub-Duties, coverage points, staff and backups, and to manage its assignments, schedule and reports.</p>
-    }
-</section>
+    </section>
+}

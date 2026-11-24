@@ -1,20 +1,17 @@
 @model DutyHubViewModel
 @*
-    Duties & Audit, top section: managing the school's duties. The day bar, the "By department" view, and the live board
-    of Main Duty cards with the selected duty's details (_Overview), which reloads itself from its own address.
+    Duties → the duty board: managing the school's duties. The day bar with the "By department" view, and the live board
+    of Main Duty cards with the selected duty's details (_Overview), which reloads itself from its own address. No section
+    heading: the page title above names it.
 *@
 @{
     var date = SchoolWeek.Iso(Model.Day.Date);
 }
-<section class="ops-section" aria-labelledby="duties-section-title">
-    <header class="ops-section__head">
-        <div>
-            <h2 class="ops-section__title" id="duties-section-title">@Ui.Icon("shield-check")Duties</h2>
-            <p class="ops-section__sub">Each duty runs on its own schedule. Statuses are calculated from the school clock (Cairo) and the attendance recorded at every coverage point. Select a duty to manage it.</p>
-        </div>
+<section class="ops-section duty-board" id="duties-section" aria-label="Duties">
+    <div class="ses-bar">
+        <partial name="~/Views/Attendance/_SessionDayNav.cshtml" model="Model.Day.Date" />
         <a class="btn btn--secondary btn--sm" href="/duties/departments?date=@date">@Ui.Icon("layers", "icon--sm")By department</a>
-    </header>
-    <partial name="~/Views/Attendance/_SessionDayNav.cshtml" model="Model.Day.Date" />
+    </div>
     <div id="duty-board" data-duty-live="@Model.LiveUrl" aria-live="polite">
         <partial name="_Overview" model="Model" />
     </div>

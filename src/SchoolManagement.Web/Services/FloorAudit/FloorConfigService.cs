@@ -28,20 +28,20 @@ public interface IFloorConfigService
 }
 
 /// <summary>
-/// Floor Audit configuration (managers only): floors, which classes are on which floor, facilities, the checklist and
+/// Floor Management configuration (managers only): floors, which classes are on which floor, facilities, the checklist and
 /// who may inspect. Nothing is deleted — floors, areas and items are deactivated and access is ended — so history keeps
-/// what it refers to. Every change is written to the Floor Audit trail.
+/// what it refers to. Every change is written to the Floor Management trail.
 /// </summary>
 public sealed class FloorConfigService(SchoolDbContext db, ICurrentUser currentUser, IFloorAuditAccessService access, IFloorAuditService audit,
     IStudentMovementService movements) : IFloorConfigService
 {
     public const int ExportLimit = 5000;
-    private const string ManagersOnly = "Only a Floor Audit manager can change the floor configuration.";
+    private const string ManagersOnly = "Only a Floor Management administrator can change the floor configuration.";
 
     private async Task<ServiceResult?> DenyAsync(CancellationToken ct)
     {
         var user = await access.CurrentAsync(ct);
-        return user.CanManage && user.HasIdentity ? null : ServiceResult.Fail("", ManagersOnly);
+        return user.CanAdminister ? null : ServiceResult.Fail("", ManagersOnly);
     }
 
     private void Log(string entity, int? id, int? floorId, string action, string text) => FloorAuditLog.Add(db, currentUser, entity, id, floorId, action, text);
@@ -387,7 +387,7 @@ public sealed class FloorConfigService(SchoolDbContext db, ICurrentUser currentU
         db.FloorAuditAccess.Add(row);
         await db.SaveChangesAsync(ct);
         Log("Access", row.Id, floorId, "Granted", form.Role == FloorAuditRole.Manager
-            ? $"{staff}: Floor Audit Manager."
+            ? $"{staff}: Floor Management Administrator."
             : $"{staff}: Inspector of {floorName ?? "every floor"}{(row.CanRecordMovements ? ", may record student movements" : "")}.");
         await db.SaveChangesAsync(ct);
         return ServiceResult.Ok(row.Id);
@@ -400,7 +400,7 @@ public sealed class FloorConfigService(SchoolDbContext db, ICurrentUser currentU
         if (row is null) return ServiceResult.Fail("", "This access was already ended.");
         row.EndedAt = DateTime.UtcNow;
         row.EndedBy = currentUser.Name;
-        Log("Access", id, row.FloorId, "Ended", $"{row.StaffMember.FullName}: {(row.Role == FloorAuditRole.Manager ? "Floor Audit Manager" : $"Inspector of {row.Floor?.Name ?? "every floor"}")} ended.");
+        Log("Access", id, row.FloorId, "Ended", $"{row.StaffMember.FullName}: {(row.Role == FloorAuditRole.Manager ? "Floor Management Administrator" : $"Inspector of {row.Floor?.Name ?? "every floor"}")} ended.");
         await db.SaveChangesAsync(ct);
         return ServiceResult.Ok(id);
     }

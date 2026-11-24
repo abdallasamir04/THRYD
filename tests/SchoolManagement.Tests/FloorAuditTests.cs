@@ -701,10 +701,10 @@ public class FloorAuditTests(DbFixture fx) : IAsyncLifetime
     {
         var client = await ClientAsync(null);
         var home = WebUtility.HtmlDecode(await client.GetStringAsync("/floor-audit"));
-        Assert.Contains("<h1 class=\"page-title\">Floor Audit</h1>", home);
+        Assert.Contains("<h1 class=\"page-title\">Floor Inspections</h1>", home);   // part of Floor Management
         Assert.Contains("href=\"/floor-audit\"", home);
         foreach (var f in new[] { "Ground Floor", "1st Floor", "2nd Floor", "3rd Floor" }) Assert.Contains(f, home);
-        Assert.Contains("View only — nobody is chosen", home);
+        Assert.Contains("<strong>Super Admin</strong>", home);   // no "Working as": the Super Admin (administration only)
         Assert.Contains("action=\"/operator\"", home);   // "Working as" can be chosen right here   // no "Working as": nothing can be recorded
         Assert.DoesNotContain("href=\"/floor-audit/movements/new\"", home);
         foreach (var url in new[] { "/floor-audit/floors/1", "/floor-audit/movements", "/floor-audit/history", "/floor-audit/manage", "/floor-audit/manage?tab=checklist", "/floor-audit/manage?tab=access" })
@@ -712,7 +712,7 @@ public class FloorAuditTests(DbFixture fx) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/floor-audit/floors/99999")).StatusCode);
         var floor = WebUtility.HtmlDecode(await client.GetStringAsync("/floor-audit/floors/1"));
         foreach (var t in new[] { "Student Access", "View Audit History", "Classrooms", "Facilities" }) Assert.Contains(t, floor);
-        Assert.DoesNotContain("Manage Floor Areas", floor);
+        Assert.Contains("Manage Floor Areas", floor);   // the Super Admin (no "Working as") administers the floors
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/floor-audit/history/pdf")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/floor-audit/movements/excel")).StatusCode);
     }
@@ -722,7 +722,10 @@ public class FloorAuditTests(DbFixture fx) : IAsyncLifetime
     {
         var inspector = await StaffWithAsync(FloorAuditRole.Inspector, 1);
         var manager = await StaffWithAsync(FloorAuditRole.Manager);
-        Assert.Equal(HttpStatusCode.Forbidden, (await (await ClientAsync(null)).GetAsync("/floor-audit/manage/items/new")).StatusCode);
+        // The Super Admin (no "Working as") administers the configuration; an ordinary staff member without a role does not.
+        Assert.Equal(HttpStatusCode.OK, (await (await ClientAsync(null)).GetAsync("/floor-audit/manage/items/new")).StatusCode);
+        var (ordinary, _) = await fx.NewTeacherAsync();
+        Assert.Equal(HttpStatusCode.Forbidden, (await (await ClientAsync(ordinary)).GetAsync("/floor-audit/manage/items/new")).StatusCode);
         var client = await ClientAsync(inspector.Id);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/floor-audit/manage/items/new")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/floor-audit/manage/facilities/new")).StatusCode);

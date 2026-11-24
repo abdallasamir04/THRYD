@@ -1,0 +1,27 @@
+@model (string Key, SubDutyRowModel Row)
+@* One Sub-Duty row of Add Duty. "SubDuties.Index" lets rows be removed without renumbering the others. *@
+@{
+    var (k, r) = Model;
+}
+<div class="md-sub" data-subduty-row>
+    <input type="hidden" name="SubDuties.Index" value="@k" />
+    <div class="field md-sub__name">
+        <label class="label" for="md-sub-@k-name">Sub-Duty name</label>
+        <input class="input" id="md-sub-@k-name" name="SubDuties[@k].Name" value="@r.Name" maxlength="@DutySection.NameMaxLength" dir="auto" placeholder="e.g. Canteen queue" />
+    </div>
+    <div class="field">
+        <label class="label" for="md-sub-@k-start">Start</label>
+        <input class="input picker" type="time" id="md-sub-@k-start" name="SubDuties[@k].StartTime" value="@r.StartTime" data-timepicker data-empty-text="Duty's start" />
+    </div>
+    <div class="field">
+        <label class="label" for="md-sub-@k-end">End</label>
+        <input class="input picker" type="time" id="md-sub-@k-end" name="SubDuties[@k].EndTime" value="@r.EndTime" data-timepicker data-empty-text="Duty's end" />
+    </div>
+    <label class="switch md-sub__req">
+        <input type="checkbox" name="SubDuties[@k].Required" value="true" checked="@r.Required" />
+        <span class="switch__track" aria-hidden="true"></span>
+        <span>Required</span>
+    </label>
+    <input type="hidden" name="SubDuties[@k].Required" value="false" />
+    <button class="icon-btn md-sub__remove" type="button" data-subduty-remove aria-label="Remove this Sub-Duty" title="Remove">@Ui.Icon("trash")</button>
+</div>

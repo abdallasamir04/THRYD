@@ -1,0 +1,336 @@
+@model PositionsManagementViewModel
+@*
+    Management → Positions & Assignments: the organizational structure's records and who holds them.
+    Tabs: Assignments (assign, edit, change position, end, set primary; filter by tier / unit / position; ended ones on
+    request), Positions (vacancies), Units, Tiers, and Review (data-quality warnings and the official import).
+    Changes need organizational-structure access; everyone else sees the same lists read-only.
+*@
+@{
+    ViewData["Title"] = "Positions & Assignments";
+    ViewData["Nav"] = "Management";
+    var s = Model.Structure;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var allPositions = s.Tiers.SelectMany(t => t.AllUnits.SelectMany(u => u.Positions.Select(p => (Tier: t, Unit: u, Position: p)))).ToList();
+    var allUnits = s.Tiers.SelectMany(t => t.AllUnits.Select(u => (Tier: t, Unit: u))).ToList();
+    string TabHref(string tab) => $"{OrgLabels.PositionsHref}?tab={tab}";
+    string Cur(string tab) => Model.Tab == tab ? "true" : "false";
+    var term = SchoolManagement.Web.Common.TextNormalizer.NameKey(Model.Search);
+    var digits = SchoolManagement.Web.Common.TextNormalizer.PhoneKey(Model.Search);
+
+    // Assignments, filtered (tier / unit / position / search by name, position or phone)
+    var assignments = Model.Assignments.Where(a =>
+        (Model.Tier is null || a.TierId == Model.Tier) && (Model.Unit is null || a.UnitId == Model.Unit) && (Model.Position is null || a.PositionId == Model.Position)
+        && (term.Length == 0 || SchoolManagement.Web.Common.TextNormalizer.NameKey(a.FullName + " " + a.DisplayTitle + " " + a.Unit).Contains(term)
+            || (digits.Length >= 3 && SchoolManagement.Web.Common.TextNormalizer.PhoneKey(a.Phone).Contains(digits)))).ToList();
+    var positions = allPositions.Where(x =>
+        (Model.Tier is null || x.Tier.Id == Model.Tier) && (Model.Unit is null || x.Unit.Id == Model.Unit)
+        && (Model.Status is null || (Model.Status == "vacant") == x.Position.IsVacant)
+        && (term.Length == 0 || SchoolManagement.Web.Common.TextNormalizer.NameKey(x.Position.DisplayTitle + " " + x.Unit.Name).Contains(term))).ToList();
+    var filtering = Model.Tier is not null || Model.Unit is not null || Model.Position is not null || Model.Status is not null || term.Length > 0;
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><span aria-current="page">Positions &amp; Assignments</span></li></ol>
+        <h1 class="page-title">Positions &amp; Assignments</h1>
+        <p class="page-sub">Organizational tiers, units and positions, who holds each position, grade ranges, reporting lines, vacancies and the history of every change.</p>
+    </div>
+    <div class="page-head__actions">
+        @if (Model.CanManage)
+        {
+            <div class="page-head__group" role="group" aria-label="Add">
+                <a class="btn btn--secondary" href="/management/org/tiers/create" data-modal>@Ui.Icon("plus")Tier</a>
+                <a class="btn btn--secondary" href="/management/org/units/create" data-modal>@Ui.Icon("plus")Unit</a>
+                <a class="btn btn--secondary" href="/management/org/positions/create" data-modal>@Ui.Icon("plus")Position</a>
+            </div>
+            <a class="btn btn--primary" href="/management/org/assignments/create" data-modal>@Ui.Icon("user-plus")Assign employee</a>
+        }
+    </div>
+</div>
+
+<partial name="~/Views/Management/_ManagementNav.cshtml" model="ManagementNav.Positions" />
+
+@if (!Model.CanManage)
+{
+    <div class="notice">@Ui.Icon("lock")<div class="notice__body"><strong>View only</strong>@OrgStructureAccess.DeniedMessage</div></div>
+}
+
+<ul class="summary-tiles summary-tiles--5" aria-label="Structure totals">
+    <li><a class="summary-tile" href="@TabHref("tiers")" aria-current="@Cur("tiers")"><span class="summary-tile__value num">@s.Tiers.Count</span><span class="summary-tile__label">@Ui.Icon("layers", "icon--sm")Tiers</span></a></li>
+    <li><a class="summary-tile" href="@TabHref("units")" aria-current="@Cur("units")"><span class="summary-tile__value num">@allUnits.Count</span><span class="summary-tile__label">@Ui.Icon("grid", "icon--sm")Units</span></a></li>
+    <li><a class="summary-tile" href="@TabHref("positions")" aria-current="@Cur("positions")"><span class="summary-tile__value num">@allPositions.Count</span><span class="summary-tile__label">@Ui.Icon("briefcase", "icon--sm")Positions</span></a></li>
+    <li><a class="summary-tile" href="@TabHref("assignments")" aria-current="@Cur("assignments")"><span class="summary-tile__value num">@Model.Assignments.Count(a => a.IsCurrent)</span><span class="summary-tile__label">@Ui.Icon("users", "icon--sm")Current assignments</span></a></li>
+    <li><a class="summary-tile @(allPositions.Any(p => p.Position.IsVacant) ? "summary-tile--bad" : "summary-tile--ok")" href="@TabHref("positions")&status=vacant" aria-current="@(Model.Status == "vacant" ? "true" : "false")"><span class="summary-tile__value num">@allPositions.Count(p => p.Position.IsVacant)</span><span class="summary-tile__label">@Ui.Icon("alert-circle", "icon--sm")Vacancies</span></a></li>
+</ul>
+
+<section class="card table-card" aria-label="@Model.Tab">
+    <nav class="segmented org-tabs" aria-label="Positions & Assignments">
+        <a href="@TabHref("assignments")" aria-current="@Cur("assignments")">@Ui.Icon("users", "icon--sm")Assignments</a>
+        <a href="@TabHref("positions")" aria-current="@Cur("positions")">@Ui.Icon("briefcase", "icon--sm")Positions</a>
+        <a href="@TabHref("units")" aria-current="@Cur("units")">@Ui.Icon("grid", "icon--sm")Units</a>
+        <a href="@TabHref("tiers")" aria-current="@Cur("tiers")">@Ui.Icon("layers", "icon--sm")Tiers</a>
+        <a href="@TabHref("review")" aria-current="@Cur("review")">@Ui.Icon("alert-triangle", "icon--sm")Review <span class="count num">@s.Flags.Count</span></a>
+    </nav>
+
+    @if (Model.Tab is "assignments" or "positions")
+    {
+        <form class="toolbar org-filters" action="@OrgLabels.PositionsHref" method="get" role="search">
+            <input type="hidden" name="tab" value="@Model.Tab" />
+            <div class="input-icon">
+                @Ui.Icon("search")
+                <label class="visually-hidden" for="pm-search">Search</label>
+                <input class="input" type="search" id="pm-search" name="search" value="@Model.Search" placeholder="@(Model.Tab == "assignments" ? "Name, position, unit or phone…" : "Position or unit…")" dir="auto" />
+            </div>
+            <label class="visually-hidden" for="pm-tier">Tier</label>
+            <select class="select" id="pm-tier" name="tier" data-autosubmit>
+                <option value="">All tiers</option>
+                @foreach (var t in s.Tiers) { <option value="@t.Id" selected="@(Model.Tier == t.Id)">Tier @t.Number · @t.Name</option> }
+            </select>
+            <label class="visually-hidden" for="pm-unit">Unit</label>
+            <select class="select" id="pm-unit" name="unit" data-searchable data-autosubmit>
+                <option value="">All units</option>
+                @foreach (var (t, u) in allUnits.Where(x => Model.Tier is null || x.Tier.Id == Model.Tier)) { <option value="@u.Id" selected="@(Model.Unit == u.Id)">@u.Name</option> }
+            </select>
+            @if (Model.Tab == "assignments")
+            {
+                <label class="visually-hidden" for="pm-position">Position</label>
+                <select class="select" id="pm-position" name="position" data-searchable data-autosubmit>
+                    <option value="">All positions</option>
+                    @foreach (var (t, u, p) in allPositions.Where(x => (Model.Tier is null || x.Tier.Id == Model.Tier) && (Model.Unit is null || x.Unit.Id == Model.Unit)))
+                    {
+                        <option value="@p.Id" selected="@(Model.Position == p.Id)">@p.DisplayTitle · @u.Name</option>
+                    }
+                </select>
+                <label class="switch org-filters__switch">
+                    <input type="checkbox" name="ended" value="true" checked="@Model.IncludeEnded" data-autosubmit />
+                    <span class="switch__track" aria-hidden="true"></span>
+                    <span>Include ended (history)</span>
+                </label>
+            }
+            else
+            {
+                <label class="visually-hidden" for="pm-status">Status</label>
+                <select class="select" id="pm-status" name="status" data-autosubmit>
+                    <option value="">Filled and vacant</option>
+                    <option value="vacant" selected="@(Model.Status == "vacant")">Vacant only</option>
+                    <option value="filled" selected="@(Model.Status == "filled")">Filled only</option>
+                </select>
+            }
+            <noscript><button class="btn btn--secondary" type="submit">Apply</button></noscript>
+            @if (filtering || Model.IncludeEnded)
+            {
+                <a class="btn btn--ghost btn--sm" href="@TabHref(Model.Tab)">Clear filters</a>
+            }
+        </form>
+    }
+
+    @* ---------------------------------------------------------------- Assignments *@
+    @if (Model.Tab == "assignments")
+    {
+        if (assignments.Count == 0)
+        {
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon("users")</span>
+                <p class="empty__title">@(Model.Assignments.Count == 0 ? "No assignments yet" : "No assignments match")</p>
+                <p class="empty__text">@(Model.Assignments.Count == 0 ? "Assign employees to positions, or record the official structure under Review." : "Try another search or remove a filter.")</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table table--stack">
+                    <thead><tr><th scope="col">Staff member</th><th scope="col">Position</th><th scope="col">Unit · tier</th><th scope="col">Since</th><th scope="col">Details</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var a in assignments)
+                        {
+                            <tr class="@(a.IsCurrent ? "" : "is-ended")">
+                                <td data-label="Staff member">
+                                    <div class="person">
+                                        <span class="avatar avatar--@Ui.Tone(a.FullName)" aria-hidden="true">@Ui.Initials(a.FullName)</span>
+                                        <div><div class="person__name" dir="auto"><a href="@a.ProfileHref">@a.FullName</a></div><div class="person__meta" dir="ltr">@(a.Phone ?? "No phone")</div></div>
+                                    </div>
+                                </td>
+                                <td data-label="Position">
+                                    <span class="org-pos__title">@a.DisplayTitle</span>
+                                    <div class="org-pos__meta">
+                                        <span>@OrgLabels.RoleType(a.RoleType)</span>
+                                        @if (a.IsCurrent) { <span class="org-tag@(a.IsPrimary ? " org-tag--primary" : "")">@(a.IsPrimary ? "Primary" : "Additional")</span> }
+                                        else { <span class="badge badge--neutral">Ended</span> }
+                                    </div>
+                                </td>
+                                <td data-label="Unit · tier"><span>@a.Unit</span><div class="muted" style="font-size:0.78rem">@a.Tier</div></td>
+                                <td data-label="Since" class="nowrap">@a.StartDate.ToString("d MMM yyyy", c)@if (!a.IsCurrent) { <div class="muted" style="font-size:0.78rem">to @a.EndDate?.ToString("d MMM yyyy", c)</div> }</td>
+                                <td data-label="Details" class="org-details">
+                                    @if (a.Scope is not null) { <div>Scope: @a.Scope</div> }
+                                    @if (a.ReportsToName is not null) { <div>Reports to: @a.ReportsToName</div> }
+                                    @if (!a.IsCurrent && a.EndReason is not null) { <div class="muted">@a.EndReason</div> }
+                                    @if (a.Notes is not null) { <div class="muted" title="@a.Notes">@a.Notes</div> }
+                                    @if (a.Scope is null && a.ReportsToName is null && a.Notes is null && a.IsCurrent) { <span class="faint">—</span> }
+                                </td>
+                                <td class="col-actions">
+                                    @if (Model.CanManage && a.IsCurrent)
+                                    {
+                                        <div class="row-actions">
+                                            @if (!a.IsPrimary)
+                                            {
+                                                <form action="/management/org/assignments/@a.Id/primary" method="post" data-ajax-form style="display:inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <button class="icon-btn icon-btn--primary" type="submit" title="Make primary" aria-label="Make @a.DisplayTitle the primary position of @a.FullName">@Ui.Icon("star")</button>
+                                                </form>
+                                            }
+                                            <a class="icon-btn icon-btn--primary" href="/management/org/assignments/@a.Id/edit" data-modal title="Edit or change position" aria-label="Edit the assignment of @a.FullName">@Ui.Icon("pencil")</a>
+                                            <a class="icon-btn icon-btn--danger" href="/management/org/assignments/@a.Id/end" data-modal title="End assignment" aria-label="End the assignment of @a.FullName">@Ui.Icon("x-circle")</a>
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+
+    @* ---------------------------------------------------------------- Positions *@
+    @if (Model.Tab == "positions")
+    {
+        if (positions.Count == 0)
+        {
+            <div class="empty"><span class="empty__icon">@Ui.Icon("briefcase")</span><p class="empty__title">No positions match</p><p class="empty__text">Try another filter, or add a position.</p></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table table--stack">
+                    <thead><tr><th scope="col">Position</th><th scope="col">Role</th><th scope="col">Unit · tier</th><th scope="col">Holders</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var (t, u, p) in positions)
+                        {
+                            <tr class="@(p.IsActive ? "" : "is-ended")">
+                                <td data-label="Position"><span class="org-pos__title">@p.Title</span>@if (p.GradeRange is not null) { <div class="org-grade">@p.GradeRange</div> }@if (!p.IsActive) { <span class="badge badge--neutral">Inactive</span> }</td>
+                                <td data-label="Role"><span class="org-role-chip org-role-chip--@OrgLabels.RoleTone(p.RoleType)">@OrgLabels.RoleType(p.RoleType)</span></td>
+                                <td data-label="Unit · tier"><span>@u.Name</span><div class="muted" style="font-size:0.78rem">Tier @t.Number · @t.Name</div></td>
+                                <td data-label="Holders">
+                                    @if (p.IsVacant) { <span class="badge badge--warning">Vacant</span> }
+                                    @foreach (var h in p.Holders) { <div dir="auto"><a href="@h.ProfileHref">@h.FullName</a></div> }
+                                </td>
+                                <td class="col-actions">
+                                    <div class="row-actions">
+                                        <a class="icon-btn icon-btn--primary" href="@OrgLabels.PositionsHref?tab=assignments&position=@p.Id&ended=true" title="Assignment history" aria-label="Assignment history of @p.DisplayTitle">@Ui.Icon("clock")</a>
+                                        @if (Model.CanManage)
+                                        {
+                                            if (p.IsActive) { <a class="icon-btn icon-btn--primary" href="/management/org/assignments/create?position=@p.Id" data-modal title="Assign employee" aria-label="Assign an employee to @p.DisplayTitle">@Ui.Icon("user-plus")</a> }
+                                            <a class="icon-btn icon-btn--primary" href="/management/org/positions/@p.Id/edit" data-modal title="Edit position" aria-label="Edit @p.DisplayTitle">@Ui.Icon("pencil")</a>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+
+    @* ---------------------------------------------------------------- Units *@
+    @if (Model.Tab == "units")
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Unit</th><th scope="col">Tier</th><th scope="col">Departments</th><th scope="col">Positions</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var (t, u) in allUnits)
+                    {
+                        <tr class="@(u.IsActive ? "" : "is-ended")">
+                            <td data-label="Unit"><strong>@u.Name</strong>@if (u.ParentUnitId is not null) { <div class="muted" style="font-size:0.78rem">Sub-unit</div> }@if (!u.IsActive) { <span class="badge badge--neutral">Inactive</span> }</td>
+                            <td data-label="Tier">Tier @t.Number · @t.Name</td>
+                            <td data-label="Departments">@if (u.Departments.Count == 0) { <span class="faint">Operational unit</span> } else { @string.Join(", ", u.Departments.Select(d => d.Label)) }</td>
+                            <td data-label="Positions">@u.Positions.Count@if (u.Positions.Any(p => p.IsVacant)) { <span class="badge badge--warning" style="margin-inline-start:6px">@u.Positions.Count(p => p.IsVacant) vacant</span> }</td>
+                            <td class="col-actions">
+                                @if (Model.CanManage)
+                                {
+                                    <div class="row-actions">
+                                        <a class="icon-btn icon-btn--primary" href="/management/org/positions/create?unit=@u.Id" data-modal title="Add position" aria-label="Add a position to @u.Name">@Ui.Icon("plus")</a>
+                                        <a class="icon-btn icon-btn--primary" href="/management/org/units/@u.Id/edit" data-modal title="Edit unit" aria-label="Edit @u.Name">@Ui.Icon("pencil")</a>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @* ---------------------------------------------------------------- Tiers *@
+    @if (Model.Tab == "tiers")
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Order</th><th scope="col">Tier</th><th scope="col">Section</th><th scope="col">Units</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var t in s.Tiers)
+                    {
+                        <tr class="@(t.IsActive ? "" : "is-ended")">
+                            <td data-label="Order" class="num">@t.SortOrder</td>
+                            <td data-label="Tier"><strong>@t.Name</strong>@if (t.Description is not null) { <div class="muted" style="font-size:0.78rem">@t.Description</div> }@if (!t.IsActive) { <span class="badge badge--neutral">Inactive</span> }</td>
+                            <td data-label="Section"><a href="@OrgLabels.SectionHref(t.Section)">@OrgLabels.Section(t.Section)</a></td>
+                            <td data-label="Units">@t.AllUnits.Count()</td>
+                            <td class="col-actions">
+                                @if (Model.CanManage)
+                                {
+                                    <div class="row-actions">
+                                        <a class="icon-btn icon-btn--primary" href="/management/org/units/create?tier=@t.Id" data-modal title="Add unit" aria-label="Add a unit to @t.Name">@Ui.Icon("plus")</a>
+                                        <a class="icon-btn icon-btn--primary" href="/management/org/tiers/@t.Id/edit" data-modal title="Edit tier" aria-label="Edit @t.Name">@Ui.Icon("pencil")</a>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @* ---------------------------------------------------------------- Review *@
+    @if (Model.Tab == "review")
+    {
+        <div class="card__body org-review">
+            @if (Model.ImportReport is { } r)
+            {
+                <div class="notice @(r.Conflicts.Count > 0 ? "notice--warning" : "notice--success")">
+                    @Ui.Icon(r.Conflicts.Count > 0 ? "alert-triangle" : "check-circle")
+                    <div class="notice__body">
+                        <strong>@(r.ChangedAnything ? "The official structure was recorded." : "Nothing to add: the official structure is already recorded.")</strong>
+                        Tiers @r.TiersCreated · units @r.UnitsCreated · positions @r.PositionsCreated · staff created @r.StaffCreated, reused @r.StaffReused ·
+                        assignments created @r.AssignmentsCreated (already recorded @r.AssignmentsAlreadyRecorded) · review flags @r.FlagsCreated.
+                        @foreach (var conflict in r.Conflicts) { <div><strong>Conflict:</strong> @conflict</div> }
+                        @foreach (var note in r.Notes) { <div>@note</div> }
+                    </div>
+                </div>
+            }
+            @if (s.Flags.Count == 0)
+            {
+                <div class="empty" style="padding:24px"><span class="empty__icon">@Ui.Icon("check-circle")</span><p class="empty__title">No records to review</p></div>
+            }
+            else
+            {
+                <partial name="~/Views/OrgStructure/_Flags.cshtml" model="(s.Flags, Model.CanManage)" />
+            }
+            <div class="org-import">
+                <div>
+                    <h2 class="card__title">@Ui.Icon("database")Official structure (2026/2027)</h2>
+                    <p class="card__sub">Records the six tiers, their units and positions, and the official position holders. Safe to repeat: only what is missing is added; nothing recorded, ended or edited is changed. Staff are matched by phone number <em>and</em> name; uncertain matches are flagged, never merged.</p>
+                </div>
+                @if (Model.CanManage)
+                {
+                    <form action="/management/org/import" method="post" data-confirm="Record the official organizational structure? Only missing tiers, units, positions, staff records and assignments are added." data-confirm-title="Record the official structure?" data-confirm-button="Record">
+                        @Html.AntiForgeryToken()
+                        <button class="btn btn--secondary" type="submit">@Ui.Icon("upload")Record official structure</button>
+                    </form>
+                }
+            </div>
+        </div>
+    }
+</section>

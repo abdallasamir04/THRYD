@@ -33,7 +33,7 @@ public sealed class DutyListViewModel
 }
 
 /// <summary>
-/// Duties & Audit → Duties (the top of the page): every Main Duty of the day with its Sub-Duties, plus Activities, and the
+/// Duties → Duties (the duty board, /duties/board): every Main Duty of the day with its Sub-Duties, plus Activities, and the
 /// Main Duty selected from its card with its full board (status, coverage, Sub-Duties and their management pages).
 /// </summary>
 public sealed class DutyHubViewModel
@@ -45,26 +45,40 @@ public sealed class DutyHubViewModel
     public DutyType? Selected { get; init; }
     public MainDutyPageViewModel? Details { get; init; }
 
-    /// <summary>The unified page's address of a card (selects it and shows its details).</summary>
-    public string CardHref(DutyType type) => DutiesAudit.For(DutyComponents.TypeSlug(type), SchoolWeek.Iso(Day.Date));
+    /// <summary>The board's address of a card (selects it and shows its details).</summary>
+    public string CardHref(DutyType type) => DutiesPages.Board(DutyComponents.TypeSlug(type), SchoolWeek.Iso(Day.Date));
+
+    /// <summary>The viewer may open Duty Audit (its links are shown only then).</summary>
+    public bool CanAudit { get; init; }
+
+    /// <summary>The viewer may add a Main Duty (the Super Admin).</summary>
+    public bool CanAddDuty { get; init; }
 
     /// <summary>The address the board reloads itself from (same day and selection).</summary>
     public string LiveUrl => $"/duties/overview?date={SchoolWeek.Iso(Day.Date)}{(Selected is { } t ? "&duty=" + DutyComponents.TypeSlug(t) : "")}";
 }
 
-/// <summary>Duties & Audit: the one page for managing duties (top) and auditing their execution (below).</summary>
-public static class DutiesAudit
+/// <summary>
+/// Daily Operations → Duties: the landing page (/duties) shows exactly two cards — Duties (the duty board: Main Duty cards,
+/// Sub-Duties, coverage, schedules, reports) and Duty Audit (the audit of every duty session and Staff Duty Records, open
+/// only to authorized users, <see cref="Services.IDutyAuditAccess"/>).
+/// </summary>
+public static class DutiesPages
 {
-    public const string Url = "/duties/audit";
-    public const string Title = "Duties & Audit";
+    public const string Landing = "/duties";
+    public const string BoardUrl = "/duties/board";
+    public const string AuditUrl = "/duties/audit";
+    public const string Title = "Duties";
+    public const string BoardTitle = "Duties";
+    public const string AuditTitle = "Duty Audit";
 
-    /// <summary>The unified page with a Main Duty's card selected (or none), on a date (today when null).</summary>
-    public static string For(string? dutySlug, string? date)
+    /// <summary>The duty board with a Main Duty's card selected (or none), on a date (today when null).</summary>
+    public static string Board(string? dutySlug, string? date)
     {
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(dutySlug)) query.Add("duty=" + Uri.EscapeDataString(dutySlug));
         if (!string.IsNullOrWhiteSpace(date)) query.Add("date=" + Uri.EscapeDataString(date));
-        return Url + (query.Count == 0 ? "" : "?" + string.Join("&", query)) + (string.IsNullOrWhiteSpace(dutySlug) ? "" : "#duty-details");
+        return BoardUrl + (query.Count == 0 ? "" : "?" + string.Join("&", query)) + (string.IsNullOrWhiteSpace(dutySlug) ? "" : "#duty-details");
     }
 }
 
@@ -106,6 +120,9 @@ public sealed class SectionForm
 {
     public int? Id { get; set; }
     public DutyType Type { get; set; }
+
+    /// <summary>The Main Duty's address as posted by the form (sets <see cref="Type"/>; any duty, original or added).</summary>
+    public string? Duty { get; set; }
     public string? Name { get; set; }
     public string? Summary { get; set; }
     public string? EffectiveFrom { get; set; }
@@ -137,6 +154,33 @@ public sealed class CoverageReportForm
     public int? Supersedes { get; set; }
 
     [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever] public SubDutyView? Sub { get; set; }
+}
+
+/// <summary>Duties → Add Duty: a new Main Duty, its schedule and its first Sub-Duties (rows may be added and removed).</summary>
+public sealed class MainDutyFormModel
+{
+    public string? Name { get; set; }
+    public string? Summary { get; set; }
+    public string? Icon { get; set; } = "shield-check";
+    public string? StartTime { get; set; }
+    public string? EndTime { get; set; }
+    public string? EffectiveFrom { get; set; }
+    public bool AllDays { get; set; } = true;
+    public List<DayOfWeek> Days { get; set; } = [];
+    public List<SubDutyRowModel> SubDuties { get; set; } = [];
+
+    public NewMainDutyInput ToInput(DateOnly today) => new(Name, Summary, Icon, DutyForms.Date(EffectiveFrom) ?? today,
+        DutyForms.Time(StartTime), DutyForms.Time(EndTime), PeriodDays.Mask(AllDays, Days),
+        SubDuties.Select(s => new NewSubDutyInput(s.Name, DutyForms.Time(s.StartTime), DutyForms.Time(s.EndTime), s.Required)).ToList());
+}
+
+/// <summary>One Sub-Duty row of Add Duty (empty times = the duty's own times).</summary>
+public sealed class SubDutyRowModel
+{
+    public string? Name { get; set; }
+    public string? StartTime { get; set; }
+    public string? EndTime { get; set; }
+    public bool Required { get; set; } = true;
 }
 
 public static class DutyForms

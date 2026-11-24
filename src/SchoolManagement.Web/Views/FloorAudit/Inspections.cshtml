@@ -4,14 +4,14 @@
     default — each with Record Audit / Continue / View. "To inspect" shows only the areas still waiting in that round.
 *@
 @{
-    ViewData["Title"] = "Inspections · Floor Audit";
+    ViewData["Title"] = "Inspections · Floor Management";
     ViewData["Nav"] = "FloorAudit";
     var live = Context.Request.Path + Context.Request.QueryString;
 }
 
 <div class="page-head">
     <div class="page-head__text">
-        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-audit">Floor Audit</a></li><li>Inspections</li></ol>
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>Daily Operations</li><li><a href="/floor-management">Floor Management</a></li><li><a href="/floor-audit">Floor Inspections</a></li><li>Inspections</li></ol>
         <h1 class="page-title">Classroom &amp; Facility Inspections</h1>
         <p class="page-sub">Choose a session and round, then Record Audit on each classroom and facility. Rounds are due at the session's start + 6, + 25 and + 40 minutes.</p>
     </div>

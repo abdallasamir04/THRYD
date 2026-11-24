@@ -8,21 +8,47 @@ using SchoolManagement.Web.ViewModels;
 namespace SchoolManagement.Web.Controllers;
 
 /// <summary>
-/// Daily Operations → Duties & Audit (/duties/audit): the Main Duties as cards (each opens its full board — Sub-Duties,
-/// coverage points, staff, backups, schedules and reports — below the cards) above the Duty Audit and Staff Duty Records.
-/// The duty management pages (Sub-Duty lists, assignments, schedules, reports) are unchanged and open from there.
+/// Daily Operations → Duties (/duties): two cards, Duties and Duty Audit.
+/// <list type="bullet">
+/// <item>Duties (/duties/board): the Main Duties as cards (each opens its full board — Sub-Duties, coverage points, staff,
+/// backups, schedules and reports — below the cards). The duty management pages are unchanged and open from there.</item>
+/// <item>Duty Audit (/duties/audit, /duties/audit/staff-records, the audit report and audit records): only for users
+/// authorized in the "DutyAudit" configuration (<see cref="IDutyAuditAccess"/>), checked here and again in the services.</item>
+/// </list>
 /// </summary>
 [Route("duties")]
-public class DutiesController(IDutyService duties, IClassService classes, IStaffDutyService staffDuty, IActivityService activities, IDutyBoardService board) : AppController
+public class DutiesController(IDutyService duties, IClassService classes, IStaffDutyService staffDuty, IActivityService activities, IDutyBoardService board,
+    IDutyAuditAccess auditAccess, ICurrentUser currentUser) : AppController
 {
     /// <summary>
-    /// The former Duties landing page (and ?type=morning | midday | dismissal, a Main Duty's page): now the top of Duties &
-    /// Audit, where the card of that duty is selected. A reload of the old board (AJAX) still gets its partial.
+    /// The Duties landing page: exactly two cards, Duties and Duty Audit. The former addresses (?type=morning | midday |
+    /// dismissal, ?date=) lead to the duty board with that duty selected. A reload of the old board (AJAX) still gets its partial.
     /// </summary>
     [HttpGet("")]
     public async Task<IActionResult> Index(string? date, string? type, CancellationToken ct)
     {
-        if (!IsAjax) return Redirect(DutiesAudit.For(ValidSlug(type), date));
+        if (!IsAjax)
+        {
+            if (!string.IsNullOrWhiteSpace(type) || !string.IsNullOrWhiteSpace(date)) return Redirect(DutiesPages.Board(ValidSlug(type), date));
+            var canAudit = await auditAccess.CanAccessAsync(ct);
+            return View("~/Views/Staff/Hub.cshtml", new HubViewModel
+            {
+                Title = DutiesPages.Title,
+                Subtitle = "Manage the school's duties, and audit how they are carried out.",
+                Crumbs = [("Dashboard", "/"), ("Daily Operations", null), (DutiesPages.Title, null)],
+                Nav = "DutyAudit",
+                Large = true,
+                Cards =
+                [
+                    new(DutiesPages.BoardUrl, "shield-check", "Duties",
+                        "Every Main Duty of the day with its Sub-Duties, coverage points, staff and backups, schedules and reports.",
+                        "Morning · Midday · Dismissal · Activities", "blue"),
+                    new(DutiesPages.AuditUrl, "clipboard-check", "Duty Audit",
+                        "Every duty session with its status, staffing, attendance and audit notes, and each staff member's duty records.",
+                        canAudit ? "Authorized" : "Restricted · authorized staff only", canAudit ? "teal" : "rose"),
+                ],
+            });
+        }
         var day = SchoolWeek.ParseDayOrToday(date);
         var dutyDay = await board.DayAsync(day, ct);
         if (string.IsNullOrWhiteSpace(type))
@@ -40,7 +66,7 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
         return PartialView("_MainBoard", model);
     }
 
-    [HttpGet("{type:regex(^(morning|midday|dismissal)$)}/{slug}")]
+    [HttpGet("{type:dutytype}/{slug}")]
     public async Task<IActionResult> Component(string type, string slug, string? date, CancellationToken ct)
     {
         var info = DutyComponents.FromSlug(slug);
@@ -75,7 +101,7 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
     }
 
     /// <summary>The final coverage report of a Main Duty on a date, as a PDF.</summary>
-    [HttpGet("{type:regex(^(morning|midday|dismissal)$)}/report.pdf")]
+    [HttpGet("{type:dutytype}/report.pdf")]
     public async Task<IActionResult> CoveragePdf(string type, string? date, CancellationToken ct)
     {
         var day = await board.DayAsync(SchoolWeek.ParseDayOrToday(date), ct);
@@ -92,11 +118,11 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
 
     // ------------------------------------------------------------------ schedules
 
-    [HttpGet("{type:regex(^(morning|midday|dismissal)$)}/schedule")]
+    [HttpGet("{type:dutytype}/schedule")]
     public async Task<IActionResult> Schedule(string type, CancellationToken ct) =>
         View(new DutySchedulePageViewModel { Schedule = await board.ScheduleAsync(DutyComponents.TypeFromSlug(type), ct), Departments = await board.DepartmentOptionsAsync(ct) });
 
-    [HttpPost("{type:regex(^(morning|midday|dismissal)$)}/schedule"), ValidateAntiForgeryToken]
+    [HttpPost("{type:dutytype}/schedule"), ValidateAntiForgeryToken]
     public async Task<IActionResult> Schedule(string type, MainScheduleForm form, CancellationToken ct)
     {
         var t = DutyComponents.TypeFromSlug(type);
@@ -116,6 +142,7 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
     public async Task<IActionResult> AddSection(SectionForm form, CancellationToken ct)
     {
         form.Id = null;
+        if (DutyComponents.IsTypeSlug(form.Duty)) form.Type = DutyComponents.TypeFromSlug(form.Duty);
         var result = await board.AddSectionAsync(form.Type, form.ToInput(SchoolWeek.Today), ct);
         if (result.Succeeded) return Finish(result, $"Sub-Duty “{form.Name?.Trim()}” added.", $"/duties/{DutyComponents.TypeSlug(form.Type)}/schedule");
         AddErrors(result);
@@ -204,9 +231,45 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
         return FormView("ReportUncovered", form);
     }
 
+    // ------------------------------------------------------------------ Add Duty (a new Main Duty)
+
+    /// <summary>Duties → Add Duty: a new Main Duty with its schedule and first Sub-Duties (Super Admin only, checked again in the service).</summary>
+    [HttpGet("main/new")]
+    public IActionResult NewMainDuty()
+    {
+        if (!currentUser.IsSuperAdmin) return AddDutyDenied();
+        return PageOrPartial("MainDutyForm", new MainDutyFormModel { EffectiveFrom = SchoolWeek.Iso(SchoolWeek.Today), SubDuties = [new()] });
+    }
+
+    [HttpPost("main/new"), ValidateAntiForgeryToken]
+    public async Task<IActionResult> NewMainDuty(MainDutyFormModel model, CancellationToken ct)
+    {
+        if (!currentUser.IsSuperAdmin) return AddDutyDenied();
+        var result = await board.CreateMainDutyAsync(model.ToInput(SchoolWeek.Today), ct);
+        if (result.Succeeded)
+        {
+            var type = (DutyType)result.EntityId!.Value;
+            var message = $"“{DutyComponents.TypeName(type)}” added. Open its Sub-Duties to add coverage points and staff.";
+            var href = DutiesPages.Board(DutyComponents.TypeSlug(type), null);
+            if (IsAjax) return AjaxSuccess(message, href);
+            Toast(message);
+            return Redirect(href);
+        }
+        AddErrors(result);
+        if (model.SubDuties.Count == 0) model.SubDuties.Add(new());
+        return FormView("MainDutyForm", model);
+    }
+
+    private IActionResult AddDutyDenied() =>
+        IsAjax ? AjaxFailure("Only the Super Admin can add a duty.", StatusCodes.Status403Forbidden) : StatusCode(StatusCodes.Status403Forbidden);
+
+    /// <summary>Duties → the duty board: every Main Duty of the day as a card (?duty= selects one and shows its board, ?date= the day).</summary>
+    [HttpGet("board")]
+    public async Task<IActionResult> Board(string? duty, string? date, CancellationToken ct) => View(await OverviewAsync(duty, date, ct));
+
     [HttpPost("reports/{id:int}/withdraw"), ValidateAntiForgeryToken]
     public async Task<IActionResult> WithdrawReport(int id, string? back, CancellationToken ct) =>
-        Finish(await board.WithdrawReportAsync(id, ct), "Report withdrawn (kept in the history).", back is not null && back.StartsWith("/duties", StringComparison.Ordinal) ? back : "/duties");
+        Finish(await board.WithdrawReportAsync(id, ct), "Report withdrawn (kept in the history).", back is not null && back.StartsWith("/duties", StringComparison.Ordinal) ? back : DutiesPages.BoardUrl);
 
     private IActionResult Finish(Common.ServiceResult result, string message, string redirect)
     {
@@ -217,27 +280,37 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
     }
 
     /// <summary>
-    /// Duties & Audit: the Main Duty cards of the day (?date=, ?duty= selects one and shows its board) above the duty
-    /// audit — every duty session with its audit fields, filterable. The audit filters (AJAX) return only the table.
+    /// Duty Audit: every duty session with its audit fields, filterable (authorized users only). The filters (AJAX) return
+    /// only the table. A former card address (/duties/audit?duty=…, when the cards were on this page) opens the duty board.
     /// </summary>
     [HttpGet("audit")]
     public async Task<IActionResult> Audit([FromQuery] DutyAuditQuery query, string? duty, string? date, CancellationToken ct)
     {
+        if (!IsAjax && !string.IsNullOrWhiteSpace(duty)) return Redirect(DutiesPages.Board(ValidSlug(duty), date));
+        if (await DeniedAsync(ct) is { } denied) return denied;
         var model = new DutyAuditViewModel
         {
             Query = query,
             Result = await duties.AuditListAsync(query, ct),
             Staff = await duties.StaffOptionsAsync(ct),
             Locations = await duties.LocationsAsync(ct),
-            Duties = IsAjax ? null : await OverviewAsync(duty, date, ct),
         };
         return IsAjax ? PartialView("_AuditTable", model) : View(model);
     }
 
-    /// <summary>The Duties section of Duties & Audit, reloaded by its board every 30 seconds (duties.js).</summary>
+    /// <summary>The duty board's cards and selected duty, reloaded every 30 seconds (duties.js).</summary>
     [HttpGet("overview")]
     public async Task<IActionResult> Overview(string? duty, string? date, CancellationToken ct) =>
-        IsAjax ? PartialView("_Overview", await OverviewAsync(duty, date, ct)) : Redirect(DutiesAudit.For(ValidSlug(duty), date));
+        IsAjax ? PartialView("_Overview", await OverviewAsync(duty, date, ct)) : Redirect(DutiesPages.Board(ValidSlug(duty), date));
+
+    /// <summary>Null when the user may use Duty Audit; otherwise the refusal (403): the explanation page, or JSON for AJAX.</summary>
+    private async Task<IActionResult?> DeniedAsync(CancellationToken ct)
+    {
+        if (await auditAccess.CanAccessAsync(ct)) return null;
+        if (IsAjax) return AjaxFailure(DutyAuditAccess.DeniedMessage, StatusCodes.Status403Forbidden);
+        Response.StatusCode = StatusCodes.Status403Forbidden;
+        return View("AuditDenied");
+    }
 
     private static string? ValidSlug(string? slug) =>
         DutyComponents.Types.Select(DutyComponents.TypeSlug).FirstOrDefault(s => string.Equals(s, slug, StringComparison.OrdinalIgnoreCase));
@@ -248,7 +321,8 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
         DutyType? selected = ValidSlug(duty) is { } slug ? DutyComponents.TypeFromSlug(slug) : null;
         return new DutyHubViewModel
         {
-            Day = dutyDay, Activities = (await activities.ListAsync(false, ct)).Count, Selected = selected,
+            Day = dutyDay, Activities = (await activities.ListAsync(false, ct)).Count, Selected = selected, CanAudit = await auditAccess.CanAccessAsync(ct),
+            CanAddDuty = currentUser.IsSuperAdmin,
             Details = selected is { } t ? new MainDutyPageViewModel
             {
                 Day = dutyDay, Main = dutyDay.Get(t),
@@ -262,13 +336,10 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
     /// was /staff?view=duties, which now redirects here). Same service, table and PDF as before.
     /// </summary>
     [HttpGet("audit/staff-records")]
-    public async Task<IActionResult> StaffRecords(string? search, string? duty, string? date, CancellationToken ct)
+    public async Task<IActionResult> StaffRecords(string? search, CancellationToken ct)
     {
-        var model = new StaffOverviewViewModel
-        {
-            Rows = await staffDuty.OverviewAsync(search, ct), Search = search,
-            Duties = IsAjax ? null : await OverviewAsync(duty, date, ct),
-        };
+        if (await DeniedAsync(ct) is { } denied) return denied;
+        var model = new StaffOverviewViewModel { Rows = await staffDuty.OverviewAsync(search, ct), Search = search };
         return IsAjax ? PartialView("~/Views/Staff/_Overview.cshtml", model) : View(model);
     }
 
@@ -276,13 +347,15 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
     [HttpGet("audit/pdf")]
     public async Task<IActionResult> AuditPdf([FromQuery] DutyAuditQuery query, CancellationToken ct)
     {
+        if (await DeniedAsync(ct) is { } denied) return denied;
         var staff = query.StaffId is { } sid ? (await duties.StaffOptionsAsync(ct)).FirstOrDefault(s => s.Id == sid)?.FullName : null;
-        return await PdfFile(PdfReports.DutyAudit(await duties.AuditListAllAsync(query, ct), query, staff), ct);
+        return await PdfFile(PdfReports.DutyAudit(await duties.AuditReportAsync(query, ct), query, staff), ct);
     }
 
     [HttpGet("{id:int}/audit-record")]
     public async Task<IActionResult> AuditRecord(int id, CancellationToken ct)
     {
+        if (await DeniedAsync(ct) is { } denied) return denied;
         var duty = await duties.GetAsync(id, ct);
         if (duty is null) return NotFoundResult("This duty no longer exists.");
         return PageOrPartial("AuditForm", new DutyAuditFormModel
@@ -295,6 +368,7 @@ public class DutiesController(IDutyService duties, IClassService classes, IStaff
     [HttpPost("{id:int}/audit-record"), ValidateAntiForgeryToken]
     public async Task<IActionResult> AuditRecord(int id, DutyAuditFormModel model, CancellationToken ct)
     {
+        if (await DeniedAsync(ct) is { } denied) return denied;
         model.Id = id;
         if (ModelState.IsValid)
         {

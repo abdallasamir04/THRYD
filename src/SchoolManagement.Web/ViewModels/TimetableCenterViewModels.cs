@@ -1,8 +1,27 @@
-using SchoolManagement.Web.Common;
+﻿using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.Services.Timetables;
 
 namespace SchoolManagement.Web.ViewModels;
+
+/// <summary>Timetables → Create Table: the class to create an empty timetable for.</summary>
+public sealed class CreateTableViewModel
+{
+    public int? ClassId { get; set; }
+    public IReadOnlyList<Services.ClassTableOption> Classes { get; set; } = [];
+
+    /// <summary>The replacement plan's fingerprint, sent back by "Replace timetable" (a stale or missing one asks again).</summary>
+    public string? Confirmation { get; set; }
+
+    /// <summary>Set when the chosen class already has a timetable: what replacing it would do. Nothing has changed yet.</summary>
+    public Services.PeriodPlan? Plan { get; set; }
+
+    /// <summary>Where a class's timetable periods are edited (add / remove slots, names, start and end times).</summary>
+    public static string EditorHref(int classId) => $"/timetable/periods?classId={classId}";
+
+    /// <summary>The class's timetable (its lessons by day and period).</summary>
+    public static string TimetableHref(int classId) => $"/timetable/classes/{classId}";
+}
 
 /// <summary>Academics → Timetables: the categories, the current selection and its timetables.</summary>
 public sealed class TimetableCenterViewModel

@@ -117,7 +117,8 @@ public interface IStaffDutyService
     Task<ServiceResult> AddFeedbackAsync(FeedbackInput input, CancellationToken ct = default);
 }
 
-public sealed class StaffDutyService(SchoolDbContext db, ICurrentUser currentUser, IDutyBoardService? board = null) : IStaffDutyService
+/// <remarks><see cref="OverviewAsync"/> (Staff Duty Records, part of Duty Audit) checks <see cref="IDutyAuditAccess"/>; without one it is refused.</remarks>
+public sealed class StaffDutyService(SchoolDbContext db, ICurrentUser currentUser, IDutyBoardService? board = null, IDutyAuditAccess? auditAccess = null) : IStaffDutyService
 {
     /// <summary>Calculated duty statuses (school clock + records).</summary>
     private IDutyBoardService Board => board ?? new DutyBoardService(db, currentUser);
@@ -133,6 +134,7 @@ public sealed class StaffDutyService(SchoolDbContext db, ICurrentUser currentUse
 
     public async Task<IReadOnlyList<StaffDutyOverviewRow>> OverviewAsync(string? search, CancellationToken ct = default)
     {
+        await (auditAccess ?? NoDutyAuditAccess.Instance).EnsureAsync(ct);
         var query = db.StaffMembers.AsQueryable();
         var term = TextNormalizer.NameKey(search);
         if (term.Length > 0) query = query.Where(s => s.NormalizedName.Contains(term));

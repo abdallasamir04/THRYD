@@ -7,7 +7,7 @@
     var (user, floorId, auditUrl) = Model;
     var canAudit = user.HasIdentity && (floorId is { } f ? user.CanInspect(f) : user.CanInspectAny);
     var canMove = user.HasIdentity && (floorId is { } g ? user.CanRecordMovements(g) : user.CanRecordAnyMovement);
-    var why = !user.HasIdentity ? "Choose “Working as” first (above)." : "Your Floor Audit role does not allow this.";
+    var why = !user.HasIdentity ? "Choose “Working as” first (above)." : "Your Floor Management role does not allow this.";
     var audit = auditUrl ?? "/floor-audit/inspections?show=pending" + (floorId is { } h ? $"&floor={h}" : "");
     var move = "/floor-audit/movements/new" + (floorId is { } k ? $"?floor={k}" : "");
 }

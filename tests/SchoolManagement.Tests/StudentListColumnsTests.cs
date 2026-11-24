@@ -42,7 +42,7 @@ public class StudentListColumnsTests(DbFixture fx)
         var list = WebUtility.HtmlDecode(await client.GetStringAsync($"/students?classId={cls}"));
         var heads = Regex.Matches(Regex.Match(list, "<thead>(.*?)</thead>", RegexOptions.Singleline).Groups[1].Value, "<th[^>]*>(.*?)</th>", RegexOptions.Singleline)
             .Select(m => Regex.Replace(m.Groups[1].Value, "<[^>]+>", "").Trim()).ToList();
-        Assert.Equal(["#", "Student name", "REL", "Second Language", "Added", "Actions"], heads.Select(h => Regex.Replace(h, @"\s+", " ")).ToList());
+        Assert.Equal(["#", "Student name", "REL", "Second Language", "Dismissal · Parent", "Added", "Actions"], heads.Select(h => Regex.Replace(h, @"\s+", " ")).ToList());
         Assert.DoesNotContain("data-label=\"Class\"", list);
         Assert.DoesNotContain("badge--class", list);
 
@@ -62,7 +62,8 @@ public class StudentListColumnsTests(DbFixture fx)
         string Order(string sort, string dir)
         {
             var html = WebUtility.HtmlDecode(client.GetStringAsync($"/students?classId={cls}&sort={sort}&dir={dir}").Result);
-            return string.Concat(Regex.Matches(html, @"/students/profile/(\d+)""").Select(m => m.Groups[1].Value == french.Id.ToString() ? "F" : m.Groups[1].Value == deutsch.Id.ToString() ? "D" : "N"));
+            // One name link per row ("Open the profile of …"; the row's "Open profile" icon is not counted).
+            return string.Concat(Regex.Matches(html, @"/students/profile/(\d+)"" title=""Open the profile of").Select(m => m.Groups[1].Value == french.Id.ToString() ? "F" : m.Groups[1].Value == deutsch.Id.ToString() ? "D" : "N"));
         }
         Assert.Equal("DFN", Order("rel", "asc"));    // CH, M, —
         Assert.Equal("FDN", Order("rel", "desc"));   // M, CH, —
@@ -128,7 +129,7 @@ public class StudentListColumnsTests(DbFixture fx)
         // page 2 holds only students without one and still keeps the column, so it does not come and go while paging.
         for (var i = 0; i < 10; i++) await fx.NewStudentAsync(cls);
         var page2 = await List($"classId={cls}&pageSize=10&sort=lang&dir=asc&page=2");
-        Assert.Equal(3, Regex.Matches(page2, @"/students/profile/\d+""").Count);
+        Assert.Equal(3, Regex.Matches(page2, @"/students/profile/\d+"" title=""Open the profile of").Count);
         Assert.True(HasLanguageColumn(page2));
         Assert.Equal(3, Regex.Matches(page2, "class=\"col-lang\"[^>]*>—</td>").Count);
 

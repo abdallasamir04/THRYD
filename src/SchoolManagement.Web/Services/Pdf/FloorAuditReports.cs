@@ -5,7 +5,7 @@ using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Services.Pdf;
 
-/// <summary>Floor Audit reports: the audit history, one area's inspections, and student movements (same filters as the pages).</summary>
+/// <summary>Floor Management reports: the audit history, one area's inspections, and student movements (same filters as the pages).</summary>
 public static class FloorAuditReports
 {
     private static readonly CultureInfo C = CultureInfo.InvariantCulture;
@@ -31,10 +31,10 @@ public static class FloorAuditReports
         var list = rows.Select(r => r.Inspection).ToList();
         return new PdfReport
         {
-            Title = "Floor Audit Report",
+            Title = "Floor Inspection Report",
             Subtitle = filterSummary,
-            Eyebrow = "Daily Operations · Floor Audit",
-            FileNameParts = ["Floor Audit Report", SchoolWeek.Iso(f.From), SchoolWeek.Iso(f.To)],
+            Eyebrow = "Daily Operations · Floor Management",
+            FileNameParts = ["Floor Inspection Report", SchoolWeek.Iso(f.From), SchoolWeek.Iso(f.To)],
             Meta = [new("Dates", Range(f.From, f.To)), new("Inspections", list.Count.ToString(C))],
             Sections =
             [
@@ -75,7 +75,7 @@ public static class FloorAuditReports
         {
             Title = "Area Inspection Report",
             Subtitle = $"{area.Name} · {area.TypeLabel} · {area.FloorName}",
-            Eyebrow = "Daily Operations · Floor Audit",
+            Eyebrow = "Daily Operations · Floor Management",
             FileNameParts = ["Area Inspection Report", area.Name, from is null ? null : SchoolWeek.Iso(from.Value), to is null ? null : SchoolWeek.Iso(to.Value)],
             Meta = [new("Area", area.Name), new("Floor", area.FloorName), new("Dates", dates), new("Status", area.IsActive ? "Active" : "Inactive")],
             Sections =
@@ -108,7 +108,7 @@ public static class FloorAuditReports
     {
         Title = "Student Movement Report",
         Subtitle = filterSummary,
-        Eyebrow = "Daily Operations · Floor Audit · Student Access",
+        Eyebrow = "Daily Operations · Floor Management · Student Access",
         FileNameParts = ["Student Movement Report", SchoolWeek.Iso(f.From), SchoolWeek.Iso(f.To)],
         Meta = [new("Dates", Range(f.From, f.To)), new("Movements", rows.Count.ToString(C))],
         Sections =

@@ -11,7 +11,8 @@
 <div class="@(modal ? "modal__content" : "card form-page")" data-modal-wide>
     <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading style="display:contents">
         @Html.AntiForgeryToken()
-        <input type="hidden" name="Type" value="@Model.Type" />
+        @* The Main Duty by its address: added duties have numbers the enum binder would not accept. *@
+        <input type="hidden" name="Duty" value="@DutyComponents.TypeSlug(Model.Type)" />
         <div class="modal__head">
             <span class="modal__icon">@Ui.Icon(isNew ? "plus" : "clock", "icon--lg")</span>
             <div>

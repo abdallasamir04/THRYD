@@ -1,0 +1,82 @@
+@model StaffPositionFormModel
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? "Edit position" : "Add position";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Management"; }
+    var action = Model.IsEdit ? $"/management/org/positions/{Model.Id}/edit" : "/management/org/positions/create";
+}
+@if (!modal)
+{
+    <div class="page-head"><div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/management">Management Team</a></li><li><a href="@OrgLabels.PositionsHref?tab=positions">Positions &amp; Assignments</a></li><li>@heading</li></ol>
+        <h1 class="page-title">@heading</h1>
+    </div></div>
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("briefcase", "icon--lg")</span>
+            <div><h2 class="modal__title">@heading</h2><p class="modal__sub">A position in a unit. It may have several holders; each holder is assigned separately.</p></div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            <div class="field field--full">
+                <label class="label" asp-for="Title">Position title <span class="req" aria-hidden="true">*</span></label>
+                <input class="input" asp-for="Title" maxlength="@SchoolManagement.Web.Entities.StaffPosition.TitleMaxLength" />
+                <span asp-validation-for="Title" class="field-validation-error"></span>
+            </div>
+            <div class="field field--full">
+                <label class="label" asp-for="UnitId">Unit <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" asp-for="UnitId" data-searchable>
+                    <option value="0">Choose a unit…</option>
+                    @foreach (var t in Model.Tiers)
+                    {
+                        <optgroup label="Tier @t.Number · @t.Name">
+                            @foreach (var u in t.AllUnits) { <option value="@u.Id" selected="@(Model.UnitId == u.Id)">@u.Name</option> }
+                        </optgroup>
+                    }
+                </select>
+                <span asp-validation-for="UnitId" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="RoleType">Role category</label>
+                <select class="select" asp-for="RoleType">
+                    @foreach (var r in OrgLabels.RoleTypes) { <option value="@r" selected="@(Model.RoleType == r)">@OrgLabels.RoleType(r)</option> }
+                </select>
+                <span asp-validation-for="RoleType" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="GradeRange">Grade range</label>
+                <input class="input" asp-for="GradeRange" placeholder="e.g. Grades 4–10" maxlength="@SchoolManagement.Web.Entities.StaffPosition.GradeRangeMaxLength" />
+                <span asp-validation-for="GradeRange" class="field-validation-error"></span>
+            </div>
+            <div class="field field--full">
+                <label class="label" asp-for="Description">Description</label>
+                <textarea class="textarea" asp-for="Description" rows="2" maxlength="@SchoolManagement.Web.Entities.StaffPosition.DescriptionMaxLength"></textarea>
+                <span asp-validation-for="Description" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="SortOrder">Order</label>
+                <input class="input" asp-for="SortOrder" type="number" min="0" max="999" />
+                <span asp-validation-for="SortOrder" class="field-validation-error"></span>
+            </div>
+            <div class="field" style="align-self:end">
+                <label class="switch"><input type="checkbox" asp-for="IsActive" /><span class="switch__track" aria-hidden="true"></span><span>Active — can be assigned</span></label>
+                <span asp-validation-for="IsActive" class="field-validation-error"></span>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (Model.IsEdit && !Model.HasHistory)
+            {
+                <button class="btn btn--soft-danger" type="submit" formaction="/management/org/positions/@Model.Id/delete" formnovalidate
+                        data-confirm="Delete this position? It has never been assigned." data-confirm-title="Delete position?" data-confirm-button="Delete">@Ui.Icon("trash")Delete</button>
+            }
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@OrgLabels.PositionsHref?tab=positions">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+        </div>
+    </form>
+</div>

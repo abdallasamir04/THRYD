@@ -1,5 +1,9 @@
+using System.Globalization;
+using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Mvc.Testing.Handlers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using SchoolManagement.Web.Data;
@@ -37,19 +41,71 @@ public sealed class DbFixture : IAsyncLifetime
         _ = Factory.Server; // starts the app: applies both migrations to the empty test database
     }
 
-    public async Task DisposeAsync() => await Factory.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        if (_audit is { } audit) await audit.Factory.DisposeAsync();
+        await Factory.DisposeAsync();
+    }
+
+    // ------------------------------------------------------------------ Duty Audit access
+
+    private readonly SemaphoreSlim _auditGate = new(1, 1);
+    private (WebApplicationFactory<Program> Factory, int Auditor, int PositionHolder)? _audit;
+
+    /// <summary>
+    /// A second instance of the app whose "DutyAudit" configuration authorizes one staff member by id (Auditor) and one
+    /// school-added Management Team position (held by PositionHolder). <see cref="Factory"/> authorizes nobody, like a
+    /// fresh installation.
+    /// </summary>
+    public async Task<(WebApplicationFactory<Program> Factory, int Auditor, int PositionHolder)> DutyAuditFactoryAsync()
+    {
+        await _auditGate.WaitAsync();
+        try
+        {
+            if (_audit is { } ready) return ready;
+            var (auditor, _) = await NewTeacherAsync("Duty Auditor");
+            var title = "Duty Audit Lead " + Unique();
+            int holder;
+            await using (var db = NewContext())
+                holder = (await Management(db).CreateAsync(new ManagementMemberInput { FullName = "Audit Lead " + Unique(), NewPositionTitle = title })).EntityId!.Value;
+            var factory = Factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DutyAudit:AuthorizedStaffIds:0"] = auditor.ToString(CultureInfo.InvariantCulture),
+                ["DutyAudit:AuthorizedPositions:0"] = title,
+            })));
+            _audit = (factory, auditor, holder);
+            return _audit.Value;
+        }
+        finally { _auditGate.Release(); }
+    }
+
+    /// <summary>A client of <paramref name="factory"/> working as a staff member (the "Working as" cookie).</summary>
+    public HttpClient ClientAs(WebApplicationFactory<Program> factory, int staffId, bool follow = true)
+    {
+        var cookies = new CookieContainer();
+        cookies.Add(new Uri("http://localhost"), new Cookie(HttpCurrentUser.OperatorCookie, staffId.ToString(CultureInfo.InvariantCulture)));
+        DelegatingHandler[] handlers = follow ? [new RedirectHandler(), new CookieContainerHandler(cookies)] : [new CookieContainerHandler(cookies)];
+        return factory.CreateDefaultClient(new Uri("http://localhost"), handlers);
+    }
+
+    /// <summary>A client authorized for Duty Audit (the configured auditor).</summary>
+    public async Task<HttpClient> DutyAuditClientAsync(bool follow = true)
+    {
+        var (factory, auditor, _) = await DutyAuditFactoryAsync();
+        return ClientAs(factory, auditor, follow);
+    }
 
     public SchoolDbContext NewContext() =>
         new(new DbContextOptionsBuilder<SchoolDbContext>().UseSqlServer(ConnectionString).Options);
 
     public static WorkloadService Workload(SchoolDbContext db) => new(db, new NoUser(), NullLogger<WorkloadService>.Instance);
-    public static DutyService Duties(SchoolDbContext db) => new(db, new NoUser());
+    public static DutyService Duties(SchoolDbContext db) => new(db, new NoUser(), auditAccess: TrustedDutyAuditAccess.Instance);
     public static TeacherService Teachers(SchoolDbContext db) => new(db);
     public static StudentService Students(SchoolDbContext db) => new(db);
     public static ClassService Classes(SchoolDbContext db) => new(db);
     public static ImportService Import(SchoolDbContext db, IMemoryCache cache) => new(db, cache, NullLogger<ImportService>.Instance);
     public static SettingsService Settings(SchoolDbContext db) => new(db, new MemoryCache(new MemoryCacheOptions()));
-    public static StaffDutyService StaffDuty(SchoolDbContext db) => new(db, new NoUser());
+    public static StaffDutyService StaffDuty(SchoolDbContext db) => new(db, new NoUser(), auditAccess: TrustedDutyAuditAccess.Instance);
     public static ArrivalService Arrivals(SchoolDbContext db) => new(db, Settings(db), new NoUser());
     public static TimetableService Timetable(SchoolDbContext db) => new(db, Workload(db), new NoUser());
     public static PeriodService Periods(SchoolDbContext db) => new(db, new NoUser());

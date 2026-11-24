@@ -15,13 +15,39 @@ public sealed record DutyComponentInfo(DutyType Type, DutyComponent Component, s
     public bool ActiveOn(DateOnly date) => RetiredOn is not { } r || date < r;
 }
 
+/// <summary>A Main Duty: its <see cref="DutyType"/> number, name, address (slug), card text and icon.</summary>
+public sealed record DutyMainInfo(DutyType Type, string Name, string Slug, string Summary, string Icon, int SortOrder);
+
 /// <summary>
-/// Duty types (Main Duties) and their sections (Sub-Duties). The sections are stored in DutySections (the original ten keep
-/// their codes, names and slugs; sections added later get new codes) and loaded by <see cref="DutyCatalog"/>; the built-in
-/// list below is used only until the database has been read.
+/// Duty types (Main Duties) and their sections (Sub-Duties). Both are stored — DutyMainDuties (the original three keep their
+/// numbers, names and slugs; duties added with Add Duty get new numbers) and DutySections (the original ten keep their codes,
+/// names and slugs; sections added later get new codes) — and loaded by <see cref="DutyCatalog"/>; the built-in lists below
+/// are used only until the database has been read.
 /// </summary>
 public static class DutyComponents
 {
+    private static readonly IReadOnlyList<DutyMainInfo> BuiltInMains =
+    [
+        new(DutyType.Morning, "Morning Duty", "morning", "Students arrival check, morning revision in the classrooms and the morning assembly line-up.", "shield-check", 1),
+        new(DutyType.Midday, "Midday Duty", "midday", "Break supervision by stage: Pre-K / KG1, KG2, Lower and Upper Elementary, Middle / High School.", "sun", 2),
+        new(DutyType.Dismissal, "Dismissal Duty", "dismissal", "End-of-day duties: students leaving by bus and pickup at the gates.", "door", 3),
+    ];
+
+    private static volatile IReadOnlyList<DutyMainInfo> _mains = BuiltInMains;
+
+    /// <summary>Replaces the Main Duty list (DutyCatalog, after reading DutyMainDuties).</summary>
+    public static void UseMains(IReadOnlyList<DutyMainInfo> mains)
+    {
+        if (mains.Count > 0) _mains = mains.OrderBy(m => m.SortOrder).ThenBy(m => (int)m.Type).ToList();
+    }
+
+    /// <summary>Every Main Duty, in display order.</summary>
+    public static IReadOnlyList<DutyMainInfo> Mains => _mains;
+
+    /// <summary>The Main Duty's definition (an unknown number still gets a readable entry).</summary>
+    public static DutyMainInfo Main(DutyType t) => _mains.FirstOrDefault(m => m.Type == t)
+        ?? new DutyMainInfo(t, $"Duty {(int)t}", ((int)t).ToString(CultureInfo.InvariantCulture), "", "shield-check", int.MaxValue);
+
     private static readonly IReadOnlyList<DutyComponentInfo> BuiltIn =
     [
         new(DutyType.Morning, DutyComponent.StudentsArrival, "students-arrival", "Students Arrival Check",
@@ -60,15 +86,22 @@ public static class DutyComponents
     public static IReadOnlyList<DutyComponentInfo> Midday => ForType(DutyType.Midday);
     public static IReadOnlyList<DutyComponentInfo> Dismissal => ForType(DutyType.Dismissal);
 
-    /// <summary>Card text for the Duties landing page.</summary>
-    public static (string Icon, string Description) TypeCard(DutyType t) => t switch
+    /// <summary>Card text for the duty board (icon and description).</summary>
+    public static (string Icon, string Description) TypeCard(DutyType t) => Main(t) is var m ? (m.Icon, m.Summary) : default;
+
+    /// <summary>The card's icon colour: the original three keep theirs; added duties take one by their number.</summary>
+    public static string TypeTone(DutyType t) => t switch
     {
-        DutyType.Midday => ("sun", "Break supervision by stage: Pre-K / KG1, KG2, Lower and Upper Elementary, Middle / High School."),
-        DutyType.Dismissal => ("door", "End-of-day duties: students leaving by bus and pickup at the gates."),
-        _ => ("shield-check", "Students arrival check, morning revision in the classrooms and the morning assembly line-up."),
+        DutyType.Morning => "violet",
+        DutyType.Midday => "amber",
+        DutyType.Dismissal => "teal",
+        _ => AddedTones[(int)t % AddedTones.Length],
     };
 
-    public static readonly DutyType[] Types = [DutyType.Morning, DutyType.Midday, DutyType.Dismissal];
+    private static readonly string[] AddedTones = ["blue", "rose", "indigo", "green", "amber", "teal"];
+
+    /// <summary>Every Main Duty's number, in display order.</summary>
+    public static IReadOnlyList<DutyType> Types => _mains.Select(m => m.Type).ToList();
 
     /// <summary>Every section of every duty type (retired ones included: their records stay readable).</summary>
     public static IReadOnlyList<DutyComponentInfo> All => _all;
@@ -81,19 +114,23 @@ public static class DutyComponents
     public static bool Exists(DutyComponent c) => _all.Any(m => m.Component == c);
     public static DutyComponentInfo? FromSlug(string? slug) => _all.FirstOrDefault(m => m.Slug == slug);
     public static string Name(DutyComponent c) => _all.FirstOrDefault(m => m.Component == c)?.Name ?? c.ToString();
-    public static string TypeName(DutyType t) => t switch { DutyType.Midday => "Midday Duty", DutyType.Dismissal => "Dismissal Duty", _ => "Morning Duty" };
-    public static string TypeSlug(DutyType t) => t.ToString().ToLowerInvariant();
-    public static DutyType TypeFromSlug(string? slug) => Types.FirstOrDefault(t => TypeSlug(t) == slug?.ToLowerInvariant(), DutyType.Morning);
+    public static string TypeName(DutyType t) => Main(t).Name;
+    public static string TypeSlug(DutyType t) => Main(t).Slug;
+    public static bool IsTypeSlug(string? slug) => _mains.Any(m => string.Equals(m.Slug, slug, StringComparison.OrdinalIgnoreCase));
+    public static DutyType TypeFromSlug(string? slug) =>
+        _mains.FirstOrDefault(m => string.Equals(m.Slug, slug, StringComparison.OrdinalIgnoreCase))?.Type ?? DutyType.Morning;
 
     /// <summary>The component's page, e.g. /duties/midday/kg2.</summary>
     public static string Href(DutyComponentInfo info) => $"/duties/{TypeSlug(info.Type)}/{info.Slug}";
 }
 
-/// <summary>Reads DutySections into <see cref="DutyComponents"/> (at startup and after a Sub-Duty is added, edited or removed).</summary>
+/// <summary>Reads DutyMainDuties and DutySections into <see cref="DutyComponents"/> (at startup and after a duty or Sub-Duty is added, edited or removed).</summary>
 public static class DutyCatalog
 {
     public static async Task LoadAsync(SchoolDbContext db, CancellationToken ct = default)
     {
+        var mains = await db.DutyMainDuties.AsNoTracking().ToListAsync(ct);
+        DutyComponents.UseMains(mains.Select(m => new DutyMainInfo((DutyType)m.Id, m.Name, m.Slug, m.Summary, m.Icon, m.SortOrder)).ToList());
         var rows = await db.DutySections.AsNoTracking().ToListAsync(ct);
         DutyComponents.Use(rows.Select(s => new DutyComponentInfo(s.DutyType, (DutyComponent)s.Id, s.Slug, s.Name, s.Summary, s.Icon, s.HasClasses,
             s.DetailsPending, s.Grades, s.RetiredOn, s.SortOrder)).ToList());
@@ -297,8 +334,14 @@ public interface IDutyService
     Task<IReadOnlyList<DutyComponentSummary>> MorningSummaryAsync(DateOnly date, CancellationToken ct = default);
     Task<IReadOnlyList<DutyComponentSummary>> SummaryAsync(DutyType type, DateOnly date, CancellationToken ct = default);
     Task<IReadOnlyList<DutyRow>> ListAsync(DutyComponent component, DateOnly date, CancellationToken ct = default);
+    /// <summary>Duty Audit list (one page). Duty Audit users only (<see cref="IDutyAuditAccess"/>).</summary>
     Task<PagedResult<DutyRow>> AuditListAsync(DutyAuditQuery query, CancellationToken ct = default);
+
+    /// <summary>Every duty session matching the filters (all pages): a plain duty listing, also used by the Timetables duty rota.</summary>
     Task<IReadOnlyList<DutyRow>> AuditListAllAsync(DutyAuditQuery query, CancellationToken ct = default);
+
+    /// <summary>Duty Audit → Download Report: <see cref="AuditListAllAsync"/> for Duty Audit users only.</summary>
+    Task<IReadOnlyList<DutyRow>> AuditReportAsync(DutyAuditQuery query, CancellationToken ct = default);
     Task<IReadOnlyDictionary<DutyStatus, int>> StatusCountsAsync(DateOnly date, CancellationToken ct = default);
 
     /// <summary>
@@ -337,7 +380,13 @@ public interface IDutyService
 /// from the school clock and these records. Every change is validated here, mirrored into DutyStaffAssignments (one row per
 /// person and role) and written to the DutyAudits trail.
 /// </summary>
-public sealed partial class DutyService(SchoolDbContext db, ICurrentUser currentUser, IDutyBoardService? board = null, ISchoolTimeService? schoolTime = null) : IDutyService
+/// <remarks>
+/// The Duty Audit operations (<see cref="AuditListAsync"/>, <see cref="AuditReportAsync"/>, <see cref="UpdateAuditAsync"/>)
+/// check <see cref="IDutyAuditAccess"/> themselves; without one (constructed directly) they are refused.
+/// <see cref="AuditListAllAsync"/> stays a plain duty listing (the Timetables duty rota reads it).
+/// </remarks>
+public sealed partial class DutyService(SchoolDbContext db, ICurrentUser currentUser, IDutyBoardService? board = null, ISchoolTimeService? schoolTime = null,
+    IDutyAuditAccess? auditAccess = null) : IDutyService
 {
     private readonly IDutyBoardService _board = board ?? new DutyBoardService(db, currentUser, schoolTime);
     private readonly ISchoolTimeService _time = schoolTime ?? SchoolTime.Current;
@@ -369,8 +418,17 @@ public sealed partial class DutyService(SchoolDbContext db, ICurrentUser current
         await LiveAsync(await Project(db.DutyAssignments.AsNoTracking().Where(d => d.Component == component && d.DutyDate == date)
             .OrderBy(d => d.StartTime).ThenBy(d => d.Id)).ToListAsync(ct), ct);
 
+    private IDutyAuditAccess AuditAccess => auditAccess ?? NoDutyAuditAccess.Instance;
+
+    public async Task<IReadOnlyList<DutyRow>> AuditReportAsync(DutyAuditQuery q, CancellationToken ct = default)
+    {
+        await AuditAccess.EnsureAsync(ct);
+        return await AuditListAllAsync(q, ct);
+    }
+
     public async Task<PagedResult<DutyRow>> AuditListAsync(DutyAuditQuery q, CancellationToken ct = default)
     {
+        await AuditAccess.EnsureAsync(ct);
         var size = Paging.NormalizePageSize(q.PageSize);
         // A status filter is on the calculated status, so it is applied after the rows are read.
         if (DutyStatuses.FromSlug(q.Status) is { } status)
@@ -619,6 +677,7 @@ public sealed partial class DutyService(SchoolDbContext db, ICurrentUser current
 
     public async Task<ServiceResult> UpdateAuditAsync(int id, string? auditNotes, string? issues, bool followUp, CancellationToken ct = default)
     {
+        if (!await AuditAccess.CanAccessAsync(ct)) return ServiceResult.Fail("", DutyAuditAccess.DeniedMessage);
         var entity = await db.DutyAssignments.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (entity is null) return ServiceResult.Fail("", "This duty no longer exists.");
         var notes = (auditNotes ?? "").Trim();

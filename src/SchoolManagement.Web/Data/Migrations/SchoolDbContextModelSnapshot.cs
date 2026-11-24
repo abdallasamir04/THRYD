@@ -1332,6 +1332,84 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.ToTable("DutyCoverageReports", (string)null);
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.DutyMainDuty", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.ToTable("DutyMainDuties");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Icon = "shield-check",
+                            Name = "Morning Duty",
+                            Slug = "morning",
+                            SortOrder = 1,
+                            Summary = "Students arrival check, morning revision in the classrooms and the morning assembly line-up."
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Icon = "sun",
+                            Name = "Midday Duty",
+                            Slug = "midday",
+                            SortOrder = 2,
+                            Summary = "Break supervision by stage: Pre-K / KG1, KG2, Lower and Upper Elementary, Middle / High School."
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CreatedAt = new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Icon = "door",
+                            Name = "Dismissal Duty",
+                            Slug = "dismissal",
+                            SortOrder = 3,
+                            Summary = "End-of-day duties: students leaving by bus and pickup at the gates."
+                        });
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.DutyMainSchedule", b =>
                 {
                     b.Property<int>("Id")
@@ -2324,6 +2402,338 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.ToTable("FloorInspectionResponses", (string)null);
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("CreatedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("FloorId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Recipient")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RecipientStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RelatedStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByStaffId");
+
+                    b.HasIndex("RecipientStaffId");
+
+                    b.HasIndex("RelatedStaffId");
+
+                    b.HasIndex("FloorId", "Status");
+
+                    b.ToTable("FloorReports", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FloorReports_Category", "[Category] BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_FloorReports_NotToRelated", "[RelatedStaffId] IS NULL OR [RecipientStaffId] IS NULL OR [RelatedStaffId] <> [RecipientStaffId]");
+
+                            t.HasCheckConstraint("CK_FloorReports_Recipient", "[Recipient] BETWEEN 1 AND 3");
+
+                            t.HasCheckConstraint("CK_FloorReports_Status", "[Status] BETWEEN 1 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorReportEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("By")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("ByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FloorReportId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("RecipientAfter")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RecipientStaffIdAfter")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StatusAfter")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FloorReportId", "At");
+
+                    b.ToTable("FloorReportEvents", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorStaffAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssignedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Coverage")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("FloorId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(120)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(120)");
+
+                    b.Property<int>("StaffMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique()
+                        .HasFilter("[SourceKey] IS NOT NULL");
+
+                    b.HasIndex("FloorId", "Role")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FloorStaff_OneLead")
+                        .HasFilter("[IsCurrent] = 1 AND [Role] IN (1, 2)");
+
+                    b.HasIndex("StaffMemberId", "IsCurrent");
+
+                    b.HasIndex("FloorId", "StaffMemberId", "Role")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FloorStaff_CurrentRole")
+                        .HasFilter("[IsCurrent] = 1");
+
+                    b.ToTable("FloorStaffAssignments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FloorStaff_CurrentHasNoEnd", "[IsCurrent] = 0 OR [EndDate] IS NULL");
+
+                            t.HasCheckConstraint("CK_FloorStaff_Role", "[Role] BETWEEN 1 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorStaffClass", b =>
+                {
+                    b.Property<int>("FloorStaffAssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SchoolClassId")
+                        .HasColumnType("int");
+
+                    b.HasKey("FloorStaffAssignmentId", "SchoolClassId");
+
+                    b.HasIndex("SchoolClassId");
+
+                    b.ToTable("FloorStaffClasses", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorTicket", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AssignedSocialWorkerId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("CreatedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("FloorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ResolutionNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("SchoolClassId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedSocialWorkerId");
+
+                    b.HasIndex("CreatedByStaffId");
+
+                    b.HasIndex("Number");
+
+                    b.HasIndex("SchoolClassId");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("FloorId", "Status");
+
+                    b.ToTable("FloorTickets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FloorTickets_Category", "[Category] BETWEEN 1 AND 4");
+
+                            t.HasCheckConstraint("CK_FloorTickets_Status", "[Status] BETWEEN 1 AND 6");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorTicketEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("AssignedAfterId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("By")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("ByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FloorTicketId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("StatusAfter")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FloorTicketId", "At");
+
+                    b.ToTable("FloorTicketEvents", (string)null);
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.Incident", b =>
                 {
                     b.Property<int>("Id")
@@ -2895,6 +3305,144 @@ namespace SchoolManagement.Web.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_MorningRevision_ExitAfterEntry", "[EntryTime] IS NULL OR [ExitTime] IS NULL OR [ExitTime] > [EntryTime]");
                         });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.OrgTier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("Section")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.HasIndex("SortOrder");
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique()
+                        .HasFilter("[SourceKey] IS NOT NULL");
+
+                    b.ToTable("OrgTiers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_OrgTiers_Section", "[Section] BETWEEN 1 AND 2");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.OrgUnit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("OrgTierId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ParentUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentUnitId");
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique()
+                        .HasFilter("[SourceKey] IS NOT NULL");
+
+                    b.HasIndex("OrgTierId", "NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("OrgUnits", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.OrgUnitDepartment", b =>
+                {
+                    b.Property<int>("OrgUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DepartmentSubcategoryId")
+                        .HasColumnType("int");
+
+                    b.HasKey("OrgUnitId", "DepartmentId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("DepartmentSubcategoryId");
+
+                    b.ToTable("OrgUnitDepartments", (string)null);
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.PeEquipmentItem", b =>
@@ -3577,6 +4125,10 @@ namespace SchoolManagement.Web.Data.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<string>("GradeRange")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -3917,6 +4469,57 @@ namespace SchoolManagement.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffDataQualityFlag", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsResolved")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ResolvedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<int>("StaffMemberId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique()
+                        .HasFilter("[SourceKey] IS NOT NULL");
+
+                    b.HasIndex("StaffMemberId", "IsResolved");
+
+                    b.ToTable("StaffDataQualityFlags", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StaffDataQualityFlags_Kind", "[Kind] BETWEEN 1 AND 3");
+                        });
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.StaffDutyFeedback", b =>
                 {
                     b.Property<int>("Id")
@@ -4034,6 +4637,11 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Property<int?>("ProbationUnit")
                         .HasColumnType("int");
 
+                    b.Property<string>("SecondaryContactNumber")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
                     b.Property<string>("StaffType")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -4090,6 +4698,164 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffPosition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("GradeRange")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NormalizedTitle")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("OrgUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RoleType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleType");
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique()
+                        .HasFilter("[SourceKey] IS NOT NULL");
+
+                    b.HasIndex("OrgUnitId", "NormalizedTitle", "GradeRange")
+                        .IsUnique();
+
+                    b.ToTable("StaffPositions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StaffPositions_RoleType", "[RoleType] BETWEEN 1 AND 10");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffPositionAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssignedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("GradeRange")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("ReportsToStaffMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Scope")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<int>("StaffMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StaffPositionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReportsToStaffMemberId");
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique()
+                        .HasFilter("[SourceKey] IS NOT NULL");
+
+                    b.HasIndex("StaffMemberId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_StaffPositionAssignments_OnePrimary")
+                        .HasFilter("[IsCurrent] = 1 AND [IsPrimary] = 1");
+
+                    b.HasIndex("StaffMemberId", "StaffPositionId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_StaffPositionAssignments_CurrentPerPosition")
+                        .HasFilter("[IsCurrent] = 1");
+
+                    b.HasIndex("StaffPositionId", "IsCurrent");
+
+                    b.ToTable("StaffPositionAssignments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StaffPositionAssignments_CurrentHasNoEnd", "[IsCurrent] = 0 OR [EndDate] IS NULL");
+
+                            t.HasCheckConstraint("CK_StaffPositionAssignments_Dates", "[EndDate] IS NULL OR [EndDate] >= [StartDate]");
+
+                            t.HasCheckConstraint("CK_StaffPositionAssignments_NotOwnManager", "[ReportsToStaffMemberId] IS NULL OR [ReportsToStaffMemberId] <> [StaffMemberId]");
+
+                            t.HasCheckConstraint("CK_StaffPositionAssignments_PrimaryIsCurrent", "[IsPrimary] = 0 OR [IsCurrent] = 1");
+                        });
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.StaffWorkingDay", b =>
                 {
                     b.Property<int>("StaffMemberId")
@@ -4114,8 +4880,17 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateOnly?>("AdmissionApplicationDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("BirthDate")
+                        .HasColumnType("date");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("DismissalMethod")
+                        .HasColumnType("int");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -4140,6 +4915,11 @@ namespace SchoolManagement.Web.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ParentContactNumber")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
 
                     b.Property<string>("Religion")
                         .HasMaxLength(10)
@@ -4166,6 +4946,10 @@ namespace SchoolManagement.Web.Data.Migrations
 
                     b.ToTable("Students", null, t =>
                         {
+                            t.HasCheckConstraint("CK_Students_ApplicationAfterBirth", "[BirthDate] IS NULL OR [AdmissionApplicationDate] IS NULL OR [AdmissionApplicationDate] >= [BirthDate]");
+
+                            t.HasCheckConstraint("CK_Students_DismissalMethod", "[DismissalMethod] IS NULL OR [DismissalMethod] BETWEEN 1 AND 2");
+
                             t.HasCheckConstraint("CK_Students_HighlightColor", "[HighlightColor] IS NULL OR [HighlightColor] LIKE '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
 
                             t.HasCheckConstraint("CK_Students_NameColor", "[NameColor] IS NULL OR [NameColor] LIKE '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
@@ -4581,6 +5365,175 @@ namespace SchoolManagement.Web.Data.Migrations
                         });
 
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.TeachingRosterDepartment", b =>
+                {
+                    b.Property<int>("TeachingRosterEntryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DepartmentSubcategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourcePart")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("TeachingRosterEntryId", "DepartmentId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("DepartmentSubcategoryId");
+
+                    b.ToTable("TeachingRosterDepartments", (string)null);
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.TeachingRosterEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AcademicYear")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GradeLevels")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsBlank")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MatchNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("NumberOfClasses")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RowNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceKey")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<string>("SourceName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("StaffMemberId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StaffName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("بريك")
+                        .HasColumnType("int")
+                        .HasColumnName("بريك");
+
+                    b.Property<int?>("ص")
+                        .HasColumnType("int")
+                        .HasColumnName("ص");
+
+                    b.Property<int?>("م")
+                        .HasColumnType("int")
+                        .HasColumnName("م");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique();
+
+                    b.HasIndex("StaffMemberId");
+
+                    b.HasIndex("SourceName", "RowNumber")
+                        .IsUnique();
+
+                    b.ToTable("TeachingRosterEntries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TeachingRoster_Blank", "[IsBlank] = 0 OR ([StaffName] IS NULL AND [StaffMemberId] IS NULL)");
+
+                            t.HasCheckConstraint("CK_TeachingRoster_Role", "[Role] IS NULL OR [Role] BETWEEN 1 AND 2");
+                        });
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.TeachingRosterReviewItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Field")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsResolved")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ObservedValue")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SourceKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(120)");
+
+                    b.Property<string>("SourceValue")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("TeachingRosterEntryId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique();
+
+                    b.HasIndex("TeachingRosterEntryId", "IsResolved");
+
+                    b.ToTable("TeachingRosterReviewItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TeachingRosterReview_Kind", "[Kind] BETWEEN 1 AND 7");
+                        });
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.TimeSlot", b =>
@@ -5435,6 +6388,139 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("Item");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorReport", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "CreatedByStaff")
+                        .WithMany()
+                        .HasForeignKey("CreatedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Web.Entities.SchoolFloor", "Floor")
+                        .WithMany()
+                        .HasForeignKey("FloorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "RecipientStaff")
+                        .WithMany()
+                        .HasForeignKey("RecipientStaffId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "RelatedStaff")
+                        .WithMany()
+                        .HasForeignKey("RelatedStaffId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByStaff");
+
+                    b.Navigation("Floor");
+
+                    b.Navigation("RecipientStaff");
+
+                    b.Navigation("RelatedStaff");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorReportEvent", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.FloorReport", "Report")
+                        .WithMany("Events")
+                        .HasForeignKey("FloorReportId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Report");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorStaffAssignment", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.SchoolFloor", "Floor")
+                        .WithMany()
+                        .HasForeignKey("FloorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "StaffMember")
+                        .WithMany()
+                        .HasForeignKey("StaffMemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Floor");
+
+                    b.Navigation("StaffMember");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorStaffClass", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.FloorStaffAssignment", "Assignment")
+                        .WithMany("Classes")
+                        .HasForeignKey("FloorStaffAssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.SchoolClass", "SchoolClass")
+                        .WithMany()
+                        .HasForeignKey("SchoolClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Assignment");
+
+                    b.Navigation("SchoolClass");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorTicket", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "AssignedSocialWorker")
+                        .WithMany()
+                        .HasForeignKey("AssignedSocialWorkerId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "CreatedByStaff")
+                        .WithMany()
+                        .HasForeignKey("CreatedByStaffId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Web.Entities.SchoolFloor", "Floor")
+                        .WithMany()
+                        .HasForeignKey("FloorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.SchoolClass", "SchoolClass")
+                        .WithMany()
+                        .HasForeignKey("SchoolClassId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AssignedSocialWorker");
+
+                    b.Navigation("CreatedByStaff");
+
+                    b.Navigation("Floor");
+
+                    b.Navigation("SchoolClass");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorTicketEvent", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.FloorTicket", "Ticket")
+                        .WithMany("Events")
+                        .HasForeignKey("FloorTicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.Incident", b =>
                 {
                     b.HasOne("SchoolManagement.Web.Entities.StaffMember", "PreparedBy")
@@ -5603,6 +6689,50 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("SchoolClass");
 
                     b.Navigation("Teacher");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.OrgUnit", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.OrgTier", "Tier")
+                        .WithMany("Units")
+                        .HasForeignKey("OrgTierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.OrgUnit", "ParentUnit")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ParentUnit");
+
+                    b.Navigation("Tier");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.OrgUnitDepartment", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.DepartmentSubcategory", "Subcategory")
+                        .WithMany()
+                        .HasForeignKey("DepartmentSubcategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SchoolManagement.Web.Entities.OrgUnit", "Unit")
+                        .WithMany("Departments")
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Department");
+
+                    b.Navigation("Subcategory");
+
+                    b.Navigation("Unit");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.PeEquipmentItem", b =>
@@ -5797,6 +6927,17 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("StaffMember");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffDataQualityFlag", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "StaffMember")
+                        .WithMany()
+                        .HasForeignKey("StaffMemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("StaffMember");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.StaffDutyFeedback", b =>
                 {
                     b.HasOne("SchoolManagement.Web.Entities.DutyStaffAssignment", "DutyStaffAssignment")
@@ -5824,6 +6965,43 @@ namespace SchoolManagement.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffPosition", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.OrgUnit", "Unit")
+                        .WithMany("Positions")
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffPositionAssignment", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "ReportsTo")
+                        .WithMany()
+                        .HasForeignKey("ReportsToStaffMemberId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "StaffMember")
+                        .WithMany()
+                        .HasForeignKey("StaffMemberId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.StaffPosition", "Position")
+                        .WithMany("Assignments")
+                        .HasForeignKey("StaffPositionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Position");
+
+                    b.Navigation("ReportsTo");
+
+                    b.Navigation("StaffMember");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.StaffWorkingDay", b =>
@@ -6001,6 +7179,53 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("TimeSlot");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.TeachingRosterDepartment", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SchoolManagement.Web.Entities.DepartmentSubcategory", "Subcategory")
+                        .WithMany()
+                        .HasForeignKey("DepartmentSubcategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SchoolManagement.Web.Entities.TeachingRosterEntry", "Entry")
+                        .WithMany("Departments")
+                        .HasForeignKey("TeachingRosterEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Department");
+
+                    b.Navigation("Entry");
+
+                    b.Navigation("Subcategory");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.TeachingRosterEntry", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.StaffMember", "StaffMember")
+                        .WithMany()
+                        .HasForeignKey("StaffMemberId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("StaffMember");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.TeachingRosterReviewItem", b =>
+                {
+                    b.HasOne("SchoolManagement.Web.Entities.TeachingRosterEntry", "Entry")
+                        .WithMany("ReviewItems")
+                        .HasForeignKey("TeachingRosterEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Entry");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.TimeSlot", b =>
                 {
                     b.HasOne("SchoolManagement.Web.Entities.TimeSlot", "Replaces")
@@ -6147,6 +7372,21 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("Responses");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorReport", b =>
+                {
+                    b.Navigation("Events");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorStaffAssignment", b =>
+                {
+                    b.Navigation("Classes");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.FloorTicket", b =>
+                {
+                    b.Navigation("Events");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.Incident", b =>
                 {
                     b.Navigation("Actions");
@@ -6166,6 +7406,20 @@ namespace SchoolManagement.Web.Data.Migrations
             modelBuilder.Entity("SchoolManagement.Web.Entities.ManagementTask", b =>
                 {
                     b.Navigation("Attachments");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.OrgTier", b =>
+                {
+                    b.Navigation("Units");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.OrgUnit", b =>
+                {
+                    b.Navigation("Children");
+
+                    b.Navigation("Departments");
+
+                    b.Navigation("Positions");
                 });
 
             modelBuilder.Entity("SchoolManagement.Web.Entities.PeSessionDetail", b =>
@@ -6207,9 +7461,21 @@ namespace SchoolManagement.Web.Data.Migrations
                     b.Navigation("WorkingDays");
                 });
 
+            modelBuilder.Entity("SchoolManagement.Web.Entities.StaffPosition", b =>
+                {
+                    b.Navigation("Assignments");
+                });
+
             modelBuilder.Entity("SchoolManagement.Web.Entities.StudentArrivalRecord", b =>
                 {
                     b.Navigation("Corrections");
+                });
+
+            modelBuilder.Entity("SchoolManagement.Web.Entities.TeachingRosterEntry", b =>
+                {
+                    b.Navigation("Departments");
+
+                    b.Navigation("ReviewItems");
                 });
 #pragma warning restore 612, 618
         }

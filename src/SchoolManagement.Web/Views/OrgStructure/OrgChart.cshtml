@@ -1,0 +1,125 @@
+@model OrgChartViewModel
+@*
+    Management → Organizational Chart: the six tiers as an expandable tree — tier → unit → position → people. Search by
+    employee name, position, department / unit or phone; filter by tier; expand or collapse branches. Names open the
+    person's profile. Reporting lines are shown only where an administrator configured them (the source gives none).
+*@
+@{
+    ViewData["Title"] = "Organizational Chart";
+    ViewData["Nav"] = "Management";
+    var s = Model.Structure;
+    var positions = s.AllPositions.ToList();
+    string SearchText(SchoolManagement.Web.Services.OrgStructure.OrgUnitNode u, SchoolManagement.Web.Services.OrgStructure.OrgTierNode t,
+        SchoolManagement.Web.Services.OrgStructure.OrgPositionNode p) =>
+        string.Join(" ", new[] { p.DisplayTitle, OrgLabels.RoleType(p.RoleType), u.Name, t.Name }.Concat(u.Departments.Select(d => d.Label))
+            .Concat(p.Holders.SelectMany(h => new[] { h.FullName, h.Phone ?? "", h.Scope ?? "" })).Concat(p.IsVacant ? ["vacant"] : [])).ToLowerInvariant();
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><span aria-current="page">Organizational Chart</span></li></ol>
+        <h1 class="page-title">Organizational Chart</h1>
+        <p class="page-sub">Royal Kings International School — every tier, unit and position, and who holds it. A person with several positions appears under each of them but is one staff record.</p>
+    </div>
+    <div class="page-head__actions">
+        @if (Model.CanManage)
+        {
+            <a class="btn btn--primary" href="@OrgLabels.PositionsHref">@Ui.Icon("settings")Manage positions</a>
+        }
+    </div>
+</div>
+
+<partial name="~/Views/Management/_ManagementNav.cshtml" model="ManagementNav.OrgChart" />
+
+<ul class="kpis leadership-kpis" aria-label="Structure totals">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("layers")</span><p class="kpi__label">Tiers</p><p class="kpi__value">@s.Tiers.Count</p><p class="kpi__meta">@s.Tiers.Sum(t => t.AllUnits.Count()) units</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("briefcase")</span><p class="kpi__label">Positions</p><p class="kpi__value">@positions.Count</p><p class="kpi__meta">@positions.Sum(p => p.Holders.Count) assignments</p></div></li>
+    <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">People</p><p class="kpi__value">@s.PeopleCount</p><p class="kpi__meta">One record per person</p></div></li>
+    <li><div class="kpi @(positions.Any(p => p.IsVacant) ? "kpi--full" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon("alert-circle")</span><p class="kpi__label">Vacant</p><p class="kpi__value">@positions.Count(p => p.IsVacant)</p><p class="kpi__meta">@Ui.Plural(s.Flags.Count, "record", "records") to review</p></div></li>
+</ul>
+
+<partial name="~/Views/OrgStructure/_Flags.cshtml" model="(s.Flags, Model.CanManage)" />
+
+@if (s.Tiers.Count == 0)
+{
+    <section class="card">
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("layers")</span>
+            <p class="empty__title">No organizational structure yet</p>
+            <p class="empty__text">Record the official structure, or add tiers, units and positions, on Positions &amp; Assignments.</p>
+            <div class="empty__actions"><a class="btn btn--primary" href="@OrgLabels.PositionsHref">@Ui.Icon("settings")Positions &amp; Assignments</a></div>
+        </div>
+    </section>
+}
+else
+{
+    <partial name="~/Views/OrgStructure/_Search.cshtml" model='("#org-chart", s.Tiers, Model.Tier, Model.Search, true)' />
+    <section class="card org-chart" id="org-chart" aria-label="Organizational chart">
+        <div class="org-chart__root">
+            <span class="org-chart__root-icon" aria-hidden="true">@Ui.Icon("school")</span>
+            <div><strong>Royal Kings International School</strong><span class="muted">Academic year 2026/2027</span></div>
+        </div>
+        <ol class="org-tree">
+            @foreach (var t in s.Tiers)
+            {
+                <li class="org-tree__tier" data-org-group data-org-tier-id="@t.Id">
+                    <details open>
+                        <summary class="org-tree__summary org-tree__summary--tier">
+                            <span class="org-tier__num" aria-hidden="true">@t.Number</span>
+                            <span class="org-tree__label"><strong>@t.Name</strong><span class="muted">@OrgLabels.Section(t.Section) · @Ui.Plural(t.AllUnits.Count(), "unit", "units") · @Ui.Plural(t.AllPositions.Count(), "position", "positions")</span></span>
+                            @Ui.Icon("chevron-down", "org-tree__chev")
+                        </summary>
+                        <ol class="org-tree__units">
+                            @foreach (var u in t.AllUnits)
+                            {
+                                <li class="org-tree__unit" data-org-group>
+                                    <details open>
+                                        <summary class="org-tree__summary">
+                                            @Ui.Icon(u.IsAcademicDepartment ? "graduation-cap" : "layers", "icon--sm")
+                                            <span class="org-tree__label"><strong>@u.Name</strong>@if (u.Departments.Count > 0) { <span class="muted">@string.Join(" · ", u.Departments.Select(d => d.Label))</span> }</span>
+                                            @Ui.Icon("chevron-down", "org-tree__chev")
+                                        </summary>
+                                        <ul class="org-tree__positions">
+                                            @foreach (var p in u.Positions)
+                                            {
+                                                <li class="org-tree__position@(p.IsVacant ? " is-vacant" : "")" data-org-item data-search="@SearchText(u, t, p)">
+                                                    <div class="org-tree__pos-head">
+                                                        <span class="org-role org-role--@OrgLabels.RoleTone(p.RoleType)" title="@OrgLabels.RoleType(p.RoleType)">@Ui.Icon(OrgLabels.RoleIcon(p.RoleType), "icon--sm")</span>
+                                                        <span class="org-pos__title">@p.Title</span>
+                                                        @if (!string.IsNullOrWhiteSpace(p.GradeRange)) { <span class="org-grade">@p.GradeRange</span> }
+                                                        @if (p.IsVacant) { <span class="badge badge--warning">Vacant</span> }
+                                                    </div>
+                                                    @if (p.Holders.Count > 0)
+                                                    {
+                                                        <ul class="org-tree__people">
+                                                            @foreach (var h in p.Holders)
+                                                            {
+                                                                <li>
+                                                                    <a class="org-tree__person" href="@h.ProfileHref" title="Open the profile of @h.FullName">
+                                                                        <span class="avatar avatar--@Ui.Tone(h.FullName) org-person__avatar" aria-hidden="true">@Ui.Initials(h.FullName)</span>
+                                                                        <span class="org-tree__person-text"><strong dir="auto">@h.FullName</strong><span class="muted" dir="ltr">@(h.Phone ?? "No phone")@(h.Scope is null ? "" : " · " + h.Scope)</span></span>
+                                                                    </a>
+                                                                    @if (h.ReportsToName is not null)
+                                                                    {
+                                                                        <span class="org-tree__reports">@Ui.Icon("arrow-up", "icon--sm")Reports to @h.ReportsToName</span>
+                                                                    }
+                                                                </li>
+                                                            }
+                                                        </ul>
+                                                    }
+                                                </li>
+                                            }
+                                        </ul>
+                                    </details>
+                                </li>
+                            }
+                        </ol>
+                    </details>
+                </li>
+            }
+        </ol>
+    </section>
+}
+
+@section Scripts {
+    <script src="~/js/org-structure.js" asp-append-version="true"></script>
+}

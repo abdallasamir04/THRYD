@@ -2,7 +2,6 @@
 @{
     var day = Model.Day;
     var date = SchoolWeek.Iso(day.Date);
-    string Tone(DutyType t) => t switch { DutyType.Midday => "amber", DutyType.Dismissal => "teal", _ => "violet" };
 }
 @if (!day.IsSchoolDay)
 {
@@ -17,7 +16,7 @@
         var pct = m.Required.Count == 0 ? 0 : (int)Math.Round(m.RequiredCovered * 100.0 / m.Required.Count);
         <article class="dmain dmain--@DutyStatuses.Slug(m.Status) @(m.Scheduled ? "" : "is-idle") @(selected ? "is-selected" : "")" aria-labelledby="dm-@m.Type" aria-current="@(selected ? "true" : null)">
             <header class="dmain__head">
-                <span class="dmain__icon dmain__icon--@Tone(m.Type)">@Ui.Icon(icon, "icon--lg")</span>
+                <span class="dmain__icon dmain__icon--@DutyComponents.TypeTone(m.Type)">@Ui.Icon(icon, "icon--lg")</span>
                 <div class="dmain__title">
                     <h2 id="dm-@m.Type"><a href="@href" data-duty-card>@m.Name</a></h2>
                     <span class="dmain__time num">@Ui.Icon("clock", "icon--sm")@(m.Scheduled ? m.Times : "Not scheduled on this day")</span>

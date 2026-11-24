@@ -1,4 +1,4 @@
-@model StudentIndexViewModel
+﻿@model StudentIndexViewModel
 @{
     var q = Model.Query;
     var r = Model.Result;
@@ -35,10 +35,13 @@
             <span class="empty__icon">@Ui.Icon("graduation-cap")</span>
             <p class="empty__title">No students yet</p>
             <p class="empty__text">Add students one by one, or import your whole list from Excel. Each student is placed in one of your classes.</p>
-            <div class="empty__actions">
-                <a class="btn btn--primary" href="@(classFilter is not null ? $"/classes/{classFilter.Id}/students/create" : "/students/create")" data-modal>@Ui.Icon("user-plus")Add student</a>
-                <a class="btn btn--secondary" href="/import-export?kind=Students">@Ui.Icon("upload")Import from Excel</a>
-            </div>
+            @if (Model.CanEdit)
+            {
+                <div class="empty__actions">
+                    <a class="btn btn--primary" href="@(classFilter is not null ? $"/classes/{classFilter.Id}/students/create" : "/students/create")" data-modal>@Ui.Icon("user-plus")Add student</a>
+                    <a class="btn btn--secondary" href="/import-export?kind=Students">@Ui.Icon("upload")Import from Excel</a>
+                </div>
+            }
         </div>
     }
     else
@@ -66,6 +69,7 @@ else
                     {
                     <th scope="col" class="col-lang" aria-sort="@(q.Sort == "lang" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "lang", "Second Language", q.Sort, q.Dir)</th>
                     }
+                    <th scope="col" class="col-dismissal">Dismissal · Parent</th>
                     <th scope="col" aria-sort="@(q.Sort == "created" ? (q.Dir == "desc" ? "descending" : "ascending") : "none")">@SortHelper.SortLink(Context.Request, "created", "Added", q.Sort, q.Dir)</th>
                     <th scope="col" class="col-actions"><span class="visually-hidden">Actions</span></th>
                 </tr>
@@ -82,7 +86,7 @@ else
                         <td data-label="Student">
                             <div class="person">
                                 <span class="avatar avatar--@Ui.Tone(s.FullName)" aria-hidden="true">@Ui.Initials(s.FullName)</span>
-                                <span class="person__name @(nameColor is null ? null : "student-name-color")" dir="auto" style="@(nameColor is null ? null : $"--student-name:{nameColor}")"><a href="/students/profile/@s.Id">@s.FullName</a></span>
+                                <span class="person__name @(nameColor is null ? null : "student-name-color")" dir="auto" style="@(nameColor is null ? null : $"--student-name:{nameColor}")"><a href="/students/profile/@s.Id" title="Open the profile of @s.FullName">@s.FullName</a></span>
                                 <partial name="_StudentMarks" model="s" />
                             </div>
                         </td>
@@ -92,17 +96,35 @@ else
                         {
                             <td data-label="Second Language" class="col-lang" title="@(s.SecondLanguage is { } code ? $"Sec Lang: {code}" : null)">@(s.SecondLanguageName ?? "—")</td>
                         }
+                        @* Dismissal method and the parent's WhatsApp (an icon; plain when the number has no safe link). *@
+                        <td data-label="Dismissal · Parent" class="col-dismissal">
+                            <span class="student-row-contact">
+                                @if (s.DismissalMethod is { } dm)
+                                {
+                                    <span class="student-dismissal student-dismissal--@dm.ToString().ToLowerInvariant()" title="Dismissal: @StudentProfileRules.Dismissal(dm)">@Ui.Icon(StudentProfileRules.Icon(dm), "icon--sm")@StudentProfileRules.Dismissal(dm)</span>
+                                }
+                                else
+                                {
+                                    <span class="faint" title="Dismissal method not recorded">—</span>
+                                }
+                                <partial name="~/Views/Students/_ParentContact.cshtml" model="(s.ParentContactNumber, true)" />
+                            </span>
+                        </td>
                         <td data-label="Added" class="muted nowrap" title="@Ui.DateTime(s.CreatedAt)">@Ui.Date(s.CreatedAt)</td>
                         <td class="col-actions">
                             <div class="row-actions">
-                                <a class="icon-btn icon-btn--primary" href="/students/transfer/@s.Id" data-modal title="Transfer class" aria-label="Transfer @s.FullName">@Ui.Icon("swap")</a>
+                                <a class="icon-btn icon-btn--primary" href="/students/profile/@s.Id" title="Open profile" aria-label="Open the profile of @s.FullName">@Ui.Icon("user")</a>
                                 <a class="icon-btn icon-btn--primary" href="/students/details/@s.Id" data-modal title="View details" aria-label="View @s.FullName">@Ui.Icon("eye")</a>
-                                <a class="icon-btn icon-btn--primary" href="/students/edit/@s.Id" data-modal title="Edit" aria-label="Edit @s.FullName">@Ui.Icon("pencil")</a>
-                                <form asp-controller="Students" asp-action="Delete" asp-route-id="@s.Id" method="post" data-ajax-form
-                                      data-confirm="@s.FullName will be removed from @s.ClassName. This cannot be undone."
-                                      data-confirm-title="Delete this student?" data-confirm-button="Delete student">
-                                    <button class="icon-btn icon-btn--danger" type="submit" title="Delete" aria-label="Delete @s.FullName">@Ui.Icon("trash")</button>
-                                </form>
+                                @if (Model.CanEdit)
+                                {
+                                    <a class="icon-btn icon-btn--primary" href="/students/transfer/@s.Id" data-modal title="Transfer class" aria-label="Transfer @s.FullName">@Ui.Icon("swap")</a>
+                                    <a class="icon-btn icon-btn--primary" href="/students/edit/@s.Id" data-modal title="Edit" aria-label="Edit @s.FullName">@Ui.Icon("pencil")</a>
+                                    <form asp-controller="Students" asp-action="Delete" asp-route-id="@s.Id" method="post" data-ajax-form
+                                          data-confirm="@s.FullName will be removed from @s.ClassName. This cannot be undone."
+                                          data-confirm-title="Delete this student?" data-confirm-button="Delete student">
+                                        <button class="icon-btn icon-btn--danger" type="submit" title="Delete" aria-label="Delete @s.FullName">@Ui.Icon("trash")</button>
+                                    </form>
+                                }
                             </div>
                         </td>
                     </tr>

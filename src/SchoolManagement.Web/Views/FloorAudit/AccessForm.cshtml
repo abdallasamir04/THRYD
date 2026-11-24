@@ -1,5 +1,5 @@
 @model AccessForm
-@* Give a staff member Floor Audit access (managers): Manager, or Inspector of one floor / every floor, optionally recording student movements. *@
+@* Give a staff member Floor Management access (managers): Manager, or Inspector of one floor / every floor, optionally recording student movements. *@
 @{
     var modal = Context.Request.IsAjax();
     if (modal) { Layout = null; }
@@ -11,7 +11,7 @@
         @if (!modal) { <input type="hidden" name="_page" value="1" /> }
         <div class="modal__head">
             <span class="modal__icon">@Ui.Icon("users", "icon--lg")</span>
-            <div><h2 class="modal__title">Give Floor Audit access</h2><p class="modal__sub">Access is ended, never deleted, so it stays known who could record what and when.</p></div>
+            <div><h2 class="modal__title">Give Floor Management access</h2><p class="modal__sub">Access is ended, never deleted, so it stays known who could record what and when.</p></div>
             <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
         </div>
         <div class="modal__body form-grid">

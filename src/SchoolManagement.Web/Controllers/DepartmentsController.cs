@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.Services.Pdf;
@@ -8,7 +8,8 @@ namespace SchoolManagement.Web.Controllers;
 
 /// <summary>Academic Staff → Departments: the department grid, each department's page, HOD changes.</summary>
 [Route("staff/departments")]
-public class DepartmentsController(IDepartmentService departments, IPeService pe, ITimetableService timetable, ITeacherService teachers) : AppController
+public class DepartmentsController(IDepartmentService departments, IPeService pe, ITimetableService timetable, ITeacherService teachers,
+    Services.OrgStructure.IOrgStructureService org) : AppController
 {
     [HttpGet("")]
     public async Task<IActionResult> Index([FromQuery] DepartmentListQuery query, CancellationToken ct)
@@ -67,6 +68,9 @@ public class DepartmentsController(IDepartmentService departments, IPeService pe
             Members = overview && !IsAjax ? [] : await departments.MembersAsync(id, query, ct),
             HeadHistory = IsAjax ? [] : await departments.HeadHistoryAsync(id, ct),
             Pe = isPe ? await PePageViewModel.LoadAsync(SchoolWeek.ParseDayOrToday(date), pe, timetable, teachers, ct) : null,
+            // The department's leadership in the organizational structure (HODs, coordinators, team leaders by grade range).
+            OrgLeadership = IsAjax ? [] : (await org.StructureAsync(false, ct)).Tiers.SelectMany(t => t.AllUnits)
+                .Where(u => u.Departments.Any(l => l.DepartmentId == id)).ToList(),
         };
         // An unknown subcategory in the address leads back to the department's cards.
         if (!IsAjax && model.Scope is not null && model.ScopeCard is null) return Redirect($"/staff/departments/{id}");

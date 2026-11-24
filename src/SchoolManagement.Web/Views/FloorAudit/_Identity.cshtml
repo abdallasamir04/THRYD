@@ -1,6 +1,6 @@
 @model FloorAuditUser
 @*
-    Who is recording in Floor Audit, what they may do, and — right here — the way to choose "Working as" (the
+    Who is recording in Floor Management, what they may do, and — right here — the way to choose "Working as" (the
     application's existing identity, a cookie on this browser). Every inspection and movement keeps that person's
     name; the services check the permissions of whoever is chosen, whatever the page shows.
 *@
@@ -9,21 +9,26 @@
     var options = await Access.IdentityOptionsAsync();
     var returnUrl = Context.Request.Path + Context.Request.QueryString;
     var canRecord = Model.IsManager || Model.CanInspectAny || Model.CanRecordAnyMovement;
-    var open = !Model.HasIdentity || !canRecord;
+    var open = !Model.IsSuperAdmin && (!Model.HasIdentity || !canRecord);
 }
 <section class="fa-who @(open ? "fa-who--attention" : "")" aria-label="Who is recording">
     <div class="fa-who__text">
         <span class="fa-who__icon">@Ui.Icon(canRecord ? "user" : "lock")</span>
         <div>
-            @if (!Model.HasIdentity)
+            @if (Model.IsSuperAdmin)
+            {
+                <strong>Super Admin</strong>
+                <span>You can manage the floors, areas, access and settings and void movements. Inspections and student movements are recorded with the person who makes them — to record one, choose that person below.</span>
+            }
+            else if (!Model.HasIdentity)
             {
                 <strong>View only — nobody is chosen under “Working as”.</strong>
-                <span>Floor Audit records every inspection and student movement with the person who made it, so recording needs a name. Choose yourself below: Management Team members are Floor Audit managers; floor inspectors can audit their floors and record student movements.</span>
+                <span>Floor Management records every inspection and student movement with the person who made it, so recording needs a name. Choose yourself below: Management Team members are Floor Management administrators; floor inspectors can audit their floors and record student movements.</span>
             }
             else if (!canRecord)
             {
-                <strong>View only — @Model.Name has no Floor Audit role.</strong>
-                <span>Choose another person below, or ask a Floor Audit manager to give @Model.Name inspector access (Manage → Access).</span>
+                <strong>View only — @Model.Name has no Floor Management role.</strong>
+                <span>Choose another person below, or ask a Floor Management administrator to give @Model.Name inspector access (Manage → Access).</span>
             }
             else
             {
@@ -42,7 +47,7 @@
                 <option value="">Choose a person…</option>
                 @if (options.Managers.Count > 0)
                 {
-                    <optgroup label="Floor Audit managers">
+                    <optgroup label="Floor Management administrators">
                         @foreach (var o in options.Managers) { <option value="@o.Id" selected="@(Model.StaffId == o.Id)" data-note="@o.Role">@o.Name</option> }
                     </optgroup>
                 }

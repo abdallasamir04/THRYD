@@ -58,7 +58,10 @@ public partial class StudentFormTests(DbFixture fx)
         var client = fx.Factory.CreateClient();
         var (status, html) = await SendAsync(client, Ajax(HttpMethod.Get, $"/classes/{classId}/students/create"));
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.DoesNotContain("<select", html);
+        // No class dropdown: the only list on the form is the optional Dismissal method.
+        Assert.DoesNotContain("<select class=\"select\" data-searchable", html);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "<select"));
+        Assert.Contains("<select class=\"select\" id=\"DismissalMethod\"", html);
         Assert.Contains($"action=\"/classes/{classId}/students/create\"", html);
 
         // Even a tampered class field cannot move the student: the route decides.
@@ -78,7 +81,7 @@ public partial class StudentFormTests(DbFixture fx)
             Form(("__RequestVerificationToken", Token(html)), ("FullName", ""))));
         Assert.Equal((HttpStatusCode)422, badStatus);
         Assert.Contains("Enter the student", badBody);
-        Assert.DoesNotContain("<select", badBody);
+        Assert.DoesNotContain("<select class=\"select\" data-searchable", badBody);   // still no class dropdown
 
         // Duplicate name in the same class.
         var (dupStatus, dupBody) = await SendAsync(client, Ajax(HttpMethod.Post, $"/classes/{classId}/students/create",

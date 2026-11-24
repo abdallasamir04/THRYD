@@ -26,7 +26,7 @@ public interface IFloorAuditService
 }
 
 /// <summary>
-/// Floor Audit: the floors, their areas and the three rounds of every timetable session. The schedule is calculated
+/// Floor Management: the floors, their areas and the three rounds of every timetable session. The schedule is calculated
 /// from the timetable of the date (see <see cref="FloorAuditSchedule"/>); inspections are the only audit records and
 /// are created by an inspector's own save — nothing is ever filled in automatically.
 /// </summary>
@@ -323,10 +323,10 @@ public sealed class FloorAuditService(
     {
         await Task.CompletedTask;
         var floorId = inspectionFloorId ?? area.FloorId;
-        if (!user.HasIdentity) return (true, "Choose who you are under “Working as” (the panel at the top of the Floor Audit pages) to record inspections: every inspection is recorded with its inspector.");
-        if (!user.CanInspect(floorId)) return (true, "You are not an inspector of this floor. A Floor Audit manager can give you access.");
+        if (!user.HasIdentity) return (true, "Choose who you are under “Working as” (the panel at the top of the Floor Management pages) to record inspections: every inspection is recorded with its inspector.");
+        if (!user.CanInspect(floorId)) return (true, "You are not an inspector of this floor. A Floor Management administrator can give you access.");
         if (status == FloorInspectionStatus.Completed)
-            return user.IsManager ? (false, null) : (true, "This inspection is completed. Only a Floor Audit manager can correct it.");
+            return user.IsManager ? (false, null) : (true, "This inspection is completed. Only a Floor Management administrator can correct it.");
         if (status == FloorInspectionStatus.InProgress) return (false, null);
         // A new inspection.
         if (session is null) return (true, "This session is not on the timetable of this date.");

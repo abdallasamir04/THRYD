@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
 using SchoolManagement.Web.Services;
@@ -11,7 +11,8 @@ namespace SchoolManagement.Web.Controllers;
 [Route("staff")]
 public class StaffController(IStaffDutyService staffDuty, IDutyService duties, IWorkloadService workload, ITeacherService teachers, ICurrentUser currentUser,
     IDepartmentService departments, IManagementService management, IManagementTaskService tasks, ITimetableService timetable, IClassTeamService classTeams,
-    IStaffDirectoryService directory, IStaffEmploymentService employment) : AppController
+    IStaffDirectoryService directory, IStaffEmploymentService employment, IDutyAuditAccess dutyAudit,
+    Services.OrgStructure.IOrgStructureService org, Services.OrgStructure.IOrgStructureAccess orgAccess) : AppController
 {
     /// <summary>
     /// Staff landing page: choose Academic Staff or Management Team. ?view=duties (the old Staff Duty Records
@@ -23,7 +24,10 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
         if (view == "duties")
         {
             if (IsAjax)
+            {
+                if (!await dutyAudit.CanAccessAsync(ct)) return AjaxFailure(DutyAuditAccess.DeniedMessage, StatusCodes.Status403Forbidden);
                 return PartialView("_Overview", new StaffOverviewViewModel { Rows = await staffDuty.OverviewAsync(query.Search, ct), Search = query.Search });
+            }
             return Redirect("/duties/audit/staff-records"
                 + (string.IsNullOrWhiteSpace(query.Search) ? "" : "?search=" + Uri.EscapeDataString(query.Search)));
         }
@@ -85,8 +89,15 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
 
     /// <summary>Staff Duty Records → Download Report (same search as the page).</summary>
     [HttpGet("duty-records/pdf")]
-    public async Task<IActionResult> DutyRecordsPdf(string? search, CancellationToken ct) =>
-        await PdfFile(PdfReports.StaffDutyRecords(await staffDuty.OverviewAsync(search, ct), search), ct);
+    public async Task<IActionResult> DutyRecordsPdf(string? search, CancellationToken ct)
+    {
+        if (!await dutyAudit.CanAccessAsync(ct))
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return View("~/Views/Duties/AuditDenied.cshtml");
+        }
+        return await PdfFile(PdfReports.StaffDutyRecords(await staffDuty.OverviewAsync(search, ct), search), ct);
+    }
 
     /// <summary>Academic Staff → Staff Members → Download Report (all pages, same filters and sort).</summary>
     [HttpGet("members/pdf")]
@@ -286,6 +297,8 @@ public class StaffController(IStaffDutyService staffDuty, IDutyService duties, I
             WorkloadAssignments = await workload.AssignmentsAsync(id, SchoolWeek.Current, ct),
             WorkloadHistory = await workload.HistoryAsync(id, 50, ct),
             ClassAssignments = await classTeams.ForStaffAsync(id, ct),
+            Org = await org.StaffAsync(id, ct),
+            CanManageOrg = await orgAccess.CanManageAsync(ct),
         });
     }
 

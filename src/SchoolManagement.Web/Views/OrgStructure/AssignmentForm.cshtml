@@ -1,0 +1,114 @@
+@model AssignmentFormModel
+@*
+    Assign an employee to a position, or edit a current assignment. Choosing a different position while editing ends the
+    current assignment (kept in the history) and starts a new one on the start date. The person is always their existing
+    staff record; one person may hold several positions, one of them primary.
+*@
+@{
+    var modal = Context.Request.IsAjax();
+    var heading = Model.IsEdit ? $"Edit assignment — {Model.Current?.FullName}" : "Assign employee";
+    if (modal) { Layout = null; }
+    else { ViewData["Title"] = heading; ViewData["Nav"] = "Management"; }
+    var action = Model.IsEdit ? $"/management/org/assignments/{Model.Id}/edit" : "/management/org/assignments/create";
+}
+@if (!modal)
+{
+    <div class="page-head"><div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/management">Management Team</a></li><li><a href="@OrgLabels.PositionsHref">Positions &amp; Assignments</a></li><li>@(Model.IsEdit ? "Edit assignment" : "Assign")</li></ol>
+        <h1 class="page-title" dir="auto">@heading</h1>
+    </div></div>
+}
+<div class="@(modal ? "modal__content" : "card form-page")">
+    <form action="@action" method="post" data-ajax-form="@(modal ? "" : null)" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__head">
+            <span class="modal__icon">@Ui.Icon("user-plus", "icon--lg")</span>
+            <div>
+                <h2 class="modal__title" dir="auto">@heading</h2>
+                <p class="modal__sub">@(Model.IsEdit ? "Changing the position ends this assignment and keeps it in the history." : "The person keeps one staff record, whatever the number of positions.")</p>
+            </div>
+            <button class="icon-btn modal__close" type="button" data-modal-close aria-label="Close">@Ui.Icon("x")</button>
+        </div>
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+            @if (Model.IsEdit && Model.Current is { } cur)
+            {
+                <div class="notice field--full">@Ui.Icon("info")<div class="notice__body"><strong dir="auto">@cur.FullName</strong>Currently @cur.DisplayTitle · @cur.Unit, since @cur.StartDate.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture).</div></div>
+                <input type="hidden" asp-for="StaffMemberId" />
+            }
+            else
+            {
+                <div class="field field--full">
+                    <label class="label" asp-for="StaffMemberId">Staff member <span class="req" aria-hidden="true">*</span></label>
+                    <select class="select" asp-for="StaffMemberId" data-searchable>
+                        <option value="0">Choose a staff member…</option>
+                        @foreach (var st in Model.Staff)
+                        {
+                            <option value="@st.Id" selected="@(Model.StaffMemberId == st.Id)" data-note="@(st.Phone ?? "no phone")@(st.Department is null ? "" : " · " + st.Department)">@st.FullName</option>
+                        }
+                    </select>
+                    <p class="hint">Not on the list? Add the person first (Staff → Add staff member, or Management Team → Add Member), then assign them.</p>
+                    <span asp-validation-for="StaffMemberId" class="field-validation-error"></span>
+                </div>
+            }
+            <div class="field field--full">
+                <label class="label" asp-for="PositionId">Position <span class="req" aria-hidden="true">*</span></label>
+                <select class="select" asp-for="PositionId" data-searchable>
+                    <option value="0">Choose a position…</option>
+                    @foreach (var t in Model.Tiers)
+                    {
+                        <optgroup label="Tier @t.Number · @t.Name">
+                            @foreach (var u in t.AllUnits)
+                            {
+                                foreach (var p in u.Positions)
+                                {
+                                    <option value="@p.Id" selected="@(Model.PositionId == p.Id)" data-note="@u.Name@(p.IsVacant ? " · vacant" : "")">@p.DisplayTitle</option>
+                                }
+                            }
+                        </optgroup>
+                    }
+                </select>
+                <span asp-validation-for="PositionId" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="GradeRange">Grade range for this holder</label>
+                <input class="input" asp-for="GradeRange" placeholder="The position's own range" maxlength="@SchoolManagement.Web.Entities.StaffPosition.GradeRangeMaxLength" />
+                <span asp-validation-for="GradeRange" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="Scope">Scope / floor</label>
+                <input class="input" asp-for="Scope" placeholder="e.g. 2nd Floor" maxlength="@SchoolManagement.Web.Entities.StaffPositionAssignment.ScopeMaxLength" />
+                <span asp-validation-for="Scope" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="ReportsToStaffMemberId">Reports to</label>
+                <select class="select" asp-for="ReportsToStaffMemberId" data-searchable>
+                    <option value="">Not configured</option>
+                    @foreach (var st in Model.Staff.Where(x => x.Id != Model.StaffMemberId))
+                    {
+                        <option value="@st.Id" selected="@(Model.ReportsToStaffMemberId == st.Id)">@st.FullName</option>
+                    }
+                </select>
+                <span asp-validation-for="ReportsToStaffMemberId" class="field-validation-error"></span>
+            </div>
+            <div class="field">
+                <label class="label" asp-for="StartDate">Start date</label>
+                <input class="input picker" type="date" asp-for="StartDate" value="@(Model.StartDate is { } sd ? SchoolWeek.Iso(sd) : "")" min="1980-01-01" max="@SchoolWeek.Iso(SchoolWeek.Today.AddYears(1))" />
+                <span asp-validation-for="StartDate" class="field-validation-error"></span>
+            </div>
+            <div class="field field--full">
+                <label class="label" asp-for="Notes">Notes</label>
+                <textarea class="textarea" asp-for="Notes" rows="2" maxlength="@SchoolManagement.Web.Entities.StaffPositionAssignment.NotesMaxLength"></textarea>
+                <span asp-validation-for="Notes" class="field-validation-error"></span>
+            </div>
+            <div class="field field--full">
+                <label class="switch"><input type="checkbox" asp-for="IsPrimary" /><span class="switch__track" aria-hidden="true"></span><span>Primary position — shown first on the staff card (the first position is always primary)</span></label>
+            </div>
+        </div>
+        <div class="modal__foot">
+            @if (modal) { <button class="btn btn--secondary" type="button" data-modal-close>Cancel</button> }
+            else { <a class="btn btn--secondary" href="@OrgLabels.PositionsHref">Cancel</a> }
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save</button>
+        </div>
+    </form>
+</div>

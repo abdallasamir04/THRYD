@@ -4,6 +4,7 @@
     Academics → Timetables: every timetable of the school in one place. Categories come from the registered
     ITimetableSource types; the filters shown depend on the category. Download one timetable, the ticked ones,
     a whole category, a department's schedules or the entire school (several PDFs → one ZIP with folders).
+    Create Table (a dialog) gives a class without a timetable its own empty one.
 *@
 @{
     ViewData["Title"] = "Timetables";
@@ -23,6 +24,7 @@
         <p class="page-sub">Every timetable of the school in one place — read live from the class timetable, P.E., duties and time slots. Download any one, a group, a whole category, or the entire school.</p>
     </div>
     <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/timetables/create" data-modal>@Ui.Icon("plus")Create Table</a>
         <a class="btn btn--secondary" href="/timetables/upload">@Ui.Icon("upload")Upload Timetable</a>
         <a class="btn btn--primary" href="@m.Query("/timetables/download-all", ("category", "all"), ("departmentId", null), ("subject", null), ("teacherId", null), ("classId", null))"
            data-preparing="Preparing every timetable of the school as one ZIP — the download starts when it is ready.">@Ui.Icon("download")Download entire school (ZIP)</a>

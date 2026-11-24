@@ -156,7 +156,7 @@ public class DutyAuditTests(DbFixture fx)
             Assert.Equal(4.0, (await DbFixture.StaffDuty(db).ProfileAsync(primary))!.Summary.AverageRating); // the rating is kept
         }
 
-        var client = fx.Factory.CreateClient();
+        var client = await fx.DutyAuditClientAsync();   // Staff Duty Records are part of Duty Audit (authorized users only)
         var url = "/duties/audit/staff-records?search=" + Uri.EscapeDataString(name);
         var ajax = new HttpRequestMessage(HttpMethod.Get, url);
         ajax.Headers.Add("X-Requested-With", "XMLHttpRequest");

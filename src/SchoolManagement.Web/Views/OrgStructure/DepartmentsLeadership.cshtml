@@ -1,0 +1,125 @@
+@model DepartmentsLeadershipViewModel
+@*
+    Management → Departments Leadership: each academic department's HODs, coordinators and team leaders with their grade
+    ranges (several per department where the source gives grade-band leadership). The department's own HOD record
+    (Departments module) is shown beside it, unchanged, so any difference is visible rather than silently overwritten.
+*@
+@{
+    ViewData["Title"] = "Departments Leadership";
+    ViewData["Nav"] = "Management";
+    var s = Model.Structure;
+    var units = s.Tiers.SelectMany(t => t.AllUnits.Select(u => (Tier: t, Unit: u))).Where(x => x.Unit.IsAcademicDepartment).ToList();
+    // HOD first, then coordinators, then team leaders, then any other role.
+    int Rank(LeadershipRoleType r) => r switch { LeadershipRoleType.Hod => 0, LeadershipRoleType.Coordinator => 1, LeadershipRoleType.TeamLeader => 2, _ => 3 };
+}
+<span data-refresh-on-save hidden></span>
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff">Staff</a></li><li><a href="/management">Management Team</a></li><li><span aria-current="page">Departments Leadership</span></li></ol>
+        <h1 class="page-title">Departments Leadership</h1>
+        <p class="page-sub">Heads of Department, coordinators and team leaders of the academic departments, with the grades each one covers. This is the leadership only, not the full teaching staff.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="/staff/departments">@Ui.Icon("users")Academic departments</a>
+        @if (Model.CanManage)
+        {
+            <a class="btn btn--primary" href="@OrgLabels.PositionsHref?tab=positions">@Ui.Icon("settings")Manage positions</a>
+        }
+    </div>
+</div>
+
+<partial name="~/Views/Management/_ManagementNav.cshtml" model="ManagementNav.Departments" />
+
+@if (units.Count == 0)
+{
+    <section class="card">
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("graduation-cap")</span>
+            <p class="empty__title">No department leadership recorded yet</p>
+            <p class="empty__text">Department leadership units link an organizational unit to an academic department. Add them on Positions &amp; Assignments.</p>
+            <div class="empty__actions"><a class="btn btn--primary" href="@OrgLabels.PositionsHref">@Ui.Icon("settings")Positions &amp; Assignments</a></div>
+        </div>
+    </section>
+}
+else
+{
+    <partial name="~/Views/OrgStructure/_Search.cshtml" model='("#dept-leadership", (IReadOnlyList<SchoolManagement.Web.Services.OrgStructure.OrgTierNode>)[], (int?)null, (string?)null, false)' />
+    <div class="org-dept-grid" id="dept-leadership">
+        @foreach (var (tier, u) in units)
+        {
+            var positions = u.AllPositions.OrderBy(p => Rank(p.RoleType)).ThenBy(p => p.SortOrder).ToList();
+            var records = Model.HodRecords.Where(r => u.Departments.Any(d => d.DepartmentId == r.DepartmentId)).ToList();
+            <section class="card org-dept" data-org-group aria-labelledby="dl-@u.Id">
+                <header class="org-dept__head">
+                    <span class="org-dept__icon" aria-hidden="true">@Ui.Icon("graduation-cap")</span>
+                    <div>
+                        <h2 class="org-dept__title" id="dl-@u.Id">@u.Name</h2>
+                        <p class="org-unit__depts">
+                            @foreach (var d in u.Departments)
+                            {
+                                <a class="org-chip" href="/staff/departments/@d.DepartmentId">@d.Label</a>
+                            }
+                        </p>
+                    </div>
+                    @if (Model.CanManage)
+                    {
+                        <a class="icon-btn icon-btn--primary" href="/management/org/positions/create?unit=@u.Id" data-modal title="Add a leadership position" aria-label="Add a leadership position to @u.Name">@Ui.Icon("plus")</a>
+                    }
+                </header>
+                @if (!string.IsNullOrWhiteSpace(u.Description))
+                {
+                    <p class="org-unit__desc" style="padding:0 20px">@u.Description</p>
+                }
+                <div class="table-wrap">
+                    <table class="table table--stack org-dept__table">
+                        <thead><tr><th scope="col">Responsibility</th><th scope="col">Grades</th><th scope="col">Staff member</th><th scope="col">Mobile</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in positions)
+                            {
+                                var search = string.Join(" ", new[] { p.DisplayTitle, OrgLabels.RoleType(p.RoleType), u.Name }.Concat(u.Departments.Select(d => d.Label))
+                                    .Concat(p.Holders.SelectMany(h => new[] { h.FullName, h.Phone ?? "" }))).ToLowerInvariant();
+                                if (p.IsVacant)
+                                {
+                                    <tr data-org-item data-search="@search vacant">
+                                        <td data-label="Responsibility"><span class="badge badge--job">@p.Title</span> <span class="muted">@OrgLabels.RoleType(p.RoleType)</span></td>
+                                        <td data-label="Grades">@(p.GradeRange ?? "—")</td>
+                                        <td data-label="Staff member" colspan="2"><span class="badge badge--warning">Vacant</span>
+                                            @if (Model.CanManage) { <a class="btn btn--ghost btn--sm" href="/management/org/assignments/create?position=@p.Id" data-modal>@Ui.Icon("user-plus", "icon--sm")Assign</a> }
+                                        </td>
+                                    </tr>
+                                }
+                                @foreach (var h in p.Holders)
+                                {
+                                    <tr data-org-item data-search="@search">
+                                        <td data-label="Responsibility"><span class="badge badge--job">@p.Title</span> <span class="muted">@OrgLabels.RoleType(p.RoleType)</span></td>
+                                        <td data-label="Grades" class="nowrap">@(h.GradeRange ?? p.GradeRange ?? "All grades")</td>
+                                        <td data-label="Staff member" dir="auto"><a href="@h.ProfileHref">@h.FullName</a></td>
+                                        <td data-label="Mobile" dir="ltr">@if (h.Phone is not null) { <a href="tel:@h.Phone.Replace(" ", "")">@h.Phone</a> } else { <span class="faint">—</span> }</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (records.Count > 0)
+                {
+                    <footer class="org-dept__foot">
+                        @Ui.Icon("info", "icon--sm")
+                        <span>HOD record in the Departments module:
+                            @foreach (var r in records)
+                            {
+                                <span class="org-dept__record"><a href="/staff/departments/@r.DepartmentId">@r.Department</a> — @(r.HodRecord ?? "none")</span>
+                            }
+                            <span class="faint">(kept as it is; change it on the department page if it should follow the official structure)</span>
+                        </span>
+                    </footer>
+                }
+            </section>
+        }
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/org-structure.js" asp-append-version="true"></script>
+}

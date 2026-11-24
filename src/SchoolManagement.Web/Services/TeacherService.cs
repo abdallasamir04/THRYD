@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Data;
 using SchoolManagement.Web.Entities;
@@ -174,6 +174,10 @@ public sealed class TeacherService(SchoolDbContext db) : ITeacherService
     public async Task<ServiceResult> DeleteAsync(int id, CancellationToken ct = default)
     {
         var headOf = await db.DepartmentHeads.Where(h => h.TeacherId == id && h.IsCurrent).Select(h => h.Department.Name).FirstOrDefaultAsync(ct);
+        // Organizational positions are kept as history with the person: their record is never deleted.
+        if (await db.StaffPositionAssignments.AnyAsync(a => a.StaffMemberId == id || a.ReportsToStaffMemberId == id, ct)
+            || await db.StaffDataQualityFlags.AnyAsync(f => f.StaffMemberId == id, ct))
+            return ServiceResult.Fail("", "This staff member has organizational positions (current or past), so the record is kept for history. End the positions on Positions & Assignments instead.");
         if (headOf is not null)
             return ServiceResult.Fail("", $"This teacher is the current Head of {headOf}. Assign a new HOD on the department page before deleting.");
 
