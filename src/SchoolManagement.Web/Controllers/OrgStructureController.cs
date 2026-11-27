@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Services.Accounts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Web.Common;
@@ -15,6 +16,7 @@ namespace SchoolManagement.Web.Controllers;
 /// open; every change checks <see cref="IOrgStructureAccess"/> here and again in the service.
 /// </summary>
 [Route("management")]
+[StaffAccess(StaffAccessRule.OrgStructure)]
 public class OrgStructureController(IOrgStructureService org, IOrgStructureAccess access, IOrgStructureSeeder seeder, SchoolDbContext db) : AppController
 {
     private const string Tier1 = "tier-1", Tier2 = "tier-2", Tier3 = "tier-3", Tier4 = "tier-4", Tier5 = "tier-5", Tier6 = "tier-6";

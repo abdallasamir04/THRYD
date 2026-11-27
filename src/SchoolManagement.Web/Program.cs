@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Data;
@@ -20,7 +21,10 @@ var rosterCommand = args.Length > 0 && args[0] == SchoolManagement.Web.Services.
 var floorCommand = args.Length > 0 && args[0] == "seed-floor-management";
 // "reconcile-official-staff": reconciles the staff records with the two official sources (idempotent), prints the report and exits.
 var officialStaffCommand = args.Length > 0 && args[0] == SchoolManagement.Web.Services.OrgStructure.OfficialStaffCommand.Name;
-var builder = WebApplication.CreateBuilder(testDataCommand is null && !orgSeedCommand && !rosterCommand && !floorCommand && !officialStaffCommand ? args : []);
+// "provision-accounts" / "reset-super-admin-password": sign-in accounts and the confidential credentials workbook (see AccountProvisioningCommand).
+var accountsCommand = args.Length > 0 && (args[0] == SchoolManagement.Web.Services.Accounts.AccountProvisioningCommand.Name
+    || args[0] == SchoolManagement.Web.Services.Accounts.AccountProvisioningCommand.RecoveryName);
+var builder = WebApplication.CreateBuilder(testDataCommand is null && !orgSeedCommand && !rosterCommand && !floorCommand && !officialStaffCommand && !accountsCommand ? args : []);
 
 var connectionString = builder.Configuration.GetConnectionString("SchoolDb")
     ?? throw new InvalidOperationException("Connection string 'SchoolDb' is not configured.");
@@ -50,6 +54,54 @@ builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IImportService, ImportService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
+
+// ---------------- Sign-in (ASP.NET Core Identity): one account per person; least-privilege staff access; unrestricted Super Admin.
+builder.Services.AddOptions<SchoolManagement.Web.Services.Accounts.AccountOptions>()
+    .Bind(builder.Configuration.GetSection(SchoolManagement.Web.Services.Accounts.AccountOptions.Section))
+    // The single on/off switch: Authentication:Enabled (temporarily false; set true to require sign-in again).
+    .Configure<IConfiguration>((o, c) => o.RequireAuthentication = c.GetValue(SchoolManagement.Web.Services.Accounts.AccountOptions.EnabledKey, false));
+builder.Services.AddIdentity<SchoolManagement.Web.Entities.AppUser, Microsoft.AspNetCore.Identity.IdentityRole>(o =>
+    {
+        o.Password.RequiredLength = 12;
+        o.Password.RequireDigit = true;
+        o.Password.RequireLowercase = true;
+        o.Password.RequireUppercase = true;
+        o.Password.RequireNonAlphanumeric = true;
+        o.Password.RequiredUniqueChars = 6;
+        o.Lockout.MaxFailedAccessAttempts = 5;
+        o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        o.Lockout.AllowedForNewUsers = true;
+        o.User.RequireUniqueEmail = true;
+        o.SignIn.RequireConfirmedAccount = false;   // no confirmation step and no forced password change
+        o.SignIn.RequireConfirmedEmail = false;
+    })
+    .AddEntityFrameworkStores<SchoolDbContext>()
+    .AddDefaultTokenProviders()
+    .AddClaimsPrincipalFactory<SchoolManagement.Web.Services.Accounts.ThrydClaimsFactory>();
+// Password-reset tokens expire after an hour; a disabled account's open session ends within a minute.
+builder.Services.Configure<Microsoft.AspNetCore.Identity.DataProtectionTokenProviderOptions>(o => o.TokenLifespan = TimeSpan.FromHours(1));
+builder.Services.Configure<Microsoft.AspNetCore.Identity.SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(1));
+builder.Services.ConfigureApplicationCookie(o =>
+{
+    o.LoginPath = "/account/login";
+    o.LogoutPath = "/account/logout";
+    o.AccessDeniedPath = "/account/denied";
+    o.Cookie.Name = "thryd.auth";
+    o.Cookie.HttpOnly = true;
+    o.Cookie.SameSite = SameSiteMode.Lax;
+    o.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+    o.ExpireTimeSpan = TimeSpan.FromHours(10);
+    o.SlidingExpiration = true;
+});
+// Every endpoint needs a signed-in account unless it is [AllowAnonymous] (sign-in pages, parent portal, error page, static files).
+builder.Services.AddAuthorization(o => o.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+    .AddRequirements(new SchoolManagement.Web.Services.Accounts.SignInRequiredRequirement()).Build());
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, SchoolManagement.Web.Services.Accounts.SignInRequiredHandler>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Accounts.IAccountAudit, SchoolManagement.Web.Services.Accounts.AccountAudit>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Accounts.IPeopleDirectoryService, SchoolManagement.Web.Services.Accounts.PeopleDirectoryService>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Accounts.IAccountProvisioningService, SchoolManagement.Web.Services.Accounts.AccountProvisioningService>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Accounts.IStaffAccessEvaluator, SchoolManagement.Web.Services.Accounts.StaffAccessEvaluator>();
+builder.Services.AddSingleton<SchoolManagement.Web.Services.Accounts.IAccountEmailSender, SchoolManagement.Web.Services.Accounts.SmtpAccountEmailSender>();
 // Duty Audit is open only to the staff / positions / roles configured in "DutyAudit" (none by default).
 builder.Services.Configure<DutyAuditOptions>(builder.Configuration.GetSection(DutyAuditOptions.Section));
 builder.Services.AddScoped<IDutyAuditAccess, DutyAuditAccess>();
@@ -110,6 +162,44 @@ builder.Services.AddScoped<IFloorAuditAccessService, FloorAuditAccessService>();
 builder.Services.AddScoped<IStudentMovementService, StudentMovementService>();
 builder.Services.AddScoped<IFloorAuditService, FloorAuditService>();
 builder.Services.AddScoped<IFloorConfigService, FloorConfigService>();
+// PTC (Parent-Teacher Conference): Super Admin only; admin pages under /ptc, no parent-facing or public endpoints yet.
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcAccess, SchoolManagement.Web.Services.Ptc.PtcAccess>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcSetupService, SchoolManagement.Web.Services.Ptc.PtcSetupService>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcBookingService, SchoolManagement.Web.Services.Ptc.PtcBookingService>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcAdminService, SchoolManagement.Web.Services.Ptc.PtcAdminService>();
+// PTC scheduling engine (event-wide analysis, conflict review, audited Admin schedule changes).
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcScheduleService, SchoolManagement.Web.Services.Ptc.PtcScheduleService>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcCoverageService, SchoolManagement.Web.Services.Ptc.PtcCoverageService>();
+builder.Services.Configure<SchoolManagement.Web.Services.Ptc.PtcFeedbackOptions>(builder.Configuration.GetSection(SchoolManagement.Web.Services.Ptc.PtcFeedbackOptions.Section));
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcFeedbackService, SchoolManagement.Web.Services.Ptc.PtcFeedbackService>();
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcReportService, SchoolManagement.Web.Services.Ptc.PtcReportService>();
+// PTC live operations: teacher dashboard and interview timer (/ptc/my), Super Admin live view.
+builder.Services.Configure<SchoolManagement.Web.Services.Ptc.PtcOperationsOptions>(builder.Configuration.GetSection(SchoolManagement.Web.Services.Ptc.PtcOperationsOptions.Section));
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcOperationsService, SchoolManagement.Web.Services.Ptc.PtcOperationsService>();
+// Public parent booking portal (/ptc-booking/{link code}): rate limited per client address; no staff account involved.
+builder.Services.Configure<SchoolManagement.Web.Services.Ptc.PtcPortalOptions>(builder.Configuration.GetSection(SchoolManagement.Web.Services.Ptc.PtcPortalOptions.Section));
+builder.Services.AddScoped<SchoolManagement.Web.Services.Ptc.IPtcPortalService, SchoolManagement.Web.Services.Ptc.PtcPortalService>();
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.OnRejected = async (context, ct) =>
+    {
+        context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
+        await context.HttpContext.Response.WriteAsync("Too many requests. Please wait a few minutes and try again.", ct);
+    };
+    // Fixed windows per client address; limits from the "PtcPortal" section (read when a client's window is created).
+    static System.Threading.RateLimiting.RateLimitPartition<string> Window(HttpContext http, string policy, Func<SchoolManagement.Web.Services.Ptc.PtcPortalOptions, int> limit)
+    {
+        var portal = http.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<SchoolManagement.Web.Services.Ptc.PtcPortalOptions>>().Value;
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(policy + ":" + (http.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = Math.Max(1, limit(portal)), Window = TimeSpan.FromMinutes(Math.Max(1, portal.WindowMinutes)), QueueLimit = 0,
+            });
+    }
+    o.AddPolicy(SchoolManagement.Web.Controllers.PtcPortalController.RequestPolicy, http => Window(http, "request", p => p.RequestPermitLimit));
+    o.AddPolicy(SchoolManagement.Web.Controllers.PtcPortalController.SubmitPolicy, http => Window(http, "submit", p => p.SubmitPermitLimit));
+});
 if (testDataCommand is null) builder.Services.AddHostedService<AttendanceAlertSweep>();
 // After the 09:30 cutoff students with no arrival are Absent; ArrivalFinalizer stores those records (off in tests).
 var automaticAbsences = builder.Configuration.GetValue("Attendance:AutoFinalize", true);
@@ -131,6 +221,8 @@ if (testDataCommand is not null) TestDataCommand.Register(builder.Services);
 
 builder.Services.AddControllersWithViews(options =>
 {
+    // Least privilege: once sign-in is required, a staff account opens only what it is allowed to (Super Admin: everything).
+    options.Filters.Add<SchoolManagement.Web.Services.Accounts.StaffAccessFilter>();
     // Clear messages for values that cannot be parsed (e.g. letters in a number field).
     options.ModelBindingMessageProvider.SetValueMustBeANumberAccessor(field => $"{field} must be a number.");
     options.ModelBindingMessageProvider.SetAttemptedValueIsInvalidAccessor((value, field) => $"\"{value}\" is not valid for {field}.");
@@ -190,6 +282,14 @@ if (officialStaffCommand)
     return;
 }
 
+if (accountsCommand)
+{
+    Environment.ExitCode = args[0] == SchoolManagement.Web.Services.Accounts.AccountProvisioningCommand.Name
+        ? await SchoolManagement.Web.Services.Accounts.AccountProvisioningCommand.RunAsync(app, args)
+        : await SchoolManagement.Web.Services.Accounts.AccountProvisioningCommand.RecoverAsync(app, args);
+    return;
+}
+
 if (orgSeedCommand)
 {
     Environment.ExitCode = await SchoolManagement.Web.Services.OrgStructure.OrgStructureCommand.RunAsync(app);
@@ -205,9 +305,20 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/error/{0}");
 app.UseHttpsRedirection();
 app.UseRouting();
+app.UseRateLimiter();
+app.UseAuthentication();
+// Sign-in switched off (Authentication:Enabled = false): every request is anonymous, so the identity is "Working as" as
+// before sign-in existed, whatever sign-in cookie the browser still holds. Nothing of the Identity setup is removed.
+app.Use((context, next) =>
+{
+    if (!context.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<SchoolManagement.Web.Services.Accounts.AccountOptions>>().CurrentValue.RequireAuthentication)
+        context.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity());
+    return next(context);
+});
 app.UseAuthorization();
 
-app.MapStaticAssets();
+// Static files (CSS, scripts, the login page's assets) never need a sign-in.
+app.MapStaticAssets().AllowAnonymous();
 app.MapControllerRoute(
         name: "default",
         pattern: "{controller=Home}/{action=Index}/{id?}")

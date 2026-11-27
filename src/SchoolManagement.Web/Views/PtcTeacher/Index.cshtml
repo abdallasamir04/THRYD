@@ -1,0 +1,110 @@
+@model PtcTeacherDashboard
+@*
+    My PTC interviews: the current staff member's own interviews for a date (never anyone else's). The interview in progress
+    is shown first with its timer; the timer counts from the start time the server recorded, so a refresh or coming back later
+    shows the right time. Start / End are recorded by the server.
+*@
+@{
+    ViewData["Title"] = "My PTC interviews";
+    ViewData["Nav"] = "MyPtc";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var m = Model;
+    var current = m.Current;
+    string Iso(DateTime? utc) => utc is { } u ? DateTime.SpecifyKind(u, DateTimeKind.Utc).ToString("o", c) : "";
+    string Local(DateTime? utc) => utc is { } u ? SchoolTime.Current.ToLocal(DateTime.SpecifyKind(u, DateTimeKind.Utc)).ToString("HH:mm:ss", c) : "—";
+    string Dur(TimeSpan? t) => t is { } d ? $"{(int)d.TotalMinutes}:{d.Seconds:00}" : "—";
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><span aria-current="page">My PTC interviews</span></li></ol>
+        <h1 class="page-title">My PTC interviews</h1>
+        <p class="page-sub">@m.TeacherName · @(m.Date is { } d ? d.ToString("dddd d MMMM yyyy", c) : "No interviews yet")@(m.Date == m.Today ? " (today)" : "")</p>
+    </div>
+</div>
+
+@if (m.Dates.Count == 0)
+{
+    <section class="card"><div class="empty"><span class="empty__icon">@Ui.Icon("calendar")</span><p class="empty__title">No PTC interviews</p>
+        <p class="empty__text">Interviews appear here when parents book a Published Parent-Teacher Conference with you.</p></div></section>
+}
+else
+{
+    <nav class="segmented" aria-label="PTC dates" style="margin-bottom: 16px; flex-wrap: wrap">
+        @foreach (var (date, ev) in m.Dates.DistinctBy(x => x.Date))
+        {
+            <a href="/ptc/my?date=@date.ToString("yyyy-MM-dd", c)" aria-current="@(m.Date == date ? "true" : null)" title="@ev">@date.ToString("ddd d MMM", c)@(date == m.Today ? " · today" : date < m.Today ? " · past" : "")</a>
+        }
+    </nav>
+
+    <div data-ptc-clock data-server-now="@Iso(m.ServerNowUtc)">
+        <ul class="kpis" aria-label="Interviews on this date">
+            <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("calendar")</span><p class="kpi__label">Interviews</p><p class="kpi__value">@m.Counts.Total</p><p class="kpi__meta">@m.PlannedMinutes min planned</p></div></li>
+            <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("clock")</span><p class="kpi__label">Upcoming</p><p class="kpi__value">@m.Counts.Upcoming</p><p class="kpi__meta">Not started yet</p></div></li>
+            <li><div class="kpi kpi--orange"><span class="kpi__icon">@Ui.Icon("activity")</span><p class="kpi__label">In progress</p><p class="kpi__value">@m.Counts.InProgress</p><p class="kpi__meta">Running now</p></div></li>
+            <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("check-circle")</span><p class="kpi__label">Completed</p><p class="kpi__value">@m.Counts.Completed</p><p class="kpi__meta">@((int)m.ActualTime.TotalMinutes) min actual</p></div></li>
+            <li><div class="kpi kpi--warn"><span class="kpi__icon">@Ui.Icon("alert-triangle")</span><p class="kpi__label">Missed</p><p class="kpi__value">@m.Counts.Missed</p><p class="kpi__meta">Planned time passed, not started</p></div></li>
+        </ul>
+
+        @if (current is not null)
+        {
+            <section class="card ptc-now" aria-labelledby="ptc-now-title">
+                <div class="card__head"><h2 class="card__title" id="ptc-now-title">@Ui.Icon("activity")Now: @current.StudentName</h2><span class="badge badge--primary">In progress</span></div>
+                <div class="card__body ptc-now__body">
+                    <p class="ptc-timer" aria-live="off"><span data-timer-start="@Iso(current.ActualStartUtc)" data-timer-planned="@current.PlannedMinutes">0:00</span>
+                        <small>of @current.PlannedMinutes min planned · started @Local(current.ActualStartUtc)</small></p>
+                    <p>@current.ClassName · Round @current.RoundNumber · @string.Join(", ", current.Subjects) · <code>@current.Reference</code></p>
+                    <form action="/ptc/my/end" method="post" data-ptc-action>
+                        @Html.AntiForgeryToken()<input type="hidden" name="key" value="@current.Key" /><input type="hidden" name="date" value="@m.Date?.ToString("yyyy-MM-dd", c)" />
+                        <button class="btn btn--primary btn--lg" type="submit">@Ui.Icon("check")End interview</button>
+                    </form>
+                </div>
+            </section>
+        }
+        else if (m.Next is { } next)
+        {
+            <p class="notice">@Ui.Icon("clock", "icon--sm")<span class="notice__body"><strong>Next: @next.PlannedStart.ToString("HH:mm", c) · @next.StudentName</strong>@next.ClassName · @string.Join(", ", next.Subjects)</span></p>
+        }
+
+        <ol class="ptc-meetings">
+            @foreach (var x in m.Meetings)
+            {
+                <li class="ptc-meeting is-@x.State.ToString().ToLowerInvariant()">
+                    <div class="ptc-meeting__time">
+                        <strong>@x.PlannedStart.ToString("HH:mm", c)–@x.PlannedEnd.ToString("HH:mm", c)</strong>
+                        <span class="badge @PtcLiveRules.Badge(x.State)">@PtcLiveRules.Label(x.State)</span>
+                    </div>
+                    <div class="ptc-meeting__body">
+                        <p><strong>@x.StudentName</strong> · @x.ClassName · Round @x.RoundNumber</p>
+                        <p class="ptc-muted">@string.Join(", ", x.Subjects) · <code>@x.Reference</code></p>
+                        @if (x.Joint.Count > 0) { <p class="ptc-muted">At the same time, with you: @string.Join(", ", x.Joint)</p> }
+                        @if (x.ActualStartUtc is not null)
+                        {
+                            <p class="ptc-muted">Started @Local(x.ActualStartUtc)@(x.ActualEndUtc is not null ? $" · ended {Local(x.ActualEndUtc)} · {Dur(x.ActualDuration)} min" : "")</p>
+                        }
+                    </div>
+                    <div class="ptc-meeting__actions">
+                        @if (x.CanStart)
+                        {
+                            <form action="/ptc/my/start" method="post" data-ptc-action>
+                                @Html.AntiForgeryToken()<input type="hidden" name="key" value="@x.Key" /><input type="hidden" name="date" value="@m.Date?.ToString("yyyy-MM-dd", c)" />
+                                <button class="btn btn--primary" type="submit" disabled="@(current is not null)" title="@(current is not null ? "End the interview in progress first" : null)">@Ui.Icon("clock", "icon--sm")Start</button>
+                            </form>
+                        }
+                        else if (x.CanEnd && x != current)
+                        {
+                            <span data-timer-start="@Iso(x.ActualStartUtc)" data-timer-planned="@x.PlannedMinutes">0:00</span>
+                            <form action="/ptc/my/end" method="post" data-ptc-action>
+                                @Html.AntiForgeryToken()<input type="hidden" name="key" value="@x.Key" /><input type="hidden" name="date" value="@m.Date?.ToString("yyyy-MM-dd", c)" />
+                                <button class="btn btn--primary" type="submit">End</button>
+                            </form>
+                        }
+                    </div>
+                </li>
+            }
+        </ol>
+    </div>
+}
+
+@section Scripts { <script src="~/js/ptc-live.js" asp-append-version="true"></script> }

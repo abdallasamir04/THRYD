@@ -1,0 +1,14 @@
+@{
+    // Signed-in users see it inside the application; anyone else on the plain sign-in layout.
+    if (User.Identity?.IsAuthenticated != true) { Layout = "_AuthLayout"; }
+    ViewData["Title"] = "Access needed";
+    var message = ViewData["Message"] as string ?? "Your account does not have access to this page. Ask the Super Admin if you need it.";
+}
+<section class="card">
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("lock")</span>
+        <p class="empty__title">Access needed</p>
+        <p class="empty__text">@message</p>
+        <div class="empty__actions"><a class="btn btn--primary" href="/">@Ui.Icon("dashboard")My dashboard</a></div>
+    </div>
+</section>

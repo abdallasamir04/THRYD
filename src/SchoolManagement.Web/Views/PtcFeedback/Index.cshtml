@@ -1,0 +1,20 @@
+@model PtcFeedbackStartModel
+@{ ViewData["Title"] = "Feedback · " + Model.Event.Title; }
+<partial name="_EventHead" model="Model.Event" />
+<section class="pp-card">
+    <h2 class="pp-h2">Share your feedback</h2>
+    <p class="pp-muted">Thank you for attending. To give feedback, enter the mobile number the school has on record for you and your child's first name as the school records it.</p>
+    @if (Model.Error is not null)
+    {
+        <p class="pp-error" role="alert">@Ui.Icon("alert-circle", "icon--sm")<span>@Model.Error</span></p>
+    }
+    <form action="/ptc-feedback/@Model.Event.Token/identify" method="post" autocomplete="off" data-pp-once>
+        @Html.AntiForgeryToken()
+        <label class="pp-label" for="phone">Mobile number registered with the school</label>
+        <input class="pp-input" id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" value="@Model.Phone" required />
+        <label class="pp-label" for="firstName">Your child's first name</label>
+        <input class="pp-input" id="firstName" name="firstName" type="text" autocomplete="off" maxlength="60" value="@Model.FirstName" required />
+        <button class="pp-btn" type="submit">Continue @Ui.Icon("arrow-right", "icon--sm")</button>
+    </form>
+</section>
+<p class="pp-small">For your security, the school does not show any details until the number and name match its records.</p>

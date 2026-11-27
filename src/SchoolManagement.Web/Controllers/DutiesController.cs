@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Services.Accounts;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
@@ -17,6 +18,7 @@ namespace SchoolManagement.Web.Controllers;
 /// </list>
 /// </summary>
 [Route("duties")]
+[StaffAccess(StaffAccessRule.DutyAudit)]
 public class DutiesController(IDutyService duties, IClassService classes, IStaffDutyService staffDuty, IActivityService activities, IDutyBoardService board,
     IDutyAuditAccess auditAccess, ICurrentUser currentUser) : AppController
 {

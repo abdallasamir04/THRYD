@@ -29,6 +29,9 @@ public sealed class DbFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         Environment.SetEnvironmentVariable("ConnectionStrings__SchoolDb", ConnectionString);
+        // The existing suite exercises the modules without signing in ("Working as" / Administration mode); the sign-in and
+        // least-privilege tests use their own host with sign-in required (AuthTests).
+        Environment.SetEnvironmentVariable("Authentication__Enabled", "false");
         // The background alert sweep would add alerts to other tests' data while they run.
         Environment.SetEnvironmentVariable("Attendance__AlertSweep", "false");
         // Automatic finalization would record other tests' unrecorded students as absent.

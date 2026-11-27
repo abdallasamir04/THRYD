@@ -1,0 +1,156 @@
+@model PtcReportData
+@*
+    PTC analytics (Super Admin only). Every card, chart and table below comes from the same filtered records; nothing is
+    estimated or sample data. Parent bookings (one per family meeting window) are counted apart from teacher interviews.
+*@
+@{
+    ViewData["Title"] = "PTC reports";
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = "/ptc";
+    var k = Model.Kpis;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    string Pct(double? v) => v is { } x ? x.ToString("0.0", c) + "%" : "—";
+    var query = Model.Filter.Query();
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li>Reports</li></ol>
+        <h1 class="page-title">PTC reports &amp; analytics</h1>
+        <p class="page-sub">Bookings, interviews, attendance, parent feedback and concerns across PTC events. Figures are calculated now from the records; averages need at least @PtcReportService.MinSample answers.</p>
+    </div>
+    <div class="page-head__actions ptc-actions">
+        <a class="btn btn--primary" href="/ptc/reports/export@(string.IsNullOrEmpty(query) ? "" : "?" + query)">@Ui.Icon("download")Export to Excel</a>
+    </div>
+</div>
+
+<partial name="~/Views/Ptc/_Nav.cshtml" model='"reports"' />
+<partial name="_ReportNav" model='("overview", query)' />
+<partial name="_Filters" model="Model" />
+
+@if (Model.Empty)
+{
+    <p class="notice">@Ui.Icon("info", "icon--sm")<span class="notice__body"><strong>No PTC bookings match these filters yet</strong>
+        @(k.Events == 0 ? "There is no PTC event in this selection." : "The selected events have no parent bookings.") Reports fill in automatically as real events, bookings, interviews and feedback are recorded; nothing is shown that has not happened.</span></p>
+}
+
+<ul class="kpis" aria-label="PTC totals">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("calendar")</span><p class="kpi__label">PTC events</p><p class="kpi__value">@k.Events</p><p class="kpi__meta">@k.CompletedEvents completed</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Parent bookings</p><p class="kpi__value">@k.Bookings</p><p class="kpi__meta">@k.CancelledBookings cancelled · one per family meeting</p></div></li>
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("clock")</span><p class="kpi__label">Teacher interviews</p><p class="kpi__value">@k.Interviews</p><p class="kpi__meta">@k.Upcoming upcoming · @k.InProgress in progress</p></div></li>
+    <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("check-circle")</span><p class="kpi__label">Completed interviews</p><p class="kpi__value">@k.Completed</p><p class="kpi__meta">Completion rate @Pct(k.CompletionRate)</p></div></li>
+    <li><div class="kpi @(k.Missed > 0 ? "kpi--warn" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon("x-circle")</span><p class="kpi__label">Missed interviews</p><p class="kpi__value">@k.Missed</p><p class="kpi__meta">@k.Cancelled cancelled (@Pct(k.CancellationRate))</p></div></li>
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("user")</span><p class="kpi__label">Participating teachers</p><p class="kpi__value">@k.Teachers</p><p class="kpi__meta">@k.Classes classes with bookings</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("inbox")</span><p class="kpi__label">Feedback submissions</p><p class="kpi__value">@k.Feedback</p><p class="kpi__meta">Response rate @Pct(k.ResponseRate) of @k.Eligible eligible</p></div></li>
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("star")</span><p class="kpi__label">Parent satisfaction</p><p class="kpi__value" style="font-size: 1.1rem">@k.Satisfaction.Text()</p><p class="kpi__meta">Overall experience, 4 = Excellent</p></div></li>
+    <li><div class="kpi @(k.OpenConcerns > 0 ? "kpi--orange" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon("alert-triangle")</span><p class="kpi__label">Open concerns</p><p class="kpi__value">@k.OpenConcerns</p><p class="kpi__meta">@k.ResolvedConcerns resolved of @k.Concerns</p></div></li>
+</ul>
+
+<section class="card" aria-labelledby="rp-att" style="margin-bottom: 16px">
+    <div class="card__head"><h2 class="card__title" id="rp-att">@Ui.Icon("clock")Attendance &amp; completion</h2></div>
+    <div class="card__body">
+        <dl class="dl">
+            <dt>Completion rate</dt><dd>@Pct(k.CompletionRate) <span class="ptc-muted">completed ÷ (completed + missed) interviews; upcoming ones are never counted as missed</span></dd>
+            <dt>Missed / never started</dt><dd>@k.Missed <span class="ptc-muted">not started and the planned end has passed (server time)</span></dd>
+            <dt>Average actual duration</dt><dd>@k.AverageActualMinutes.Text("0.0", " min") <span class="ptc-muted">from server Start/End stamps · planned @k.AveragePlannedMinutes.Text("0.0", " min")</span></dd>
+            <dt>Started on time</dt><dd>@(k.Started == 0 ? "No meeting started yet" : $"{k.StartedOnTime} of {k.Started} meetings") <span class="ptc-muted">within @PtcReportService.OnTimeGraceMinutes minutes of the planned start</span></dd>
+            <dt>Ended after planned end</dt><dd>@(k.Ended == 0 ? "No meeting ended yet" : $"{k.EndedAfterPlanned} of {k.Ended} meetings")</dd>
+            <dt>Started but never ended</dt><dd>@k.StartedNotEnded <span class="ptc-muted">in progress past the planned end (no End recorded)</span></dd>
+        </dl>
+    </div>
+</section>
+
+<h2 class="ptc-section-title">Charts</h2>
+<div class="ptc-chart-grid">
+    @foreach (var chart in Model.Charts) { <partial name="_Chart" model="chart" /> }
+</div>
+
+<section class="card table-card" aria-labelledby="rp-events" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="rp-events">@Ui.Icon("calendar")Event summary (@Model.Events.Count)</h2></div>
+    @if (Model.Events.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No PTC event matches these filters.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Event</th><th scope="col">Status</th><th scope="col">Classes · Rounds</th><th scope="col">Parent bookings</th><th scope="col">Teacher interviews</th>
+                <th scope="col">Completed · missed · cancelled</th><th scope="col">Upcoming · in progress</th><th scope="col">Teachers</th><th scope="col">Substitutes · uncovered</th>
+                <th scope="col">Feedback (response)</th><th scope="col">Open concerns</th></tr></thead>
+            <tbody>@foreach (var e in Model.Events)
+            {
+                <tr>
+                    <td data-label="Event"><a href="/ptc/events/@e.Id"><strong>@e.Title</strong></a><br /><span class="ptc-muted">@e.Start.ToString("d MMM", c) – @e.End.ToString("d MMM yyyy", c) · @e.Year</span></td>
+                    <td data-label="Status"><span class="badge @PtcLabels.Badge(e.Status)">@PtcLabels.Label(e.Status)</span></td>
+                    <td data-label="Classes · Rounds">@e.Classes · @e.Rounds</td>
+                    <td data-label="Parent bookings">@e.Bookings<br /><span class="ptc-muted">@e.CancelledBookings cancelled</span></td>
+                    <td data-label="Teacher interviews">@e.Interviews</td>
+                    <td data-label="Completed · missed · cancelled">@e.Completed · @e.Missed · @e.Cancelled</td>
+                    <td data-label="Upcoming · in progress">@e.Upcoming · @e.InProgress</td>
+                    <td data-label="Teachers">@e.Teachers <span class="ptc-muted">· @e.ParticipatingClasses classes</span></td>
+                    <td data-label="Substitutes · uncovered">@e.Substitutes · @(e.CoverageConflicts is { } cc ? cc.ToString(c) : "—")</td>
+                    <td data-label="Feedback (response)">@e.Feedback <span class="ptc-muted">(@Pct(e.ResponseRate) of @e.Eligible)</span></td>
+                    <td data-label="Open concerns">@e.OpenConcerns <span class="ptc-muted">of @e.Concerns</span></td>
+                </tr>
+            }</tbody>
+        </table></div>
+        <p class="hint" style="padding: 0 16px 12px">Uncovered coverage is computed live for Draft and Published events only (—: the event is closed, so the current timetable no longer says what applied then).</p>
+    }
+</section>
+
+<section class="card table-card" aria-labelledby="rp-compare" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="rp-compare">@Ui.Icon("list-checks")Completed events compared</h2></div>
+    @if (Model.Comparison.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No completed PTC event in this selection yet: there is nothing to compare.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Event</th><th scope="col">Parent bookings</th><th scope="col">Teachers</th><th scope="col">Classes</th><th scope="col">Completed</th><th scope="col">Missed</th>
+                <th scope="col">Avg duration</th><th scope="col">Response rate</th><th scope="col">Overall rating</th><th scope="col">Concerns</th></tr></thead>
+            <tbody>@foreach (var e in Model.Comparison)
+            {
+                <tr>
+                    <td data-label="Event"><strong>@e.Title</strong>@if (!e.HasData) { <br /><span class="badge badge--neutral">No booking data</span> }</td>
+                    <td data-label="Parent bookings">@e.Bookings</td><td data-label="Teachers">@e.Teachers</td><td data-label="Classes">@e.ParticipatingClasses</td>
+                    <td data-label="Completed">@e.Completed</td><td data-label="Missed">@e.Missed</td><td data-label="Avg duration">@e.AverageMinutes.Text("0.0", " min")</td>
+                    <td data-label="Response rate">@Pct(e.ResponseRate)</td><td data-label="Overall rating">@e.Overall.Text()</td><td data-label="Concerns">@e.Concerns</td>
+                </tr>
+            }</tbody>
+        </table></div>
+    }
+</section>
+
+<section class="card table-card" aria-labelledby="rp-classes" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="rp-classes">@Ui.Icon("door")Classes (@Model.Classes.Count)</h2><span class="ptc-muted">Every active class, PreK and KG included</span></div>
+    <div class="table-wrap"><table class="table table--stack">
+        <thead><tr><th scope="col">Class</th><th scope="col">Events</th><th scope="col">Subjects</th><th scope="col">Teachers</th><th scope="col">Parent bookings</th>
+            <th scope="col">Completed · missed · cancelled</th><th scope="col">Feedback</th><th scope="col">Avg overall</th><th scope="col">Concerns (open)</th></tr></thead>
+        <tbody>@foreach (var x in Model.Classes)
+        {
+            <tr>
+                <td data-label="Class"><strong>@x.Name</strong></td>
+                <td data-label="Events">@(x.Events.Count == 0 ? "—" : string.Join(", ", x.Events))</td>
+                <td data-label="Subjects">@(x.Subjects.Count == 0 ? "—" : string.Join(", ", x.Subjects))</td>
+                <td data-label="Teachers">@x.Teachers</td><td data-label="Parent bookings">@x.Bookings</td>
+                <td data-label="Completed · missed · cancelled">@x.Completed · @x.Missed · @x.Cancelled</td>
+                <td data-label="Feedback">@x.Feedback</td><td data-label="Avg overall">@x.Overall.Text()</td><td data-label="Concerns (open)">@x.Concerns (@x.OpenConcerns)</td>
+            </tr>
+        }</tbody>
+    </table></div>
+</section>
+
+<section class="card table-card" aria-labelledby="rp-depts" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="rp-depts">@Ui.Icon("layers")Departments (@Model.Departments.Count)</h2><span class="ptc-muted">The subject's department of each interview (from its timetable lesson)</span></div>
+    @if (Model.Departments.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No teacher interviews in this selection yet.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Department</th><th scope="col">Teachers</th><th scope="col">Classes</th><th scope="col">Parent meetings</th><th scope="col">Completed · missed</th>
+                <th scope="col">Feedback</th><th scope="col">Avg communication</th><th scope="col">Concerns · resolved · unresolved</th></tr></thead>
+            <tbody>@foreach (var d in Model.Departments)
+            {
+                <tr><td data-label="Department"><strong>@d.Name</strong></td><td data-label="Teachers">@d.Teachers</td><td data-label="Classes">@d.Classes</td><td data-label="Parent meetings">@d.Meetings</td>
+                    <td data-label="Completed · missed">@d.Completed · @d.Missed</td><td data-label="Feedback">@d.Feedback</td><td data-label="Avg communication">@d.Communication.Text()</td>
+                    <td data-label="Concerns · resolved · unresolved">@d.Concerns · @d.Resolved · @d.Unresolved</td></tr>
+            }</tbody>
+        </table></div>
+        <p class="hint" style="padding: 0 16px 12px">Average communication uses only teacher-specific answers about the department's teachers. Concerns are those raised by parents whose booking included the department; they are not necessarily about it.</p>
+    }
+</section>

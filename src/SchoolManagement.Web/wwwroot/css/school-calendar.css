@@ -155,3 +155,7 @@
     .sc-month { break-inside: avoid; box-shadow: none; }
 }
 
+
+/* Parent-Teacher Conference lines (from the PTC module; read-only in the calendar). */
+.sc-flag--ptc { background: var(--color-primary-soft, #e6efff); color: var(--color-primary, #1d4ed8); font-weight: 800; letter-spacing: 0.02em; margin-right: 4px; }
+.sc-ev--ptc .sc-ev__link { border-left: 3px solid var(--color-primary, #1d4ed8); }

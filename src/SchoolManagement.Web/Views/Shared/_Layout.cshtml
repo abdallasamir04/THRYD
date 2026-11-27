@@ -6,12 +6,23 @@
 @inject ISettingsService Settings
 @inject IDashboardService Dashboard
 @inject ICurrentUser CurrentUser
+@inject SchoolManagement.Web.Services.Ptc.IPtcOperationsService PtcOperations
+@inject SchoolManagement.Web.Services.Accounts.IStaffAccessEvaluator StaffAccess
+@inject Microsoft.Extensions.Options.IOptionsMonitor<SchoolManagement.Web.Services.Accounts.AccountOptions> AccountSettings
 @{
     var operatorName = CurrentUser.Name;
     // Super Admin (Administration mode: no "Working as" identity) — full access, "Working as" optional.
     var superAdmin = CurrentUser.IsSuperAdmin;
     var profile = await Settings.GetProfileAsync();
     var counts = await Dashboard.NavCountsAsync();
+    // "My PTC" for a staff member (Working as) who has PTC interviews in a Published or Completed event.
+    var myPtc = !superAdmin && await PtcOperations.HasInterviewsAsync();
+    // Signed in: the account is the identity. A staff account sees only what it may open (least privilege, also enforced on the server).
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var staffNav = signedIn && !superAdmin;
+    var access = staffNav ? await StaffAccess.SummaryAsync() : null;
+    // Sign-in switched off: the navigation is the one from before sign-in (no Staff accounts entry; the page stays at its address).
+    var signInOn = AccountSettings.CurrentValue.RequireAuthentication;
     var current = ViewData["Nav"] as string ?? "";
     // Every page under Staff (academic and management) highlights the single Staff entry.
     if (current is "Departments" or "StaffMembers" or "Teachers" or "Workload" or "Timetable" or "Management") current = "Staff";
@@ -36,7 +47,11 @@
             ("Classes", "/classes", "Classes", "door", counts.Classes),
             ("Timetables", "/timetables", "Timetables", "calendar", null),
             ("AcademicCalendar", "/school-calendar", "School Calendar", "calendar-days", null),
-        }),
+        }.Concat(superAdmin
+            // PTC administration is Super Admin only (checked again on every request); nobody else sees the entry.
+            ? new (string, string?, string, string, int?)[] { ("PTC", "/ptc", "PTC", "users", null) }
+            : myPtc ? new (string, string?, string, string, int?)[] { ("MyPtc", "/ptc/my", "My PTC interviews", "clock", null) }
+            : []).ToArray()),
         ("Daily Operations", new (string, string?, string, string, int?)[]
         {
             ("DutyAudit", "/duties", "Duties", "shield-check", null),
@@ -51,14 +66,27 @@
         {
             ("SchoolQA", null, "School QA", "clipboard-check", null),
             // Upcoming (no page or route yet): shown disabled with a "Soon" badge, like School QA.
-            ("PTC", null, "PTC", "users", null),
             ("Admission", null, "Admission", "user-plus", null),
         }),
         ("System", new (string, string?, string, string, int?)[]
         {
             ("Settings", "/settings", "Settings", "settings", null),
-        }),
+        }.Concat(signInOn ? [("StaffAccounts", "/staff/accounts", "Staff accounts", "lock", null)] : Array.Empty<(string, string?, string, string, int?)>()).ToArray()),
     };
+    if (staffNav)
+    {
+        // A signed-in staff member: their own pages, plus the modules they hold a specific grant for.
+        var mine = new List<(string, string?, string, string, int?)> { ("Me", "/me", "My dashboard", "dashboard", null) };
+        if (myPtc) mine.Add(("MyPtc", "/ptc/my", "My PTC interviews", "clock", null));
+        var modules = new List<(string, string?, string, string, int?)>();
+        if (access!.FloorTeam) modules.Add(("FloorAudit", "/floor-management", "Floor Management", "school", null));
+        if (access.DutyAudit) modules.Add(("DutyAudit", "/duties", "Duties", "shield-check", null));
+        if (access.OrgStructure) modules.Add(("Management", "/management", "Management", "briefcase", null));
+        if (access.StudentRecords) { modules.Add(("Students", "/students/hub", "Students", "graduation-cap", null)); modules.Add(("Classes", "/classes", "Classes", "door", null)); }
+        groups = modules.Count == 0
+            ? [("You", mine.ToArray())]
+            : [("You", mine.ToArray()), ("Modules", modules.ToArray())];
+    }
     var group = current == "Dashboard" ? "Overview"
         : groups.FirstOrDefault(g => g.Items.Any(i => i.Key == current)).Title ?? "";
     var flash = TempData[SchoolManagement.Web.Controllers.AppController.ToastKey] as string;
@@ -186,7 +214,24 @@
                         @Ui.Icon("moon", "icon--moon")@Ui.Icon("sun", "icon--sun")
                     </button>
                     <span class="topbar__divider" aria-hidden="true"></span>
-                    @if (superAdmin)
+                    @if (signedIn)
+                    {
+                        <details class="account-menu">
+                            <summary class="account" title="Signed in as @operatorName">
+                                <span class="avatar avatar--@(superAdmin ? "violet" : Ui.Tone(operatorName))" aria-hidden="true">@(superAdmin ? "SA" : Ui.Initials(operatorName))</span>
+                                <span class="account__text">
+                                    <span class="account__name" dir="auto">@operatorName</span>
+                                    <span class="account__role">@(superAdmin ? "Super Admin · full access" : "Staff")</span>
+                                </span>
+                            </summary>
+                            <div class="account-menu__panel">
+                                <a href="@(superAdmin && CurrentUser.StaffId is null ? "/staff/accounts" : "/me")">@Ui.Icon("dashboard", "icon--sm")@(superAdmin && CurrentUser.StaffId is null ? "Staff accounts" : "My dashboard")</a>
+                                <a href="/account/password">@Ui.Icon("lock", "icon--sm")Change password</a>
+                                <form action="/account/logout" method="post">@Html.AntiForgeryToken()<button type="submit">@Ui.Icon("power", "icon--sm")Sign out</button></form>
+                            </div>
+                        </details>
+                    }
+                    else if (superAdmin)
                     {
                         <a class="account" href="/settings#operator" title="Super Admin — full access. “Working as” is optional (Settings).">
                             <span class="avatar avatar--violet" aria-hidden="true">SA</span>

@@ -1,0 +1,81 @@
+@model PtcPortalBookModel
+@{
+    var p = Model.Page;
+    ViewData["Title"] = p.Event.Title;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+<partial name="_EventHead" model="p.Event" />
+<partial name="_Steps" model="2" />
+
+<section class="pp-card pp-child">
+    <p><strong>@p.FirstName</strong> · @p.ClassName</p>
+    @if (p.Date is { } d) { <p class="pp-muted">@Ui.Icon("calendar", "icon--sm")@d.ToString("dddd d MMMM yyyy", c)</p> }
+</section>
+
+@if (p.ExistingBooking is not null)
+{
+    <section class="pp-card pp-center">
+        <span class="pp-icon pp-icon--ok">@Ui.Icon("check-circle")</span>
+        <h2 class="pp-h2">@p.FirstName already has a booking</h2>
+        <p>Each child has one booking for this conference, with all the subjects you want to discuss.</p>
+        <a class="pp-btn" href="/ptc-booking/@p.Event.Token/confirmation?b=@Uri.EscapeDataString(p.ExistingBooking)&amp;already=1">View the booking</a>
+    </section>
+}
+else if (p.Unavailable is not null)
+{
+    <section class="pp-card pp-center">
+        <span class="pp-icon">@Ui.Icon("info")</span>
+        <h2 class="pp-h2">Booking is not available</h2>
+        <p>@p.Unavailable</p>
+    </section>
+}
+else
+{
+    <form action="/ptc-booking/@p.Event.Token/book" method="post" autocomplete="off" data-pp-once data-pp-book>
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="c" value="@p.ChildToken" />
+        @if (Model.Error is not null)
+        {
+            <p class="pp-error" role="alert">@Ui.Icon("alert-circle", "icon--sm")<span>@Model.Error</span></p>
+        }
+
+        <section class="pp-card">
+            <h2 class="pp-h2">1. Choose one session</h2>
+            <p class="pp-muted">All the teachers you choose below meet you together, in the same session.</p>
+            <fieldset class="pp-options">
+                <legend class="visually-hidden">Session</legend>
+                @foreach (var r in p.Rounds)
+                {
+                    var id = $"round-{r.Number}";
+                    <label class="pp-option@(r.Full ? " is-full" : "")" for="@id">
+                        <input type="radio" id="@id" name="round" value="@r.Number" required disabled="@r.Full" checked="@(Model.Round == r.Number && !r.Full)" />
+                        <span class="pp-option__body">
+                            <strong>Session @r.Number · @r.Start.ToString("h:mm tt", c) – @r.End.ToString("h:mm tt", c)</strong>
+                            <span class="pp-muted">@r.Date.ToString("ddd d MMM", c)</span>
+                        </span>
+                        @if (r.Full) { <span class="pp-badge">Full</span> } else { <span class="pp-badge pp-badge--ok">@Ui.Plural(r.Remaining, "place", "places") left</span> }
+                    </label>
+                }
+            </fieldset>
+        </section>
+
+        <section class="pp-card">
+            <h2 class="pp-h2">2. Choose the subjects to discuss</h2>
+            <p class="pp-muted">Choose one or more. These are your child's teachers for this conference.</p>
+            <fieldset class="pp-options">
+                <legend class="visually-hidden">Subjects</legend>
+                @foreach (var s in p.Subjects)
+                {
+                    var id = "subject-" + s.Code;
+                    <label class="pp-option" for="@id">
+                        <input type="checkbox" id="@id" name="subjects" value="@s.Code" checked="@Model.Subjects.Contains(s.Code)" />
+                        <span class="pp-option__body"><strong>@s.Subject</strong><span class="pp-muted">@s.Teacher</span></span>
+                    </label>
+                }
+            </fieldset>
+        </section>
+
+        <button class="pp-btn" type="submit">@Ui.Icon("check", "icon--sm")Confirm booking</button>
+        <p class="pp-small">Your booking is confirmed straight away. The time of your meeting is shown on the next page.</p>
+    </form>
+}

@@ -1,0 +1,7 @@
+@model PortalEvent
+@{ var c = System.Globalization.CultureInfo.InvariantCulture; }
+<section class="pp-event">
+    <h1 class="pp-title">@Model.Title</h1>
+    <p class="pp-dates">@Ui.Icon("calendar", "icon--sm")@(Model.StartDate == Model.EndDate ? Model.StartDate.ToString("dddd d MMMM yyyy", c) : $"{Model.StartDate.ToString("d MMM", c)} – {Model.EndDate.ToString("d MMM yyyy", c)}")</p>
+    @if (!string.IsNullOrWhiteSpace(Model.Description)) { <p class="pp-desc">@Model.Description</p> }
+</section>

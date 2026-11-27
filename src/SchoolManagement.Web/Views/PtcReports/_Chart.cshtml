@@ -1,0 +1,44 @@
+@model PtcChart
+@*
+    A bar chart drawn on the server from real values only (no placeholder data). Bars share one scale starting at zero; each
+    value is printed beside its bar. Colours come from the theme tokens, so Light and Dark modes both read correctly.
+*@
+@{
+    var tones = new[] { "var(--tone-blue)", "var(--tone-green)", "var(--tone-rose)", "var(--tone-amber)", "var(--tone-violet)" };
+    var max = Model.Max <= 0 ? 1 : Model.Max;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+<section class="card ptc-chart-card" aria-label="@Model.Title">
+    <div class="card__head"><h3 class="card__title">@Model.Title</h3></div>
+    <div class="card__body">
+        <p class="ptc-muted" style="margin-top:0">@Model.Description</p>
+        @if (Model.Empty)
+        {
+            <p class="ptc-chart__empty">@Ui.Icon("chart", "icon--sm")No data yet for the selected filters.</p>
+        }
+        else
+        {
+            @if (Model.Series.Count > 1)
+            {
+                <ul class="ptc-chart__legend">@for (var s = 0; s < Model.Series.Count; s++) { <li><span class="ptc-chart__swatch" style="background:@tones[s % tones.Length]"></span>@Model.Series[s]</li> }</ul>
+            }
+            <div class="ptc-chart" role="table" aria-label="@Model.Title values">
+                @foreach (var row in Model.Rows)
+                {
+                    <div class="ptc-chart__row" role="row">
+                        <span class="ptc-chart__label" role="rowheader" title="@row.Label">@row.Label</span>
+                        <span class="ptc-chart__bars" role="cell">
+                            @for (var s = 0; s < row.Values.Count; s++)
+                            {
+                                var v = row.Values[s];
+                                <span class="ptc-chart__line"><span class="ptc-chart__bar" style="width:@((v / max * 100).ToString("0.##", c))%; background:@tones[s % tones.Length]"></span>
+                                    <span class="ptc-chart__value">@v.ToString("0.#", c)@Model.Unit@(Model.Series.Count > 1 ? " " + Model.Series[s].ToLowerInvariant() : "")</span></span>
+                            }
+                            @if (row.Note is not null) { <span class="ptc-muted ptc-chart__note">@row.Note</span> }
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>

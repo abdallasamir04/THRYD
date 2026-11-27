@@ -1,0 +1,31 @@
+@model PtcPortalConfirmationModel
+@{
+    var b = Model.Confirmation;
+    ViewData["Title"] = "Booking confirmed";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var confirmed = b.Status == PtcBookingStatus.Confirmed;
+}
+<partial name="_Steps" model="3" />
+<section class="pp-card pp-center">
+    <span class="pp-icon @(confirmed ? "pp-icon--ok" : "")">@Ui.Icon(confirmed ? "check-circle" : "info")</span>
+    <h1 class="pp-title">@(confirmed ? (Model.AlreadyBooked ? "Your booking is confirmed" : "Booking confirmed") : "This booking was cancelled")</h1>
+    @if (Model.AlreadyBooked && confirmed) { <p class="pp-muted">This child already had this booking; no second booking was made.</p> }
+    <p class="pp-ref">Booking reference<br /><strong>@b.Reference</strong></p>
+    <p class="pp-small">Keep this reference. You can also save or screenshot this page.</p>
+</section>
+
+<section class="pp-card">
+    <dl class="pp-dl">
+        <dt>Conference</dt><dd>@b.EventTitle</dd>
+        <dt>Student</dt><dd>@b.StudentName</dd>
+        <dt>Class</dt><dd>@b.ClassName</dd>
+        <dt>Date</dt><dd>@b.Date.ToString("dddd d MMMM yyyy", c)</dd>
+        <dt>Session</dt><dd>Session @b.RoundNumber · @b.RoundStart.ToString("h:mm tt", c) – @b.RoundEnd.ToString("h:mm tt", c)</dd>
+        <dt>Your meeting</dt><dd><strong>@b.MeetingStart.ToString("h:mm tt", c) – @b.MeetingEnd.ToString("h:mm tt", c)</strong><br /><span class="pp-muted">All your teachers meet you together at this time.</span></dd>
+        <dt>Status</dt><dd>@(confirmed ? "Confirmed" : "Cancelled")</dd>
+    </dl>
+    <h2 class="pp-h2">Subjects and teachers</h2>
+    <ul class="pp-list pp-list--plain">
+        @foreach (var (subject, teacher) in b.Subjects) { <li><strong>@subject</strong> · @teacher</li> }
+    </ul>
+</section>

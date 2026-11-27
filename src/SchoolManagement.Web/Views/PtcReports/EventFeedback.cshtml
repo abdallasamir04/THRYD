@@ -1,0 +1,78 @@
+@model PtcEventFeedbackModel
+@*
+    An event's feedback links (Super Admin only): the event-wide link (parents identify themselves) and each eligible
+    booking's own link, for copying into WhatsApp by hand. Nothing is sent automatically. The page is not cached.
+*@
+@{
+    var e = Model.Event;
+    var l = Model.Links;
+    ViewData["Title"] = "Feedback · " + e.Title;
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = $"/ptc/events/{e.Id}";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var message = l.EventUrl is null ? null : $"Thank you for attending {e.Title}. We would value your feedback: {l.EventUrl}";
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/events/@e.Id">@e.Title</a></li><li>Feedback</li></ol>
+        <h1 class="page-title">Parent feedback</h1>
+        <p class="page-sub">Feedback opens for a booking once its class's PTC is over (or the event is Completed), and closes on @l.ClosesOn.ToString("d MMM yyyy", c). One submission per booking.</p>
+    </div>
+    <div class="page-head__actions ptc-actions"><a class="btn btn--secondary" href="/ptc/feedback?EventId=@e.Id">@Ui.Icon("inbox")View submitted feedback</a></div>
+</div>
+<partial name="~/Views/Ptc/_EventNav.cshtml" model='(e, "feedback")' />
+
+<ul class="kpis" aria-label="Feedback response">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Eligible bookings</p><p class="kpi__value">@l.Eligible</p><p class="kpi__meta">Confirmed, class PTC over</p></div></li>
+    <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("check-circle")</span><p class="kpi__label">Feedback submitted</p><p class="kpi__value">@l.Submitted</p><p class="kpi__meta">@(l.Eligible - l.Submitted) not yet</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("chart")</span><p class="kpi__label">Response rate</p><p class="kpi__value">@(l.ResponseRate is { } rr ? rr.ToString("0.0", c) + "%" : "—")</p><p class="kpi__meta">Submitted ÷ eligible bookings</p></div></li>
+</ul>
+
+<section class="card" aria-labelledby="ef-link" style="margin-bottom: 16px">
+    <div class="card__head"><h2 class="card__title" id="ef-link">@Ui.Icon("send")Event feedback link</h2></div>
+    <div class="card__body" data-ptc-share>
+        @if (l.EventUrl is null)
+        {
+            <p class="ptc-muted">@(l.Status is PtcEventStatus.Draft or PtcEventStatus.Cancelled ? "Feedback is only available for Published or Completed events." : "The feedback period for this event has ended.")</p>
+        }
+        else
+        {
+            <div class="field"><label class="label" for="fb-link">Link (parents enter their registered number and child's first name)</label>
+                <div class="ptc-actions"><input class="input" id="fb-link" value="@l.EventUrl" readonly style="flex:1; min-width: 220px" data-share-url />
+                    <button class="btn btn--secondary" type="button" data-copy-link>@Ui.Icon("copy", "icon--sm")Copy link</button></div></div>
+            <div class="field" style="margin-top: 12px"><label class="label" for="fb-message">WhatsApp message (edit before sharing)</label>
+                <textarea class="input" id="fb-message" rows="3" data-share-message>@message</textarea></div>
+            <div class="ptc-actions" style="margin-top: 12px">
+                <a class="btn btn--primary" href="@PtcLinks.WhatsAppShare(message!)" target="_blank" rel="noopener noreferrer" data-share-whatsapp>@Ui.Icon("whatsapp", "icon--sm")Share on WhatsApp</a>
+                <span class="ptc-muted">Opens WhatsApp with the message; you choose the chat and send it. Nothing is sent automatically. Parents whose class PTC is not over yet see that feedback opens later.</span>
+            </div>
+        }
+    </div>
+</section>
+
+<section class="card table-card" aria-labelledby="ef-bookings">
+    <div class="card__head"><h2 class="card__title" id="ef-bookings">@Ui.Icon("users")Bookings (@l.Bookings.Count)</h2><span class="ptc-muted">Each booking's own link opens its form directly; share it only with that family.</span></div>
+    @if (l.Bookings.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No confirmed bookings for this event.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Booking</th><th scope="col">Child · class</th><th scope="col">Date</th><th scope="col">Feedback</th><th scope="col">Parent-specific link</th></tr></thead>
+            <tbody>@foreach (var b in l.Bookings)
+            {
+                <tr>
+                    <td data-label="Booking"><code>@b.BookingReference</code></td><td data-label="Child · class">@b.ChildFirstName · @b.ClassName</td>
+                    <td data-label="Date">@b.Date.ToString("ddd d MMM", c)</td>
+                    <td data-label="Feedback">@if (b.FeedbackReference is { } fr) { <span class="badge badge--success">Received @fr</span> }
+                        else { <span class="badge @(b.Availability == PtcFeedbackAvailability.Open ? "badge--warning" : "badge--neutral")">@(b.Availability switch { PtcFeedbackAvailability.Open => "Not yet submitted", PtcFeedbackAvailability.NotYet => "Opens after the PTC", PtcFeedbackAvailability.Closed => "Period ended", _ => "Not eligible" })</span> }</td>
+                    <td data-label="Parent-specific link">@if (b.Url is { } u && b.FeedbackReference is null)
+                        {
+                            <div class="ptc-actions" data-ptc-share><input class="input" value="@u" readonly style="min-width: 180px; flex: 1" data-share-url aria-label="Feedback link for @b.BookingReference" />
+                                <button class="btn btn--ghost btn--sm" type="button" data-copy-link>@Ui.Icon("copy", "icon--sm")Copy</button></div>
+                        } else { <span class="ptc-muted">—</span> }</td>
+                </tr>
+            }</tbody>
+        </table></div>
+    }
+</section>
+@section Scripts { <script src="~/js/ptc.js" asp-append-version="true"></script> }

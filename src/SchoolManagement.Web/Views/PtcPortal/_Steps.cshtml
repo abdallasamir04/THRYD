@@ -1,0 +1,10 @@
+@model int
+@* 1 Your details · 2 Session & subjects · 3 Confirmed *@
+@{ var steps = new[] { "Your details", "Session & subjects", "Confirmed" }; }
+<ol class="pp-steps" aria-label="Booking steps">
+    @for (var i = 0; i < steps.Length; i++)
+    {
+        var n = i + 1;
+        <li class="@(n < Model ? "is-done" : n == Model ? "is-current" : "")" aria-current="@(n == Model ? "step" : null)"><span>@n</span>@steps[i]</li>
+    }
+</ol>

@@ -1,0 +1,194 @@
+@model PtcScheduleViewModel
+@*
+    One class's PTC day: its daily session (date and time window), its Rounds (each one shared booking window: a parent books
+    one Round and chooses subjects; the chosen teachers meet them in parallel in the parent's slot), the actual subject
+    teachers from the class's timetable, KG Homeroom / Co-Teacher assignments as context only, parent contact readiness and
+    the class's readiness. Changes only while the event is a Draft.
+*@
+@{
+    var e = Model.Event;
+    var r = Model.Class;
+    var s = Model.Schedule;
+    ViewData["Title"] = r.ClassName + " · " + e.Title;
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = $"/ptc/events/{e.Id}";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var editable = e.IsDraft;
+    var f = Model.Form;
+    var p = Model.Rounds;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/events/@e.Id">@e.Title</a></li><li>@r.ClassName</li></ol>
+        <h1 class="page-title">@r.ClassName @if (r.IsKg) { <span class="badge badge--neutral">KG</span> } <partial name="_Readiness" model="r.Readiness.Status" /></h1>
+        <p class="page-sub">@s.Date.ToString("dddd d MMMM yyyy", c) · @ScheduleRules.Times(s.Start, s.End) · @Ui.Plural(s.Rounds.Count, "Round", "Rounds") · @s.Capacity parent places</p>
+    </div>
+    @if (editable)
+    {
+        <div class="page-head__actions">
+            <form action="/ptc/schedules/@s.Id/remove" method="post" data-confirm="@r.ClassName and its Rounds are taken out of this Draft event. The class itself is not changed." data-confirm-title="Remove @r.ClassName from the event?" data-confirm-button="Remove class">
+                @Html.AntiForgeryToken()<button class="btn btn--danger" type="submit">@Ui.Icon("trash")Remove from event</button>
+            </form>
+        </div>
+    }
+</div>
+
+<partial name="_EventNav" model='(e, "classes")' />
+
+<div asp-validation-summary="All" class="validation-summary-errors"></div>
+@if (!editable)
+{
+    <p class="notice notice--warning">@Ui.Icon("lock", "icon--sm")<span class="notice__body"><strong>Read-only</strong>@(e.Status == PtcEventStatus.Published ? SchoolManagement.Web.Services.Ptc.PtcSetupService.DraftOnlyMessage : SchoolManagement.Web.Services.Ptc.PtcSetupService.ClosedMessage)</span></p>
+}
+
+<div class="ptc-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)">
+    <section class="card" aria-labelledby="ptc-session">
+        <div class="card__head"><h2 class="card__title" id="ptc-session">@Ui.Icon("clock")Daily session</h2></div>
+        <form action="/ptc/schedules/@s.Id" method="post" data-loading autocomplete="off" class="card__body form-grid form-grid--2">
+            @Html.AntiForgeryToken()
+            <div class="field field--full">
+                <label class="label" for="Date">PTC date</label>
+                <select class="select" id="Date" name="Date" disabled="@(!editable)">
+                    @foreach (var d in e.Dates) { <option value="@d.ToString("yyyy-MM-dd", c)" selected="@(f.Date == d)">@d.ToString("dddd d MMM yyyy", c)</option> }
+                </select>
+            </div>
+            <div class="field"><label class="label" for="Start">Daily start</label><input class="input" id="Start" name="Start" type="time" value="@f.Start?.ToString("HH:mm", c)" required disabled="@(!editable)" /></div>
+            <div class="field"><label class="label" for="End">Daily end</label><input class="input" id="End" name="End" type="time" value="@f.End?.ToString("HH:mm", c)" required disabled="@(!editable)" /></div>
+            <div class="field field--full"><label class="label" for="Notes">Notes</label><input class="input" id="Notes" name="Notes" value="@f.Notes" maxlength="@PtcClassSchedule.NotesMaxLength" disabled="@(!editable)" placeholder="e.g. room or arrangements" /></div>
+            @if (editable)
+            {
+                <div class="field field--full ptc-actions"><button class="btn btn--primary" type="submit">@Ui.Icon("check")Save session</button><span class="ptc-muted">Every Round must stay within the daily time.</span></div>
+            }
+        </form>
+    </section>
+
+    <section class="card" aria-labelledby="ptc-class-ready">
+        <div class="card__head"><h2 class="card__title" id="ptc-class-ready">@Ui.Icon("list-checks")Readiness of @r.ClassName</h2></div>
+        <div class="card__body"><partial name="_Issues" model="(r.Readiness.Issues, false)" /></div>
+    </section>
+</div>
+
+<section class="card table-card" aria-labelledby="ptc-rounds">
+    <div class="card__head">
+        <h2 class="card__title" id="ptc-rounds">@Ui.Icon("clock")Rounds</h2>
+        <span class="ptc-muted">A parent books one Round and chooses subjects; the chosen teachers meet them in parallel in the parent's slot. Capacity counts parents, not teachers.</span>
+    </div>
+    @if (s.Rounds.Count == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("clock")</span><p class="empty__title">No Rounds yet</p><p class="empty__text">Add the day's Rounds below. Their number and start times are yours to choose.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Round</th><th scope="col">Time</th><th scope="col">Duration</th><th scope="col">Parent capacity</th><th scope="col">Meeting / transition</th><th scope="col">Bookings</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var round in s.Rounds)
+                    {
+                        <tr>
+                            <td data-label="Round"><strong>Round @round.Number</strong>@if (round.Status != PtcRoundStatus.Open) { <span class="badge badge--neutral">@round.Status</span> }</td>
+                            <td data-label="Time">@ScheduleRules.Times(round.Start, round.End)</td>
+                            <td data-label="Duration">@round.DurationMinutes min</td>
+                            <td data-label="Parent capacity">@round.Capacity</td>
+                            <td data-label="Meeting / transition">@round.MeetingMinutes min · @round.TransitionMinutes min</td>
+                            <td data-label="Bookings">@round.Bookings / @round.Capacity</td>
+                            <td data-label="Actions">
+                                @if (editable && round.Bookings == 0)
+                                {
+                                    <form action="/ptc/rounds/@round.Id/remove" method="post" data-confirm="Round @round.Number (@ScheduleRules.Times(round.Start, round.End)) is removed; the other Rounds are renumbered in time order." data-confirm-title="Remove this Round?" data-confirm-button="Remove">
+                                        @Html.AntiForgeryToken()<input type="hidden" name="scheduleId" value="@s.Id" />
+                                        <button class="btn btn--ghost btn--sm" type="submit">@Ui.Icon("trash", "icon--sm")Remove</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    @if (editable)
+    {
+        <form action="/ptc/schedules/@s.Id/rounds" method="post" data-loading autocomplete="off" class="card__body form-grid" style="border-top: 1px solid var(--color-border-subtle)">
+            @Html.AntiForgeryToken()
+            <h3 class="field--full ptc-issues__area" style="margin:0">Add Rounds</h3>
+            <div class="field"><label class="label" for="FirstStart">First Round starts</label><input class="input" id="FirstStart" name="FirstStart" type="time" value="@p.FirstStart?.ToString("HH:mm", c)" required /></div>
+            <div class="field"><label class="label" for="Count">Number of Rounds</label><input class="input" id="Count" name="Count" type="number" min="1" max="@PtcRoundPlan.MaxCount" value="@p.Count" required /></div>
+            <div class="field"><label class="label" for="DurationMinutes">Round duration (min)</label><input class="input" id="DurationMinutes" name="DurationMinutes" type="number" min="1" value="@p.DurationMinutes" required /></div>
+            <div class="field"><label class="label" for="GapMinutes">Gap between Rounds (min)</label><input class="input" id="GapMinutes" name="GapMinutes" type="number" min="0" max="@PtcRoundPlan.MaxGapMinutes" value="@p.GapMinutes" /></div>
+            <div class="field"><label class="label" for="Capacity">Parent capacity per Round</label><input class="input" id="Capacity" name="Capacity" type="number" min="1" value="@p.Capacity" required /></div>
+            <div class="field"><label class="label" for="MeetingMinutes">Meeting duration (min)</label><input class="input" id="MeetingMinutes" name="MeetingMinutes" type="number" min="1" value="@p.MeetingMinutes" required /></div>
+            <div class="field"><label class="label" for="TransitionMinutes">Transition (min)</label><input class="input" id="TransitionMinutes" name="TransitionMinutes" type="number" min="0" value="@p.TransitionMinutes" required /></div>
+            @if (Model.SameDayWithoutRounds > 0)
+            {
+                <div class="field field--full"><label class="switch"><input type="checkbox" name="SameDayClasses" value="true" checked="@p.SameDayClasses" /><span class="switch__track" aria-hidden="true"></span><span>Also add these Rounds to the @Ui.Plural(Model.SameDayWithoutRounds, "other class", "other classes") on @s.Date.ToString("ddd d MMM", c) that have no Rounds yet</span></label></div>
+            }
+            <p class="hint field--full">Defaults (from <a href="/ptc/settings">Round defaults</a>): @Model.Defaults.Capacity parents, @Model.Defaults.MeetingDurationMinutes-minute meetings, @Model.Defaults.TransitionDurationMinutes-minute transition, @Model.Defaults.RoundDurationMinutes-minute Rounds. A Round must hold every meeting (capacity × meeting duration).</p>
+            <div class="field field--full"><button class="btn btn--primary" type="submit">@Ui.Icon("plus")Add Rounds</button></div>
+        </form>
+    }
+</section>
+
+<div class="ptc-grid" style="grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr)">
+    <section class="card table-card" aria-labelledby="ptc-subjects">
+        <div class="card__head"><h2 class="card__title" id="ptc-subjects">@Ui.Icon("graduation-cap")Subjects &amp; actual teachers</h2><span class="ptc-muted">From @r.ClassName's timetable lessons in the week of @s.Date.ToString("d MMM", c)</span></div>
+        @if (r.Subjects.Count == 0)
+        {
+            <div class="empty">
+                <span class="empty__icon">@Ui.Icon("alert-triangle")</span>
+                <p class="empty__title">No timetable assignments found for this class.</p>
+                <p class="empty__text">Subjects and their actual teachers come only from the class's timetable lessons; none are invented. The class can stay in this Draft, but the event cannot be published until its timetable has lessons with current teachers.</p>
+                <div class="empty__actions"><a class="btn btn--secondary" href="/timetables">@Ui.Icon("calendar")Open Timetables</a></div>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table table--stack">
+                    <thead><tr><th scope="col">Department</th><th scope="col">Subject</th><th scope="col">Actual teacher</th><th scope="col">Source</th></tr></thead>
+                    <tbody>
+                        @foreach (var x in r.Subjects)
+                        {
+                            <tr><td data-label="Department">@x.DepartmentName</td><td data-label="Subject">@x.Subject</td><td data-label="Actual teacher">@x.TeacherName</td><td data-label="Source" class="ptc-muted">Timetable lesson #@x.SourceLessonId</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <div>
+        @if (r.IsKg)
+        {
+            <section class="card" aria-labelledby="ptc-kg">
+                <div class="card__head"><h2 class="card__title" id="ptc-kg">@Ui.Icon("users")KG Homeroom &amp; Co-Teacher</h2><span class="badge badge--neutral">Context only</span></div>
+                <div class="card__body">
+                    @if (r.KgTeam.Count == 0)
+                    {
+                        <p class="ptc-muted">No Homeroom Teacher or Co-Teacher is assigned to @r.ClassName for @e.YearName.</p>
+                    }
+                    else
+                    {
+                        <dl class="dl">@foreach (var m in r.KgTeam) { <dt>@PtcLabels.Role(m.Role)</dt><dd>@m.Name</dd> }</dl>
+                    }
+                    <p class="hint">Shown for context only. Like every class, this KG class's PTC teachers come from its timetable: a Homeroom Teacher or Co-Teacher meets parents for the subjects they teach in its timetable lessons.</p>
+                </div>
+            </section>
+        }
+        <section class="card" aria-labelledby="ptc-contacts">
+            <div class="card__head"><h2 class="card__title" id="ptc-contacts">@Ui.Icon("phone")Parent contact numbers</h2></div>
+            <div class="card__body">
+                <dl class="dl">
+                    <dt>Students</dt><dd>@r.Contacts.Students</dd>
+                    <dt>Usable number</dt><dd>@r.Contacts.Usable</dd>
+                    <dt>Missing</dt><dd>@if (r.Contacts.Missing > 0) { <span class="badge badge--warning">@r.Contacts.Missing</span> } else { @:0
+                    }</dd>
+                    <dt>Not usable</dt><dd>@r.Contacts.Unusable</dd>
+                </dl>
+                <p class="hint">A parent is identified by the student's parent contact number; students without one cannot be booked. <a href="/ptc/parent-contacts#class-@r.ClassId">See the students</a></p>
+            </div>
+        </section>
+    </div>
+</div>

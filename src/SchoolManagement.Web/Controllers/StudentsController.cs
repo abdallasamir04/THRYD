@@ -1,4 +1,5 @@
-﻿using SchoolManagement.Web.Common;
+﻿using SchoolManagement.Web.Services.Accounts;
+using SchoolManagement.Web.Common;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.Services.Excel;
@@ -6,6 +7,7 @@ using SchoolManagement.Web.ViewModels;
 
 namespace SchoolManagement.Web.Controllers;
 
+[StaffAccess(StaffAccessRule.StudentRecords)]
 public class StudentsController(IStudentService students, IClassService classes, IExcelExportService excel, IArrivalService arrivals,
     IStudentRecordsAccess access) : AppController
 {

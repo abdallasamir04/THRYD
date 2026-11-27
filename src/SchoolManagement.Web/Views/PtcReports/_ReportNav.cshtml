@@ -1,0 +1,13 @@
+@model (string Current, string Query)
+@{
+    var q = string.IsNullOrEmpty(Model.Query) ? "" : "?" + Model.Query;
+    var items = new (string Key, string Href, string Icon, string Label)[]
+    {
+        ("overview", "/ptc/reports" + q, "chart", "Overview"),
+        ("teachers", "/ptc/reports/teachers" + q, "users", "Teachers"),
+        ("feedback", "/ptc/feedback", "inbox", "Feedback & concerns"),
+    };
+}
+<nav class="segmented" aria-label="Report sections" style="margin-bottom: 16px">
+    @foreach (var (key, href, icon, label) in items) { <a href="@href" aria-current="@(Model.Current == key ? "true" : null)">@label</a> }
+</nav>

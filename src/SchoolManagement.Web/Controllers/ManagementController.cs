@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using SchoolManagement.Web.Services.Accounts;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
@@ -13,6 +14,7 @@ namespace SchoolManagement.Web.Controllers;
 /// (<see cref="ManagementTeams"/>); member profiles, forms, tasks and permissions are shared.
 /// </summary>
 [Route("management")]
+[StaffAccess(StaffAccessRule.OrgStructure)]
 public class ManagementController(IManagementService members, IManagementTaskService tasks,
     Services.OrgStructure.IOrgStructureService org, Services.OrgStructure.IOrgStructureAccess orgAccess) : AppController
 {

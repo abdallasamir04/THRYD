@@ -1,0 +1,18 @@
+@model string
+@* PTC administration sections (Super Admin only). *@
+@{
+    var items = new (string Key, string Href, string Icon, string Label)[]
+    {
+        ("dashboard", "/ptc", "dashboard", "PTC dashboard"),
+        ("feedback", "/ptc/feedback", "inbox", "Feedback"),
+        ("reports", "/ptc/reports", "chart", "Reports"),
+        ("contacts", "/ptc/parent-contacts", "phone", "Parent contacts"),
+        ("defaults", "/ptc/settings", "settings", "Round defaults"),
+    };
+}
+<nav class="org-nav" aria-label="PTC sections">
+    @foreach (var (key, href, icon, label) in items)
+    {
+        <a class="org-nav__link" href="@href" aria-current="@(Model == key ? "page" : null)">@Ui.Icon(icon, "icon--sm")<span>@label</span></a>
+    }
+</nav>

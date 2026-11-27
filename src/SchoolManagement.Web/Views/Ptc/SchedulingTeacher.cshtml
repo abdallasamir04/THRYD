@@ -1,0 +1,58 @@
+@model PtcTeacherSchedule
+@*
+    One teacher across the PTC event (Super Admin only): their classes and dates, each Round of their classes, every interview
+    allocated to them (with the booking reference) and everything else that keeps them busy on those dates.
+*@
+@{
+    var e = (PtcEventDetail)ViewData["Event"]!;
+    ViewData["Title"] = Model.Name + " · PTC scheduling";
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = $"/ptc/events/{e.Id}/scheduling?view=teachers";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/events/@e.Id">@e.Title</a></li><li><a href="/ptc/events/@e.Id/scheduling?view=teachers">Scheduling</a></li><li>@Model.Name</li></ol>
+        <h1 class="page-title">@Model.Name</h1>
+        <p class="page-sub">@(Model.Classes.Count == 0 ? "No participating class" : string.Join(", ", Model.Classes)) · @string.Join(", ", Model.Dates.Select(d => d.ToString("ddd d MMM", c)))</p>
+    </div>
+</div>
+
+<partial name="_EventNav" model='(e, "scheduling")' />
+
+@if (Model.Conflicts.Count > 0)
+{
+    <p class="notice notice--warning">@Ui.Icon("alert-triangle", "icon--sm")<span class="notice__body"><strong>@Ui.Plural(Model.Conflicts.Count, "item needs attention", "items need attention")</strong>
+        @string.Join(" ", Model.Conflicts.Select(x => x.Kind + " (" + x.Date.ToString("d MMM", c) + ").").Distinct()) <a href="/ptc/events/@e.Id/scheduling?view=conflicts">Review conflicts</a></span></p>
+}
+
+@foreach (var day in Model.Items.GroupBy(i => i.Date))
+{
+    <section class="card table-card ptc-day" aria-label="@day.Key.ToString("dddd d MMMM", c)">
+        <div class="card__head"><h2 class="card__title">@Ui.Icon("calendar")@day.Key.ToString("dddd d MMMM yyyy", c)</h2><span class="ptc-muted">@day.Count(i => i.Kind == "Interview") interviews</span></div>
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Time</th><th scope="col">What</th><th scope="col">Class · subject</th><th scope="col">Booking</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                    @foreach (var i in day)
+                    {
+                        var state = i.Kind == "Interview" ? i.State : i.Kind == "Round" ? (PtcAllocationState?)null : i.State;
+                        <tr>
+                            <td data-label="Time">@ScheduleRules.Times(i.Start, i.End)</td>
+                            <td data-label="What"><strong>@i.Kind</strong><br /><span class="ptc-muted">@i.Description</span></td>
+                            <td data-label="Class · subject">@i.ClassName@(i.Subject is null ? "" : " · " + i.Subject)</td>
+                            <td data-label="Booking">@if (i.Reference is not null) { <code>@i.Reference</code> }</td>
+                            <td data-label="Status">@if (state is { } s) { <span class="badge @PtcLabels.Badge(s)">@(i.Kind is "Interview" ? PtcLabels.Label(s) : s == PtcAllocationState.Available ? "Not blocking" : "Unavailable")</span> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+@if (Model.Items.Count == 0)
+{
+    <section class="card"><div class="empty"><span class="empty__icon">@Ui.Icon("calendar")</span><p class="empty__title">Nothing scheduled</p><p class="empty__text">This teacher has no Round or interview in the event.</p></div></section>
+}

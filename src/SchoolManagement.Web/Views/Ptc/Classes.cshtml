@@ -1,0 +1,101 @@
+@model PtcClassesViewModel
+@*
+    Classes & dates: every active class of the school (existing SchoolClass records), whether it takes part in the event,
+    and its PTC date (within the event's dates) and daily time. Saved as one unit: nothing is saved when any row is invalid.
+    Rows keep their Rounds when only the date or times change. Read-only unless the event is a Draft.
+*@
+@{
+    var e = Model.Event;
+    ViewData["Title"] = "Classes & dates · " + e.Title;
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = $"/ptc/events/{e.Id}";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var editable = e.IsDraft;
+    var i = 0;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/events/@e.Id">@e.Title</a></li><li>Classes &amp; dates</li></ol>
+        <h1 class="page-title">Classes &amp; dates</h1>
+        <p class="page-sub">Choose the classes taking part and give each its own PTC date between @e.StartDate.ToString("ddd d MMM", c) and @e.EndDate.ToString("ddd d MMM yyyy", c), with its daily start and end time. Different classes can have different days.</p>
+    </div>
+</div>
+
+<partial name="_EventNav" model='(e, "classes")' />
+
+@if (!editable)
+{
+    <p class="notice notice--warning">@Ui.Icon("lock", "icon--sm")<span class="notice__body"><strong>Read-only</strong>@(e.Status == PtcEventStatus.Published ? SchoolManagement.Web.Services.Ptc.PtcSetupService.DraftOnlyMessage : SchoolManagement.Web.Services.Ptc.PtcSetupService.ClosedMessage)</span></p>
+}
+
+<form action="/ptc/events/@e.Id/classes" method="post" data-loading autocomplete="off" data-ptc-classes>
+    @Html.AntiForgeryToken()
+    <div asp-validation-summary="All" class="validation-summary-errors"></div>
+    <section class="card table-card">
+        @if (editable)
+        {
+            <div class="ptc-bulk" aria-label="Apply to the selected classes">
+                <div class="field"><label class="label" for="bulk-date">Date</label>
+                    <select class="select" id="bulk-date" data-bulk="date"><option value="">—</option>
+                        @foreach (var d in e.Dates) { <option value="@d.ToString("yyyy-MM-dd", c)">@d.ToString("ddd d MMM", c)</option> }
+                    </select></div>
+                <div class="field"><label class="label" for="bulk-start">Start</label><input class="input" id="bulk-start" type="time" data-bulk="start" /></div>
+                <div class="field"><label class="label" for="bulk-end">End</label><input class="input" id="bulk-end" type="time" data-bulk="end" /></div>
+                <button class="btn btn--secondary" type="button" data-bulk-apply>@Ui.Icon("check", "icon--sm")Apply to selected classes</button>
+                <span class="ptc-muted">Fills the date and times of every ticked class; you can still change each row.</span>
+            </div>
+        }
+        <div class="table-wrap">
+            <table class="table table--stack ptc-rows">
+                <thead><tr><th scope="col">Takes part</th><th scope="col">Class</th><th scope="col">PTC date</th><th scope="col">Daily start</th><th scope="col">Daily end</th><th scope="col">Now</th></tr></thead>
+                <tbody>
+                    @foreach (var row in e.Classes)
+                    {
+                        var input = Model.Rows.GetValueOrDefault(row.ClassId) ?? new PtcClassRowInput { ClassId = row.ClassId };
+                        var n = i++;
+                        <tr class="@(input.Include ? "" : "is-off")" data-ptc-row>
+                            <td data-label="Takes part">
+                                <input type="hidden" name="rows[@n].ClassId" value="@row.ClassId" />
+                                <label class="switch"><input type="checkbox" name="rows[@n].Include" value="true" checked="@input.Include" disabled="@(!editable)" data-include /><span class="switch__track" aria-hidden="true"></span><span class="visually-hidden">@row.ClassName takes part</span></label>
+                            </td>
+                            <td data-label="Class"><strong>@row.ClassName</strong>@if (row.IsKg) { <span class="badge badge--neutral">KG</span> }@if (!row.ClassActive) { <span class="badge badge--error">Inactive</span> }</td>
+                            <td data-label="PTC date">
+                                <select class="select" name="rows[@n].Date" aria-label="@row.ClassName PTC date" disabled="@(!editable)" data-field="date">
+                                    <option value="">Choose a date</option>
+                                    @foreach (var d in e.Dates) { <option value="@d.ToString("yyyy-MM-dd", c)" selected="@(input.Date == d)">@d.ToString("ddd d MMM", c)</option> }
+                                    @if (input.Date is { } own && !e.Dates.Contains(own)) { <option value="@own.ToString("yyyy-MM-dd", c)" selected>@own.ToString("ddd d MMM", c) (outside the event)</option> }
+                                </select>
+                                @Html.ValidationMessage($"Date_{row.ClassId}")
+                            </td>
+                            <td data-label="Daily start"><input class="input" type="time" name="rows[@n].Start" value="@input.Start?.ToString("HH:mm", c)" aria-label="@row.ClassName daily start" disabled="@(!editable)" data-field="start" />@Html.ValidationMessage($"Start_{row.ClassId}")</td>
+                            <td data-label="Daily end"><input class="input" type="time" name="rows[@n].End" value="@input.End?.ToString("HH:mm", c)" aria-label="@row.ClassName daily end" disabled="@(!editable)" data-field="end" /></td>
+                            <td data-label="Now" class="ptc-muted">
+                                @if (row.Schedule is { } s)
+                                {
+                                    @:@s.Date.ToString("ddd d MMM", c) · @Ui.Plural(s.Rounds.Count, "Round", "Rounds")@(s.Bookings > 0 ? $" · {s.Bookings} bookings" : "")
+                                }
+                                else
+                                {
+                                    @:Not assigned
+                                }
+                                @if (row.Subjects.Count == 0) { <br /><span class="badge badge--warning">No timetable assignments</span> }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (editable)
+        {
+            <div class="card__foot ptc-actions" style="justify-content: flex-end; padding: 12px 16px">
+                <span class="ptc-muted">Unticking an assigned class removes it (and its Rounds) from this Draft event.</span>
+                <a class="btn btn--secondary" href="/ptc/events/@e.Id">Cancel</a>
+                <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save classes &amp; dates</button>
+            </div>
+        }
+    </section>
+</form>
+
+@section Scripts { <script src="~/js/ptc.js" asp-append-version="true"></script> }

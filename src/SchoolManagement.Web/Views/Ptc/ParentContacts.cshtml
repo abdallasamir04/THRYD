@@ -1,0 +1,104 @@
+@model PtcContactReport
+@*
+    Parent contact readiness (Super Admin only — numbers are personal data): students of the active classes with and without a
+    usable parent contact number (Students.ParentContactNumber), by class, and the students to follow up. Numbers are shown
+    normalized (international) next to the stored value, which is never changed. Nothing is generated or invented.
+*@
+@{
+    ViewData["Title"] = "Parent contacts · PTC";
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = "/ptc";
+    var usable = Model.Recorded.Count;
+    var missing = Model.Missing.Count;
+    var unusable = Model.Unusable.Count;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><span aria-current="page">Parent contacts</span></li></ol>
+        <h1 class="page-title">Parent contact readiness</h1>
+        <p class="page-sub">A parent is identified for PTC by the student's parent contact number. Students without a usable number cannot be booked until one is recorded on the student's profile.</p>
+    </div>
+</div>
+
+<partial name="_Nav" model='"contacts"' />
+
+<ul class="kpis" aria-label="Parent contact numbers">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("graduation-cap")</span><p class="kpi__label">Students</p><p class="kpi__value">@Ui.Count(Model.Students)</p><p class="kpi__meta">In active classes</p></div></li>
+    <li><div class="kpi @(usable == Model.Students ? "kpi--ok" : "kpi--teal")"><span class="kpi__icon">@Ui.Icon("phone")</span><p class="kpi__label">With a usable number</p><p class="kpi__value">@Ui.Count(usable)</p><p class="kpi__meta">Can be identified for booking</p></div></li>
+    <li><div class="kpi @(missing > 0 ? "kpi--warn" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon("alert-triangle")</span><p class="kpi__label">Missing a number</p><p class="kpi__value">@Ui.Count(missing)</p><p class="kpi__meta">No parent number recorded</p></div></li>
+    <li><div class="kpi @(unusable > 0 ? "kpi--orange" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon("x-circle")</span><p class="kpi__label">Number not usable</p><p class="kpi__value">@Ui.Count(unusable)</p><p class="kpi__meta">Recorded but not a valid phone number</p></div></li>
+</ul>
+
+@if (missing + unusable > 0)
+{
+    <p class="notice notice--warning">@Ui.Icon("alert-triangle", "icon--sm")<span class="notice__body"><strong>Data readiness issue</strong>@Ui.Count(missing + unusable) of @Ui.Count(Model.Students) students have no usable parent number. PTC events can still be configured and published, but these parents cannot book until their numbers are recorded.</span></p>
+}
+
+<section class="card table-card" aria-labelledby="pc-classes">
+    <div class="card__head"><h2 class="card__title" id="pc-classes">@Ui.Icon("door")By class</h2></div>
+    <div class="table-wrap">
+        <table class="table table--stack">
+            <thead><tr><th scope="col">Class</th><th scope="col">Students</th><th scope="col">Usable number</th><th scope="col">Missing</th><th scope="col">Not usable</th><th scope="col">Readiness</th></tr></thead>
+            <tbody>
+                @foreach (var cl in Model.Classes)
+                {
+                    var n = cl.Counts;
+                    var status = n.Students == 0 ? PtcReadiness.NotConfigured : n.WithoutUsable == 0 ? PtcReadiness.Ready : n.Usable == 0 ? PtcReadiness.Blocked : PtcReadiness.Incomplete;
+                    <tr id="class-@cl.ClassId">
+                        <td data-label="Class"><strong>@cl.ClassName</strong></td>
+                        <td data-label="Students">@n.Students</td>
+                        <td data-label="Usable number">@n.Usable</td>
+                        <td data-label="Missing">@n.Missing</td>
+                        <td data-label="Not usable">@n.Unusable</td>
+                        <td data-label="Readiness"><partial name="_Readiness" model="status" /></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+@if (unusable > 0)
+{
+    <section class="card table-card" aria-labelledby="pc-unusable">
+        <div class="card__head"><h2 class="card__title" id="pc-unusable">@Ui.Icon("x-circle")Numbers that are not usable (@unusable)</h2></div>
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Student</th><th scope="col">Class</th><th scope="col">Stored value</th></tr></thead>
+                <tbody>@foreach (var s in Model.Unusable) { <tr><td data-label="Student"><a href="/students/profile/@s.Id">@s.Name</a></td><td data-label="Class">@s.ClassName</td><td data-label="Stored value">@s.Stored</td></tr> }</tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@if (usable > 0)
+{
+    <section class="card table-card" aria-labelledby="pc-recorded">
+        <div class="card__head"><h2 class="card__title" id="pc-recorded">@Ui.Icon("check-circle")Recorded numbers (@usable)</h2><span class="ptc-muted">Normalized for checking; the stored value is unchanged</span></div>
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Student</th><th scope="col">Class</th><th scope="col">Stored value</th><th scope="col">Normalized</th></tr></thead>
+                <tbody>@foreach (var s in Model.Recorded) { <tr><td data-label="Student"><a href="/students/profile/@s.Id">@s.Name</a></td><td data-label="Class">@s.ClassName</td><td data-label="Stored value">@s.Stored</td><td data-label="Normalized">@s.Normalized</td></tr> }</tbody>
+            </table>
+        </div>
+    </section>
+}
+
+<section class="card table-card" aria-labelledby="pc-missing">
+    <div class="card__head"><h2 class="card__title" id="pc-missing">@Ui.Icon("alert-triangle")Students missing a parent number (@missing)</h2></div>
+    @if (missing == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("check-circle")</span><p class="empty__title">None</p><p class="empty__text">Every student in an active class has a parent number recorded.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Student</th><th scope="col">Class</th></tr></thead>
+                <tbody>@foreach (var s in Model.Missing) { <tr><td data-label="Student"><a href="/students/profile/@s.Id">@s.Name</a></td><td data-label="Class">@s.ClassName</td></tr> }</tbody>
+            </table>
+        </div>
+    }
+</section>

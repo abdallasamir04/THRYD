@@ -1,0 +1,23 @@
+@model PtcEventDetail
+@* Class coverage at a glance on the event overview (computed now). *@
+@{
+    var r = Model.Coverage;
+    var label = r.HasSchedules && r.TimetableEmpty && r.Unresolved == 0 ? "Cannot be verified" : PtcCoverageLabels.Label(r.Overall);
+}
+<section class="card" aria-labelledby="ptc-coverage" style="margin-bottom: 16px">
+    <div class="card__head"><h2 class="card__title" id="ptc-coverage">@Ui.Icon("shield-check")Class coverage</h2><span class="badge @PtcCoverageLabels.Badge(r.Overall)">@label</span></div>
+    <div class="card__body">
+        @if (Model.Status == PtcEventStatus.Published && r.Unresolved > 0)
+        {
+            <p class="notice notice--error">@Ui.Icon("x-circle", "icon--sm")<span class="notice__body"><strong>Needs attention</strong>A change after publishing left @Ui.Plural(r.Unresolved, "lesson", "lessons") without a valid substitute. Confirmed bookings are not changed and no teacher is swapped automatically.</span></p>
+        }
+        @if (!r.HasSchedules) { <p class="ptc-muted">No class has a PTC date yet.</p> }
+        else if (r.TimetableEmpty) { <p class="ptc-muted">The timetable has no lessons for these dates: teachers' lessons during the Rounds cannot be checked yet. This does not mean every teacher is free.</p> }
+        else
+        {
+            <p>@Ui.Plural(r.ConflictCount, "lesson falls", "lessons fall") during the Rounds: <strong>@r.Covered covered</strong>, <strong>@r.Uncovered uncovered</strong>@(r.Invalid > 0 ? $", {r.Invalid} invalid" : "")@(r.Pending.Count > 0 ? $"; {r.Pending.Count} assignments need review" : "").
+                @(r.Unresolved > 0 ? "Publishing is blocked until each is covered." : "")</p>
+        }
+        <a class="btn btn--secondary btn--sm" href="/ptc/events/@Model.Id/coverage">@Ui.Icon("user")Manage substitutes</a>
+    </div>
+</section>

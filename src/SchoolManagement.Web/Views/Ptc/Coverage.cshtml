@@ -1,0 +1,231 @@
+@model PtcCoverageViewModel
+@*
+    Class Coverage (Super Admin only): every participating teacher's timetable lessons that fall during the PTC Rounds, the
+    substitute covering each one and whether it still counts. Computed from the live timetable and assignments on every
+    request (and again immediately before publishing); nothing is assigned automatically.
+*@
+@{
+    var e = Model.Event;
+    var r = Model.Report;
+    ViewData["Title"] = "Class coverage · " + e.Title;
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = $"/ptc/events/{e.Id}";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var rows = Model.Rows;
+    var base_ = $"/ptc/events/{e.Id}/coverage";
+    var open = !e.IsClosed;
+    string Query(string sort) => base_ + "?" + string.Join("&", new[]
+    {
+        Model.Date is { } d ? "date=" + d.ToString("yyyy-MM-dd", c) : null,
+        Model.ClassId is { } cl ? "cls=" + cl : null, Model.DepartmentId is { } dp ? "dept=" + dp : null, Model.TeacherId is { } t ? "teacher=" + t : null,
+        Model.Status is { } st ? "status=" + st : null, Model.Round is { } rn ? "round=" + rn : null, "sort=" + sort,
+    }.Where(x => x is not null));
+    var here = Context.Request.Path + Context.Request.QueryString;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/events/@e.Id">@e.Title</a></li><li>Class coverage</li></ol>
+        <h1 class="page-title">Class coverage <span class="badge @PtcCoverageLabels.Badge(r.Overall)">@(r.HasSchedules && r.TimetableEmpty && r.Unresolved == 0 ? "Cannot be verified" : PtcCoverageLabels.Label(r.Overall))</span></h1>
+        <p class="page-sub">Teachers meeting parents must not leave a class untaught: each timetable lesson they have during a Round needs a substitute you choose. Checked again every time this page opens and immediately before publishing.</p>
+    </div>
+    <div class="page-head__actions ptc-actions">
+        <a class="btn btn--secondary" href="@base_?revalidate=true">@Ui.Icon("refresh")Revalidate coverage</a>
+        <a class="btn btn--ghost" href="/ptc/events/@e.Id">@Ui.Icon("arrow-left")Event details</a>
+    </div>
+</div>
+
+<partial name="_EventNav" model='(e, "coverage")' />
+
+@if (!r.HasSchedules)
+{
+    <section class="card"><div class="empty"><span class="empty__icon">@Ui.Icon("door")</span><p class="empty__title">No class has a PTC date yet</p>
+        <p class="empty__text">Assign classes to dates and add Rounds first: coverage is checked for the teachers of the participating classes during their Rounds.</p>
+        <a class="btn btn--secondary" href="/ptc/events/@e.Id/classes">Classes &amp; dates</a></div></section>
+}
+else
+{
+    @if (r.TimetableEmpty)
+    {
+        <p class="notice notice--warning">@Ui.Icon("alert-triangle", "icon--sm")<span class="notice__body"><strong>The timetable has no lessons for these dates</strong>
+            Teachers' lessons during the Rounds cannot be checked, so class coverage cannot be verified: this does not mean every teacher is free. Enter the timetable (Timetables) and this page will show every lesson that needs a substitute. Publishing asks you to acknowledge this.</span></p>
+    }
+    @if (r.Unresolved > 0)
+    {
+        <p class="notice notice--error">@Ui.Icon("x-circle", "icon--sm")<span class="notice__body"><strong>@(e.Status == PtcEventStatus.Published ? "This Published event needs attention" : r.BlockSummary)</strong>
+            @Ui.Plural(r.Uncovered, "lesson has", "lessons have") no substitute@(r.Invalid > 0 ? $" and {Ui.Plural(r.Invalid, "substitute no longer counts", "substitutes no longer count")}" : "").
+            @(e.Status == PtcEventStatus.Published ? "Confirmed bookings are not changed and no teacher is swapped automatically: assign valid substitutes below." : "Publishing stays blocked until each is covered.")</span></p>
+    }
+
+    <ul class="kpis" aria-label="Coverage summary">
+        <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Participating teachers</p><p class="kpi__value">@r.Teachers.Count</p><p class="kpi__meta">@r.Teachers.Count(t => t.Status == PtcCoverageStatus.NoConflict) with no conflict</p></div></li>
+        <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("calendar")</span><p class="kpi__label">Lessons during PTC</p><p class="kpi__value">@r.OverlappingLessons</p><p class="kpi__meta">@r.TimetableLessons timetable lessons those weeks@(r.CancelledLessons > 0 ? $" · {r.CancelledLessons} cancelled that day" : "")</p></div></li>
+        <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("check-circle")</span><p class="kpi__label">Covered</p><p class="kpi__value">@r.Covered</p><p class="kpi__meta">of @Ui.Plural(r.ConflictCount, "conflict", "conflicts")</p></div></li>
+        <li><div class="kpi @(r.Unresolved > 0 ? "kpi--warn" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon(r.Unresolved > 0 ? "x-circle" : "check")</span><p class="kpi__label">Uncovered · invalid</p><p class="kpi__value">@r.Uncovered · @r.Invalid</p><p class="kpi__meta">Block publishing</p></div></li>
+        <li><div class="kpi @(r.Pending.Count + r.Untimed.Count > 0 ? "kpi--orange" : "kpi--blue")"><span class="kpi__icon">@Ui.Icon("alert-triangle")</span><p class="kpi__label">Needs review</p><p class="kpi__value">@(r.Pending.Count + r.Untimed.Count)</p><p class="kpi__meta">@r.Pending.Count pending assignments · @r.Untimed.Count untimed lessons</p></div></li>
+    </ul>
+
+    <form class="card ptc-bulk" method="get" action="@base_" style="margin-bottom: 16px">
+        <div class="field"><label class="label" for="f-date">Date</label>
+            <select class="select" id="f-date" name="date"><option value="">All dates</option>
+                @foreach (var d in e.Assigned.Select(x => x.Schedule!.Date).Distinct().Order()) { <option value="@d.ToString("yyyy-MM-dd", c)" selected="@(Model.Date == d)">@d.ToString("ddd d MMM", c)</option> }
+            </select></div>
+        <div class="field"><label class="label" for="f-class">Class</label>
+            <select class="select" id="f-class" name="cls"><option value="">All classes</option>
+                @foreach (var x in r.Conflicts.Select(x => (x.LessonClassId, x.LessonClassName)).Distinct().OrderBy(x => x.LessonClassName)) { <option value="@x.LessonClassId" selected="@(Model.ClassId == x.LessonClassId)">@x.LessonClassName</option> }
+            </select></div>
+        <div class="field"><label class="label" for="f-dept">Department</label>
+            <select class="select" id="f-dept" name="dept"><option value="">All departments</option>
+                @foreach (var x in r.Conflicts.Select(x => (x.DepartmentId, x.Department)).Distinct().OrderBy(x => x.Department)) { <option value="@x.DepartmentId" selected="@(Model.DepartmentId == x.DepartmentId)">@x.Department</option> }
+            </select></div>
+        <div class="field"><label class="label" for="f-teacher">Teacher</label>
+            <select class="select" id="f-teacher" name="teacher"><option value="">All teachers</option>
+                @foreach (var t in r.Teachers) { <option value="@t.Id" selected="@(Model.TeacherId == t.Id)">@t.Name</option> }
+            </select></div>
+        <div class="field"><label class="label" for="f-status">Coverage status</label>
+            <select class="select" id="f-status" name="status"><option value="">All</option>
+                @foreach (var st in new[] { PtcCoverageStatus.Uncovered, PtcCoverageStatus.Invalid, PtcCoverageStatus.Covered }) { <option value="@st" selected="@(Model.Status == st)">@PtcCoverageLabels.Label(st)</option> }
+            </select></div>
+        <div class="field"><label class="label" for="f-round">PTC Round</label>
+            <select class="select" id="f-round" name="round"><option value="">All Rounds</option>
+                @foreach (var n in r.Conflicts.Select(x => x.RoundNumber).Distinct().Order()) { <option value="@n" selected="@(Model.Round == n)">Round @n</option> }
+            </select></div>
+        <div class="field"><label class="label" for="f-sort">Sort by</label>
+            <select class="select" id="f-sort" name="sort">
+                <option value="date" selected="@(Model.Sort == "date")">Date</option><option value="teacher" selected="@(Model.Sort == "teacher")">Teacher</option><option value="status" selected="@(Model.Sort == "status")">Coverage status</option>
+            </select></div>
+        <button class="btn btn--secondary" type="submit">@Ui.Icon("filter", "icon--sm")Filter</button>
+        @if (Model.Filtered) { <a class="btn btn--ghost" href="@base_">Clear</a> }
+    </form>
+
+    <section class="card table-card" aria-labelledby="cov-table">
+        <div class="card__head"><h2 class="card__title" id="cov-table">@Ui.Icon("shield-check")Lessons during the PTC (@rows.Count)</h2>
+            <span class="ptc-muted">Sort: <a href="@Query("date")">date</a> · <a href="@Query("teacher")">teacher</a> · <a href="@Query("status")">status</a></span></div>
+        @if (rows.Count == 0)
+        {
+            <div class="empty"><span class="empty__icon">@Ui.Icon(r.TimetableEmpty ? "calendar" : "check-circle")</span>
+                <p class="empty__title">@(r.TimetableEmpty ? "No timetable lessons to check" : Model.Filtered ? "No lesson matches these filters" : "No conflict")</p>
+                <p class="empty__text">@(r.TimetableEmpty ? "The timetable is empty for the PTC weeks: nothing can be shown or verified until lessons are entered. No lessons or substitutes are invented."
+                    : Model.Filtered ? "Change or clear the filters." : "No participating teacher has a timetable lesson during the Rounds of their classes.")</p></div>
+        }
+        else
+        {
+            <div class="table-wrap"><table class="table table--stack">
+                <thead><tr><th scope="col">Teacher</th><th scope="col">Department</th><th scope="col">Subject</th><th scope="col">Class</th><th scope="col">Lesson date</th>
+                    <th scope="col">Lesson</th><th scope="col">PTC Round</th><th scope="col">PTC time</th><th scope="col">Conflict</th><th scope="col">Substitute</th>
+                    <th scope="col">Coverage</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var x in rows)
+                    {
+                        var href = $"{base_}/lesson?schedule={x.ScheduleId}&lesson={x.LessonId}";
+                        <tr>
+                            <td data-label="Teacher"><strong>@x.TeacherName</strong></td>
+                            <td data-label="Department">@x.Department</td>
+                            <td data-label="Subject">@x.Subject</td>
+                            <td data-label="Class">@x.LessonClassName</td>
+                            <td data-label="Lesson date">@x.Date.ToString("ddd d MMM", c)</td>
+                            <td data-label="Lesson">@ScheduleRules.Times(x.LessonStart, x.LessonEnd)@(x.Period is { } p ? $" · P{p}" : "")</td>
+                            <td data-label="PTC Round">@x.PtcClassName · Round @x.RoundNumber</td>
+                            <td data-label="PTC time">@ScheduleRules.Times(x.RoundStart, x.RoundEnd)<br /><span class="ptc-muted">overlap @ScheduleRules.Times(x.OverlapStart, x.OverlapEnd)</span></td>
+                            <td data-label="Conflict">Timetable<br /><span class="ptc-muted">@x.Explanation</span></td>
+                            <td data-label="Substitute">@(x.Cover?.SubstituteName ?? "—")</td>
+                            <td data-label="Coverage"><span class="badge @PtcCoverageLabels.Badge(x.Status)">@PtcCoverageLabels.Label(x.Status)</span></td>
+                            <td data-label="Actions" class="ptc-actions">
+                                @if (open && x.Status == PtcCoverageStatus.Uncovered) { <a class="btn btn--primary btn--sm" href="@href">Assign substitute</a> }
+                                else if (open && x.Cover is not null) { <a class="btn btn--secondary btn--sm" href="@href">Edit</a> }
+                                <a class="btn btn--ghost btn--sm" href="@href">View</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table></div>
+        }
+    </section>
+
+    @if (r.Pending.Count > 0 || r.Untimed.Count > 0)
+    {
+        <section class="card table-card" aria-labelledby="cov-review" style="margin-top: 16px">
+            <div class="card__head"><h2 class="card__title" id="cov-review">@Ui.Icon("alert-triangle")Needs review</h2></div>
+            <div class="table-wrap"><table class="table table--stack">
+                <thead><tr><th scope="col">What</th><th scope="col">Teacher</th><th scope="col">Date</th><th scope="col">Detail</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var a in r.Pending)
+                    {
+                        <tr>
+                            <td data-label="What">Substitute assignment<br /><span class="ptc-muted">@a.SubstituteName covers @ScheduleRules.Times(a.Start, a.End)</span></td>
+                            <td data-label="Teacher">@a.OriginalName</td>
+                            <td data-label="Date">@a.Date.ToString("ddd d MMM", c)</td>
+                            <td data-label="Detail">@a.StatusDetail</td>
+                            <td data-label="Actions">@if (open)
+                            {
+                                <form action="/ptc/coverage/@a.Id/remove" method="post" class="ptc-actions" data-confirm="@a.SubstituteName's assignment for @a.OriginalName is removed (kept in the history)." data-confirm-title="Remove substitute?" data-confirm-button="Remove">
+                                    @Html.AntiForgeryToken()<input type="hidden" name="eventId" value="@e.Id" /><input type="hidden" name="back" value="@here" />
+                                    <input class="input" name="reason" required maxlength="@PtcSubstituteAssignment.ReasonMaxLength" placeholder="Reason" aria-label="Reason for removing" />
+                                    <button class="btn btn--danger btn--sm" type="submit">Remove</button>
+                                </form>
+                            }</td>
+                        </tr>
+                    }
+                    @foreach (var u in r.Untimed)
+                    {
+                        <tr><td data-label="What">Untimed lesson</td><td data-label="Teacher">@u.TeacherName</td><td data-label="Date">@u.Date.ToString("ddd d MMM", c)</td>
+                            <td data-label="Detail">@u.Subject with @u.ClassName (period @u.Period): the period has no start and end times, so it cannot be checked against the Rounds. Set the period times in Timetables.</td><td></td></tr>
+                    }
+                </tbody>
+            </table></div>
+        </section>
+    }
+
+    @if (r.Others.Count > 0)
+    {
+        <section class="card table-card" aria-labelledby="cov-other" style="margin-top: 16px">
+            <div class="card__head"><h2 class="card__title" id="cov-other">@Ui.Icon("clock")Other commitments during the Rounds (@r.Others.Count)</h2>
+                <span class="ptc-muted">No substitute needed: parents are never given a slot that overlaps them.</span></div>
+            <div class="table-wrap"><table class="table table--stack">
+                <thead><tr><th scope="col">Teacher</th><th scope="col">Type</th><th scope="col">Date</th><th scope="col">Time</th><th scope="col">Explanation</th></tr></thead>
+                <tbody>@foreach (var o in r.Others)
+                {
+                    <tr><td data-label="Teacher">@o.TeacherName</td><td data-label="Type"><span class="badge badge--warning">@PtcCoverageLabels.Kind(o.Kind)</span></td>
+                        <td data-label="Date">@o.Date.ToString("ddd d MMM", c)</td><td data-label="Time">@ScheduleRules.Times(o.Start, o.End)</td><td data-label="Explanation">@o.Explanation</td></tr>
+                }</tbody>
+            </table></div>
+        </section>
+    }
+
+    <section class="card table-card" aria-labelledby="cov-teachers" style="margin-top: 16px">
+        <div class="card__head"><h2 class="card__title" id="cov-teachers">@Ui.Icon("users")Participating teachers (@r.Teachers.Count)</h2></div>
+        @if (r.Teachers.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No participating teacher yet: every class (KG included) gets its PTC teachers from its timetable lessons.</p> }
+        else
+        {
+            <div class="table-wrap"><table class="table table--stack">
+                <thead><tr><th scope="col">Teacher</th><th scope="col">Lessons during PTC</th><th scope="col">Coverage</th></tr></thead>
+                <tbody>@foreach (var t in r.Teachers)
+                {
+                    <tr><td data-label="Teacher"><a href="@base_?teacher=@t.Id">@t.Name</a></td><td data-label="Lessons during PTC">@t.Conflicts</td>
+                        <td data-label="Coverage"><span class="badge @PtcCoverageLabels.Badge(t.Status)">@PtcCoverageLabels.Label(t.Status)</span></td></tr>
+                }</tbody>
+            </table></div>
+        }
+    </section>
+}
+
+<section class="card table-card" aria-labelledby="cov-history" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="cov-history">@Ui.Icon("clock")Substitute history</h2></div>
+    @if (Model.History.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No substitute has been assigned or changed for this event.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">When</th><th scope="col">Change</th><th scope="col">Original teacher</th><th scope="col">Previous substitute</th><th scope="col">New substitute</th>
+                <th scope="col">Lesson</th><th scope="col">Reason · notes</th><th scope="col">By</th><th scope="col">Status</th></tr></thead>
+            <tbody>@foreach (var h in Model.History)
+            {
+                <tr><td data-label="When">@Ui.DateTime(h.At)</td><td data-label="Change">@PtcCoverageLabels.Kind(h.Kind)</td><td data-label="Original teacher">@h.Original</td>
+                    <td data-label="Previous substitute">@(h.Kind == PtcSubstituteChangeKind.NotesChanged ? "—" : h.OldSubstitute ?? "—")</td>
+                    <td data-label="New substitute">@(h.Kind == PtcSubstituteChangeKind.NotesChanged ? "—" : h.NewSubstitute ?? "—")</td>
+                    <td data-label="Lesson">@(h.Lesson ?? "—")</td><td data-label="Reason · notes">@(h.Reason ?? "—")@(h.Notes is null ? "" : " · " + h.Notes)</td>
+                    <td data-label="By">@(h.By ?? "—")</td><td data-label="Status">@(h.StillActive ? "Active" : "Ended")</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>

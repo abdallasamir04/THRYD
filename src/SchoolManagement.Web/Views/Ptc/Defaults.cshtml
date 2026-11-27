@@ -1,0 +1,40 @@
+@model PtcDefaultsFormModel
+@*
+    The values new PTC Rounds start with (stored in Settings; approved initial values: 9 parents, 7-minute meetings,
+    7-minute transition, 70-minute Rounds). Existing Rounds keep their own values.
+*@
+@{
+    ViewData["Title"] = "Round defaults · PTC";
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = "/ptc";
+    var initial = PtcRoundDefaults.Initial;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><span aria-current="page">Round defaults</span></li></ol>
+        <h1 class="page-title">Round defaults</h1>
+        <p class="page-sub">The values a new Round starts with; each Round can still be given its own values when it is added. Changing them never changes existing Rounds or bookings.</p>
+    </div>
+</div>
+
+<partial name="_Nav" model='"defaults"' />
+
+<div class="card form-page">
+    <form action="/ptc/settings" method="post" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <div class="modal__body form-grid form-grid--2">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            <div class="field"><label class="label" for="Capacity">Parent capacity per Round</label><input class="input" id="Capacity" name="Capacity" type="number" min="1" max="@PtcRoundDefaults.MaxCapacity" value="@Model.Capacity" required /><span class="hint">Parents (bookings) per Round, not per teacher.</span></div>
+            <div class="field"><label class="label" for="MeetingMinutes">Meeting duration (minutes)</label><input class="input" id="MeetingMinutes" name="MeetingMinutes" type="number" min="1" max="@PtcRoundDefaults.MaxMeetingMinutes" value="@Model.MeetingMinutes" required /></div>
+            <div class="field"><label class="label" for="TransitionMinutes">Transition / break (minutes)</label><input class="input" id="TransitionMinutes" name="TransitionMinutes" type="number" min="0" max="@PtcRoundDefaults.MaxTransitionMinutes" value="@Model.TransitionMinutes" required /></div>
+            <div class="field"><label class="label" for="DurationMinutes">Round duration (minutes)</label><input class="input" id="DurationMinutes" name="DurationMinutes" type="number" min="1" max="@PtcRoundDefaults.MaxRoundMinutes" value="@Model.DurationMinutes" required /><span class="hint">Planned: capacity × meeting + transition. It must at least hold every meeting.</span></div>
+            <p class="hint field--full">Approved initial values: @initial.Capacity parents · @initial.MeetingDurationMinutes-minute meetings · @initial.TransitionDurationMinutes-minute transition · @initial.RoundDurationMinutes-minute Rounds (@initial.Capacity × @initial.MeetingDurationMinutes + @initial.TransitionDurationMinutes).</p>
+        </div>
+        <div class="modal__foot">
+            <a class="btn btn--secondary" href="/ptc">Cancel</a>
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")Save defaults</button>
+        </div>
+    </form>
+</div>

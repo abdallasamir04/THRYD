@@ -1,0 +1,108 @@
+@model PtcFeedbackFormModel
+@using SchoolManagement.Web.Entities
+@{
+    var f = Model.Form;
+    var p = Model.Post;
+    ViewData["Title"] = "Feedback · " + f.EventTitle;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var sent = Context.Request.Query["sent"] == "1";
+    var ratings = new[] { PtcRating.Excellent, PtcRating.Good, PtcRating.Average, PtcRating.Poor };
+    var helpful = new[] { PtcHelpful.Yes, PtcHelpful.Partially, PtcHelpful.No };
+    PtcTeacherFeedbackPost? T(string code) => p?.Teachers?.FirstOrDefault(x => x.Code == code);
+}
+<section class="pp-event">
+    <h1 class="pp-title">@f.EventTitle</h1>
+    <p class="pp-dates">@Ui.Icon("calendar", "icon--sm")@f.Date.ToString("dddd d MMMM yyyy", c) · @f.ChildFirstName · @f.ClassName</p>
+</section>
+
+@if (f.SubmittedReference is not null)
+{
+    <section class="pp-card pp-center">
+        <span class="pp-icon pp-icon--ok">@Ui.Icon("check-circle")</span>
+        <h2 class="pp-h2">@(sent ? "Thank you — your feedback was received" : "Feedback already received")</h2>
+        <p>Reference <span class="pp-ref">@f.SubmittedReference</span>@(f.SubmittedAt is { } at ? ", " + Ui.DateTime(at) : "").</p>
+        <p class="pp-muted">Feedback can be given once per booking and is kept as you sent it. If you need to add something, please contact the school and quote the reference.</p>
+    </section>
+}
+else if (f.Availability == PtcFeedbackAvailability.NotYet)
+{
+    <section class="pp-card pp-center"><span class="pp-icon">@Ui.Icon("clock")</span><h2 class="pp-h2">Feedback opens after the conference</h2>
+        <p>Please come back after your child's Parent-Teacher Conference on @f.Date.ToString("dddd d MMMM", c).</p></section>
+}
+else if (f.Availability == PtcFeedbackAvailability.Closed)
+{
+    <section class="pp-card pp-center"><span class="pp-icon">@Ui.Icon("lock")</span><h2 class="pp-h2">The feedback period has ended</h2>
+        <p>Feedback for this conference closed on @f.ClosesOn.ToString("d MMMM yyyy", c). Thank you.</p></section>
+}
+else
+{
+    <section class="pp-card">
+        <p class="pp-muted">Every question is optional: answer what you like, in Arabic or English. Your answers go to the school administration only. You can send feedback once, until @f.ClosesOn.ToString("d MMMM yyyy", c).</p>
+        @if (Model.Error is not null) { <p class="pp-error" role="alert">@Ui.Icon("alert-circle", "icon--sm")<span>@Model.Error</span></p> }
+        <form action="/ptc-feedback/f/@Uri.EscapeDataString(f.Token)" method="post" autocomplete="off" data-pp-once>
+            @Html.AntiForgeryToken()
+            @foreach (var (name, label, value) in new[] { ("Overall", "Overall PTC experience", p?.Overall), ("Communication", "Teacher communication", p?.Communication), ("Organization", "Organization & scheduling", p?.Organization) })
+            {
+                <fieldset class="pp-options pp-options--inline">
+                    <legend class="pp-label">@label</legend>
+                    @foreach (var r in ratings)
+                    {
+                        var id = $"{name}-{r}";
+                        <label class="pp-option" for="@id"><input type="radio" id="@id" name="@name" value="@r" checked="@(value == r.ToString())" /><span class="pp-option__body">@r</span></label>
+                    }
+                </fieldset>
+            }
+            <fieldset class="pp-options pp-options--inline">
+                <legend class="pp-label">Was the meeting helpful?</legend>
+                @foreach (var h in helpful)
+                {
+                    <label class="pp-option" for="Helpful-@h"><input type="radio" id="Helpful-@h" name="Helpful" value="@h" checked="@(p?.Helpful == h.ToString())" /><span class="pp-option__body">@h</span></label>
+                }
+            </fieldset>
+
+            @if (f.Teachers.Count > 0)
+            {
+                <h2 class="pp-h2" style="margin-top: 18px">The teachers you met (optional)</h2>
+                @for (var i = 0; i < f.Teachers.Count; i++)
+                {
+                    var t = f.Teachers[i];
+                    var tp = T(t.Code);
+                    <fieldset class="pp-card" style="margin: 10px 0; padding: 12px">
+                        <legend class="pp-label"><strong>@t.Name</strong> <span class="pp-muted">· @t.Subjects</span></legend>
+                        <input type="hidden" name="Teachers[@i].Code" value="@t.Code" />
+                        <div class="pp-options pp-options--inline" role="radiogroup" aria-label="Communication with @t.Name">
+                            @foreach (var r in ratings)
+                            {
+                                var id = $"t{i}-{r}";
+                                <label class="pp-option" for="@id"><input type="radio" id="@id" name="Teachers[@i].Communication" value="@r" checked="@(tp?.Communication == r.ToString())" /><span class="pp-option__body">@r</span></label>
+                            }
+                        </div>
+                        <div class="pp-options pp-options--inline" role="radiogroup" aria-label="Was the meeting with @t.Name helpful?">
+                            @foreach (var h in helpful)
+                            {
+                                var id = $"t{i}-h-{h}";
+                                <label class="pp-option" for="@id"><input type="radio" id="@id" name="Teachers[@i].Helpful" value="@h" checked="@(tp?.Helpful == h.ToString())" /><span class="pp-option__body">Helpful: @h</span></label>
+                            }
+                        </div>
+                        <label class="pp-label" for="t@(i)-comment">Comment about @t.Name</label>
+                        <textarea class="pp-input" id="t@(i)-comment" name="Teachers[@i].Comment" rows="2" maxlength="@PtcTeacherFeedback.CommentMaxLength" dir="auto">@tp?.Comment</textarea>
+                    </fieldset>
+                }
+            }
+
+            <label class="pp-label" for="Comments">Additional feedback</label>
+            <textarea class="pp-input" id="Comments" name="Comments" rows="4" maxlength="@PtcFeedback.CommentsMaxLength" dir="auto">@p?.Comments</textarea>
+
+            <h2 class="pp-h2" style="margin-top: 18px">A concern or complaint (optional)</h2>
+            <label class="pp-label" for="ConcernCategory">What is it about?</label>
+            <select class="pp-input" id="ConcernCategory" name="ConcernCategory">
+                <option value="">— No concern —</option>
+                @foreach (var cat in Enum.GetValues<PtcConcernCategory>()) { <option value="@cat" selected="@(p?.ConcernCategory == cat.ToString())">@PtcFeedbackRules.Label(cat)</option> }
+            </select>
+            <label class="pp-label" for="Concern">Describe your concern</label>
+            <textarea class="pp-input" id="Concern" name="Concern" rows="4" maxlength="@PtcFeedback.ConcernMaxLength" dir="auto">@p?.Concern</textarea>
+
+            <button class="pp-btn" type="submit">Send feedback @Ui.Icon("send", "icon--sm")</button>
+        </form>
+    </section>
+}

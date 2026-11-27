@@ -1,0 +1,89 @@
+@model StaffAccountDetailsModel
+@{
+    var p = Model.Person.Person;
+    var acc = Model.Person.Account;
+    var d = Model.Person.Directory;
+    ViewData["Title"] = p.FullName + " · Account";
+    ViewData["Nav"] = "StaffAccounts";
+    ViewData["BackButtonHref"] = "/staff/accounts";
+    var review = d.Review.Where(r => r.PersonId == p.PersonId).ToList();
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/staff/accounts">Staff accounts</a></li><li>@p.FullName</li></ol>
+        <h1 class="page-title">@p.FullName @if (p.Archived) { <span class="badge badge--neutral">Archived</span> }</h1>
+        <p class="page-sub">@p.Category · @(p.JobTitle ?? "No job title") · @(acc?.Email ?? "No account")</p>
+    </div>
+    <div class="page-head__actions ptc-actions">
+        @if (acc is null)
+        {
+            <form action="/staff/accounts/@p.StaffId/create" method="post" data-confirm="A login account with a new random password is created for @p.FullName. The password is shown to you once." data-confirm-title="Create account?" data-confirm-button="Create account" data-confirm-tone="info">
+                @Html.AntiForgeryToken()
+                @if (p.IdentityConflict is not null) { <label class="ptc-ack"><input type="checkbox" name="identityReviewed" value="true" required /><span>I reviewed the duplicate identity: this is a separate person.</span></label> }
+                <button class="btn btn--primary" type="submit" disabled="@p.Archived">@Ui.Icon("user-plus")Create account</button>
+            </form>
+        }
+        else
+        {
+            <form action="/staff/accounts/users/@acc.UserId/reset" method="post" data-confirm="@p.FullName's current password stops working and a new random password is shown to you once." data-confirm-title="Reset password?" data-confirm-button="Reset password">
+                @Html.AntiForgeryToken()<button class="btn btn--secondary" type="submit">@Ui.Icon("refresh")Reset password</button></form>
+            @if (acc.Disabled)
+            {
+                <form action="/staff/accounts/users/@acc.UserId/enable" method="post">@Html.AntiForgeryToken()<button class="btn btn--secondary" type="submit">@Ui.Icon("check")Reactivate</button></form>
+            }
+            else
+            {
+                <form action="/staff/accounts/users/@acc.UserId/disable" method="post" data-confirm="@p.FullName can no longer sign in; an open session ends within a minute." data-confirm-title="Disable account?" data-confirm-button="Disable">
+                    @Html.AntiForgeryToken()<button class="btn btn--danger" type="submit">@Ui.Icon("lock")Disable</button></form>
+            }
+            <form action="/staff/accounts/users/@acc.UserId/role" method="post" class="ptc-actions" data-confirm="The role decides what @p.FullName can open. Super Admin gives unrestricted access to everything." data-confirm-title="Change role?" data-confirm-button="Change role">
+                @Html.AntiForgeryToken()
+                <select class="select" name="role" aria-label="Role">@foreach (var r in AppRoles.All) { <option value="@r" selected="@acc.Roles.Contains(r)">@r</option> }</select>
+                <button class="btn btn--secondary" type="submit">Change role</button>
+            </form>
+        }
+        <a class="btn btn--ghost" href="/tasks">Assign / reassign tasks</a>
+        <a class="btn btn--ghost" href="/duties">Assign / reassign duties</a>
+    </div>
+</div>
+
+@if (review.Count > 0)
+{
+    <section class="card" style="margin-bottom: 16px"><div class="card__head"><h2 class="card__title">@Ui.Icon("alert-triangle")Needs Admin review (@review.Count)</h2></div>
+        <ul class="ptc-issues card__body">@foreach (var r in review) { <li class="ptc-issue is-warning"><span><strong>@r.Category:</strong> @r.Detail — @r.ActionNeeded</span></li> }</ul></section>
+}
+
+<section class="card" style="margin-bottom: 16px">
+    <div class="card__head"><h2 class="card__title">@Ui.Icon("shield-check")Access</h2></div>
+    <div class="card__body">
+        @if (acc is null) { <p class="ptc-muted">No account: cannot sign in.</p> }
+        else if (acc.Roles.Contains(AppRoles.SuperAdmin)) { <p><strong>Super Admin:</strong> unrestricted access to every module.</p> }
+        else
+        {
+            <p><strong>Staff (least privilege):</strong> own dashboard, own tasks, duties, schedule and responsibilities, own PTC interviews and own password.
+                @{ var extra = d.Responsibilities.Where(r => r.StaffId == p.StaffId && r.Type is "Floor team" or "Floor audit access").Select(r => "Floor Management (" + (r.Floor ?? "assigned floor") + ")")
+                       .Concat(d.ConfiguredGrants.TryGetValue(p.StaffId ?? 0, out var g) ? g : []).Distinct().ToList(); }
+                @(extra.Count == 0 ? "No other module." : "Also: " + string.Join(", ", extra) + ".")</p>
+        }
+        <p class="hint">Linked records: @(d.Linked.Count == 0 ? "none" : string.Join("; ", d.Linked.Select(l => $"{l.Table}: {l.Count}")))</p>
+    </div>
+</section>
+
+<partial name="_PersonSections" model="Model.Person" />
+
+<section class="card table-card" aria-label="Account history">
+    <div class="card__head"><h2 class="card__title">@Ui.Icon("clock")Account history</h2></div>
+    @if (Model.History.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">Nothing recorded yet.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">When</th><th scope="col">Action</th><th scope="col">By</th><th scope="col">Before → after</th><th scope="col">Detail</th></tr></thead>
+            <tbody>@foreach (var h in Model.History)
+            {
+                <tr><td data-label="When">@Ui.DateTime(h.At)</td><td data-label="Action">@h.Action</td><td data-label="By">@(h.ActorName ?? "—")</td>
+                    <td data-label="Before → after">@(h.OldValue ?? "—") → @(h.NewValue ?? "—")</td><td data-label="Detail">@h.Detail</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>

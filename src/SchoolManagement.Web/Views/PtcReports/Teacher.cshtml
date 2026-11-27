@@ -1,0 +1,102 @@
+@model PtcTeacherReport
+@{
+    ViewData["Title"] = Model.Name + " · PTC report";
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = "/ptc/reports/teachers";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var t = Model.Summary;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/reports">Reports</a></li><li><a href="/ptc/reports/teachers">Teachers</a></li><li>@Model.Name</li></ol>
+        <h1 class="page-title">@Model.Name</h1>
+        <p class="page-sub">@(Model.JobTitle ?? "No job title") · @(Model.Department ?? "No department recorded") · @(Model.Events.Count == 0 ? "No PTC event" : string.Join(", ", Model.Events.Select(e => e.Title)))</p>
+    </div>
+</div>
+
+@if (t is null)
+{
+    <section class="card"><div class="empty"><span class="empty__icon">@Ui.Icon("user")</span><p class="empty__title">No PTC interviews</p><p class="empty__text">This teacher has no PTC meetings in the selected filters.</p></div></section>
+}
+else
+{
+    <div class="ptc-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-bottom: 16px">
+        <section class="card"><div class="card__head"><h2 class="card__title">@Ui.Icon("clock")Attendance (operational)</h2></div><div class="card__body"><dl class="dl">
+            <dt>Meetings</dt><dd>@t.Meetings</dd><dt>Completed</dt><dd>@t.Completed</dd><dt>Missed</dt><dd>@t.Missed</dd><dt>Cancelled</dt><dd>@t.Cancelled</dd><dt>Upcoming</dt><dd>@t.Upcoming</dd>
+            <dt>Average actual duration</dt><dd>@t.AverageMinutes.Text("0.0", " min")</dd><dt>Total actual time</dt><dd>@t.TotalMinutes min</dd></dl></div></section>
+        <section class="card"><div class="card__head"><h2 class="card__title">@Ui.Icon("star")Parent satisfaction</h2></div><div class="card__body"><dl class="dl">
+            <dt>Teacher-specific feedback</dt><dd>@t.TeacherFeedback</dd><dt>Average communication</dt><dd>@t.Communication.Text()</dd>
+            <dt>Positive · negative</dt><dd>@t.Positive · @t.Negative</dd></dl>
+            <p class="hint">Only answers parents gave about this teacher. General event feedback is not attributed to any teacher.</p></div></section>
+        <section class="card"><div class="card__head"><h2 class="card__title">@Ui.Icon("alert-triangle")Concerns of their parents</h2></div><div class="card__body"><dl class="dl">
+            <dt>Open</dt><dd>@t.OpenConcerns</dd><dt>Resolved</dt><dd>@t.ResolvedConcerns</dd></dl>
+            <p class="hint">Raised by parents who met this teacher; not necessarily about them.</p></div></section>
+    </div>
+}
+
+<section class="card table-card" aria-labelledby="tr-int">
+    <div class="card__head"><h2 class="card__title" id="tr-int">@Ui.Icon("calendar")Interviews (@Model.Interviews.Count)</h2></div>
+    @if (Model.Interviews.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">None.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Event · class</th><th scope="col">Subject</th><th scope="col">Date · Round</th><th scope="col">Planned</th><th scope="col">Actual (server)</th><th scope="col">State</th><th scope="col">Booking</th></tr></thead>
+            <tbody>@foreach (var i in Model.Interviews)
+            {
+                <tr><td data-label="Event · class">@i.EventTitle · @i.ClassName</td><td data-label="Subject">@i.Subject <span class="ptc-muted">(@i.Department)</span></td>
+                    <td data-label="Date · Round">@i.Date.ToString("ddd d MMM", c) · R@i.RoundNumber</td><td data-label="Planned">@ScheduleRules.Times(i.PlannedStart, i.PlannedEnd)</td>
+                    <td data-label="Actual (server)">@(i.ActualStart is { } s ? SchoolTime.Current.ToLocal(s).ToString("HH:mm", c) : "—") – @(i.ActualEnd is { } e ? SchoolTime.Current.ToLocal(e).ToString("HH:mm", c) : "—")</td>
+                    <td data-label="State"><span class="badge @PtcLiveRules.Badge(i.State)">@PtcLiveRules.Label(i.State)</span></td><td data-label="Booking"><code>@i.BookingReference</code></td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>
+
+<section class="card table-card" aria-labelledby="tr-fb" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="tr-fb">@Ui.Icon("inbox")Teacher-specific feedback (@Model.Feedback.Count)</h2></div>
+    @if (Model.Feedback.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No parent has given feedback about this teacher yet.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Feedback</th><th scope="col">Communication</th><th scope="col">Helpful</th><th scope="col">Comment</th><th scope="col">Submitted</th></tr></thead>
+            <tbody>@foreach (var x in Model.Feedback)
+            {
+                <tr><td data-label="Feedback"><a href="/ptc/feedback/@x.FeedbackId"><code>@x.FeedbackReference</code></a></td><td data-label="Communication">@(x.Communication?.ToString() ?? "—")</td>
+                    <td data-label="Helpful">@(x.Helpful?.ToString() ?? "—")</td><td data-label="Comment" dir="auto" class="ptc-pre">@(x.Comment ?? "—")</td><td data-label="Submitted">@Ui.DateTime(x.SubmittedAt)</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>
+
+<section class="card table-card" aria-labelledby="tr-con" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="tr-con">@Ui.Icon("alert-triangle")Concerns from their parents' bookings (@Model.Concerns.Count)</h2></div>
+    @if (Model.Concerns.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">None.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Feedback</th><th scope="col">Category</th><th scope="col">Status</th><th scope="col">Submitted</th></tr></thead>
+            <tbody>@foreach (var x in Model.Concerns)
+            {
+                <tr><td data-label="Feedback"><a href="/ptc/feedback/@x.Id"><code>@x.Reference</code></a></td><td data-label="Category">@(x.Category is { } cat ? PtcFeedbackRules.Label(cat) : "—")</td>
+                    <td data-label="Status"><span class="badge @PtcFeedbackRules.Badge(x.ConcernStatus!.Value)">@PtcFeedbackRules.Label(x.ConcernStatus.Value)</span></td><td data-label="Submitted">@Ui.DateTime(x.SubmittedAt)</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>
+
+<section class="card table-card" aria-labelledby="tr-sub" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="tr-sub">@Ui.Icon("shield-check")Substitute assignments (@Model.Substitutes.Count)</h2></div>
+    @if (Model.Substitutes.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">None.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Event</th><th scope="col">Role</th><th scope="col">Date · time</th><th scope="col">Lesson</th><th scope="col">Status</th></tr></thead>
+            <tbody>@foreach (var s in Model.Substitutes)
+            {
+                <tr><td data-label="Event">@s.EventTitle · @s.ClassName</td><td data-label="Role">@(s.OriginalId == Model.Id ? $"Covered by {s.Substitute}" : $"Covering {s.Original}")</td>
+                    <td data-label="Date · time">@s.Date.ToString("ddd d MMM", c) · @ScheduleRules.Times(s.Start, s.End)</td><td data-label="Lesson">@(s.Lesson ?? "—")</td><td data-label="Status">@s.Status</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>

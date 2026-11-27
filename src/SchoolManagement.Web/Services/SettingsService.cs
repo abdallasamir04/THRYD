@@ -38,6 +38,15 @@ public interface ISettingsService
 
     Task<int> GetMaxWeeklyPeriodsAsync(CancellationToken ct = default);
     Task<ServiceResult> SaveMaxWeeklyPeriodsAsync(int max, CancellationToken ct = default);
+
+    /// <summary>
+    /// The values new PTC Rounds are created with: the school's saved values, each falling back to
+    /// <see cref="Ptc.PtcRoundDefaults.Initial"/> (9 parents, 7-minute meetings, 7-minute transition, 70-minute Rounds).
+    /// </summary>
+    Task<Ptc.PtcRoundDefaults> GetPtcDefaultsAsync(CancellationToken ct = default);
+
+    /// <summary>Saves the PTC Round defaults (only new Rounds use them; existing Rounds keep their own values).</summary>
+    Task<ServiceResult> SavePtcDefaultsAsync(Ptc.PtcRoundDefaults values, CancellationToken ct = default);
 }
 
 public sealed class SettingsService(SchoolDbContext db, IMemoryCache cache) : ISettingsService
@@ -99,6 +108,42 @@ public sealed class SettingsService(SchoolDbContext db, IMemoryCache cache) : IS
         await UpsertAsync(MaxWeeklyPeriodsKey, max.ToString(), ct);
         await db.SaveChangesAsync(ct);
         cache.Remove(MaxPeriodsCacheKey);
+        return ServiceResult.Ok();
+    }
+
+    public const string PtcCapacityKey = "Ptc.RoundCapacity";
+    public const string PtcMeetingMinutesKey = "Ptc.MeetingDurationMinutes";
+    public const string PtcTransitionMinutesKey = "Ptc.TransitionDurationMinutes";
+    public const string PtcRoundMinutesKey = "Ptc.RoundDurationMinutes";
+    private const string PtcCacheKey = "settings:ptc_defaults";
+
+    public async Task<Ptc.PtcRoundDefaults> GetPtcDefaultsAsync(CancellationToken ct = default)
+    {
+        if (cache.TryGetValue(PtcCacheKey, out Ptc.PtcRoundDefaults? cached) && cached is not null) return cached;
+        var keys = new[] { PtcCapacityKey, PtcMeetingMinutesKey, PtcTransitionMinutesKey, PtcRoundMinutesKey };
+        var values = await db.Settings.AsNoTracking().Where(s => keys.Contains(s.Key)).ToDictionaryAsync(s => s.Key, s => s.Value, ct);
+        int Read(string key, int fallback) => int.TryParse(values.GetValueOrDefault(key), System.Globalization.NumberStyles.None, Inv, out var v) ? v : fallback;
+        var initial = Ptc.PtcRoundDefaults.Initial;
+        var stored = new Ptc.PtcRoundDefaults(
+            Read(PtcCapacityKey, initial.Capacity),
+            Read(PtcMeetingMinutesKey, initial.MeetingDurationMinutes),
+            Read(PtcTransitionMinutesKey, initial.TransitionDurationMinutes),
+            Read(PtcRoundMinutesKey, initial.RoundDurationMinutes));
+        // A stored combination that is not valid (edited by hand) is never used: the approved initial values apply.
+        var result = stored.Problem() is null ? stored : initial;
+        cache.Set(PtcCacheKey, result, TimeSpan.FromMinutes(10));
+        return result;
+    }
+
+    public async Task<ServiceResult> SavePtcDefaultsAsync(Ptc.PtcRoundDefaults values, CancellationToken ct = default)
+    {
+        if (values.Problem() is { } problem) return ServiceResult.Fail(problem.Field, problem.Message);
+        await UpsertAsync(PtcCapacityKey, values.Capacity.ToString(Inv), ct);
+        await UpsertAsync(PtcMeetingMinutesKey, values.MeetingDurationMinutes.ToString(Inv), ct);
+        await UpsertAsync(PtcTransitionMinutesKey, values.TransitionDurationMinutes.ToString(Inv), ct);
+        await UpsertAsync(PtcRoundMinutesKey, values.RoundDurationMinutes.ToString(Inv), ct);
+        await db.SaveChangesAsync(ct);
+        cache.Remove(PtcCacheKey);
         return ServiceResult.Ok();
     }
 

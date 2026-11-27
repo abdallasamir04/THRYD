@@ -1,0 +1,23 @@
+@model (IReadOnlyList<PtcIssue> Issues, bool Links)
+@* Readiness findings grouped by area: blocking issues first, then warnings. *@
+@if (Model.Issues.Count == 0)
+{
+    <p class="ptc-ok">@Ui.Icon("check-circle", "icon--sm")Nothing missing.</p>
+}
+else
+{
+    foreach (var area in Model.Issues.GroupBy(i => i.Area).OrderBy(g => g.Key))
+    {
+        <h3 class="ptc-issues__area">@PtcLabels.Area(area.Key)</h3>
+        <ul class="ptc-issues">
+            @foreach (var i in area.OrderByDescending(i => i.Blocking))
+            {
+                <li class="ptc-issue @(i.Blocking ? "is-blocking" : "is-warning")">
+                    @Ui.Icon(i.Blocking ? "x-circle" : "alert-triangle", "icon--sm")
+                    <span><strong>@(i.Blocking ? "Blocking" : "Warning"):</strong> @i.Message
+                        @if (Model.Links && i.Href is not null) { <a href="@i.Href">Fix</a> }</span>
+                </li>
+            }
+        </ul>
+    }
+}

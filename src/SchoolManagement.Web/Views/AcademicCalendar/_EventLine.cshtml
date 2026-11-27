@@ -1,11 +1,35 @@
 @model CalendarRow
+@inject ICurrentUser CurrentUser
 @*
     One event line under a month: the date (or the date as printed) and the event name.
     The whole line takes the event's colour, unless only part of the name is coloured in the print (AccentText).
     A continuation is the part of a multi-month event that is listed under another month.
+    A Parent-Teacher Conference (from the PTC module, Published / Completed only) is read-only here: a "PTC" badge, its
+    classes per date, and a link to its PTC page for the Super Admin (it is edited in PTC, never in the calendar).
 *@
 @{
     var e = Model.Event;
+    if (e.IsPtc)
+    {
+        var meta = Model.ContinuationText ?? e.Notes;
+        <li class="sc-ev sc-ev--ptc@(Model.Continuation ? " is-cont" : "")">
+            @if (CurrentUser.IsSuperAdmin)
+            {
+                <a class="sc-ev__link" href="/ptc/events/@e.PtcEventId">
+                    <span class="sc-ev__date">@Model.DateText</span>
+                    <span class="sc-ev__body"><span class="sc-ev__title"><span class="sc-flag sc-flag--ptc">PTC</span> @e.Title</span><span class="sc-ev__meta">@meta</span></span>
+                </a>
+            }
+            else
+            {
+                <div class="sc-ev__link">
+                    <span class="sc-ev__date">@Model.DateText</span>
+                    <span class="sc-ev__body"><span class="sc-ev__title"><span class="sc-flag sc-flag--ptc">PTC</span> @e.Title</span><span class="sc-ev__meta">@meta</span></span>
+                </div>
+            }
+        </li>
+        return;
+    }
     var accentAt = e.AccentText is { Length: > 0 } a ? e.Title.IndexOf(a, StringComparison.OrdinalIgnoreCase) : -1;
     var whole = e.Color != CalendarColor.None && accentAt < 0;
     var cls = "sc-ev" + (whole ? " is-colored " + CalendarColors.Css(e.Color) : "") + (Model.Continuation ? " is-cont" : "")

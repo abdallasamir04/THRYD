@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authorization;
+using SchoolManagement.Web.Services.Accounts;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
@@ -14,8 +16,11 @@ public class HomeController(
     IStaffAttendanceService staffAttendance,
     IActivityService activities) : AppController
 {
+    [StaffAccess(StaffAccessRule.Self)]
     public async Task<IActionResult> Index(CancellationToken ct)
     {
+        // A signed-in staff account (not the Super Admin) has its own dashboard; the school dashboard is Super Admin only.
+        if (User.Identity?.IsAuthenticated == true && !HttpContext.RequestServices.GetRequiredService<ICurrentUser>().IsSuperAdmin) return Redirect("/me");
         var today = SchoolWeek.Today;
         // Section-level coverage for today (school timezone), read per request: fully covered sections ÷ sections.
         // Morning / Midday / Dismissal = the duty cards of each type (DutyComponents), each covered when every duty in it
@@ -45,7 +50,7 @@ public class HomeController(
         return View(model);
     }
 
-    [Route("/error/{code:int?}")]
+    [Route("/error/{code:int?}"), AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error(int? code)
     {

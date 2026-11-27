@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Services.Accounts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Web.Data;
@@ -9,11 +10,19 @@ namespace SchoolManagement.Web.Controllers;
 /// "Working as": the staff member this browser records changes under (Created by / Recorded by).
 /// Self-selected and not verified — a stand-in until sign-in exists.
 /// </summary>
+[StaffAccess(StaffAccessRule.Self)]
 public class OperatorController(SchoolDbContext db) : AppController
 {
     [HttpPost("/operator"), ValidateAntiForgeryToken]
     public async Task<IActionResult> Set(int? staffId, string? returnUrl, CancellationToken ct)
     {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            // Signed in: the account is the identity; "Working as" cannot change who you are.
+            Response.Cookies.Delete(HttpCurrentUser.OperatorCookie);
+            Toast("You are signed in: your account is your identity, so “Working as” is not used.", "info");
+            return LocalRedirect(Url.IsLocalUrl(returnUrl) ? returnUrl! : "/");
+        }
         if (staffId is { } id && await db.StaffMembers.AnyAsync(s => s.Id == id, ct))
         {
             Response.Cookies.Append(HttpCurrentUser.OperatorCookie, id.ToString(), new CookieOptions

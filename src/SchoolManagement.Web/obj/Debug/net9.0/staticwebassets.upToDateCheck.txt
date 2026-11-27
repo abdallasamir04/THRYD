@@ -4,6 +4,8 @@ wwwroot\css\floor-audit.css
 wwwroot\css\floor-management.css
 wwwroot\css\operations.css
 wwwroot\css\org-structure.css
+wwwroot\css\ptc-portal.css
+wwwroot\css\ptc.css
 wwwroot\css\school-calendar.css
 wwwroot\css\skeleton.css
 wwwroot\css\staff.css
@@ -29,6 +31,9 @@ wwwroot\js\floor-audit.js
 wwwroot\js\incidents.js
 wwwroot\js\operations.js
 wwwroot\js\org-structure.js
+wwwroot\js\ptc-live.js
+wwwroot\js\ptc-portal.js
+wwwroot\js\ptc.js
 wwwroot\js\school-clock.js
 wwwroot\js\staff-attendance.js
 wwwroot\js\staff.js
@@ -98,3 +103,8 @@ E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\belongings.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\school-clock.js
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\student-profile.css
 E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\lib\jquery\dist\jquery.slim.js
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\ptc-portal.css
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\css\ptc.css
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\ptc-portal.js
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\ptc.js
+E:\noo\SchoolManagement\src\SchoolManagement.Web\wwwroot\js\ptc-live.js

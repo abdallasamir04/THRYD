@@ -56,6 +56,30 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWNhZGVtaWNDYWxlbmRhclxfTW9udGguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Account/ChangePassword.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWNjb3VudFxDaGFuZ2VQYXNzd29yZC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Account/Denied.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWNjb3VudFxEZW5pZWQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Account/ForgotPassword.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWNjb3VudFxGb3Jnb3RQYXNzd29yZC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Account/Login.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWNjb3VudFxMb2dpbi5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Account/ResetPassword.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWNjb3VudFxSZXNldFBhc3N3b3JkLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Account/_AuthLayout.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWNjb3VudFxfQXV0aExheW91dC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Activities/Details.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWN0aXZpdGllc1xEZXRhaWxzLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
@@ -740,6 +764,14 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWFuYWdlbWVudFxfTWVtYmVyQ2FyZC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Me/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWVcSW5kZXguY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Me/NoPerson.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWVcTm9QZXJzb24uY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/OrgStructure/AssignmentForm.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcT3JnU3RydWN0dXJlXEFzc2lnbm1lbnRGb3JtLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
@@ -812,6 +844,202 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUGVcX1RpbWV0YWJsZS5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcFeedback/Children.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjRmVlZGJhY2tcQ2hpbGRyZW4uY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcFeedback/Form.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjRmVlZGJhY2tcRm9ybS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcFeedback/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjRmVlZGJhY2tcSW5kZXguY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcFeedback/Invalid.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjRmVlZGJhY2tcSW52YWxpZC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcFeedback/_EventHead.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjRmVlZGJhY2tcX0V2ZW50SGVhZC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcFeedback/_ViewStart.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjRmVlZGJhY2tcX1ZpZXdTdGFydC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcPortal/Book.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUG9ydGFsXEJvb2suY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcPortal/Children.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUG9ydGFsXENoaWxkcmVuLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcPortal/Closed.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUG9ydGFsXENsb3NlZC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcPortal/Confirmation.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUG9ydGFsXENvbmZpcm1hdGlvbi5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcPortal/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUG9ydGFsXEluZGV4LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcPortal/_EventHead.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUG9ydGFsXF9FdmVudEhlYWQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcPortal/_PortalLayout.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUG9ydGFsXF9Qb3J0YWxMYXlvdXQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcPortal/_Steps.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUG9ydGFsXF9TdGVwcy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcPortal/_ViewStart.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUG9ydGFsXF9WaWV3U3RhcnQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/EventFeedback.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xFdmVudEZlZWRiYWNrLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/Feedback.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xGZWVkYmFjay5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/FeedbackDetails.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xGZWVkYmFja0RldGFpbHMuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/Teacher.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xUZWFjaGVyLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/Teachers.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xUZWFjaGVycy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/_Chart.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xfQ2hhcnQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/_Filters.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xfRmlsdGVycy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/_ReportNav.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xfUmVwb3J0TmF2LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcReports/_ViewImports.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjUmVwb3J0c1xfVmlld0ltcG9ydHMuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcTeacher/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjVGVhY2hlclxJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/PtcTeacher/NoStaff.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjVGVhY2hlclxOb1N0YWZmLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Bookings.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXEJvb2tpbmdzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Classes.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXENsYXNzZXMuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Coverage.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXENvdmVyYWdlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/CoverageLesson.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXENvdmVyYWdlTGVzc29uLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Defaults.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXERlZmF1bHRzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Denied.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXERlbmllZC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Event.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXEV2ZW50LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/EventForm.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXEV2ZW50Rm9ybS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXEluZGV4LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Live.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXExpdmUuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/ParentContacts.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXFBhcmVudENvbnRhY3RzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Preview.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXFByZXZpZXcuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Schedule.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXFNjaGVkdWxlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/Scheduling.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXFNjaGVkdWxpbmcuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/SchedulingTeacher.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXFNjaGVkdWxpbmdUZWFjaGVyLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/_CoverageCard.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXF9Db3ZlcmFnZUNhcmQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/_EventNav.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXF9FdmVudE5hdi5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/_Issues.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXF9Jc3N1ZXMuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/_Live.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXF9MaXZlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/_Nav.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXF9OYXYuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/_Readiness.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXF9SZWFkaW5lc3MuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Ptc/_Share.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHRjXF9TaGFyZS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Settings/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2V0dGluZ3NcSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
@@ -838,6 +1066,10 @@ build_metadata.AdditionalFiles.CssScope =
 
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Shared/_Pager.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9QYWdlci5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Shared/_PersonSections.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9QZXJzb25TZWN0aW9ucy5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Shared/_PositionOptions.cshtml]
@@ -870,6 +1102,18 @@ build_metadata.AdditionalFiles.CssScope =
 
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/Shared/_WorkloadMeter.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9Xb3JrbG9hZE1ldGVyLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/StaffAccounts/Credential.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3RhZmZBY2NvdW50c1xDcmVkZW50aWFsLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/StaffAccounts/Details.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3RhZmZBY2NvdW50c1xEZXRhaWxzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/StaffAccounts/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3RhZmZBY2NvdW50c1xJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
 [E:/noo/SchoolManagement/src/SchoolManagement.Web/Views/StaffAttendance/History.cshtml]

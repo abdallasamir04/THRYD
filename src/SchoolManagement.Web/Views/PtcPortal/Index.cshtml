@@ -1,0 +1,27 @@
+@model PtcPortalStartModel
+@{ ViewData["Title"] = Model.Event.Title; }
+<partial name="_EventHead" model="Model.Event" />
+<partial name="_Steps" model="1" />
+
+@if (!Model.Event.BookingsOpen)
+{
+    <p class="pp-note">@Ui.Icon("info", "icon--sm")<span>Booking is closed: there are no upcoming sessions with free places. If you have already booked, enter your details to see your booking.</span></p>
+}
+
+<section class="pp-card">
+    <h2 class="pp-h2">Find your child</h2>
+    <p class="pp-muted">Enter the mobile number the school has on record for you and your child's first name as the school records it.</p>
+    @if (Model.Error is not null)
+    {
+        <p class="pp-error" role="alert">@Ui.Icon("alert-circle", "icon--sm")<span>@Model.Error</span></p>
+    }
+    <form action="/ptc-booking/@Model.Event.Token/identify" method="post" autocomplete="off" data-pp-once>
+        @Html.AntiForgeryToken()
+        <label class="pp-label" for="phone">Mobile number registered with the school</label>
+        <input class="pp-input" id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" value="@Model.Phone" placeholder="e.g. 010 1234 5678" required />
+        <label class="pp-label" for="firstName">Your child's first name</label>
+        <input class="pp-input" id="firstName" name="firstName" type="text" autocomplete="off" maxlength="60" value="@Model.FirstName" required />
+        <button class="pp-btn" type="submit">Continue @Ui.Icon("arrow-right", "icon--sm")</button>
+    </form>
+</section>
+<p class="pp-small">For your security, the school does not show any details until the number and name match its records.</p>

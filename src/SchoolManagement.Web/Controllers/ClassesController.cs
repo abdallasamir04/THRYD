@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using SchoolManagement.Web.Services.Accounts;
+using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Services;
 using SchoolManagement.Web.ViewModels;
@@ -9,6 +10,7 @@ namespace SchoolManagement.Web.Controllers;
 /// Classes: a landing page with the four academic stages (see <see cref="ClassStages"/>), each stage's
 /// classes, and the full class list (/classes/all). Every page reads the same Classes table.
 /// </summary>
+[StaffAccess(StaffAccessRule.StudentRecords)]
 public class ClassesController(IClassService classes, IClassTeamService teams, IStudentService studentList, IStudentRecordsAccess studentAccess) : AppController
 {
     // ---------- class details / KG Class Teaching Team ----------

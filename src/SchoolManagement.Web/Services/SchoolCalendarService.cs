@@ -10,9 +10,16 @@ namespace SchoolManagement.Web.Services;
 
 public sealed record CalendarYearOption(int Id, string Name);
 
+/// <summary>
+/// An event line. <see cref="PtcEventId"/> is set for a Parent-Teacher Conference shown from the PTC module (read-only here:
+/// its <see cref="Id"/> is the negative PTC event id, so it never matches a School Calendar event).
+/// </summary>
 public sealed record CalendarEventView(int Id, int YearId, string Title, DateOnly? StartDate, DateOnly? EndDate,
-    string? DateLabel, DateOnly ListMonth, CalendarColor Color, string? AccentText, bool NeedsConfirmation, string? Notes, int SortOrder, bool IsHidden)
+    string? DateLabel, DateOnly ListMonth, CalendarColor Color, string? AccentText, bool NeedsConfirmation, string? Notes, int SortOrder, bool IsHidden,
+    int? PtcEventId = null)
 {
+    public bool IsPtc => PtcEventId is not null;
+
     public DateOnly? LastDate => EndDate ?? StartDate;
     public bool Covers(DateOnly d) => StartDate is { } s && d >= s && d <= (EndDate ?? s);
 }
@@ -105,8 +112,12 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
         var marks = await db.SchoolCalendarMarks.AsNoTracking().Where(m => m.AcademicYearId == year.Id)
             .ToDictionaryAsync(m => m.Date, m => m.Color, ct);
 
+        // Published / Completed Parent-Teacher Conferences are shown from the PTC module itself (never copied into the
+        // calendar's own events), so editing or cancelling a PTC updates the calendar and nothing is duplicated.
+        var shown = events.Concat(await PtcEventsAsync(year.Id, null, ct)).ToList();
+
         var today = SchoolWeek.Today;
-        var visible = events.Where(e => !e.IsHidden).ToList();
+        var visible = shown.Where(e => !e.IsHidden).ToList();
         var printedOrder = await PrintedOrderMonthsAsync(year.Id, ct);
 
         // Each quarter's school calendar dates: as printed, or its 8-week dates until those are set.
@@ -120,7 +131,7 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
 
         // Every event line goes to exactly one month card: the month it is listed under. As in the print, an event is listed
         // once — a multi-day event that runs into another month is not repeated there (its dates there still carry it).
-        var placements = events.SelectMany(Placements).ToList();
+        var placements = shown.SelectMany(Placements).ToList();
         var placed = new HashSet<(int, DateOnly)>();
 
         var months = new List<CalendarMonth>();
@@ -228,7 +239,7 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
     private static IQueryable<CalendarEventView> Events(IQueryable<SchoolCalendarEvent> q) =>
         q.AsNoTracking().OrderBy(e => e.ListMonth).ThenBy(e => e.SortOrder).ThenBy(e => e.Id)
             .Select(e => new CalendarEventView(e.Id, e.AcademicYearId, e.Title, e.StartDate, e.EndDate, e.DateLabel, e.ListMonth,
-                e.Color, e.AccentText, e.NeedsConfirmation, e.Notes, e.SortOrder, e.IsHidden));
+                e.Color, e.AccentText, e.NeedsConfirmation, e.Notes, e.SortOrder, e.IsHidden, null));
 
     // ------------------------------------------------------------------ events
 
@@ -315,7 +326,29 @@ public sealed class SchoolCalendarService(SchoolDbContext db) : ISchoolCalendarS
         if (name is null) return null;
         var mark = await db.SchoolCalendarMarks.Where(m => m.AcademicYearId == yearId && m.Date == date).Select(m => (CalendarColor?)m.Color).FirstOrDefaultAsync(ct);
         var events = await Events(db.SchoolCalendarEvents.Where(e => e.AcademicYearId == yearId && e.StartDate != null && e.StartDate <= date && (e.EndDate ?? e.StartDate) >= date)).ToListAsync(ct);
+        events.AddRange(await PtcEventsAsync(yearId, date, ct));
         return new CalendarDayView(yearId, name, date, mark ?? CalendarColor.None, events);
+    }
+
+    /// <summary>The year's Published and Completed PTC events (optionally only those covering <paramref name="on"/>) as read-only lines.</summary>
+    private async Task<List<CalendarEventView>> PtcEventsAsync(int yearId, DateOnly? on, CancellationToken ct)
+    {
+        var q = db.PtcEvents.AsNoTracking().Where(e => e.AcademicYearId == yearId && (e.Status == PtcEventStatus.Published || e.Status == PtcEventStatus.Completed));
+        if (on is { } d) q = q.Where(e => e.StartDate <= d && e.EndDate >= d);
+        var rows = await q.OrderBy(e => e.StartDate).ThenBy(e => e.Id)
+            .Select(e => new
+            {
+                e.Id, e.Title, e.StartDate, e.EndDate,
+                Classes = e.ClassSchedules.Where(s => s.Status != PtcScheduleStatus.Cancelled)
+                    .OrderBy(s => s.EventDate).ThenBy(s => s.SchoolClass.SortOrder).Select(s => new { s.EventDate, s.SchoolClass.Name }).ToList(),
+            })
+            .ToListAsync(ct);
+        return rows.Select(e => new CalendarEventView(-e.Id, yearId, e.Title, e.StartDate, e.EndDate == e.StartDate ? null : e.EndDate, null, MonthOf(e.StartDate),
+                CalendarColor.None, null, false,
+                "Parent-Teacher Conference" + string.Concat(e.Classes.GroupBy(c => c.EventDate)
+                    .Select(g => $" · {g.Key.ToString("ddd d MMM", C)}: {string.Join(", ", g.Select(c => c.Name))}")),
+                int.MaxValue, false, e.Id))
+            .ToList();
     }
 
     public async Task<ServiceResult> SetMarkAsync(int yearId, DateOnly date, CalendarColor color, CancellationToken ct = default)

@@ -1,0 +1,42 @@
+@model PtcShareModel
+@*
+    The event's public booking link: Copy Link, and Share on WhatsApp (click-to-chat with an editable message). The Admin
+    shares it manually; nothing is sent automatically and the link holds no student information.
+*@
+<section class="card" aria-labelledby="ptc-share">
+    <div class="card__head">
+        <h2 class="card__title" id="ptc-share">@Ui.Icon("send")Parent booking link</h2>
+        @if (Model.Published)
+        {
+            if (Model.BookingsOpen) { <span class="badge badge--success badge--dot">Bookings open</span> } else { <span class="badge badge--warning badge--dot">Bookings not open</span> }
+        }
+    </div>
+    <div class="card__body" data-ptc-share>
+        @if (!Model.Published || Model.Url is null)
+        {
+            <p class="ptc-muted">The booking link becomes active when the event is published. Parents can then book from it directly.</p>
+        }
+        else
+        {
+            <div class="field">
+                <label class="label" for="ptc-link">Booking link</label>
+                <div class="ptc-actions">
+                    <input class="input" id="ptc-link" value="@Model.Url" readonly style="flex:1; min-width: 220px" data-share-url />
+                    <button class="btn btn--secondary" type="button" data-copy-link>@Ui.Icon("copy", "icon--sm")Copy link</button>
+                </div>
+            </div>
+            <div class="field" style="margin-top: 12px">
+                <label class="label" for="ptc-message">WhatsApp message (edit before sharing)</label>
+                <textarea class="input" id="ptc-message" rows="3" data-share-message>@Model.Message</textarea>
+            </div>
+            <div class="ptc-actions" style="margin-top: 12px">
+                <a class="btn btn--primary" href="@PtcLinks.WhatsAppShare(Model.Message!)" target="_blank" rel="noopener noreferrer" data-share-whatsapp>@Ui.Icon("whatsapp", "icon--sm")Share on WhatsApp</a>
+                <span class="ptc-muted">Opens WhatsApp with the message; you choose the chat and send it. Nothing is sent automatically.</span>
+            </div>
+            @if (!Model.BookingsOpen)
+            {
+                <p class="ptc-muted" style="margin-top: 8px">No Round can take a booking right now (all are full, past or closed): parents opening the link will see that booking is closed.</p>
+            }
+        }
+    </div>
+</section>

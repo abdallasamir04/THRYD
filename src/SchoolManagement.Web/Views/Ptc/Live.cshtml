@@ -1,0 +1,51 @@
+@model PtcLiveOverview
+@*
+    PTC live operations (Super Admin only): the day's interviews across every class, Round and teacher, refreshed in place
+    every few seconds from the server (timers count from the recorded start times, so a refresh never resets them).
+*@
+@{
+    var e = (PtcEventDetail)ViewData["Event"]!;
+    ViewData["Title"] = "Live operations · " + e.Title;
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = $"/ptc/events/{e.Id}";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var query = $"date={Model.Date?.ToString("yyyy-MM-dd", c)}&cls={Model.ClassId}&teacher={Model.TeacherId}&state={Model.State}";
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/events/@e.Id">@e.Title</a></li><li>Live operations</li></ol>
+        <h1 class="page-title">Live operations <span class="badge @PtcLabels.Badge(e.Status)">@PtcLabels.Label(e.Status)</span></h1>
+        <p class="page-sub">Every teacher's interviews on the day: started, running, ended or missed, as recorded by the server. Each parent booking is one meeting time; each of its teachers has their own interview.</p>
+    </div>
+</div>
+
+<partial name="_EventNav" model='(e, "live")' />
+
+@if (Model.Dates.Count == 0)
+{
+    <section class="card"><div class="empty"><span class="empty__icon">@Ui.Icon("activity")</span><p class="empty__title">No interviews yet</p>
+        <p class="empty__text">Interviews appear here once parents book this event. There is nothing to operate yet.</p></div></section>
+}
+else
+{
+    <form class="card ptc-bulk" method="get" action="/ptc/events/@e.Id/live" style="margin-bottom: 16px">
+        <div class="field"><label class="label" for="l-date">Date</label>
+            <select class="select" id="l-date" name="date">@foreach (var d in Model.Dates) { <option value="@d.ToString("yyyy-MM-dd", c)" selected="@(Model.Date == d)">@d.ToString("ddd d MMM", c)</option> }</select></div>
+        <div class="field"><label class="label" for="l-class">Class</label>
+            <select class="select" id="l-class" name="cls"><option value="">All classes</option>@foreach (var r in Model.Rounds.DistinctBy(r => r.ClassId)) { <option value="@r.ClassId" selected="@(Model.ClassId == r.ClassId)">@r.ClassName</option> }</select></div>
+        <div class="field"><label class="label" for="l-teacher">Teacher</label>
+            <select class="select" id="l-teacher" name="teacher"><option value="">All teachers</option>@foreach (var t in Model.Teachers) { <option value="@t.TeacherId" selected="@(Model.TeacherId == t.TeacherId)">@t.Name</option> }</select></div>
+        <div class="field"><label class="label" for="l-state">Status</label>
+            <select class="select" id="l-state" name="state"><option value="">All</option>@foreach (var s in Enum.GetValues<PtcLiveState>()) { <option value="@s" selected="@(Model.State == s)">@PtcLiveRules.Label(s)</option> }</select></div>
+        <button class="btn btn--secondary" type="submit">@Ui.Icon("filter", "icon--sm")Filter</button>
+        <span class="ptc-muted" data-live-status aria-live="polite">Updates every @Model.RefreshSeconds s</span>
+    </form>
+
+    <div data-live-url="/ptc/events/@e.Id/live?@query&partial=true" data-refresh-seconds="@Model.RefreshSeconds">
+        <partial name="_Live" model="Model" />
+    </div>
+}
+
+@section Scripts { <script src="~/js/ptc-live.js" asp-append-version="true"></script> }

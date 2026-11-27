@@ -1,0 +1,57 @@
+@model PtcReportData
+@*
+    Teacher reports (Super Admin only): objective operational figures from the teachers' actual PTC interviews, kept apart
+    from parent satisfaction (teacher-specific feedback only) and concerns. No ranking, score or label is derived; averages
+    are shown only with enough answers, always with their sample size.
+*@
+@{
+    ViewData["Title"] = "PTC teacher reports";
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = "/ptc/reports";
+    ViewData["FilterAction"] = "/ptc/reports/teachers";
+    var query = Model.Filter.Query();
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/reports">Reports</a></li><li>Teachers</li></ol>
+        <h1 class="page-title">Teacher reports</h1>
+        <p class="page-sub">Operational attendance, parent satisfaction and concerns, shown separately with their sample sizes. Nothing here ranks or labels a teacher.</p>
+    </div>
+    <div class="page-head__actions ptc-actions"><a class="btn btn--secondary" href="/ptc/reports/export@(string.IsNullOrEmpty(query) ? "" : "?" + query)">@Ui.Icon("download")Export to Excel</a></div>
+</div>
+<partial name="~/Views/Ptc/_Nav.cshtml" model='"reports"' />
+<partial name="_ReportNav" model='("teachers", query)' />
+<partial name="_Filters" model="Model" />
+
+<section class="card table-card" aria-labelledby="rt-list">
+    <div class="card__head"><h2 class="card__title" id="rt-list">@Ui.Icon("users")Participating teachers (@Model.Teachers.Count)</h2></div>
+    @if (Model.Teachers.Count == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("users")</span><p class="empty__title">No teacher interviews yet</p>
+            <p class="empty__text">Teachers appear here once parents have booked meetings with them (from the timetable's subject teachers). No figures are invented.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Teacher</th><th scope="col">Department</th><th scope="col">Events</th><th scope="col">Meetings</th><th scope="col">Completed · missed · cancelled</th>
+                <th scope="col">Avg · total actual time</th><th scope="col">Teacher-specific feedback</th><th scope="col">Avg communication</th><th scope="col">Positive · negative</th>
+                <th scope="col">Concerns of their parents (open · resolved)</th></tr></thead>
+            <tbody>@foreach (var t in Model.Teachers)
+            {
+                <tr>
+                    <td data-label="Teacher"><a href="/ptc/reports/teachers/@t.Id@(string.IsNullOrEmpty(query) ? "" : "?" + query)"><strong>@t.Name</strong></a></td>
+                    <td data-label="Department">@(t.Department ?? "—")</td><td data-label="Events">@t.Events</td>
+                    <td data-label="Meetings">@t.Meetings <span class="ptc-muted">(@t.Upcoming upcoming)</span></td>
+                    <td data-label="Completed · missed · cancelled">@t.Completed · @t.Missed · @t.Cancelled</td>
+                    <td data-label="Avg · total actual time">@t.AverageMinutes.Text("0.0", " min") · @t.TotalMinutes min</td>
+                    <td data-label="Teacher-specific feedback">@t.TeacherFeedback <span class="ptc-muted">of @t.ParentFeedback parent submissions</span></td>
+                    <td data-label="Avg communication">@t.Communication.Text()</td>
+                    <td data-label="Positive · negative">@t.Positive · @t.Negative</td>
+                    <td data-label="Concerns of their parents">@t.OpenConcerns · @t.ResolvedConcerns</td>
+                </tr>
+            }</tbody>
+        </table></div>
+        <p class="hint" style="padding: 0 16px 12px">A meeting is one teacher with one family (several subjects with the same teacher are one meeting). Averages need at least @PtcReportService.MinSample answers. Concerns are those of parents the teacher met: they are not necessarily about the teacher.</p>
+    }
+</section>

@@ -1,0 +1,66 @@
+/* PTC administration (Parent-Teacher Conference). Uses the THRYD tokens; only layout helpers live here. */
+.ptc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.ptc-indicator { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface-raised); }
+.ptc-indicator__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.ptc-indicator__title { margin: 0; font-size: 0.86rem; font-weight: 800; color: var(--color-text-strong); }
+.ptc-indicator__value { margin: 0; font-size: 1.4rem; font-weight: 800; color: var(--color-text-strong); }
+.ptc-indicator__detail { margin: 0; font-size: 0.8rem; color: var(--color-text-muted); }
+.ptc-indicator.is-blocked { border-color: var(--color-error-ink); }
+.ptc-indicator.is-incomplete { border-color: var(--color-warning-ink); }
+.ptc-section-title { margin: 24px 0 12px; font-size: 1rem; font-weight: 800; color: var(--color-text-strong); }
+.ptc-issues { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.ptc-issues__area { margin: 12px 0 6px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted); }
+.ptc-issue { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; font-size: 0.86rem; }
+.ptc-issue.is-blocking { background: var(--color-error-soft); color: var(--color-error-ink); }
+.ptc-issue.is-warning { background: var(--color-warning-soft); color: var(--color-warning-ink); }
+.ptc-issue span { color: var(--color-text); }
+.ptc-ok { display: flex; gap: 6px; align-items: center; color: var(--color-success-ink); margin: 0; }
+.ptc-subjects { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 0.84rem; }
+.ptc-subjects small { color: var(--color-text-muted); }
+.ptc-rows td { vertical-align: top; }
+.ptc-rows input[type="date"], .ptc-rows input[type="time"], .ptc-rows select { min-width: 0; }
+.ptc-rows tr.is-off td:not(:first-child) { opacity: 0.55; }
+.ptc-bulk { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 12px 16px; border-bottom: 1px solid var(--color-border-subtle); }
+.ptc-day { margin-bottom: 16px; }
+.ptc-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ptc-actions form { display: inline; }
+.ptc-muted { color: var(--color-text-muted); font-size: 0.82rem; }
+.ptc-ack { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0; }
+
+/* Phase 5: live operations and the teacher's interview timer. */
+.ptc-now { border: 2px solid var(--color-primary); margin-bottom: 16px; }
+.ptc-now__body { display: grid; gap: 8px; }
+.ptc-timer { margin: 0; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.ptc-timer [data-timer-start] { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--color-text-strong); }
+.ptc-timer small { color: var(--color-text-muted); }
+[data-timer-start] { font-variant-numeric: tabular-nums; font-weight: 700; }
+[data-timer-start].is-over { color: var(--color-error-ink); }
+.ptc-meetings { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ptc-meeting { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface-raised); }
+.ptc-meeting p { margin: 0; }
+.ptc-meeting__time { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.ptc-meeting__actions { display: flex; gap: 8px; align-items: center; }
+.ptc-meeting.is-inprogress { border: 2px solid var(--color-primary); }
+.ptc-meeting.is-completed { opacity: 0.8; }
+.ptc-meeting.is-missed { border-color: var(--color-error-ink); }
+.ptc-meeting.is-cancelled { opacity: 0.55; }
+@media (max-width: 640px) { .ptc-meeting { grid-template-columns: 1fr; } .ptc-meeting__actions .btn { width: 100%; justify-content: center; } }
+tr.is-stuck td { background: var(--color-error-soft); }
+tr.is-over td { background: var(--color-warning-soft); }
+.ptc-correct > summary { list-style: none; cursor: pointer; }
+.ptc-correct[open] form { margin-top: 8px; min-width: 280px; }
+
+/* ---- PTC reports: server-rendered bar charts (real values; theme tokens for Light and Dark) ---- */
+.ptc-chart-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.ptc-chart { display: grid; gap: 10px; }
+.ptc-chart__row { display: grid; grid-template-columns: minmax(80px, 34%) 1fr; gap: 10px; align-items: center; }
+.ptc-chart__label { font-size: .85rem; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ptc-chart__bars { display: grid; gap: 4px; }
+.ptc-chart__line { display: flex; align-items: center; gap: 8px; }
+.ptc-chart__bar { display: block; height: 12px; min-width: 2px; border-radius: var(--radius-sm); }
+.ptc-chart__value { font-size: .78rem; color: var(--color-text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ptc-chart__note { font-size: .75rem; }
+.ptc-chart__legend { display: flex; flex-wrap: wrap; gap: 12px; list-style: none; padding: 0; margin: 0 0 10px; font-size: .8rem; color: var(--color-text-muted); }
+.ptc-chart__swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.ptc-chart__empty { display: flex; gap: 6px; align-items: center; color: var(--color-text-muted); margin: 8px 0; }
+.ptc-pre { white-space: pre-line; }

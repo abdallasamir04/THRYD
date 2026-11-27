@@ -1,0 +1,148 @@
+@model PtcLiveOverview
+@inject IPtcOperationsService Operations
+@*
+    The refreshable part of the live view. Counts: parent bookings and teacher interviews (one teacher's meeting with one
+    booking) are counted separately. Corrections need a reason and confirmation and keep the previous values in the log.
+*@
+@{
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    string Iso(DateTime? utc) => utc is { } u ? DateTime.SpecifyKind(u, DateTimeKind.Utc).ToString("o", c) : "";
+    string Local(DateTime? utc) => utc is { } u ? SchoolTime.Current.ToLocal(DateTime.SpecifyKind(u, DateTimeKind.Utc)).ToString("HH:mm:ss", c) : "—";
+    string Dur(TimeSpan? t) => t is { } d ? $"{(int)d.TotalMinutes}:{d.Seconds:00}" : "—";
+    var n = Model.Counts;
+    var date = Model.Date?.ToString("yyyy-MM-dd", c);
+}
+<div data-ptc-clock data-server-now="@Iso(Model.ServerNowUtc)">
+    <ul class="kpis" aria-label="Live totals">
+        <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Parent bookings</p><p class="kpi__value">@Model.Bookings</p><p class="kpi__meta">@Model.Classes classes · @Model.ActiveRounds Rounds · @Model.Teachers.Count teachers</p></div></li>
+        <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("calendar")</span><p class="kpi__label">Teacher interviews</p><p class="kpi__value">@n.Total</p><p class="kpi__meta">@n.Upcoming upcoming · @n.Cancelled cancelled</p></div></li>
+        <li><div class="kpi kpi--orange"><span class="kpi__icon">@Ui.Icon("activity")</span><p class="kpi__label">In progress</p><p class="kpi__value">@n.InProgress</p><p class="kpi__meta">@Model.Overrunning.Count running over · @Model.Stuck.Count stuck</p></div></li>
+        <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("check-circle")</span><p class="kpi__label">Completed</p><p class="kpi__value">@n.Completed</p><p class="kpi__meta">Average @(Model.AverageActual is { } avg ? Dur(avg) + " min" : "—")</p></div></li>
+        <li><div class="kpi @(n.Missed > 0 ? "kpi--warn" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon("alert-triangle")</span><p class="kpi__label">Missed</p><p class="kpi__value">@n.Missed</p><p class="kpi__meta">Planned time passed, not started</p></div></li>
+    </ul>
+
+    @if (Model.Stuck.Count + Model.Overrunning.Count + Model.NotStarted.Count > 0)
+    {
+        <section class="card" aria-labelledby="live-alerts" style="margin-bottom: 16px">
+            <div class="card__head"><h2 class="card__title" id="live-alerts">@Ui.Icon("alert-triangle")Needs attention</h2></div>
+            <ul class="ptc-issues card__body">
+                @foreach (var x in Model.Stuck) { <li class="ptc-issue is-blocking"><span><strong>Stuck in progress:</strong> @x.TeacherName · @x.ClassName · @x.StudentName — started @Local(x.ActualStartUtc), not ended.</span></li> }
+                @foreach (var x in Model.Overrunning) { <li class="ptc-issue is-warning"><span><strong>Running over:</strong> @x.TeacherName · @x.ClassName · @x.StudentName — @x.PlannedMinutes min planned, <span data-timer-start="@Iso(x.ActualStartUtc)" data-timer-planned="@x.PlannedMinutes">…</span> so far.</span></li> }
+                @foreach (var x in Model.NotStarted) { <li class="ptc-issue is-warning"><span><strong>Not started:</strong> @x.TeacherName · @x.ClassName · @x.StudentName — planned @ScheduleRules.Times(x.PlannedStart, x.PlannedEnd).</span></li> }
+            </ul>
+        </section>
+    }
+
+    <div class="ptc-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)">
+        <section class="card table-card" aria-label="By class and Round">
+            <div class="card__head"><h2 class="card__title">@Ui.Icon("door")By class &amp; Round</h2></div>
+            <div class="table-wrap"><table class="table table--stack">
+                <thead><tr><th scope="col">Class · Round</th><th scope="col">Bookings</th><th scope="col">Interviews</th><th scope="col">Running</th><th scope="col">Done</th><th scope="col">Missed</th><th scope="col">To come</th></tr></thead>
+                <tbody>@foreach (var r in Model.Rounds)
+                {
+                    <tr><td data-label="Class · Round">@r.ClassName · R@(r.RoundNumber)</td><td data-label="Bookings">@r.Bookings</td><td data-label="Interviews">@r.Interviews.Total</td>
+                        <td data-label="Running">@r.Interviews.InProgress</td><td data-label="Done">@r.Interviews.Completed</td><td data-label="Missed">@r.Interviews.Missed</td><td data-label="To come">@r.Interviews.Upcoming</td></tr>
+                }</tbody>
+            </table></div>
+        </section>
+        <section class="card table-card" aria-label="By teacher">
+            <div class="card__head"><h2 class="card__title">@Ui.Icon("user")By teacher</h2></div>
+            <div class="table-wrap"><table class="table table--stack">
+                <thead><tr><th scope="col">Teacher</th><th scope="col">Interviews</th><th scope="col">Running</th><th scope="col">Done</th><th scope="col">Missed</th><th scope="col">To come</th><th scope="col">Actual time</th></tr></thead>
+                <tbody>@foreach (var t in Model.Teachers)
+                {
+                    <tr><td data-label="Teacher"><a href="/ptc/events/@Model.EventId/live?date=@date&teacher=@t.TeacherId">@t.Name</a><br /><span class="ptc-muted">@string.Join(", ", t.Classes)</span></td>
+                        <td data-label="Interviews">@t.Interviews.Total</td><td data-label="Running">@t.Interviews.InProgress</td><td data-label="Done">@t.Interviews.Completed</td>
+                        <td data-label="Missed">@t.Interviews.Missed</td><td data-label="To come">@t.Interviews.Upcoming</td><td data-label="Actual time">@Dur(t.ActualTime)</td></tr>
+                }</tbody>
+            </table></div>
+        </section>
+    </div>
+
+    <section class="card table-card" aria-label="Interviews">
+        <div class="card__head"><h2 class="card__title">@Ui.Icon("list")Interviews (@Model.Meetings.Count)</h2></div>
+        @if (Model.Meetings.Count == 0)
+        {
+            <div class="empty"><p class="empty__title">No interview matches these filters</p></div>
+        }
+        else
+        {
+            <div class="table-wrap"><table class="table table--stack">
+                <thead><tr><th scope="col">Planned</th><th scope="col">Teacher</th><th scope="col">Parent booking</th><th scope="col">Status</th><th scope="col">Actual</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var x in Model.Meetings)
+                    {
+                        <tr class="@(x.Stuck ? "is-stuck" : x.Overrunning ? "is-over" : "")">
+                            <td data-label="Planned">@ScheduleRules.Times(x.PlannedStart, x.PlannedEnd)<br /><span class="ptc-muted">@x.ClassName · R@(x.RoundNumber)</span></td>
+                            <td data-label="Teacher">@x.TeacherName<br /><span class="ptc-muted">@string.Join(", ", x.Subjects)</span></td>
+                            <td data-label="Parent booking">@x.StudentName<br /><code>@x.Reference</code></td>
+                            <td data-label="Status"><span class="badge @PtcLiveRules.Badge(x.State)">@PtcLiveRules.Label(x.State)</span>
+                                @if (x.State == PtcLiveState.InProgress) { <br /><span data-timer-start="@Iso(x.ActualStartUtc)" data-timer-planned="@x.PlannedMinutes">…</span> }</td>
+                            <td data-label="Actual">@Local(x.ActualStartUtc) – @Local(x.ActualEndUtc)@(x.ActualDuration is { } dd ? $" · {Dur(dd)}" : "")</td>
+                            <td data-label="Actions">
+                                <div class="ptc-actions">
+                                    @if (x.CanStart)
+                                    {
+                                        <form action="/ptc/live/start" method="post" data-confirm="Start @x.TeacherName's interview with @x.StudentName now (server time)?" data-confirm-title="Start for the teacher?" data-confirm-button="Start" data-confirm-tone="info">
+                                            @Html.AntiForgeryToken()<input type="hidden" name="key" value="@x.Key" /><input type="hidden" name="eventId" value="@Model.EventId" /><input type="hidden" name="date" value="@date" />
+                                            <button class="btn btn--secondary btn--sm" type="submit">Start</button></form>
+                                    }
+                                    @if (x.CanEnd)
+                                    {
+                                        <form action="/ptc/live/end" method="post" data-confirm="End @x.TeacherName's interview with @x.StudentName now (server time)?" data-confirm-title="End for the teacher?" data-confirm-button="End" data-confirm-tone="info">
+                                            @Html.AntiForgeryToken()<input type="hidden" name="key" value="@x.Key" /><input type="hidden" name="eventId" value="@Model.EventId" /><input type="hidden" name="date" value="@date" />
+                                            <button class="btn btn--secondary btn--sm" type="submit">End</button></form>
+                                    }
+                                    @if (x.State != PtcLiveState.Cancelled)
+                                    {
+                                        <details class="ptc-correct">
+                                            <summary class="btn btn--ghost btn--sm">Correct…</summary>
+                                            <form action="/ptc/live/correct" method="post" class="form-grid" data-loading>
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="key" value="@x.Key" /><input type="hidden" name="eventId" value="@Model.EventId" /><input type="hidden" name="date" value="@date" />
+                                                <input type="hidden" name="version" value="@Operations.Version(x)" />
+                                                <p class="field--full ptc-muted">Recorded now: @PtcLiveRules.Label(x.State) · start @Local(x.ActualStartUtc) · end @Local(x.ActualEndUtc). Planned times never change.</p>
+                                                <div class="field field--full"><label class="label">Corrected status</label>
+                                                    <select class="select" name="target">
+                                                        <option value="@PtcCorrectionTarget.Completed">Completed (start and end)</option>
+                                                        <option value="@PtcCorrectionTarget.InProgress">In progress (start only)</option>
+                                                        <option value="@PtcCorrectionTarget.NotStarted">Not started (clear the times)</option>
+                                                    </select></div>
+                                                <div class="field"><label class="label">Actual start</label><input class="input" type="time" step="1" name="start" value="@(x.ActualStartUtc is not null ? Local(x.ActualStartUtc) : "")" /></div>
+                                                <div class="field"><label class="label">Actual end</label><input class="input" type="time" step="1" name="end" value="@(x.ActualEndUtc is not null ? Local(x.ActualEndUtc) : "")" /></div>
+                                                <div class="field field--full"><label class="label">Reason</label><input class="input" name="reason" maxlength="500" required /></div>
+                                                <label class="ptc-ack field--full"><input type="checkbox" name="confirmed" value="true" required /><span>I confirm this correction; the recorded values above are kept in the log.</span></label>
+                                                <div class="field field--full"><button class="btn btn--primary btn--sm" type="submit">Save correction</button></div>
+                                            </form>
+                                        </details>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table></div>
+        }
+    </section>
+
+    <section class="card table-card" aria-label="Operations log">
+        <div class="card__head"><h2 class="card__title">@Ui.Icon("clock")Operations log</h2><span class="ptc-muted">Latest 50: starts, ends and corrections</span></div>
+        @if (Model.Log.Count == 0)
+        {
+            <p class="ptc-muted" style="padding: 0 16px 12px">Nothing recorded yet.</p>
+        }
+        else
+        {
+            <div class="table-wrap"><table class="table table--stack">
+                <thead><tr><th scope="col">When</th><th scope="col">What</th><th scope="col">Teacher · booking</th><th scope="col">Before</th><th scope="col">After</th><th scope="col">Reason</th></tr></thead>
+                <tbody>@foreach (var l in Model.Log)
+                {
+                    <tr><td data-label="When">@Local(l.At)<br /><span class="ptc-muted">@l.By</span></td><td data-label="What">@l.Kind</td>
+                        <td data-label="Teacher · booking">@l.TeacherName · <code>@l.Reference</code></td>
+                        <td data-label="Before">@(l.OldStatus?.ToString() ?? "—") · @Local(l.OldStart)–@Local(l.OldEnd)</td>
+                        <td data-label="After">@l.NewStatus · @Local(l.NewStart)–@Local(l.NewEnd)</td><td data-label="Reason">@l.Reason</td></tr>
+                }</tbody>
+            </table></div>
+        }
+    </section>
+</div>

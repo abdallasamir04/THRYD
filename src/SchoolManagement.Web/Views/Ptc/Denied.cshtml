@@ -1,0 +1,17 @@
+@{
+    ViewData["Title"] = "Access needed";
+    ViewData["Nav"] = "PTC";
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>PTC</li></ol>
+        <h1 class="page-title">Access needed</h1>
+    </div>
+</div>
+<section class="card">
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon("lock")</span>
+        <p class="empty__title">You cannot manage Parent-Teacher Conferences</p>
+        <p class="empty__text">@PtcAccess.DeniedMessage</p>
+    </div>
+</section>

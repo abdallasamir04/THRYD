@@ -1,0 +1,27 @@
+@inject ICurrentUser CurrentUser
+@{
+    ViewData["Title"] = "My PTC interviews";
+    ViewData["Nav"] = "MyPtc";
+}
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li>My PTC interviews</li></ol>
+        <h1 class="page-title">My PTC interviews</h1>
+    </div>
+</div>
+<section class="card">
+    <div class="empty">
+        <span class="empty__icon">@Ui.Icon(CurrentUser.IsSuperAdmin ? "shield-check" : "lock")</span>
+        @if (CurrentUser.IsSuperAdmin)
+        {
+            <p class="empty__title">This page shows a teacher's own interviews</p>
+            <p class="empty__text">You are using THRYD as the Super Admin, without a staff identity. Follow every teacher's interviews in the PTC live operations view.</p>
+            <div class="empty__actions"><a class="btn btn--primary" href="/ptc">@Ui.Icon("activity")PTC events</a></div>
+        }
+        else
+        {
+            <p class="empty__title">Choose who you are working as</p>
+            <p class="empty__text">Your PTC interviews are shown for the staff member you are working as.</p>
+        }
+    </div>
+</section>

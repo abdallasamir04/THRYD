@@ -1,0 +1,79 @@
+@model PtcEventFormModel
+@*
+    Create / edit a PTC event. A new event is a Draft (it may be incomplete and is never bookable). A Published event keeps
+    its academic year and dates; status changes are the actions on the event page, each checked on the server.
+*@
+@{
+    var heading = Model.IsEdit ? "Edit PTC event" : "New PTC event";
+    ViewData["Title"] = heading;
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = Model.IsEdit ? $"/ptc/events/{Model.Id}" : "/ptc";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li>@if (Model.IsEdit) { <li><a href="/ptc/events/@Model.Id">@Model.Title</a></li> }<li>@heading</li></ol>
+        <h1 class="page-title">@heading</h1>
+        <p class="page-sub">The event's title, academic year and dates. Classes, their dates and Rounds are set next, on the event page.</p>
+    </div>
+</div>
+
+<div class="card form-page">
+    <form action="/ptc/events/save" method="post" data-loading autocomplete="off" style="display:contents">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Id" value="@Model.Id" />
+        <div class="modal__body form-grid">
+            <div asp-validation-summary="All" class="validation-summary-errors"></div>
+            @if (Model.IsEdit)
+            {
+                <p class="field field--full">Status: <span class="badge @PtcLabels.Badge(Model.Status)">@PtcLabels.Label(Model.Status)</span>
+                    <span class="ptc-muted">Publish, return to Draft or cancel from the event page.</span></p>
+            }
+            <div class="field field--full">
+                <label class="label" for="Title">Title <span class="req">*</span></label>
+                <input class="input" id="Title" name="Title" value="@Model.Title" maxlength="@PtcEvent.TitleMaxLength" placeholder="e.g. Q2 Parent-Teacher Conference" required />
+            </div>
+            <div class="field">
+                <label class="label" for="AcademicYearId">Academic year <span class="req">*</span></label>
+                @if (Model.DatesLocked)
+                {
+                    <input type="hidden" name="AcademicYearId" value="@Model.AcademicYearId" />
+                    <input class="input" id="AcademicYearId" value="@(Model.Years.FirstOrDefault(y => y.Id == Model.AcademicYearId)?.Name)" disabled />
+                }
+                else
+                {
+                    <select class="select" id="AcademicYearId" name="AcademicYearId" required>
+                        @foreach (var y in Model.Years)
+                        {
+                            <option value="@y.Id" selected="@(y.Id == Model.AcademicYearId)">@y.Name@(y.IsCurrent ? " (current)" : "")</option>
+                        }
+                    </select>
+                }
+                @if (Model.Years.Count == 0) { <span class="field-validation-error">No academic year exists yet: add one in the School Calendar first.</span> }
+            </div>
+            <div class="field">
+                <label class="label" for="StartDate">First date <span class="req">*</span></label>
+                <input class="input" id="StartDate" name="StartDate" type="date" value="@Model.StartDate?.ToString("yyyy-MM-dd", c)" required readonly="@Model.DatesLocked" />
+            </div>
+            <div class="field">
+                <label class="label" for="EndDate">Last date <span class="req">*</span></label>
+                <input class="input" id="EndDate" name="EndDate" type="date" value="@Model.EndDate?.ToString("yyyy-MM-dd", c)" required readonly="@Model.DatesLocked" />
+                <span class="hint">The PTC week or date range (up to @SchoolManagement.Web.Services.Ptc.PtcSetupService.MaxEventDays days). Each class gets one date within it.</span>
+            </div>
+            @if (Model.DatesLocked)
+            {
+                <p class="notice notice--warning field--full">@Ui.Icon("lock", "icon--sm")<span class="notice__body">This event is Published: its academic year and dates are fixed. Return it to Draft (possible while it has no confirmed bookings) to change them.</span></p>
+            }
+            <div class="field field--full">
+                <label class="label" for="Description">Description / internal notes</label>
+                <textarea class="input" id="Description" name="Description" rows="3" maxlength="@PtcEvent.DescriptionMaxLength">@Model.Description</textarea>
+            </div>
+        </div>
+        <div class="modal__foot">
+            <a class="btn btn--secondary" href="@(Model.IsEdit ? $"/ptc/events/{Model.Id}" : "/ptc")">Cancel</a>
+            <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(Model.IsEdit ? "Save" : "Create Draft")</button>
+        </div>
+    </form>
+</div>

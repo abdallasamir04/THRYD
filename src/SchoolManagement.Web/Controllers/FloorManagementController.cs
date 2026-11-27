@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Services.Accounts;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
 using SchoolManagement.Web.Entities;
@@ -12,6 +13,7 @@ namespace SchoolManagement.Web.Controllers;
 /// Access comes from the person's floor roles and configured positions only, checked here and in the service.
 /// </summary>
 [Route("floor-management")]
+[StaffAccess(StaffAccessRule.FloorTeam)]
 public class FloorManagementController(IFloorManagementService floors) : AppController
 {
     // ================================================================== floors

@@ -1,0 +1,26 @@
+@model LoginModel
+@{
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Sign in";
+}
+<section class="pp-card">
+    <h1 class="pp-title">Sign in to THRYD</h1>
+    <p class="pp-muted">Use the login e-mail and password the school gave you.</p>
+    @if (ViewData["SignInOff"] is true)
+    {
+        <p class="pp-error" role="status">Sign-in is turned off for now: THRYD opens without signing in. <a href="/">Open THRYD</a></p>
+    }
+    <div asp-validation-summary="ModelOnly" class="pp-error" role="alert"></div>
+    <form action="/account/login" method="post" autocomplete="on">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+        <label class="pp-label" for="Email">E-mail</label>
+        <input class="pp-input" id="Email" name="Email" type="email" autocomplete="username" value="@Model.Email" required autofocus />
+        <label class="pp-label" for="Password">Password</label>
+        <input class="pp-input" id="Password" name="Password" type="password" autocomplete="current-password" required />
+        <label class="pp-option" style="margin-top: 14px"><input type="checkbox" name="RememberMe" value="true" checked="@Model.RememberMe" /><span class="pp-option__body">Remember me on this device</span></label>
+        <input type="hidden" name="RememberMe" value="false" />
+        <button class="pp-btn" type="submit">Sign in</button>
+    </form>
+    <p class="pp-small" style="margin-top: 14px"><a href="/account/forgot">Forgot your password?</a></p>
+</section>

@@ -1,0 +1,143 @@
+@model PtcCoverageForm
+@*
+    One lesson in conflict (Super Admin only): the original lesson, why the teacher is unavailable, and assigning, replacing
+    or removing its substitute. Only current staff free for the whole lesson are offered; the server checks again on save.
+    Nothing is chosen automatically.
+*@
+@{
+    var e = Model.Event;
+    var l = Model.Lesson;
+    var cur = Model.Current;
+    ViewData["Title"] = $"{l.TeacherName} · {l.Subject} · Class coverage";
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = $"/ptc/events/{e.Id}/coverage";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var open = !e.IsClosed;
+    var here = Context.Request.Path + Context.Request.QueryString;
+    var status = Model.Rows.Any(x => x.Status == PtcCoverageStatus.Uncovered) ? PtcCoverageStatus.Uncovered
+        : Model.Rows.Any(x => x.Status == PtcCoverageStatus.Invalid) ? PtcCoverageStatus.Invalid : PtcCoverageStatus.Covered;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/events/@e.Id">@e.Title</a></li><li><a href="/ptc/events/@e.Id/coverage">Class coverage</a></li><li>@l.TeacherName</li></ol>
+        <h1 class="page-title">@l.Subject with @l.LessonClassName <span class="badge @PtcCoverageLabels.Badge(status)">@PtcCoverageLabels.Label(status)</span></h1>
+        <p class="page-sub">@l.TeacherName · @l.Date.ToString("dddd d MMMM yyyy", c) · @ScheduleRules.Times(l.LessonStart, l.LessonEnd)</p>
+    </div>
+    <div class="page-head__actions ptc-actions"><a class="btn btn--ghost" href="/ptc/events/@e.Id/coverage">@Ui.Icon("arrow-left")Class coverage</a></div>
+</div>
+
+<partial name="_EventNav" model='(e, "coverage")' />
+
+<div class="ptc-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr)">
+    <section class="card" aria-labelledby="cl-lesson">
+        <div class="card__head"><h2 class="card__title" id="cl-lesson">@Ui.Icon("calendar")Original lesson</h2></div>
+        <div class="card__body">
+            <dl class="dl">
+                <dt>Original teacher</dt><dd>@l.TeacherName</dd>
+                <dt>Class</dt><dd>@l.LessonClassName</dd>
+                <dt>Subject</dt><dd>@l.Subject</dd>
+                <dt>Department</dt><dd>@l.Department</dd>
+                <dt>Date</dt><dd>@l.Date.ToString("ddd d MMM yyyy", c)</dd>
+                <dt>Time</dt><dd>@ScheduleRules.Times(l.LessonStart, l.LessonEnd)@(l.Period is { } p ? $" (period {p})" : "")</dd>
+                <dt>PTC event</dt><dd>@e.Title</dd>
+                <dt>PTC Rounds</dt><dd>@string.Join("; ", Model.Rows.Select(x => $"{x.PtcClassName} Round {x.RoundNumber}, {ScheduleRules.Times(x.RoundStart, x.RoundEnd)}"))</dd>
+            </dl>
+            <h3 class="ptc-issues__area">Why the teacher is unavailable</h3>
+            <ul class="ptc-issues">@foreach (var x in Model.Rows)
+            {
+                <li class="ptc-issue @(x.Blocks ? "is-blocking" : "is-warning")">@Ui.Icon(PtcCoverageLabels.Icon(x.Status), "icon--sm")<span>@x.Explanation</span></li>
+            }</ul>
+            <p class="hint">The timetable lesson itself is never changed: a substitute covers it on this date only.</p>
+        </div>
+    </section>
+
+    <section class="card" aria-labelledby="cl-sub">
+        <div class="card__head"><h2 class="card__title" id="cl-sub">@Ui.Icon("user")@(cur is null ? "Assign substitute" : "Substitute")</h2></div>
+        <div class="card__body">
+            @if (cur is not null)
+            {
+                <dl class="dl">
+                    <dt>Substitute</dt><dd><strong>@cur.SubstituteName</strong> <span class="badge @PtcCoverageLabels.Badge(status)">@PtcCoverageLabels.Label(status)</span></dd>
+                    <dt>Cover</dt><dd>@ScheduleRules.Times(cur.Start, cur.End)</dd>
+                    <dt>Assigned</dt><dd>@Ui.DateTime(cur.AssignedAt)@(cur.AssignedBy is null ? "" : " · " + cur.AssignedBy)</dd>
+                    <dt>Reason</dt><dd>@(cur.Reason ?? "—")</dd>
+                </dl>
+                @if (status == PtcCoverageStatus.Invalid) { <p class="notice notice--error">@Ui.Icon("x-circle", "icon--sm")<span class="notice__body"><strong>This substitute no longer counts</strong>@Model.Rows.First(x => x.Status == PtcCoverageStatus.Invalid).InvalidReason Replace or remove the assignment.</span></p> }
+            }
+            @if (!open)
+            {
+                <p class="ptc-muted">This event is closed: substitutes can no longer change.</p>
+            }
+            else if (Model.Eligible.Count == 0)
+            {
+                <p class="notice notice--warning">@Ui.Icon("alert-triangle", "icon--sm")<span class="notice__body"><strong>No staff member is free for the whole lesson</strong>Everyone else has a lesson, PTC interview, duty, cover or period at that time (see below). Change the Rounds, or free a staff member, then come back.</span></p>
+            }
+            else
+            {
+                <form action="@(cur is null ? $"/ptc/events/{e.Id}/coverage/assign" : $"/ptc/coverage/{cur.Id}/replace")" method="post"
+                      data-confirm="@(cur is null ? "The substitute covers the lesson on this date only." : $"{cur.SubstituteName} is replaced; the previous assignment is kept in the history.")"
+                      data-confirm-title="@(cur is null ? "Assign substitute?" : "Replace substitute?")" data-confirm-button="@(cur is null ? "Assign" : "Replace")" data-confirm-tone="info">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="eventId" value="@e.Id" /><input type="hidden" name="scheduleId" value="@l.ScheduleId" /><input type="hidden" name="lessonId" value="@l.LessonId" />
+                    <div class="field"><label class="label" for="substituteId">@(cur is null ? "Substitute teacher" : "New substitute")</label>
+                        <select class="select" id="substituteId" name="substituteId" required>
+                            <option value="">Choose a staff member…</option>
+                            @foreach (var s in Model.Eligible) { <option value="@s.Id">@s.Name@(s.Department is null ? "" : " · " + s.Department)@(s.SameDepartment ? " (same department)" : "")</option> }
+                        </select>
+                        <p class="hint">@Ui.Plural(Model.Eligible.Count, "staff member is", "staff members are") free for the whole lesson. Suggestions only: the choice is yours.</p></div>
+                    <div class="field"><label class="label" for="reason">Reason@(cur is null ? " (optional)" : "")</label>
+                        <input class="input" id="reason" name="reason" maxlength="@PtcSubstituteAssignment.ReasonMaxLength" required="@(cur is not null)" placeholder="@(cur is null ? "PTC cover" : "Why the substitute changes")" /></div>
+                    <div class="field"><label class="label" for="notes">Admin notes (optional)</label>
+                        <textarea class="input" id="notes" name="notes" rows="2" maxlength="@PtcSubstituteAssignment.NotesMaxLength">@cur?.Notes</textarea></div>
+                    <button class="btn btn--primary" type="submit">@Ui.Icon("check")@(cur is null ? "Assign substitute" : "Replace substitute")</button>
+                </form>
+            }
+            @if (open && cur is not null)
+            {
+                <hr />
+                <form action="/ptc/coverage/@cur.Id/notes" method="post">
+                    @Html.AntiForgeryToken()<input type="hidden" name="eventId" value="@e.Id" /><input type="hidden" name="back" value="@here" />
+                    <div class="field"><label class="label" for="only-notes">Change notes only</label>
+                        <textarea class="input" id="only-notes" name="notes" rows="2" maxlength="@PtcSubstituteAssignment.NotesMaxLength">@cur.Notes</textarea></div>
+                    <button class="btn btn--secondary" type="submit">Save notes</button>
+                </form>
+                <hr />
+                <form action="/ptc/coverage/@cur.Id/remove" method="post" data-confirm="The lesson becomes uncovered again: @(e.Status == PtcEventStatus.Published ? "this Published event will need attention" : "publishing is blocked") until another substitute is assigned. The assignment is kept in the history." data-confirm-title="Remove substitute?" data-confirm-button="Remove substitute">
+                    @Html.AntiForgeryToken()<input type="hidden" name="eventId" value="@e.Id" /><input type="hidden" name="back" value="@here" />
+                    <div class="field"><label class="label" for="remove-reason">Reason for removing</label>
+                        <input class="input" id="remove-reason" name="reason" required maxlength="@PtcSubstituteAssignment.ReasonMaxLength" /></div>
+                    <button class="btn btn--danger" type="submit">@Ui.Icon("x-circle")Remove substitute</button>
+                </form>
+            }
+        </div>
+    </section>
+</div>
+
+@if (Model.Unavailable.Count > 0)
+{
+    <details class="card" style="margin-top: 16px">
+        <summary class="card__head"><span class="card__title">@Ui.Icon("users")Not available for this lesson (@Model.Unavailable.Count)</span></summary>
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Staff member</th><th scope="col">Why</th></tr></thead>
+            <tbody>@foreach (var u in Model.Unavailable) { <tr><td data-label="Staff member">@u.Name</td><td data-label="Why">@u.Reason</td></tr> }</tbody>
+        </table></div>
+    </details>
+}
+
+<section class="card table-card" aria-labelledby="cl-history" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="cl-history">@Ui.Icon("clock")History of this lesson's cover</h2></div>
+    @if (Model.History.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No change recorded yet.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">When</th><th scope="col">Change</th><th scope="col">Previous</th><th scope="col">New</th><th scope="col">Reason · notes</th><th scope="col">By</th></tr></thead>
+            <tbody>@foreach (var h in Model.History)
+            {
+                <tr><td data-label="When">@Ui.DateTime(h.At)</td><td data-label="Change">@PtcCoverageLabels.Kind(h.Kind)</td><td data-label="Previous">@(h.OldSubstitute ?? "—")</td>
+                    <td data-label="New">@(h.NewSubstitute ?? "—")</td><td data-label="Reason · notes">@(h.Reason ?? "—")@(h.Notes is null ? "" : " · " + h.Notes)</td><td data-label="By">@(h.By ?? "—")</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>

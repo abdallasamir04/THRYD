@@ -1,0 +1,19 @@
+@model PtcPortalChildrenModel
+@{ ViewData["Title"] = Model.Event.Title; }
+<partial name="_EventHead" model="Model.Event" />
+<partial name="_Steps" model="1" />
+<section class="pp-card">
+    <h2 class="pp-h2">Choose your child</h2>
+    <p class="pp-muted">Your number is registered for more than one child taking part. Each child is booked separately.</p>
+    <ul class="pp-list">
+        @foreach (var child in Model.Children)
+        {
+            <li>
+                <a class="pp-choice" href="/ptc-booking/@Model.Event.Token/book?c=@Uri.EscapeDataString(child.Token)">
+                    <span><strong>@child.FirstName</strong><br /><span class="pp-muted">@child.ClassName</span></span>
+                    @if (child.AlreadyBooked) { <span class="pp-badge pp-badge--ok">Booked</span> } else { @Ui.Icon("arrow-right") }
+                </a>
+            </li>
+        }
+    </ul>
+</section>

@@ -1,0 +1,34 @@
+@inject ISettingsService Settings
+@{
+    var profile = await Settings.GetProfileAsync();
+    var title = ViewData["Title"] as string ?? "Parent-Teacher Conference";
+}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>@title · @profile.SchoolName</title>
+    <link rel="preload" href="~/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="~/css/app.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ptc-portal.css" asp-append-version="true" />
+    <link rel="icon" type="image/png" href="~/img/logo-mark.png" asp-append-version="true" />
+</head>
+<body class="pp-body">
+    <partial name="_Icons" />
+    <header class="pp-header">
+        <img class="pp-logo" src="~/img/logo-mark.png" alt="" width="36" height="36" />
+        <div>
+            <p class="pp-school">@profile.SchoolName</p>
+            <p class="pp-product">@(ViewData["PortalProduct"] as string ?? "Parent-Teacher Conference booking")</p>
+        </div>
+    </header>
+    <main class="pp-main" id="content">
+        @RenderBody()
+    </main>
+    <footer class="pp-footer">@(ViewData["PortalFooter"] as string ?? "Your details are only used to book your child's Parent-Teacher Conference.")</footer>
+    <script src="~/js/ptc-portal.js" asp-append-version="true"></script>
+</body>
+</html>

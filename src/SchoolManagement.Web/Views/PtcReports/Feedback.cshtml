@@ -1,0 +1,75 @@
+@model PtcFeedbackListModel
+@*
+    Parent feedback and concerns (Super Admin only). Parent phone numbers are never shown; search by safe reference or event.
+*@
+@{
+    ViewData["Title"] = "PTC feedback";
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = "/ptc";
+    var l = Model.List;
+    var s = l.Summary;
+    var f = Model.Filter;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li>Feedback</li></ol>
+        <h1 class="page-title">Parent feedback &amp; concerns</h1>
+        <p class="page-sub">What parents sent after their PTC, exactly as submitted. Review, assign and resolve concerns here; every change is kept in each record's history.</p>
+    </div>
+</div>
+<partial name="~/Views/Ptc/_Nav.cshtml" model='"feedback"' />
+
+<ul class="kpis" aria-label="Feedback totals">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("inbox")</span><p class="kpi__label">Submissions</p><p class="kpi__value">@s.Submissions</p><p class="kpi__meta">@s.Events events with feedback</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("star")</span><p class="kpi__label">Average overall</p><p class="kpi__value">@(s.AverageOverall is { } a ? a.ToString("0.0", c) + " / 4" : "—")</p><p class="kpi__meta">@s.RatedOverall rated · @s.Positive positive · @s.Negative negative</p></div></li>
+    <li><div class="kpi @(s.Unresolved > 0 ? "kpi--orange" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon("alert-triangle")</span><p class="kpi__label">Concerns</p><p class="kpi__value">@s.Concerns</p><p class="kpi__meta">@s.Unresolved unresolved · @s.Resolved resolved</p></div></li>
+    <li><div class="kpi @(s.PendingReview > 0 ? "kpi--warn" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon("list-checks")</span><p class="kpi__label">Pending review</p><p class="kpi__value">@s.PendingReview</p><p class="kpi__meta">Not yet marked reviewed</p></div></li>
+</ul>
+
+<form class="card ptc-bulk" method="get" action="/ptc/feedback" style="margin-bottom: 16px">
+    <div class="field"><label class="label" for="q">Reference or event</label><input class="input" id="q" name="Q" value="@f.Q" placeholder="FB-… / PTC-… / title" /></div>
+    <div class="field"><label class="label" for="ev">PTC event</label><select class="select" id="ev" name="EventId"><option value="">All</option>@foreach (var (id, t) in l.Events) { <option value="@id" selected="@(f.EventId == id)">@t</option> }</select></div>
+    <div class="field"><label class="label" for="dt">Event date</label><input class="input" type="date" id="dt" name="Date" value="@f.Date?.ToString("yyyy-MM-dd", c)" /></div>
+    <div class="field"><label class="label" for="cl">Class</label><select class="select" id="cl" name="ClassId"><option value="">All</option>@foreach (var (id, n) in l.Classes) { <option value="@id" selected="@(f.ClassId == id)">@n</option> }</select></div>
+    <div class="field"><label class="label" for="dp">Department</label><select class="select" id="dp" name="DepartmentId"><option value="">All</option>@foreach (var (id, n) in l.Departments) { <option value="@id" selected="@(f.DepartmentId == id)">@n</option> }</select></div>
+    <div class="field"><label class="label" for="te">Teacher</label><select class="select" id="te" name="TeacherId"><option value="">All</option>@foreach (var (id, n) in l.Teachers) { <option value="@id" selected="@(f.TeacherId == id)">@n</option> }</select></div>
+    <div class="field"><label class="label" for="rt">Overall rating</label><select class="select" id="rt" name="Rating"><option value="">All</option>@foreach (var r in Enum.GetValues<PtcRating>().Reverse()) { <option value="@r" selected="@(f.Rating == r)">@r</option> }</select></div>
+    <div class="field"><label class="label" for="cs">Concern status</label><select class="select" id="cs" name="ConcernStatus"><option value="">All</option>@foreach (var x in Enum.GetValues<PtcConcernStatus>()) { <option value="@x" selected="@(f.ConcernStatus == x)">@PtcFeedbackRules.Label(x)</option> }</select></div>
+    <div class="field"><label class="label" for="rv">Review</label><select class="select" id="rv" name="Review"><option value="">All</option>@foreach (var x in Enum.GetValues<PtcFeedbackReview>()) { <option value="@x" selected="@(f.Review == x)">@x</option> }</select></div>
+    <div class="field"><label class="label" for="sf">Submitted from</label><input class="input" type="date" id="sf" name="SubmittedFrom" value="@f.SubmittedFrom?.ToString("yyyy-MM-dd", c)" /></div>
+    <div class="field"><label class="label" for="st">Submitted to</label><input class="input" type="date" id="st" name="SubmittedTo" value="@f.SubmittedTo?.ToString("yyyy-MM-dd", c)" /></div>
+    <button class="btn btn--secondary" type="submit">@Ui.Icon("filter", "icon--sm")Filter</button>
+    <a class="btn btn--ghost" href="/ptc/feedback">Clear</a>
+</form>
+
+<section class="card table-card" aria-labelledby="fb-table">
+    <div class="card__head"><h2 class="card__title" id="fb-table">@Ui.Icon("inbox")Feedback (@l.Rows.Count)</h2></div>
+    @if (l.Rows.Count == 0)
+    {
+        <div class="empty"><span class="empty__icon">@Ui.Icon("inbox")</span><p class="empty__title">No feedback yet</p>
+            <p class="empty__text">Parents can give feedback once their child's PTC is over, from the event's feedback link (Event → Feedback). Nothing is shown here until real feedback arrives.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Reference</th><th scope="col">PTC event</th><th scope="col">Event date</th><th scope="col">Class</th><th scope="col">Submitted</th><th scope="col">Overall</th>
+                <th scope="col">Communication</th><th scope="col">Organization</th><th scope="col">Helpful</th><th scope="col">Concern</th><th scope="col">Concern status</th><th scope="col">Review</th>
+                <th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+            <tbody>@foreach (var r in l.Rows)
+            {
+                <tr>
+                    <td data-label="Reference"><code>@r.Reference</code></td><td data-label="PTC event">@r.EventTitle</td><td data-label="Event date">@r.Date.ToString("d MMM yyyy", c)</td>
+                    <td data-label="Class">@r.ClassName</td><td data-label="Submitted">@Ui.DateTime(r.SubmittedAt)</td>
+                    <td data-label="Overall">@(r.Overall?.ToString() ?? "—")</td><td data-label="Communication">@(r.Communication?.ToString() ?? "—")</td>
+                    <td data-label="Organization">@(r.Organization?.ToString() ?? "—")</td><td data-label="Helpful">@(r.Helpful?.ToString() ?? "—")</td>
+                    <td data-label="Concern">@(r.Category is { } cat && r.ConcernStatus is not null ? PtcFeedbackRules.Label(cat) : "—")</td>
+                    <td data-label="Concern status">@if (r.ConcernStatus is { } cs) { <span class="badge @PtcFeedbackRules.Badge(cs)">@PtcFeedbackRules.Label(cs)</span> } else { <span class="ptc-muted">—</span> }</td>
+                    <td data-label="Review"><span class="badge @(r.Review == PtcFeedbackReview.Reviewed ? "badge--success" : "badge--warning")">@r.Review</span></td>
+                    <td data-label="Actions"><a class="btn btn--secondary btn--sm" href="/ptc/feedback/@r.Id">Open</a></td>
+                </tr>
+            }</tbody>
+        </table></div>
+    }
+</section>

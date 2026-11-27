@@ -1,0 +1,31 @@
+@inject ISettingsService Settings
+@{
+    var profile = await Settings.GetProfileAsync();
+    var title = ViewData["Title"] as string ?? "Sign in";
+    var flash = TempData[SchoolManagement.Web.Controllers.AppController.ToastKey] as string;
+}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>@title · THRYD · @profile.SchoolName</title>
+    <link rel="preload" href="~/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="~/css/app.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ptc-portal.css" asp-append-version="true" />
+    <link rel="icon" type="image/png" href="~/img/logo-mark.png" asp-append-version="true" />
+</head>
+<body class="pp-body">
+    <partial name="_Icons" />
+    <header class="pp-header">
+        <img class="pp-logo" src="~/img/logo-mark.png" alt="" width="36" height="36" />
+        <div><p class="pp-school">THRYD</p><p class="pp-product">@profile.SchoolName</p></div>
+    </header>
+    <main class="pp-main" id="content">
+        @if (flash is { Length: > 0 }) { <p class="pp-note" role="status">@Ui.Icon("info", "icon--sm")<span>@(flash.Contains('|') ? flash[(flash.IndexOf('|') + 1)..] : flash)</span></p> }
+        @RenderBody()
+    </main>
+    <footer class="pp-footer">THRYD · staff sign-in</footer>
+</body>
+</html>

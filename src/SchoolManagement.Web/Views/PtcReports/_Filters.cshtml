@@ -1,0 +1,29 @@
+@model PtcReportData
+@{
+    var f = Model.Filter;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var action = ViewData["FilterAction"] as string ?? "/ptc/reports";
+}
+<form class="card ptc-bulk" method="get" action="@action" style="margin-bottom: 16px" aria-label="Report filters">
+    <div class="field"><label class="label" for="f-year">Academic year</label>
+        <select class="select" id="f-year" name="YearId"><option value="">All years</option>@foreach (var (id, name) in Model.Years) { <option value="@id" selected="@(f.YearId == id)">@name</option> }</select></div>
+    <div class="field"><label class="label" for="f-event">PTC event</label>
+        <select class="select" id="f-event" name="EventId"><option value="">All events</option>@foreach (var (id, title) in Model.EventOptions) { <option value="@id" selected="@(f.EventId == id)">@title</option> }</select></div>
+    <div class="field"><label class="label" for="f-from">From</label><input class="input" type="date" id="f-from" name="From" value="@f.From?.ToString("yyyy-MM-dd", c)" /></div>
+    <div class="field"><label class="label" for="f-to">To</label><input class="input" type="date" id="f-to" name="To" value="@f.To?.ToString("yyyy-MM-dd", c)" /></div>
+    <div class="field"><label class="label" for="f-class">Class</label>
+        <select class="select" id="f-class" name="ClassId"><option value="">All classes</option>@foreach (var (id, name) in Model.ClassOptions) { <option value="@id" selected="@(f.ClassId == id)">@name</option> }</select></div>
+    <div class="field"><label class="label" for="f-dept">Department</label>
+        <select class="select" id="f-dept" name="DepartmentId"><option value="">All departments</option>@foreach (var (id, name) in Model.DepartmentOptions) { <option value="@id" selected="@(f.DepartmentId == id)">@name</option> }</select></div>
+    <div class="field"><label class="label" for="f-teacher">Teacher</label>
+        <select class="select" id="f-teacher" name="TeacherId"><option value="">All teachers</option>@foreach (var (id, name) in Model.TeacherOptions) { <option value="@id" selected="@(f.TeacherId == id)">@name</option> }</select></div>
+    <div class="field"><label class="label" for="f-state">Interview status</label>
+        <select class="select" id="f-state" name="State"><option value="">All</option>@foreach (var s in Enum.GetValues<PtcLiveState>()) { <option value="@s" selected="@(f.State == s)">@PtcLiveRules.Label(s)</option> }</select></div>
+    <div class="field"><label class="label" for="f-feedback">Feedback status</label>
+        <select class="select" id="f-feedback" name="Feedback"><option value="">All</option>
+            @foreach (var (v, label) in new[] { (PtcReportFeedback.Submitted, "Feedback submitted"), (PtcReportFeedback.NotSubmitted, "Eligible, no feedback"), (PtcReportFeedback.WithConcern, "With a concern"), (PtcReportFeedback.OpenConcern, "Open concern"), (PtcReportFeedback.ResolvedConcern, "Resolved concern") })
+            { <option value="@v" selected="@(f.Feedback == v)">@label</option> }
+        </select></div>
+    <button class="btn btn--secondary" type="submit">@Ui.Icon("filter", "icon--sm")Apply</button>
+    <a class="btn btn--ghost" href="@action">Clear</a>
+</form>

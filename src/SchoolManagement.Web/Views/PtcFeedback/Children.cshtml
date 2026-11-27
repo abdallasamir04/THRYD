@@ -1,0 +1,25 @@
+@model PtcFeedbackChildrenModel
+@{ ViewData["Title"] = "Feedback · " + Model.Event.Title; }
+<partial name="_EventHead" model="Model.Event" />
+<section class="pp-card">
+    <h2 class="pp-h2">Choose your child</h2>
+    <ul class="pp-list pp-list--plain">
+        @foreach (var ch in Model.Children)
+        {
+            <li class="pp-child">
+                <span><strong>@ch.FirstName</strong> <span class="pp-muted">· @ch.ClassName</span></span>
+                @if (ch.Submitted) { <span class="pp-badge pp-badge--ok">Feedback received</span> }
+                else if (ch.FeedbackToken is { } t) { <a class="pp-btn" href="/ptc-feedback/f/@Uri.EscapeDataString(t)">Give feedback</a> }
+                else
+                {
+                    <span class="pp-muted">@(ch.Availability switch
+                    {
+                        PtcFeedbackAvailability.NotYet => "Feedback opens after the conference.",
+                        PtcFeedbackAvailability.Closed => "The feedback period has ended.",
+                        _ => "No booking for this conference.",
+                    })</span>
+                }
+            </li>
+        }
+    </ul>
+</section>

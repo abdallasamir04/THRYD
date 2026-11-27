@@ -1,3 +1,4 @@
+using SchoolManagement.Web.Services.Accounts;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using SchoolManagement.Web.Common;
@@ -15,6 +16,7 @@ namespace SchoolManagement.Web.Controllers;
 /// current person cannot do.
 /// </summary>
 [Route("floor-audit")]
+[StaffAccess(StaffAccessRule.FloorTeam)]
 public class FloorAuditController(
     IFloorAuditService audit, IFloorConfigService config, IStudentMovementService movements, IFloorAuditAccessService access,
     IExcelExportService excel, ISettingsService settings) : AppController

@@ -1232,3 +1232,12 @@ tr.student-hl .avatar { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08); }
     .table th.col-lang { white-space: normal; }   /* "Second Language" on two lines rather than a sideways scroll */
 }
 .profile-marks { display: inline-flex; margin-inline-start: 8px; vertical-align: middle; }
+
+/* Signed-in account menu (topbar). */
+.account-menu { position: relative; }
+.account-menu > summary { list-style: none; cursor: pointer; }
+.account-menu > summary::-webkit-details-marker { display: none; }
+.account-menu__panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; min-width: 200px; display: grid; gap: 2px; padding: 6px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-surface-raised); box-shadow: var(--shadow-card); }
+.account-menu__panel a, .account-menu__panel button { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 8px; color: var(--color-text); text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer; text-align: left; width: 100%; }
+.account-menu__panel a:hover, .account-menu__panel button:hover { background: var(--color-surface-soft); }
+.account-menu__panel form { margin: 0; }

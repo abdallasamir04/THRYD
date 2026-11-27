@@ -1,0 +1,15 @@
+@model PersonDashboardModel
+@{
+    ViewData["Title"] = "My dashboard";
+    ViewData["Nav"] = "Me";
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><span aria-current="page">My dashboard</span></li></ol>
+        <h1 class="page-title">@Model.Person.FullName</h1>
+        <p class="page-sub">Your own profile, tasks, duties, schedule, responsibilities and PTC in THRYD.</p>
+    </div>
+    <div class="page-head__actions"><a class="btn btn--secondary" href="/account/password">@Ui.Icon("lock")Change password</a></div>
+</div>
+<partial name="_PersonSections" model="Model" />

@@ -1,0 +1,110 @@
+@model PersonDashboardModel
+@*
+    A person's profile, tasks, duties, schedule, responsibilities and PTC (their own dashboard, or the Super Admin's view of
+    them). Only sections with data for the person are shown, plus a line saying what is not recorded.
+*@
+@{
+    var d = Model.Directory;
+    var p = Model.Person;
+    var id = p.StaffId ?? 0;
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var tasks = d.Tasks.Where(t => t.StaffId == id).ToList();
+    var duties = d.Duties.Where(x => x.StaffId == id).OrderBy(x => x.Date).ThenBy(x => x.Start).ToList();
+    var academic = d.Academic.Where(x => x.StaffId == id).ToList();
+    var ptc = d.Ptc.Where(x => x.StaffId == id).ToList();
+    var resp = d.Responsibilities.Where(x => x.StaffId == id && x.Type is not ("Task" or "Task (reviewer)" or "Duty" or "PTC" or "Teaching")).ToList();
+    string T(TimeOnly? a, TimeOnly? b) => a is { } x && b is { } y ? ScheduleRules.Times(x, y) : "";
+}
+<div class="ptc-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr)">
+    <section class="card" aria-labelledby="me-profile">
+        <div class="card__head"><h2 class="card__title" id="me-profile">@Ui.Icon("user")Profile</h2></div>
+        <div class="card__body">
+            <dl class="dl">
+                <dt>Name</dt><dd>@p.FullName</dd>
+                <dt>Job title</dt><dd>@(p.JobTitle ?? "Not recorded")</dd>
+                <dt>Position</dt><dd>@(p.Position ?? "Not recorded")</dd>
+                <dt>Department</dt><dd>@(p.Department ?? "Not recorded")</dd>
+                <dt>Roles</dt><dd>@string.Join(", ", p.Roles)</dd>
+                <dt>Login e-mail</dt><dd>@(Model.Account?.Email ?? "No account")</dd>
+                <dt>Account</dt><dd>@(Model.Account is null ? "No account" : Model.Account.Disabled ? "Disabled" : "Active") @(Model.Account is null ? "" : "· " + string.Join(", ", Model.Account.Roles))</dd>
+                @if (Model.Modules.Count > 0) { <dt>Modules</dt><dd>@string.Join(", ", Model.Modules)</dd> }
+            </dl>
+        </div>
+    </section>
+
+    <section class="card" aria-labelledby="me-resp">
+        <div class="card__head"><h2 class="card__title" id="me-resp">@Ui.Icon("layers")My responsibilities</h2></div>
+        <div class="card__body">
+            @if (resp.Count == 0) { <p class="ptc-muted">No position, floor team, class team or other responsibility is recorded. Ask the Super Admin if this is wrong.</p> }
+            <ul class="ptc-subjects">
+                @foreach (var r in resp)
+                {
+                    <li><strong>@r.Type:</strong> @r.Name@(r.Floor is null ? "" : $" · {r.Floor}")@(r.Class is null ? "" : $" · {r.Class}")@(r.Section is null ? "" : $" · {r.Section}") <small>(@r.Module)</small></li>
+                }
+            </ul>
+        </div>
+    </section>
+</div>
+
+<section class="card table-card" aria-labelledby="me-tasks">
+    <div class="card__head"><h2 class="card__title" id="me-tasks">@Ui.Icon("list-checks")My tasks (@tasks.Count)</h2></div>
+    @if (tasks.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No tasks are assigned.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Task</th><th scope="col">Priority</th><th scope="col">Due</th><th scope="col">Status</th><th scope="col">Created by</th></tr></thead>
+            <tbody>@foreach (var t in tasks)
+            {
+                <tr><td data-label="Task"><strong>@t.Title</strong>@(t.AsReviewer ? " (you review it)" : "")<br /><span class="ptc-muted">@t.Description</span></td><td data-label="Priority">@t.Priority</td>
+                    <td data-label="Due">@(t.DueDate?.ToString("d MMM yyyy", c) ?? "—")</td><td data-label="Status">@t.Status</td><td data-label="Created by">@t.CreatedBy</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>
+
+<section class="card table-card" aria-labelledby="me-duties">
+    <div class="card__head"><h2 class="card__title" id="me-duties">@Ui.Icon("shield-check")My duties (@duties.Count)</h2></div>
+    @if (duties.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No duties are assigned.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Date</th><th scope="col">Time</th><th scope="col">Duty</th><th scope="col">Location</th><th scope="col">Status</th><th scope="col">Your part</th></tr></thead>
+            <tbody>@foreach (var x in duties)
+            {
+                <tr><td data-label="Date">@x.Date.ToString("ddd d MMM", c)</td><td data-label="Time">@T(x.Start, x.End)</td><td data-label="Duty">@x.DutyName <span class="ptc-muted">(@x.DutyType)</span></td>
+                    <td data-label="Location">@(x.Location ?? "—")</td><td data-label="Status">@x.Status</td><td data-label="Your part">@x.Responsibility</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>
+
+<section class="card table-card" aria-labelledby="me-schedule">
+    <div class="card__head"><h2 class="card__title" id="me-schedule">@Ui.Icon("calendar")My schedule</h2></div>
+    @if (academic.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No timetable lessons or academic assignments are recorded.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Assignment</th><th scope="col">Class</th><th scope="col">Subject</th><th scope="col">Day</th><th scope="col">Time</th><th scope="col">Weeks</th></tr></thead>
+            <tbody>@foreach (var a in academic)
+            {
+                <tr><td data-label="Assignment">@a.AssignmentType</td><td data-label="Class">@(a.Class ?? "—")</td><td data-label="Subject">@(a.Subject ?? "—")</td><td data-label="Day">@(a.Day ?? "—")</td>
+                    <td data-label="Time">@(a.Time ?? "—")</td><td data-label="Weeks">@(a.ActiveWeeks ?? "—")</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>
+
+@if (ptc.Count > 0)
+{
+    <section class="card table-card" aria-labelledby="me-ptc">
+        <div class="card__head"><h2 class="card__title" id="me-ptc">@Ui.Icon("clock")My PTC (@ptc.Count)</h2><a class="btn btn--primary btn--sm" href="/ptc/my">Open My PTC interviews</a></div>
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">Event</th><th scope="col">Date</th><th scope="col">Time</th><th scope="col">Class · subject</th><th scope="col">What</th><th scope="col">Status</th></tr></thead>
+            <tbody>@foreach (var x in ptc.Take(30))
+            {
+                <tr><td data-label="Event">@x.Event</td><td data-label="Date">@(x.Date?.ToString("ddd d MMM", c) ?? "—")</td><td data-label="Time">@T(x.PlannedStart, x.PlannedEnd)</td>
+                    <td data-label="Class · subject">@x.Class@(x.Subject is null ? "" : " · " + x.Subject)</td><td data-label="What">@x.Responsibility</td><td data-label="Status">@x.Status</td></tr>
+            }</tbody>
+        </table></div>
+    </section>
+}

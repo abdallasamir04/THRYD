@@ -1,0 +1,22 @@
+@model (PtcEventDetail Event, string Current)
+@* One event's workspace: overview, classes & dates, preview & publish. *@
+@{
+    var e = Model.Event;
+    var items = new (string Key, string Href, string Icon, string Label)[]
+    {
+        ("overview", $"/ptc/events/{e.Id}", "layers", "Overview"),
+        ("classes", $"/ptc/events/{e.Id}/classes", "door", "Classes & dates"),
+        ("bookings", $"/ptc/events/{e.Id}/bookings", "users", $"Bookings ({e.Bookings})"),
+        ("coverage", $"/ptc/events/{e.Id}/coverage", "shield-check", e.Coverage.Unresolved > 0 ? $"Class coverage ({e.Coverage.Unresolved} to cover)" : "Class coverage"),
+        ("scheduling", $"/ptc/events/{e.Id}/scheduling", "clock", "Scheduling"),
+        ("live", $"/ptc/events/{e.Id}/live", "activity", "Live operations"),
+        ("feedback", $"/ptc/events/{e.Id}/feedback", "inbox", "Feedback"),
+        ("preview", $"/ptc/events/{e.Id}/preview", "eye", e.IsDraft ? "Preview & publish" : "Preview"),
+    };
+}
+<nav class="org-nav" aria-label="Event sections">
+    @foreach (var (key, href, icon, label) in items)
+    {
+        <a class="org-nav__link" href="@href" aria-current="@(Model.Current == key ? "page" : null)">@Ui.Icon(icon, "icon--sm")<span>@label</span></a>
+    }
+</nav>

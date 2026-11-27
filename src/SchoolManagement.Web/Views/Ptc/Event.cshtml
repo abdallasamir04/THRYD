@@ -1,0 +1,140 @@
+@model PtcEventDetail
+@*
+    One PTC event: details and status actions, readiness, the participating classes by date (each with its daily time,
+    Rounds, actual subject teachers from the timetable and parent contact readiness) and the classes not assigned.
+*@
+@{
+    ViewData["Title"] = Model.Title;
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = "/ptc";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var e = Model;
+    IReadOnlyList<PtcIssue> shownIssues = e.Readiness.Issues.Take(12).ToList();
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><span aria-current="page">@e.Title</span></li></ol>
+        <h1 class="page-title">@e.Title <span class="badge @PtcLabels.Badge(e.Status)">@PtcLabels.Label(e.Status)</span></h1>
+        <p class="page-sub">@e.YearName · @e.StartDate.ToString("ddd d MMM", c) – @e.EndDate.ToString("ddd d MMM yyyy", c)</p>
+    </div>
+    <div class="page-head__actions ptc-actions">
+        @if (!e.IsClosed) { <a class="btn btn--secondary" href="/ptc/events/@e.Id/edit">@Ui.Icon("pencil")Edit details</a> }
+        @if (e.IsDraft)
+        {
+            <a class="btn btn--primary" href="/ptc/events/@e.Id/preview">@Ui.Icon("eye")Preview &amp; publish</a>
+        }
+        @if (e.Status == PtcEventStatus.Published)
+        {
+            <form action="/ptc/events/@e.Id/draft" method="post" data-confirm="The event leaves the School Calendar and can be changed again. This is only possible while it has no confirmed bookings." data-confirm-title="Return to Draft?" data-confirm-button="Return to Draft" data-confirm-tone="warning">
+                @Html.AntiForgeryToken()<button class="btn btn--secondary" type="submit">@Ui.Icon("pencil")Return to Draft</button>
+            </form>
+            <form action="/ptc/events/@e.Id/complete" method="post" data-confirm="Marks the conference as held. It stays on the School Calendar." data-confirm-title="Mark as Completed?" data-confirm-button="Mark Completed" data-confirm-tone="info">
+                @Html.AntiForgeryToken()<button class="btn btn--secondary" type="submit">@Ui.Icon("check")Mark Completed</button>
+            </form>
+        }
+        @if (e.Status is PtcEventStatus.Draft or PtcEventStatus.Published)
+        {
+            <form action="/ptc/events/@e.Id/cancel" method="post" data-confirm="“@e.Title” is cancelled and removed from the School Calendar. Its classes, dates and Rounds are kept as history; an event with confirmed bookings cannot be cancelled." data-confirm-title="Cancel this event?" data-confirm-button="Cancel event">
+                @Html.AntiForgeryToken()<button class="btn btn--danger" type="submit">@Ui.Icon("x-circle")Cancel event</button>
+            </form>
+        }
+        @if (e.Status == PtcEventStatus.Cancelled)
+        {
+            <form action="/ptc/events/@e.Id/reopen" method="post" data-confirm="The event becomes a Draft again with its classes, dates and Rounds." data-confirm-title="Reopen as Draft?" data-confirm-button="Reopen" data-confirm-tone="info">
+                @Html.AntiForgeryToken()<button class="btn btn--secondary" type="submit">@Ui.Icon("refresh")Reopen as Draft</button>
+            </form>
+        }
+    </div>
+</div>
+
+<partial name="_EventNav" model='(Model, "overview")' />
+
+@if (e.Status == PtcEventStatus.Published)
+{
+    <p class="notice notice--success">@Ui.Icon("check-circle", "icon--sm")<span class="notice__body"><strong>Published</strong>Shown on the School Calendar. Classes, dates and Rounds are locked to protect bookings; return to Draft to change them. Parent booking pages and WhatsApp links come in a later phase.</span></p>
+}
+else if (e.IsDraft)
+{
+    <p class="notice">@Ui.Icon("info", "icon--sm")<span class="notice__body"><strong>Draft</strong>Internal to administrators and never bookable. It can be incomplete; publishing checks that it is ready.</span></p>
+}
+
+<ul class="kpis" aria-label="Event totals">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("door")</span><p class="kpi__label">Classes</p><p class="kpi__value">@e.Assigned.Count</p><p class="kpi__meta">@e.Unassigned.Count active classes not assigned</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("calendar")</span><p class="kpi__label">PTC days</p><p class="kpi__value">@e.Days</p><p class="kpi__meta">Of @e.Dates.Count in the range</p></div></li>
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("clock")</span><p class="kpi__label">Rounds</p><p class="kpi__value">@e.Rounds</p><p class="kpi__meta">Capacity @Ui.Count(e.Capacity) parents</p></div></li>
+    <li><div class="kpi @(e.Readiness.Status == PtcReadiness.Ready ? "kpi--ok" : e.Readiness.Status == PtcReadiness.Blocked ? "kpi--warn" : "kpi--orange")"><span class="kpi__icon">@Ui.Icon(PtcLabels.Icon(e.Readiness.Status))</span><p class="kpi__label">Readiness</p><p class="kpi__value">@PtcLabels.Label(e.Readiness.Status)</p><p class="kpi__meta">@Ui.Plural(e.Readiness.Blockers.Count, "blocking issue", "blocking issues") · @Ui.Plural(e.Readiness.Warnings.Count, "warning", "warnings")</p></div></li>
+</ul>
+
+@if (ViewData["Share"] is PtcShareModel share) { <partial name="_Share" model="share" /> }
+
+<div class="ptc-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr)">
+    <section class="card" aria-labelledby="ptc-details">
+        <div class="card__head"><h2 class="card__title" id="ptc-details">@Ui.Icon("info")Details</h2></div>
+        <div class="card__body">
+            <dl class="dl">
+                <dt>Academic year</dt><dd>@e.YearName</dd>
+                <dt>Dates</dt><dd>@e.StartDate.ToString("ddd d MMM yyyy", c) – @e.EndDate.ToString("ddd d MMM yyyy", c)</dd>
+                <dt>Description</dt><dd>@(e.Description ?? "—")</dd>
+                <dt>Created</dt><dd>@Ui.DateTime(e.CreatedAt)@(e.CreatedBy is null ? "" : " · " + e.CreatedBy)</dd>
+                <dt>Last changed</dt><dd>@Ui.DateTime(e.UpdatedAt)@(e.UpdatedBy is null ? "" : " · " + e.UpdatedBy)</dd>
+            </dl>
+        </div>
+    </section>
+    <section class="card" aria-labelledby="ptc-ready">
+        <div class="card__head"><h2 class="card__title" id="ptc-ready">@Ui.Icon("list-checks")Readiness</h2><partial name="_Readiness" model="e.Readiness.Status" /></div>
+        <div class="card__body">
+            <partial name="_Issues" model="(shownIssues, e.IsDraft)" />
+            @if (e.Readiness.Issues.Count > 12) { <a href="/ptc/events/@e.Id/preview">All @e.Readiness.Issues.Count findings in the preview @Ui.Icon("arrow-right", "icon--sm")</a> }
+        </div>
+    </section>
+</div>
+
+<partial name="_CoverageCard" model="e" />
+
+<section class="card table-card" aria-labelledby="ptc-classes">
+    <div class="card__head">
+        <h2 class="card__title" id="ptc-classes">@Ui.Icon("door")Participating classes</h2>
+        @if (e.IsDraft) { <a class="btn btn--primary btn--sm" href="/ptc/events/@e.Id/classes">@Ui.Icon("pencil", "icon--sm")Assign classes to dates</a> }
+    </div>
+    @if (e.Assigned.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("door")</span>
+            <p class="empty__title">No classes assigned yet</p>
+            <p class="empty__text">Choose which classes take part and give each its PTC date within @e.StartDate.ToString("d MMM", c) – @e.EndDate.ToString("d MMM yyyy", c).</p>
+            @if (e.IsDraft) { <div class="empty__actions"><a class="btn btn--primary" href="/ptc/events/@e.Id/classes">Assign classes to dates</a></div> }
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack ptc-rows">
+                <thead><tr><th scope="col">Date</th><th scope="col">Class</th><th scope="col">Daily time</th><th scope="col">Rounds</th><th scope="col">Subjects &amp; teachers</th><th scope="col">Parent numbers</th><th scope="col">Readiness</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var r in e.Assigned.OrderBy(r => r.Schedule!.Date))
+                    {
+                        var s = r.Schedule!;
+                        <tr>
+                            <td data-label="Date">@s.Date.ToString("ddd d MMM", c)</td>
+                            <td data-label="Class"><strong>@r.ClassName</strong>@if (r.IsKg) { <span class="badge badge--neutral">KG</span> }</td>
+                            <td data-label="Daily time">@ScheduleRules.Times(s.Start, s.End)</td>
+                            <td data-label="Rounds">@if (s.Rounds.Count == 0) { <span class="badge badge--error">None</span> } else { @s.Rounds.Count <span class="ptc-muted">· @s.Capacity places</span> }</td>
+                            <td data-label="Subjects & teachers">@if (r.Subjects.Count == 0) { <span class="badge badge--error">No timetable assignments</span> } else { @Ui.Plural(r.Subjects.Count, "subject", "subjects") <span class="ptc-muted">· @Ui.Plural(r.Subjects.Select(x => x.TeacherId).Distinct().Count(), "teacher", "teachers")</span> }</td>
+                            <td data-label="Parent numbers">@r.Contacts.Usable / @r.Contacts.Students</td>
+                            <td data-label="Readiness"><partial name="_Readiness" model="r.Readiness.Status" /></td>
+                            <td data-label="Actions"><a class="btn btn--secondary btn--sm" href="/ptc/schedules/@s.Id">@(e.IsDraft ? "Sessions & Rounds" : "View")</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    @if (e.Unassigned.Count > 0)
+    {
+        <p class="hint" style="padding: 12px 16px">@Ui.Icon("info", "icon--sm")Not assigned (@e.Unassigned.Count): @string.Join(", ", e.Unassigned.Select(u => u.ClassName))</p>
+    }
+</section>
+
+@section Scripts { <script src="~/js/ptc.js" asp-append-version="true"></script> }

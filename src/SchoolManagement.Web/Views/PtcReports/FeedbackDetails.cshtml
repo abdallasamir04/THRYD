@@ -1,0 +1,130 @@
+@model PtcFeedbackDetails
+@*
+    One parent's feedback (Super Admin only). The parent's answers are shown as submitted and cannot be edited; only the
+    administrative status, assignment, resolution and internal notes change, and each change is kept in the history.
+*@
+@{
+    var r = Model.Row;
+    ViewData["Title"] = r.Reference + " · PTC feedback";
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = "/ptc/feedback";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var open = PtcFeedbackRules.Open(r.ConcernStatus);
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/feedback">Feedback</a></li><li>@r.Reference</li></ol>
+        <h1 class="page-title">Feedback <code>@r.Reference</code> <span class="badge @(r.Review == PtcFeedbackReview.Reviewed ? "badge--success" : "badge--warning")">@r.Review</span>
+            @if (r.ConcernStatus is { } cs) { <span class="badge @PtcFeedbackRules.Badge(cs)">Concern: @PtcFeedbackRules.Label(cs)</span> }</h1>
+        <p class="page-sub">@r.EventTitle · @r.ClassName · @r.Date.ToString("ddd d MMM yyyy", c) · booking <code>@r.BookingReference</code> · submitted @Ui.DateTime(r.SubmittedAt)</p>
+    </div>
+    <div class="page-head__actions ptc-actions">
+        @if (r.Review == PtcFeedbackReview.Pending)
+        {
+            <form action="/ptc/feedback/@r.Id/review" method="post">@Html.AntiForgeryToken()<input type="hidden" name="version" value="@Model.Version" />
+                <button class="btn btn--primary" type="submit">@Ui.Icon("check")Mark as reviewed</button></form>
+        }
+    </div>
+</div>
+
+<div class="ptc-grid" style="grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr)">
+    <section class="card" aria-labelledby="fd-answers">
+        <div class="card__head"><h2 class="card__title" id="fd-answers">@Ui.Icon("inbox")Submitted answers</h2><span class="badge badge--neutral">As sent by the parent</span></div>
+        <div class="card__body">
+            <dl class="dl">
+                <dt>Overall experience</dt><dd>@(r.Overall?.ToString() ?? "Not answered")</dd>
+                <dt>Teacher communication</dt><dd>@(r.Communication?.ToString() ?? "Not answered")</dd>
+                <dt>Organization &amp; scheduling</dt><dd>@(r.Organization?.ToString() ?? "Not answered")</dd>
+                <dt>Meeting helpful</dt><dd>@(r.Helpful?.ToString() ?? "Not answered")</dd>
+                <dt>Comments</dt><dd dir="auto" class="ptc-pre">@(Model.Comments ?? "—")</dd>
+                <dt>Concern</dt><dd dir="auto" class="ptc-pre">@(Model.Concern is null ? "No concern" : (r.Category is { } cat ? PtcFeedbackRules.Label(cat) + ": " : "") + Model.Concern)</dd>
+            </dl>
+            @if (Model.Teachers.Count > 0)
+            {
+                <h3 class="ptc-issues__area">About individual teachers</h3>
+                <div class="table-wrap"><table class="table table--stack">
+                    <thead><tr><th scope="col">Teacher</th><th scope="col">Communication</th><th scope="col">Helpful</th><th scope="col">Comment</th></tr></thead>
+                    <tbody>@foreach (var t in Model.Teachers)
+                    {
+                        <tr><td data-label="Teacher"><a href="/ptc/reports/teachers/@t.TeacherId">@t.Teacher</a><br /><span class="ptc-muted">@t.Subjects</span></td>
+                            <td data-label="Communication">@(t.Communication?.ToString() ?? "—")</td><td data-label="Helpful">@(t.Helpful?.ToString() ?? "—")</td>
+                            <td data-label="Comment" dir="auto" class="ptc-pre">@(t.Comment ?? "—")</td></tr>
+                    }</tbody>
+                </table></div>
+            }
+            <p class="hint">Reviewed: @(Model.ReviewedAt is { } ra ? Ui.DateTime(ra) + " · " + Model.ReviewedBy : "not yet").</p>
+        </div>
+    </section>
+
+    <div>
+        @if (r.ConcernStatus is { } status)
+        {
+            <section class="card" aria-labelledby="fd-concern" style="margin-bottom: 16px">
+                <div class="card__head"><h2 class="card__title" id="fd-concern">@Ui.Icon("alert-triangle")Concern</h2><span class="badge @PtcFeedbackRules.Badge(status)">@PtcFeedbackRules.Label(status)</span></div>
+                <div class="card__body">
+                    <dl class="dl">
+                        <dt>Assigned to</dt><dd>@(r.AssignedTo is null ? "Nobody" : $"{r.AssignedTo} · by {Model.AssignedBy} · {(Model.AssignedAt is { } aa ? Ui.DateTime(aa) : "")}")</dd>
+                        <dt>Resolution</dt><dd dir="auto" class="ptc-pre">@(Model.Resolution ?? "—")@(Model.ResolvedAt is { } rs ? $" ({Ui.DateTime(rs)} · {Model.ResolvedBy})" : "")</dd>
+                    </dl>
+                    @if (open)
+                    {
+                        <form action="/ptc/feedback/@r.Id/status" method="post" class="form-grid" style="margin-top: 8px">
+                            @Html.AntiForgeryToken()<input type="hidden" name="version" value="@Model.Version" />
+                            <div class="field"><label class="label" for="st">Status</label><select class="select" id="st" name="status">
+                                @foreach (var x in new[] { PtcConcernStatus.New, PtcConcernStatus.UnderReview, PtcConcernStatus.InProgress, PtcConcernStatus.Closed }) { <option value="@x" selected="@(status == x)">@PtcFeedbackRules.Label(x)</option> }
+                            </select></div>
+                            <div class="field"><label class="label" for="st-note">Note (required to close)</label><input class="input" id="st-note" name="note" maxlength="2000" /></div>
+                            <div class="field field--full"><button class="btn btn--secondary" type="submit">Change status</button></div>
+                        </form>
+                        <form action="/ptc/feedback/@r.Id/assign" method="post" class="form-grid" style="margin-top: 8px">
+                            @Html.AntiForgeryToken()<input type="hidden" name="version" value="@Model.Version" />
+                            <div class="field field--full"><label class="label" for="as">Assign to a staff member</label><select class="select" id="as" name="staffId" data-searchable>
+                                <option value="">— Nobody —</option>@foreach (var (id, n) in Model.Staff) { <option value="@id" selected="@(Model.AssignedStaffId == id)">@n</option> }
+                            </select><p class="hint">The assignment is recorded here only: concern details are not copied into the staff Tasks module, so they stay private to administrators.</p></div>
+                            <div class="field field--full"><button class="btn btn--secondary" type="submit">Save assignment</button></div>
+                        </form>
+                        <form action="/ptc/feedback/@r.Id/resolve" method="post" style="margin-top: 8px" data-confirm="The concern is marked Resolved with these details. It can be reopened later." data-confirm-title="Resolve concern?" data-confirm-button="Resolve" data-confirm-tone="info">
+                            @Html.AntiForgeryToken()<input type="hidden" name="version" value="@Model.Version" />
+                            <label class="label" for="res">Resolution details</label><textarea class="input" id="res" name="resolution" rows="3" maxlength="@PtcFeedback.ResolutionMaxLength" required dir="auto"></textarea>
+                            <button class="btn btn--primary" type="submit" style="margin-top: 8px">@Ui.Icon("check")Resolve concern</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <form action="/ptc/feedback/@r.Id/reopen" method="post" style="margin-top: 8px">
+                            @Html.AntiForgeryToken()<input type="hidden" name="version" value="@Model.Version" />
+                            <label class="label" for="ro">Reason for reopening</label><input class="input" id="ro" name="reason" required maxlength="2000" />
+                            <button class="btn btn--secondary" type="submit" style="margin-top: 8px">@Ui.Icon("refresh")Reopen concern</button>
+                        </form>
+                    }
+                </div>
+            </section>
+        }
+        <section class="card" aria-labelledby="fd-note">
+            <div class="card__head"><h2 class="card__title" id="fd-note">@Ui.Icon("lock")Internal note</h2><span class="badge badge--neutral">Never shown to parents</span></div>
+            <div class="card__body">
+                <form action="/ptc/feedback/@r.Id/note" method="post">@Html.AntiForgeryToken()
+                    <textarea class="input" name="note" rows="3" maxlength="@PtcFeedbackHistory.NoteMaxLength" required dir="auto" aria-label="Internal note"></textarea>
+                    <button class="btn btn--secondary" type="submit" style="margin-top: 8px">Add note</button></form>
+            </div>
+        </section>
+    </div>
+</div>
+
+<section class="card table-card" aria-labelledby="fd-history" style="margin-top: 16px">
+    <div class="card__head"><h2 class="card__title" id="fd-history">@Ui.Icon("clock")History</h2></div>
+    @if (Model.History.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 12px">No administrative change yet.</p> }
+    else
+    {
+        <div class="table-wrap"><table class="table table--stack">
+            <thead><tr><th scope="col">When</th><th scope="col">What</th><th scope="col">Before → after</th><th scope="col">Note</th><th scope="col">By</th></tr></thead>
+            <tbody>@foreach (var h in Model.History)
+            {
+                <tr><td data-label="When">@Ui.DateTime(h.At)</td><td data-label="What">@PtcFeedbackRules.Label(h.Kind)</td>
+                    <td data-label="Before → after">@(h.OldValue is null && h.NewValue is null ? "—" : $"{h.OldValue ?? "—"} → {h.NewValue ?? "—"}")</td>
+                    <td data-label="Note" dir="auto" class="ptc-pre">@(h.Note ?? "—")</td><td data-label="By">@(h.By ?? "—")</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>

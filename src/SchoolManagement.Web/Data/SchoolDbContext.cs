@@ -1,10 +1,17 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SchoolManagement.Web.Entities;
 
 namespace SchoolManagement.Web.Data;
 
-public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : DbContext(options)
+/// <summary>
+/// The application database, including ASP.NET Core Identity's sign-in tables (accounts, roles, claims, tokens): one
+/// database and one transaction for accounts and the people they belong to.
+/// </summary>
+public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) : IdentityDbContext<AppUser>(options)
 {
+    public DbSet<AccountAuditEvent> AccountAuditEvents => Set<AccountAuditEvent>();
+
     public DbSet<SchoolClass> Classes => Set<SchoolClass>();
     public DbSet<Student> Students => Set<Student>();
     public DbSet<StudentTransferHistory> StudentTransfers => Set<StudentTransferHistory>();
@@ -87,11 +94,15 @@ public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) 
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        base.OnModelCreating(b); // Identity tables (AspNetUsers, AspNetRoles…)
+        ConfigureAccounts(b);
         ConfigureActivities(b);
         ConfigureFloorAudit(b);
         ConfigureOrgStructure(b);
         ConfigureTeachingRoster(b);
         ConfigureFloorManagement(b);
+        ConfigurePtc(b);
+        ConfigurePtcFeedback(b);
 
         b.Entity<SchoolClass>(e =>
         {
@@ -1121,5 +1132,20 @@ public partial class SchoolDbContext(DbContextOptions<SchoolDbContext> options) 
         foreach (var entry in ChangeTracker.Entries<AppSetting>())
             if (entry.State is EntityState.Added or EntityState.Modified)
                 entry.Entity.UpdatedAt = now;
+
+        // PTC bookings keep BookedAt (not CreatedAt) as their creation time.
+        foreach (var entry in ChangeTracker.Entries<PtcParentBooking>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                if (entry.Entity.BookedAt == default) entry.Entity.BookedAt = now;
+                entry.Entity.UpdatedAt = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Property(x => x.BookedAt).IsModified = false;
+                entry.Entity.UpdatedAt = now;
+            }
+        }
     }
 }

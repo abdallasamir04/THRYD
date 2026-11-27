@@ -1,0 +1,130 @@
+@model PtcEventDetail
+@*
+    Preview of the whole configuration before publishing: details, classes by date with their daily time, Rounds and
+    capacities, actual subject teachers (or the missing timetable assignments), KG Homeroom / Co-Teacher context, parent
+    contact readiness, totals and the overall readiness with every blocking issue and warning. Publishing re-checks all of
+    it on the server; warnings must be acknowledged.
+*@
+@{
+    var e = Model;
+    ViewData["Title"] = "Preview · " + e.Title;
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = $"/ptc/events/{e.Id}";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var status = e.Readiness.Status;
+    var verdict = status switch
+    {
+        PtcReadiness.Ready => ("Ready to publish", "notice--success", "check-circle", "Everything required is configured and every student has a usable parent number."),
+        PtcReadiness.Incomplete => ("Incomplete configuration", "notice--warning", "alert-triangle", "Nothing required is missing, but there are warnings — for example parents who cannot book yet. You can publish after acknowledging them."),
+        PtcReadiness.Blocked => ("Blocked configuration", "notice--error", "x-circle", "Required configuration is missing or invalid. Fix the blocking issues below to publish."),
+        _ => ("Not yet configured", "notice--error", "info", "No class is assigned to a PTC date yet."),
+    };
+    var withContactsMissing = e.Assigned.Where(r => r.Contacts.WithoutUsable > 0).ToList();
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/events/@e.Id">@e.Title</a></li><li>Preview</li></ol>
+        <h1 class="page-title">Preview: @e.Title <span class="badge @PtcLabels.Badge(e.Status)">@PtcLabels.Label(e.Status)</span></h1>
+        <p class="page-sub">The complete configuration as parents' booking will use it. Nothing here is bookable until a later phase adds the parent booking pages.</p>
+    </div>
+    <div class="page-head__actions"><a class="btn btn--secondary" href="/ptc/events/@e.Id">@Ui.Icon("pencil")Back to editing</a></div>
+</div>
+
+<partial name="_EventNav" model='(e, "preview")' />
+
+<p class="notice @verdict.Item2">@Ui.Icon(verdict.Item3, "icon--sm")<span class="notice__body"><strong>@verdict.Item1</strong>@verdict.Item4</span></p>
+
+<div class="ptc-grid" style="grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr)">
+    <section class="card" aria-labelledby="pv-details">
+        <div class="card__head"><h2 class="card__title" id="pv-details">@Ui.Icon("info")Event</h2></div>
+        <div class="card__body">
+            <dl class="dl">
+                <dt>Title</dt><dd>@e.Title</dd>
+                <dt>Academic year</dt><dd>@e.YearName</dd>
+                <dt>Dates</dt><dd>@e.StartDate.ToString("ddd d MMM yyyy", c) – @e.EndDate.ToString("ddd d MMM yyyy", c)</dd>
+                <dt>Description</dt><dd>@(e.Description ?? "—")</dd>
+                <dt>Classes</dt><dd>@e.Assigned.Count on @Ui.Plural(e.Days, "day", "days") (@e.Unassigned.Count active classes not taking part)</dd>
+                <dt>Rounds</dt><dd>@e.Rounds</dd>
+                <dt>Booking capacity</dt><dd>@Ui.Count(e.Capacity) parent places</dd>
+                <dt>Parent numbers</dt><dd>@e.Assigned.Sum(r => r.Contacts.Usable) of @e.Assigned.Sum(r => r.Contacts.Students) students can be booked</dd>
+            </dl>
+        </div>
+    </section>
+
+    <section class="card" aria-labelledby="pv-ready">
+        <div class="card__head"><h2 class="card__title" id="pv-ready">@Ui.Icon("list-checks")Blocking issues &amp; warnings</h2><partial name="_Readiness" model="status" /></div>
+        @if (e.Coverage.BlockSummary is { } blocked)
+        {
+            <p class="notice notice--error" style="margin: 0 16px">@Ui.Icon("x-circle", "icon--sm")<span class="notice__body"><strong>@blocked</strong>
+                @string.Join("; ", e.Coverage.Conflicts.Where(x => x.Blocks).GroupBy(x => (x.TeacherId, x.LessonId, x.Date)).Take(5).Select(g => g.First())
+                    .Select(x => $"{x.TeacherName}: {x.LessonClassName} {x.Subject}, {x.Date.ToString("ddd d MMM", System.Globalization.CultureInfo.InvariantCulture)} {ScheduleRules.Times(x.LessonStart, x.LessonEnd)}"))@(e.Coverage.Unresolved > 5 ? "; …" : "").
+                <a href="/ptc/events/@e.Id/coverage?status=Uncovered">Open Class Coverage</a></span></p>
+        }
+        <div class="card__body">
+            <partial name="_Issues" model="(e.Readiness.Issues, e.IsDraft)" />
+            @if (e.IsDraft)
+            {
+                <form action="/ptc/events/@e.Id/publish" method="post" data-loading style="margin-top: 12px">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="All" class="validation-summary-errors"></div>
+                    @if (e.Readiness.CanPublish && e.Readiness.Warnings.Count > 0)
+                    {
+                        <label class="ptc-ack"><input type="checkbox" name="acknowledgeWarnings" value="true" required />
+                            <span>I have reviewed the @Ui.Plural(e.Readiness.Warnings.Count, "warning", "warnings") above. I understand that students without a usable parent number cannot be booked until one is recorded.</span></label>
+                    }
+                    <button class="btn btn--primary" type="submit" disabled="@(!e.Readiness.CanPublish)">@Ui.Icon("send")Publish event</button>
+                    @if (!e.Readiness.CanPublish) { <span class="ptc-muted">Publishing is blocked until the blocking issues are fixed.</span> }
+                </form>
+            }
+        </div>
+    </section>
+</div>
+
+<h2 class="ptc-section-title">Classes by date</h2>
+@if (e.Assigned.Count == 0)
+{
+    <section class="card"><div class="empty"><span class="empty__icon">@Ui.Icon("door")</span><p class="empty__title">No classes assigned</p><p class="empty__text"><a href="/ptc/events/@e.Id/classes">Assign classes to dates</a> first.</p></div></section>
+}
+@foreach (var day in e.Assigned.GroupBy(r => r.Schedule!.Date).OrderBy(g => g.Key))
+{
+    <section class="card table-card ptc-day" aria-label="@day.Key.ToString("dddd d MMMM", c)">
+        <div class="card__head"><h3 class="card__title">@Ui.Icon("calendar")@day.Key.ToString("dddd d MMMM yyyy", c)</h3><span class="ptc-muted">@Ui.Plural(day.Count(), "class", "classes") · @day.Sum(r => r.Schedule!.Capacity) parent places</span></div>
+        <div class="table-wrap">
+            <table class="table table--stack ptc-rows">
+                <thead><tr><th scope="col">Class</th><th scope="col">Daily time</th><th scope="col">Rounds (capacity)</th><th scope="col">Subjects &amp; actual teachers</th><th scope="col">Parent numbers</th><th scope="col">Readiness</th></tr></thead>
+                <tbody>
+                    @foreach (var r in day)
+                    {
+                        var s = r.Schedule!;
+                        <tr>
+                            <td data-label="Class"><a href="/ptc/schedules/@s.Id"><strong>@r.ClassName</strong></a>@if (r.IsKg) { <span class="badge badge--neutral">KG</span> }</td>
+                            <td data-label="Daily time">@ScheduleRules.Times(s.Start, s.End)</td>
+                            <td data-label="Rounds (capacity)">
+                                @if (s.Rounds.Count == 0) { <span class="badge badge--error">No Rounds</span> }
+                                <ul class="ptc-subjects">@foreach (var x in s.Rounds) { <li>Round @x.Number · @ScheduleRules.Times(x.Start, x.End) <small>(@x.Capacity parents, @x.MeetingMinutes + @x.TransitionMinutes min)</small></li> }</ul>
+                            </td>
+                            <td data-label="Subjects & actual teachers">
+                                @if (r.Subjects.Count == 0)
+                                {
+                                    <span class="badge badge--error">No timetable assignments found for this class.</span>
+                                }
+                                <ul class="ptc-subjects">@foreach (var x in r.Subjects) { <li>@x.Subject <small>· @x.TeacherName</small></li> }</ul>
+
+                            </td>
+                            <td data-label="Parent numbers">@r.Contacts.Usable / @r.Contacts.Students @if (r.Contacts.WithoutUsable > 0) { <br /><span class="badge badge--warning">@r.Contacts.WithoutUsable missing</span> }</td>
+                            <td data-label="Readiness"><partial name="_Readiness" model="r.Readiness.Status" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@if (withContactsMissing.Count > 0)
+{
+    <p class="notice notice--warning">@Ui.Icon("phone", "icon--sm")<span class="notice__body"><strong>Missing parent contact numbers</strong>
+        @withContactsMissing.Sum(r => r.Contacts.WithoutUsable) students in @Ui.Plural(withContactsMissing.Count, "class", "classes") have no usable parent number. <a href="/ptc/parent-contacts">See the list</a>.</span></p>
+}

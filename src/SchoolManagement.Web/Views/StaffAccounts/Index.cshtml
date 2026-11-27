@@ -1,0 +1,70 @@
+@model StaffAccountsListModel
+@*
+    Staff → Accounts (Super Admin only): every non-student person (staff records and unverified source names), their login
+    account, role and responsibilities, with filters. Account actions are on each person's page.
+*@
+@{
+    ViewData["Title"] = "Staff accounts";
+    ViewData["Nav"] = "StaffAccounts";
+    var d = Model.Directory;
+    var rows = Model.Rows.ToList();
+    var departments = d.People.Select(p => p.Department).Where(x => x is not null).Distinct().Order().ToList();
+    var categories = d.People.Select(p => p.Category).Distinct().Order().ToList();
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><span aria-current="page">Staff accounts</span></li></ol>
+        <h1 class="page-title">Staff accounts</h1>
+        <p class="page-sub">Every non-student person with their sign-in account, role and responsibilities. Students never get accounts.</p>
+    </div>
+</div>
+
+<ul class="kpis" aria-label="Accounts">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">People</p><p class="kpi__value">@d.People.Count(p => p.Verified)</p><p class="kpi__meta">@d.People.Count(p => !p.Verified) unverified names</p></div></li>
+    <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("check-circle")</span><p class="kpi__label">Active accounts</p><p class="kpi__value">@d.Accounts.Count(a => !a.Disabled)</p><p class="kpi__meta">@d.Accounts.Count(a => a.Disabled) disabled</p></div></li>
+    <li><div class="kpi kpi--orange"><span class="kpi__icon">@Ui.Icon("user-plus")</span><p class="kpi__label">Without account</p><p class="kpi__value">@d.People.Count(p => p.Verified && d.AccountOf(p.StaffId) is null)</p><p class="kpi__meta">@d.People.Count(p => p.Eligible && d.AccountOf(p.StaffId) is null) eligible</p></div></li>
+    <li><div class="kpi kpi--warn"><span class="kpi__icon">@Ui.Icon("alert-triangle")</span><p class="kpi__label">Admin review</p><p class="kpi__value">@d.Review.Select(r => r.PersonId).Distinct().Count()</p><p class="kpi__meta">@d.Review.Count items</p></div></li>
+</ul>
+
+<form class="card ptc-bulk" method="get" action="/staff/accounts" style="margin-bottom: 16px">
+    <div class="field"><label class="label" for="q">Name or e-mail</label><input class="input" id="q" name="q" value="@Model.Query" /></div>
+    <div class="field"><label class="label" for="status">Account</label><select class="select" id="status" name="status">
+        <option value="">All</option><option value="active" selected="@(Model.Status == "active")">Active</option><option value="disabled" selected="@(Model.Status == "disabled")">Disabled</option></select></div>
+    <div class="field"><label class="label" for="setup">Setup</label><select class="select" id="setup" name="setup">
+        <option value="">All</option><option value="account" selected="@(Model.Setup == "account")">Has account</option><option value="none" selected="@(Model.Setup == "none")">No account</option><option value="review" selected="@(Model.Setup == "review")">Needs review</option></select></div>
+    <div class="field"><label class="label" for="role">Role</label><select class="select" id="role" name="role">
+        <option value="">All</option>@foreach (var r in AppRoles.All.Append("None")) { <option value="@r" selected="@(Model.Role == r)">@r</option> }</select></div>
+    <div class="field"><label class="label" for="department">Department</label><select class="select" id="department" name="department">
+        <option value="">All</option>@foreach (var x in departments) { <option value="@x" selected="@(Model.Department == x)">@x</option> }</select></div>
+    <div class="field"><label class="label" for="category">Category</label><select class="select" id="category" name="category">
+        <option value="">All</option>@foreach (var x in categories) { <option value="@x" selected="@(Model.Category == x)">@x</option> }</select></div>
+    <button class="btn btn--secondary" type="submit">@Ui.Icon("filter", "icon--sm")Filter</button>
+</form>
+
+<section class="card table-card">
+    <div class="card__head"><h2 class="card__title">@Ui.Icon("users")People (@rows.Count)</h2></div>
+    <div class="table-wrap"><table class="table table--stack">
+        <thead><tr><th scope="col">Person</th><th scope="col">Login e-mail</th><th scope="col">Category · job title</th><th scope="col">Department</th><th scope="col">Role</th>
+            <th scope="col">Account</th><th scope="col">Last sign-in</th><th scope="col">Tasks · duties · other · PTC</th><th scope="col">Review</th></tr></thead>
+        <tbody>
+            @foreach (var p in rows)
+            {
+                var acc = d.AccountOf(p.StaffId);
+                var id = p.StaffId ?? -1;
+                var review = d.Review.Count(r => r.PersonId == p.PersonId);
+                <tr>
+                    <td data-label="Person">@if (p.StaffId is { } sid) { <a href="/staff/accounts/@sid"><strong>@p.FullName</strong></a> } else { <strong>@p.FullName</strong><br /><span class="ptc-muted">@p.SourceEntity</span> }</td>
+                    <td data-label="Login e-mail">@(acc?.Email ?? "—")</td>
+                    <td data-label="Category · job title">@p.Category<br /><span class="ptc-muted">@(p.JobTitle ?? "No job title")</span></td>
+                    <td data-label="Department">@(p.Department ?? "—")</td>
+                    <td data-label="Role">@(acc is null ? "None" : string.Join(", ", acc.Roles))</td>
+                    <td data-label="Account">@if (acc is null) { <span class="badge badge--neutral">No account</span> } else if (acc.Disabled) { <span class="badge badge--error">Disabled</span> } else { <span class="badge badge--success">Active</span> }</td>
+                    <td data-label="Last sign-in">@(acc?.LastLoginAt is { } l ? Ui.DateTime(l) : "—")</td>
+                    <td data-label="Tasks · duties · other · PTC">@d.Tasks.Count(t => t.StaffId == id) · @d.Duties.Count(x => x.StaffId == id) · @d.Responsibilities.Count(r => r.StaffId == id && r.Type is not ("Task" or "Task (reviewer)" or "Duty" or "PTC")) · @d.Ptc.Count(x => x.StaffId == id)</td>
+                    <td data-label="Review">@if (review > 0) { <span class="badge badge--warning">@review</span> } else { <span class="ptc-muted">—</span> }</td>
+                </tr>
+            }
+        </tbody>
+    </table></div>
+</section>

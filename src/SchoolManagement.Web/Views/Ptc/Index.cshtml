@@ -1,0 +1,108 @@
+@model PtcDashboard
+@*
+    PTC dashboard (Super Admin): event overview, scheduling totals of the active events (Draft and Published), the school's
+    data readiness for PTC, and the event list. Missing information is shown as missing — never as configured.
+*@
+@{
+    ViewData["Title"] = "PTC";
+    ViewData["Nav"] = "PTC";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><span aria-current="page">PTC</span></li></ol>
+        <h1 class="page-title">Parent-Teacher Conferences</h1>
+        <p class="page-sub">Create PTC events, give each class its date and Rounds, check that the actual subject teachers and parent numbers are in place, and publish when ready.</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--primary" href="/ptc/events/new">@Ui.Icon("plus")New PTC event</a>
+    </div>
+</div>
+
+<partial name="_Nav" model='"dashboard"' />
+
+@foreach (var a in Model.Events.Where(x => x.CoverageAttention > 0))
+{
+    <p class="notice notice--error">@Ui.Icon("x-circle", "icon--sm")<span class="notice__body"><strong>“@a.Title” needs attention</strong>It is Published, but @Ui.Plural(a.CoverageAttention, "timetable lesson has", "timetable lessons have") no valid substitute now. Confirmed bookings are not changed. <a href="/ptc/events/@a.Id/coverage">Open Class Coverage</a></span></p>
+}
+<h2 class="ptc-section-title">Events</h2>
+<ul class="kpis" aria-label="PTC events">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("calendar-days")</span><p class="kpi__label">Total events</p><p class="kpi__value">@Model.Events.Count</p><p class="kpi__meta">All statuses</p></div></li>
+    <li><div class="kpi kpi--orange"><span class="kpi__icon">@Ui.Icon("pencil")</span><p class="kpi__label">Draft</p><p class="kpi__value">@Model.Count(PtcEventStatus.Draft)</p><p class="kpi__meta">Being configured · not bookable</p></div></li>
+    <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("check-circle")</span><p class="kpi__label">Published</p><p class="kpi__value">@Model.Count(PtcEventStatus.Published)</p><p class="kpi__meta">On the School Calendar</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Bookings open</p><p class="kpi__value">@Model.BookingsOpen</p><p class="kpi__meta">Published, with a future Round that has places left</p></div></li>
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("check")</span><p class="kpi__label">Completed</p><p class="kpi__value">@Model.Count(PtcEventStatus.Completed)</p><p class="kpi__meta">Held</p></div></li>
+    <li><div class="kpi kpi--warn"><span class="kpi__icon">@Ui.Icon("x-circle")</span><p class="kpi__label">Cancelled</p><p class="kpi__value">@Model.Count(PtcEventStatus.Cancelled)</p><p class="kpi__meta">Kept as history</p></div></li>
+</ul>
+
+<h2 class="ptc-section-title">Scheduling <span class="ptc-muted">· Draft and Published events</span></h2>
+<ul class="kpis" aria-label="PTC scheduling">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("door")</span><p class="kpi__label">Participating classes</p><p class="kpi__value">@Model.Classes</p><p class="kpi__meta">With a PTC date</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("calendar")</span><p class="kpi__label">PTC days</p><p class="kpi__value">@Model.Days</p><p class="kpi__meta">Distinct dates</p></div></li>
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("clock")</span><p class="kpi__label">Rounds</p><p class="kpi__value">@Model.Rounds</p><p class="kpi__meta">Configured</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Booking capacity</p><p class="kpi__value">@Ui.Count(Model.Capacity)</p><p class="kpi__meta">Parent places in all Rounds</p></div></li>
+    <li><div class="kpi kpi--ok"><span class="kpi__icon">@Ui.Icon("check-circle")</span><p class="kpi__label">Confirmed bookings</p><p class="kpi__value">@Ui.Count(Model.Bookings)</p><p class="kpi__meta">Direct booking</p></div></li>
+    <li><div class="kpi kpi--orange"><span class="kpi__icon">@Ui.Icon("inbox")</span><p class="kpi__label">Remaining capacity</p><p class="kpi__value">@Ui.Count(Model.Remaining)</p><p class="kpi__meta">Places still free</p></div></li>
+</ul>
+
+<h2 class="ptc-section-title">Data readiness</h2>
+<div class="ptc-grid">
+    @foreach (var i in Model.Indicators)
+    {
+        var tone = i.Status switch { PtcReadiness.Blocked => " is-blocked", PtcReadiness.Incomplete => " is-incomplete", _ => "" };
+        <article class="ptc-indicator@(tone)">
+            <div class="ptc-indicator__head">
+                <h3 class="ptc-indicator__title">@i.Title</h3>
+                <partial name="_Readiness" model="i.Status" />
+            </div>
+            <p class="ptc-indicator__value">@i.Value</p>
+            <p class="ptc-indicator__detail">@i.Detail</p>
+            @if (i.Href is not null) { <a class="ptc-muted" href="@i.Href">View details @Ui.Icon("arrow-right", "icon--sm")</a> }
+        </article>
+    }
+</div>
+
+<section class="card table-card" aria-labelledby="ptc-events-title">
+    <div class="card__head">
+        <h2 class="card__title" id="ptc-events-title">@Ui.Icon("calendar-days")PTC events</h2>
+        <span class="ptc-muted">Defaults for new Rounds: @Model.Defaults.Capacity parents · @Model.Defaults.MeetingDurationMinutes-min meetings · @Model.Defaults.TransitionDurationMinutes-min transition · @Model.Defaults.RoundDurationMinutes-min Rounds</span>
+    </div>
+    @if (Model.Events.Count == 0)
+    {
+        <div class="empty">
+            <span class="empty__icon">@Ui.Icon("calendar-days")</span>
+            <p class="empty__title">No PTC events yet</p>
+            <p class="empty__text">Create a Draft event, then assign classes to dates and configure their Rounds. A Draft can be incomplete; it is never bookable.</p>
+            <div class="empty__actions"><a class="btn btn--primary" href="/ptc/events/new">@Ui.Icon("plus")New PTC event</a></div>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Event</th><th scope="col">Dates</th><th scope="col">Status</th><th scope="col">Readiness</th><th scope="col">Classes</th><th scope="col">Rounds</th><th scope="col">Bookings / capacity</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var e in Model.Events)
+                    {
+                        <tr>
+                            <td data-label="Event"><a href="/ptc/events/@e.Id"><strong>@e.Title</strong></a><br /><span class="ptc-muted">@e.YearName</span></td>
+                            <td data-label="Dates">@e.StartDate.ToString("d MMM", c) – @e.EndDate.ToString("d MMM yyyy", c)</td>
+                            <td data-label="Status"><span class="badge @PtcLabels.Badge(e.Status)">@PtcLabels.Label(e.Status)</span></td>
+                            <td data-label="Readiness">@if (e.Readiness is { } r) { <partial name="_Readiness" model="r" /> } else if (e.CoverageAttention > 0) { <a class="badge badge--error" href="/ptc/events/@e.Id/coverage">Coverage needs attention (@e.CoverageAttention)</a> } else { <span class="ptc-muted">—</span> }</td>
+                            <td data-label="Classes">@e.Classes <span class="ptc-muted">· @Ui.Plural(e.Days, "day", "days")</span></td>
+                            <td data-label="Rounds">@e.Rounds</td>
+                            <td data-label="Bookings / capacity">@e.Bookings / @e.Capacity</td>
+                            <td data-label="Actions" class="ptc-actions">
+                                <a class="btn btn--secondary btn--sm" href="/ptc/events/@e.Id">Open</a>
+                                @if (e.Status is PtcEventStatus.Draft or PtcEventStatus.Published) { <a class="btn btn--ghost btn--sm" href="/ptc/events/@e.Id/edit">Edit</a> }
+                                <a class="btn btn--ghost btn--sm" href="/ptc/events/@e.Id/preview">Preview</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

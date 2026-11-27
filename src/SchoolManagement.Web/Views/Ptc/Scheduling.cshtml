@@ -1,0 +1,260 @@
+@model PtcSchedulingViewModel
+@*
+    PTC scheduling (Super Admin only): the whole event as one schedule. By date: every class, Round and parent slot with its
+    booking and parallel teacher interviews. Teachers: who is shared between classes. Conflicts: each conflict with its source
+    and a safe resolution, applied only by an explicit, confirmed Admin action. History: every schedule change.
+*@
+@{
+    var e = Model.Event;
+    var a = Model.Analysis;
+    ViewData["Title"] = "Scheduling · " + e.Title;
+    ViewData["Nav"] = "PTC";
+    ViewData["BackButtonHref"] = $"/ptc/events/{e.Id}";
+    var c = System.Globalization.CultureInfo.InvariantCulture;
+    var hard = a.Conflicts.Count(x => x.Severity != PtcConflictSeverity.Restriction);
+    var tabs = new (string Key, string Label)[]
+    {
+        (PtcSchedulingViewModel.DatesView, "By date & class"),
+        (PtcSchedulingViewModel.TeachersView, $"Teachers ({a.Teachers.Count})"),
+        (PtcSchedulingViewModel.ConflictsView, $"Conflicts ({a.Conflicts.Count})"),
+        (PtcSchedulingViewModel.HistoryView, "History"),
+    };
+    var base_ = $"/ptc/events/{e.Id}/scheduling";
+}
+@section Head { <link rel="stylesheet" href="~/css/ptc.css" asp-append-version="true" /> }
+
+<div class="page-head">
+    <div class="page-head__text">
+        <ol class="crumbs"><li><a href="/">Dashboard</a></li><li><a href="/ptc">PTC</a></li><li><a href="/ptc/events/@e.Id">@e.Title</a></li><li>Scheduling</li></ol>
+        <h1 class="page-title">Scheduling <span class="badge @PtcLabels.Badge(e.Status)">@PtcLabels.Label(e.Status)</span></h1>
+        <p class="page-sub">All classes, Rounds and teachers of the event as one schedule. Each parent has one slot; their chosen teachers meet them together in it, and a teacher never has two interviews at once.</p>
+    </div>
+</div>
+
+<partial name="_EventNav" model='(e, "scheduling")' />
+
+<ul class="kpis" aria-label="Scheduling totals">
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("door")</span><p class="kpi__label">Classes</p><p class="kpi__value">@a.Classes.Count</p><p class="kpi__meta">On @Ui.Plural(a.Dates.Count, "day", "days")</p></div></li>
+    <li><div class="kpi kpi--teal"><span class="kpi__icon">@Ui.Icon("users")</span><p class="kpi__label">Allocated parents</p><p class="kpi__value">@a.Bookings.Count()</p><p class="kpi__meta">@a.Classes.SelectMany(x => x.Rounds).Sum(r => r.Capacity) slots in @a.Classes.Sum(x => x.Rounds.Count) Rounds</p></div></li>
+    <li><div class="kpi kpi--blue"><span class="kpi__icon">@Ui.Icon("user")</span><p class="kpi__label">Teachers</p><p class="kpi__value">@a.Teachers.Count</p><p class="kpi__meta">@a.Teachers.Count(t => t.MultiClass) in more than one class</p></div></li>
+    <li><div class="kpi @(hard > 0 ? "kpi--warn" : "kpi--ok")"><span class="kpi__icon">@Ui.Icon(hard > 0 ? "alert-triangle" : "check-circle")</span><p class="kpi__label">Conflicts</p><p class="kpi__value">@hard</p><p class="kpi__meta">@a.Conflicts.Count(x => x.Severity == PtcConflictSeverity.Restriction) availability restrictions</p></div></li>
+</ul>
+
+<nav class="segmented" aria-label="Scheduling views" style="margin-bottom: 16px">
+    @foreach (var (key, label) in tabs)
+    {
+        <a href="@base_?view=@key" aria-current="@(Model.View == key ? "true" : null)">@label</a>
+    }
+</nav>
+
+@if (Model.View == PtcSchedulingViewModel.DatesView)
+{
+    <form class="card ptc-bulk" method="get" action="@base_" style="margin-bottom: 16px">
+        <input type="hidden" name="view" value="dates" />
+        <div class="field"><label class="label" for="f-date">Date</label>
+            <select class="select" id="f-date" name="date"><option value="">All dates</option>
+                @foreach (var d in a.Dates) { <option value="@d.ToString("yyyy-MM-dd", c)" selected="@(Model.Date == d)">@d.ToString("ddd d MMM", c)</option> }
+            </select></div>
+        <div class="field"><label class="label" for="f-class">Class</label>
+            <select class="select" id="f-class" name="cls"><option value="">All classes</option>
+                @foreach (var x in a.Classes) { <option value="@x.ClassId" selected="@(Model.ClassId == x.ClassId)">@x.ClassName</option> }
+            </select></div>
+        <div class="field"><label class="label" for="f-teacher">Teacher</label>
+            <select class="select" id="f-teacher" name="teacher"><option value="">All teachers</option>
+                @foreach (var t in a.Teachers) { <option value="@t.TeacherId" selected="@(Model.TeacherId == t.TeacherId)">@t.Name</option> }
+            </select></div>
+        <div class="field"><label class="label" for="f-state">Status</label>
+            <select class="select" id="f-state" name="state"><option value="">All slots</option>
+                @foreach (var st in Enum.GetValues<PtcAllocationState>()) { <option value="@st" selected="@(Model.State == st)">@PtcLabels.Label(st)</option> }
+            </select></div>
+        <button class="btn btn--secondary" type="submit">@Ui.Icon("filter", "icon--sm")Filter</button>
+    </form>
+
+    @if (Model.Classes.Count == 0)
+    {
+        <section class="card"><div class="empty"><span class="empty__icon">@Ui.Icon("calendar")</span><p class="empty__title">Nothing to show</p><p class="empty__text">No class matches these filters, or no class has a PTC date yet.</p></div></section>
+    }
+    @foreach (var day in Model.Classes.GroupBy(x => x.Date))
+    {
+        <h2 class="ptc-section-title">@day.Key.ToString("dddd d MMMM yyyy", c)</h2>
+        @foreach (var x in day)
+        {
+            <section class="card table-card ptc-day" aria-label="@x.ClassName schedule">
+                <div class="card__head">
+                    <h3 class="card__title">@Ui.Icon("door")@x.ClassName @if (x.IsKg) { <span class="badge badge--neutral">KG</span> } <span class="ptc-muted">· @ScheduleRules.Times(x.Start, x.End)</span></h3>
+                    <a class="btn btn--ghost btn--sm" href="/ptc/schedules/@x.ScheduleId">Class page</a>
+                </div>
+                <p class="ptc-muted" style="padding: 0 16px">Teachers:
+                    @if (x.Teachers.Count == 0) { <span class="badge badge--error">None configured</span> }
+                    @foreach (var t in x.Teachers) { <a href="@base_/teachers/@t.TeacherId">@t.Name</a><span> · @t.Subject; </span> }
+                </p>
+                @foreach (var r in x.Rounds)
+                {
+                    var slots = r.Slots.Where(Model.Shows).ToList();
+                    <h4 class="ptc-issues__area" style="padding: 0 16px">Round @r.Number · @ScheduleRules.Times(r.Start, r.End) · @r.Booked / @r.Capacity parents (@r.Utilization%) · @r.MeetingMinutes-min meetings</h4>
+                    @if (slots.Count == 0) { <p class="ptc-muted" style="padding: 0 16px 8px">No slot with this status.</p> continue; }
+                    <div class="table-wrap">
+                        <table class="table table--stack">
+                            <thead><tr><th scope="col">Slot</th><th scope="col">Time</th><th scope="col">Status</th><th scope="col">Booking</th><th scope="col">Teacher interviews (parallel)</th></tr></thead>
+                            <tbody>
+                                @foreach (var s in slots)
+                                {
+                                    <tr>
+                                        <td data-label="Slot">@s.Slot</td>
+                                        <td data-label="Time">@ScheduleRules.Times(s.Start, s.End)</td>
+                                        <td data-label="Status"><span class="badge @PtcLabels.Badge(s.State)">@PtcLabels.Label(s.State)</span></td>
+                                        <td data-label="Booking">@if (s.Booking is { } b) { <code>@b.Reference</code><br /><span class="ptc-muted">@b.StudentName</span> } else { <span class="ptc-muted">—</span> }</td>
+                                        <td data-label="Teacher interviews">
+                                            @if (s.Booking is { } bk)
+                                            {
+                                                <ul class="ptc-subjects">
+                                                    @foreach (var i in bk.Interviews)
+                                                    {
+                                                        <li>@i.TeacherName <small>· @i.Subject</small> @if (i.State != PtcAllocationState.Scheduled) { <span class="badge @PtcLabels.Badge(i.State)" title="@i.Problem">@PtcLabels.Label(i.State)</span> }</li>
+                                                    }
+                                                </ul>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+    }
+}
+else if (Model.View == PtcSchedulingViewModel.TeachersView)
+{
+    <section class="card table-card">
+        <div class="table-wrap">
+            <table class="table table--stack">
+                <thead><tr><th scope="col">Teacher</th><th scope="col">Classes</th><th scope="col">PTC dates</th><th scope="col">Interviews</th><th scope="col">Conflicts</th></tr></thead>
+                <tbody>
+                    @foreach (var t in a.Teachers)
+                    {
+                        <tr>
+                            <td data-label="Teacher"><a href="@base_/teachers/@t.TeacherId"><strong>@t.Name</strong></a></td>
+                            <td data-label="Classes">@string.Join(", ", t.Classes) @if (t.MultiClass) { <span class="badge badge--primary">Shared</span> }</td>
+                            <td data-label="PTC dates">@string.Join(", ", t.Dates.Select(d => d.ToString("ddd d MMM", c)))</td>
+                            <td data-label="Interviews">@t.Interviews</td>
+                            <td data-label="Conflicts">@if (t.Conflicts > 0) { <span class="badge badge--error">@t.Conflicts</span> } else { <span class="badge badge--success">None</span> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+else if (Model.View == PtcSchedulingViewModel.ConflictsView)
+{
+    <p class="notice">@Ui.Icon("info", "icon--sm")<span class="notice__body"><strong>Nothing changes automatically</strong>Each resolution is checked again on the server when you apply it. A confirmed parent keeps their Round, subjects, teachers and booking reference; any change to their meeting time needs your confirmation and a reason, and is kept in the history. Parents are not notified automatically.</span></p>
+
+    @if (a.Proposals.Count > 0 && !a.IsClosed)
+    {
+        <section class="card table-card" aria-labelledby="ptc-proposals">
+            <div class="card__head"><h2 class="card__title" id="ptc-proposals">@Ui.Icon("swap")Proposed safe changes (@a.Proposals.Count)</h2></div>
+            <div class="table-wrap">
+                <table class="table table--stack">
+                    <thead><tr><th scope="col">Booking</th><th scope="col">Class · Round</th><th scope="col">Old time</th><th scope="col">New time</th><th scope="col">Teachers</th><th scope="col">Why</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in a.Proposals)
+                        {
+                            <tr><td data-label="Booking"><code>@p.Reference</code></td><td data-label="Class · Round">@p.ClassName · Round @p.RoundNumber</td>
+                                <td data-label="Old time">Slot @p.OldSlot · @ScheduleRules.Times(p.OldStart, p.OldEnd)</td>
+                                <td data-label="New time"><strong>Slot @p.NewSlot · @ScheduleRules.Times(p.NewStart, p.NewEnd)</strong></td>
+                                <td data-label="Teachers">@string.Join(", ", p.Teachers)</td><td data-label="Why">@p.Why</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <form class="card__body form-grid" action="@base_/apply" method="post" data-loading>
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="fingerprint" value="@a.Fingerprint" />
+                <div class="field field--full"><label class="label" for="apply-reason">Reason (kept in the history)</label><input class="input" id="apply-reason" name="reason" maxlength="500" required /></div>
+                <label class="ptc-ack field--full"><input type="checkbox" name="confirmed" value="true" required /><span>I confirm moving these parents' meeting times as shown. All are applied together, or none.</span></label>
+                <div class="field field--full"><button class="btn btn--primary" type="submit">@Ui.Icon("check")Apply all proposals</button></div>
+            </form>
+        </section>
+    }
+
+    @if (a.Conflicts.Count == 0)
+    {
+        <section class="card"><div class="empty"><span class="empty__icon">@Ui.Icon("check-circle")</span><p class="empty__title">No conflicts</p><p class="empty__text">Every booked interview is allocated and no teacher is busy at two places at once.</p></div></section>
+    }
+    @foreach (var x in a.Conflicts)
+    {
+        <section class="card" style="margin-bottom: 12px">
+            <div class="card__head">
+                <h3 class="card__title"><span class="badge @PtcLabels.Badge(x.Severity)">@PtcLabels.Label(x.Severity)</span> @x.Kind</h3>
+                <span class="ptc-muted">@x.Date.ToString("ddd d MMM yyyy", c)</span>
+            </div>
+            <div class="card__body">
+                <dl class="dl">
+                    @if (x.TeacherName is not null) { <dt>Teacher</dt><dd><a href="@base_/teachers/@x.TeacherId">@x.TeacherName</a></dd> }
+                    <dt>Classes</dt><dd>@string.Join(", ", x.Classes)</dd>
+                    @if (x.Round is not null) { <dt>Round</dt><dd>@x.Round</dd> }
+                    <dt>Times</dt><dd>@string.Join(" · ", x.Intervals)</dd>
+                    <dt>Source</dt><dd>@x.Source</dd>
+                    @if (x.Bookings.Count > 0) { <dt>Bookings</dt><dd>@foreach (var r in x.Bookings) { <code>@r</code> } </dd> }
+                    <dt>Suggested</dt><dd>@x.Suggestion</dd>
+                </dl>
+                @if (!a.IsClosed && x.SlotMove is { } m)
+                {
+                    <form action="/ptc/bookings/@m.BookingId/reassign" method="post" data-loading class="form-grid" style="margin-top: 12px">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="eventId" value="@a.EventId" /><input type="hidden" name="expectedSlot" value="@m.OldSlot" /><input type="hidden" name="newSlot" value="@m.NewSlot" />
+                        <p class="field--full">Old: <strong>slot @m.OldSlot · @ScheduleRules.Times(m.OldStart, m.OldEnd)</strong> → New: <strong>slot @m.NewSlot · @ScheduleRules.Times(m.NewStart, m.NewEnd)</strong> (@string.Join(", ", m.Teachers))</p>
+                        <div class="field field--full"><label class="label" for="r-@m.BookingId-@x.GetHashCode()">Reason</label><input class="input" id="r-@m.BookingId-@x.GetHashCode()" name="reason" maxlength="500" required value="@m.Why" /></div>
+                        <label class="ptc-ack field--full"><input type="checkbox" name="confirmed" value="true" required /><span>I confirm changing booking @m.Reference's meeting time as shown.</span></label>
+                        <div class="field field--full"><button class="btn btn--primary btn--sm" type="submit">@Ui.Icon("swap", "icon--sm")Apply this change</button></div>
+                    </form>
+                }
+                @if (!a.IsClosed && x.RoundMove is { } rm)
+                {
+                    <form action="/ptc/rounds/@rm.RoundId/move" method="post" data-loading class="form-grid" style="margin-top: 12px">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="eventId" value="@a.EventId" /><input type="hidden" name="expectedStart" value="@rm.OldStart.ToString("HH:mm", c)" /><input type="hidden" name="newStart" value="@rm.NewStart.ToString("HH:mm", c)" />
+                        <p class="field--full">Move @rm.ClassName Round @rm.RoundNumber: <strong>@ScheduleRules.Times(rm.OldStart, rm.OldEnd)</strong> → <strong>@ScheduleRules.Times(rm.NewStart, rm.NewEnd)</strong>@(rm.Bookings > 0 ? $" ({rm.Bookings} booked parents' times move by the same amount)" : "")</p>
+                        <div class="field field--full"><label class="label">Reason</label><input class="input" name="reason" maxlength="500" required /></div>
+                        @if (rm.Bookings > 0) { <label class="ptc-ack field--full"><input type="checkbox" name="confirmed" value="true" required /><span>I confirm moving @rm.Bookings confirmed parents' meeting times.</span></label> }
+                        <div class="field field--full"><button class="btn btn--secondary btn--sm" type="submit">@Ui.Icon("clock", "icon--sm")Move the Round</button></div>
+                    </form>
+                }
+            </div>
+        </section>
+    }
+}
+else
+{
+    <section class="card table-card">
+        @if (Model.History.Count == 0)
+        {
+            <div class="empty"><span class="empty__icon">@Ui.Icon("clock")</span><p class="empty__title">No schedule changes yet</p><p class="empty__text">Every Admin change to a slot or Round is recorded here with the old and new times.</p></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table table--stack">
+                    <thead><tr><th scope="col">When</th><th scope="col">Change</th><th scope="col">Class · Round</th><th scope="col">Booking</th><th scope="col">Old</th><th scope="col">New</th><th scope="col">Teachers</th><th scope="col">Reason</th></tr></thead>
+                    <tbody>
+                        @foreach (var h in Model.History)
+                        {
+                            <tr>
+                                <td data-label="When">@Ui.DateTime(h.At)<br /><span class="ptc-muted">@h.By</span></td>
+                                <td data-label="Change">@(h.Kind == PtcScheduleChangeKind.RoundMoved ? "Round moved" : "Slot reassigned")</td>
+                                <td data-label="Class · Round">@h.ClassName · Round @h.RoundNumber</td>
+                                <td data-label="Booking">@if (h.Reference is not null) { <code>@h.Reference</code> } else { <span class="ptc-muted">Round</span> }</td>
+                                <td data-label="Old">@(h.OldSlot is { } os ? $"Slot {os} · " : "")@ScheduleRules.Times(h.OldStart, h.OldEnd)</td>
+                                <td data-label="New">@(h.NewSlot is { } ns ? $"Slot {ns} · " : "")@ScheduleRules.Times(h.NewStart, h.NewEnd)</td>
+                                <td data-label="Teachers">@h.Teachers</td>
+                                <td data-label="Reason">@h.Reason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}

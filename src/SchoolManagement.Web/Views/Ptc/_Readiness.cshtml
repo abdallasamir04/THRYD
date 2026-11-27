@@ -1,0 +1,3 @@
+@model PtcReadiness
+@* A readiness badge: Ready / Incomplete / Blocked / Not yet configured (never shown as ready when something is missing). *@
+<span class="badge @PtcLabels.Badge(Model) badge--dot">@PtcLabels.Label(Model)</span>

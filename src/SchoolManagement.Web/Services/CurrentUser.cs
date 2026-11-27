@@ -4,9 +4,11 @@ using SchoolManagement.Web.Data;
 namespace SchoolManagement.Web.Services;
 
 /// <summary>
-/// Who is making a change, for "Created by / Recorded by / Updated by" fields.
-/// With a signed-in user (once authentication exists) this is the user's name. Until then it is
-/// the staff member chosen under "Working as" (a cookie on this browser): self-selected, not verified.
+/// Who is making a change, for "Created by / Recorded by / Updated by" fields, and whose data a request may see.
+/// With a signed-in account (the normal case) this is the account: its person (the staff record linked to the account on
+/// the server, from the sign-in cookie's claims) and its role — the "Working as" cookie is ignored. Only when sign-in is
+/// switched off (Authentication:Enabled=false: the current setting, and the tests) is it the "Working as" staff member: self-selected,
+/// not verified.
 /// </summary>
 public interface ICurrentUser
 {
@@ -70,7 +72,10 @@ public sealed class HttpCurrentUser(IHttpContextAccessor accessor, SchoolDbConte
         if (http is null) return;
         if (http.User.Identity is { IsAuthenticated: true } identity)
         {
-            _name = identity.Name;
+            // The account's own person, set on the server at sign-in; never a cookie, query string or form value.
+            _name = http.User.FindFirst(Accounts.AccountClaims.DisplayName)?.Value ?? identity.Name;
+            _staffId = int.TryParse(http.User.FindFirst(Accounts.AccountClaims.StaffId)?.Value, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var claimId) ? claimId : null;
             return;
         }
         if (int.TryParse(http.Request.Cookies[OperatorCookie], out var id))
